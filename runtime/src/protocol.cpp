@@ -1,9 +1,12 @@
 #include "rivet/protocol.hpp"
 
+#include <algorithm>
 #include <array>
+#include <climits>
 #include <cstring>
 #include <stdexcept>
 #include <type_traits>
+#include <utility>
 
 namespace rivet {
 namespace {
