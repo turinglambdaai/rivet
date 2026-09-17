@@ -54,15 +54,14 @@
 (define-rpc (increment [value Int64] : Int64)
   (add1 value))
 
-;; Native hosts call this entry point after the embedded Racket runtime loads
-;; the application module.
-(define (start in out)
-  (serve in out))
+;; Native hosts pass CRT file descriptors owned by Rivet's transport bridge.
+(define (start in-fd out-fd)
+  (serve-fds in-fd out-fd))
 RKT
   )
 
 (define (config-template name)
-  (format "#hasheq((name . ~s) (backend . \"app/backend.rkt\") (entry . start) (protocol . 1))\n"
+  (format "#hasheq((name . ~s) (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1))\n"
           name))
 
 (define (new-project name)
