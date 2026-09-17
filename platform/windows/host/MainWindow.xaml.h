@@ -17,7 +17,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   void SetReadyUi();
   void SetErrorUi(std::string const& message);
 
-  std::unique_ptr<rivet::windows::Backend> backend_;
+  std::shared_ptr<rivet::windows::Backend> backend_;
   std::atomic<std::int64_t> count_{0};
 };
 
