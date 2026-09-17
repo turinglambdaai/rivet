@@ -1,0 +1,31 @@
+# Racket
+compiled/
+*.zo
+
+# Native builds
+build/
+out/
+dist/
+.vs/
+.vscode/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+
+# Swift
+.build/
+.swiftpm/
+DerivedData/
+
+# NuGet / Windows
+packages/
+AppPackages/
+BundleArtifacts/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Rivet generated state
+.rivet/
