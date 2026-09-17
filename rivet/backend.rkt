@@ -1,11 +1,13 @@
 #lang racket/base
 
-(require racket/async-channel
+(require ffi/unsafe/port
+         racket/async-channel
          racket/match
          "protocol.rkt")
 
 (provide define-rpc
          serve
+         serve-fds
          registered-rpcs
          (struct-out rpc-info))
 
@@ -146,3 +148,21 @@
       (custodian-shutdown-all root-custodian)))
 
   (void))
+
+;; Native hosts deal in OS/CRT file descriptors. Keeping the conversion here
+;; means platform hosts never need to manufacture Racket port objects through
+;; the embedding API. `unsafe-file-descriptor->port` does not duplicate the
+;; descriptor, so this procedure owns the two descriptors for its lifetime.
+(define (serve-fds in-fd out-fd)
+  (unless (exact-integer? in-fd)
+    (raise-argument-error 'serve-fds "exact-integer?" in-fd))
+  (unless (exact-integer? out-fd)
+    (raise-argument-error 'serve-fds "exact-integer?" out-fd))
+  (define in (unsafe-file-descriptor->port in-fd 'rivet-in '(read)))
+  (define out (unsafe-file-descriptor->port out-fd 'rivet-out '(write)))
+  (dynamic-wind
+    void
+    (lambda () (serve in out))
+    (lambda ()
+      (unless (port-closed? in) (close-input-port in))
+      (unless (port-closed? out) (close-output-port out)))))
