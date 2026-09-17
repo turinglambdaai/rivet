@@ -98,7 +98,9 @@
            (unless (= expected (length args))
              (error rpc-name
                     "expected ~a argument~a, received ~a"
-                    expected (if (= expected 1) "" "s") (length args)))
+                    expected
+                    (if (= expected 1) "" "s")
+                    (length args)))
            (finish! id
                     message:response
                     (apply (rpc-info-procedure info) args)))))))
@@ -110,6 +112,18 @@
       (hash-remove! pending id)
       (send! (frame message:error id (encode-value "request cancelled")))))
 
+  (define (dispatch! f)
+    (case (frame-type f)
+      [(2) (start-request! f)]
+      [(6) (cancel! (frame-id f))]
+      [(7) (set! stopped? #t)]
+      [else
+       (send! (frame message:error
+                     (frame-id f)
+                     (encode-value
+                      (format "unsupported message type: ~a"
+                              (frame-type f)))))]))
+
   (dynamic-wind
     void
     (lambda ()
@@ -117,22 +131,12 @@
                     (encode-value (list "rivet" protocol-version))))
       (let loop ()
         (unless stopped?
-          (define f (read-frame in))
-          (cond
-            [(eof-object? f)
-             (set! stopped? #t)]
-            [else
-             (case (frame-type f)
-               [(2) (start-request! f)]
-               [(6) (cancel! (frame-id f))]
-               [(7) (set! stopped? #t)]
-               [else
-                (send! (frame message:error
-                              (frame-id f)
-                              (encode-value
-                               (format "unsupported message type: ~a"
-                                       (frame-type f)))))] )
-             (loop)]))))
+          (let ([f (read-frame in)])
+            (if (eof-object? f)
+                (set! stopped? #t)
+                (begin
+                  (dispatch! f)
+                  (loop)))))))
     (lambda ()
       (for ([cust (in-hash-values pending)])
         (custodian-shutdown-all cust))
