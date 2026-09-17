@@ -3,6 +3,7 @@
 (require racket/file
          racket/format
          racket/list
+         racket/match
          racket/path
          racket/string)
 
@@ -102,15 +103,15 @@ RKT
   (define native-ok?
     (case (system-type 'os)
       [(windows)
-       (define msbuild? (tool-status "MSBuild" "MSBuild.exe"))
-       (define cl? (tool-status "C++ compiler" "cl.exe"))
-       (printf "  UI: WinUI 3 / Windows App SDK\n")
-       (and msbuild? cl?)]
+       (let ([msbuild? (tool-status "MSBuild" "MSBuild.exe")]
+             [cl? (tool-status "C++ compiler" "cl.exe")])
+         (printf "  UI: WinUI 3 / Windows App SDK\n")
+         (and msbuild? cl?))]
       [(macosx)
-       (define swift? (tool-status "Swift" "swift"))
-       (define xcode? (tool-status "Xcode build" "xcodebuild"))
-       (printf "  UI: SwiftUI / AppKit\n")
-       (and swift? xcode?)]
+       (let ([swift? (tool-status "Swift" "swift")]
+             [xcode? (tool-status "Xcode build" "xcodebuild")])
+         (printf "  UI: SwiftUI / AppKit\n")
+         (and swift? xcode?))]
       [else
        (printf "  UI: unsupported (Rivet currently targets Windows and macOS)\n")
        #f]))
@@ -128,7 +129,7 @@ RKT
    (new-project name)]
   [(list "doctor")
    (exit (doctor))]
-  [(list (or "dev" "build" "package") command-rest ...)
+  [(list (or "dev" "build" "package") _ ...)
    (die "this command is not wired yet; runtime/host integration is the current milestone")]
   [_
    (usage)
