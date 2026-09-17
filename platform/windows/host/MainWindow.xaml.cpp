@@ -1,7 +1,6 @@
 #include "pch.h"
 #include "MainWindow.xaml.h"
 
-#include <array>
 #include <stdexcept>
 
 namespace winrt::RivetHost::implementation {
@@ -67,22 +66,24 @@ MainWindow::MainWindow() {
 winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
   auto const dispatcher = DispatcherQueue();
   auto const weak = get_weak();
+  auto backend = std::make_shared<rivet::windows::Backend>(runtime_config());
 
   try {
-    auto backend = std::make_unique<rivet::windows::Backend>(runtime_config());
     co_await winrt::resume_background();
     backend->start();
 
-    if (auto self = weak.get()) {
-      self->backend_ = std::move(backend);
-      dispatcher.TryEnqueue([weak] {
-        if (auto window = weak.get()) {
-          window->SetReadyUi();
-        }
-      });
-    } else {
-      backend->stop();
-    }
+    dispatcher.TryEnqueue([weak, backend = std::move(backend)]() mutable {
+      if (auto window = weak.get()) {
+        window->backend_ = std::move(backend);
+        window->SetReadyUi();
+      } else {
+        // The UI disappeared during startup. Stop without publishing the
+        // backend into a destroyed XAML object.
+        std::thread([backend = std::move(backend)]() mutable {
+          backend->stop();
+        }).detach();
+      }
+    });
   } catch (std::exception const& e) {
     auto message = std::string(e.what());
     dispatcher.TryEnqueue([weak, message = std::move(message)] {
@@ -102,7 +103,7 @@ void MainWindow::Increment_Click(
 winrt::fire_and_forget MainWindow::IncrementAsync() {
   auto const dispatcher = DispatcherQueue();
   auto const weak = get_weak();
-  auto* backend = backend_.get();
+  auto backend = backend_;
   if (backend == nullptr || !backend->running()) {
     SetErrorUi("Racket backend is not running");
     co_return;
@@ -125,8 +126,9 @@ winrt::fire_and_forget MainWindow::IncrementAsync() {
 
     dispatcher.TryEnqueue([weak, next_value = *next] {
       if (auto window = weak.get()) {
-        window->CountText().Text(
-            winrt::hstring(L"Count: ") + winrt::to_hstring(next_value));
+        std::wstring text = L"Count: ";
+        text += std::to_wstring(next_value);
+        window->CountText().Text(winrt::hstring(text));
         window->IncrementButton().IsEnabled(true);
       }
     });
