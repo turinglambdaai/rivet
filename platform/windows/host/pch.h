@@ -19,10 +19,12 @@
 #include <winrt/Microsoft.UI.Xaml.Markup.h>
 
 #include <atomic>
+#include <cstdint>
 #include <filesystem>
 #include <future>
 #include <memory>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include "../runtime/backend.hpp"
