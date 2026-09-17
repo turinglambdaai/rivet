@@ -22,7 +22,7 @@ jobs:
           variant: CS
           version: '9.3'
       - name: Install Rivet
-        run: raco pkg install --auto --no-docs --name rivet .
+        run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Test
         run: raco test tests/
       - name: Check CLI
