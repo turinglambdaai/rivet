@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  racket:
+    name: Racket core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Install Rivet
+        run: raco pkg install --auto --no-docs --name rivet .
+      - name: Test
+        run: raco test tests/
+      - name: Check CLI
+        run: raco rivet help
+
+  native-protocol:
+    name: Native protocol (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure
+        run: cmake -S runtime -B build/native -DRIVET_BUILD_TESTS=ON
+      - name: Build
+        run: cmake --build build/native --config Release
+      - name: Test
+        run: ctest --test-dir build/native -C Release --output-on-failure
