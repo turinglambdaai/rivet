@@ -73,7 +73,7 @@
       <WarningLevel>Level4</WarningLevel>
       <AdditionalOptions>%(AdditionalOptions) /bigobj /permissive-</AdditionalOptions>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(RIVET_RACKET_INCLUDE);$(MSBuildThisFileDirectory)..\..\..\runtime\include;$(MSBuildThisFileDirectory)..\runtime;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(RIVET_RACKET_INCLUDE);$(RIVET_ROOT)runtime\include;$(RIVET_ROOT)platform\windows\runtime;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalDependencies>$(RIVET_RACKET_IMPORT_LIB);%(AdditionalDependencies)</AdditionalDependencies>
@@ -112,9 +112,9 @@
     <ClInclude Include="MainWindow.xaml.h">
       <DependentUpon>MainWindow.xaml</DependentUpon>
     </ClInclude>
-    <ClInclude Include="..\runtime\backend.hpp" />
-    <ClInclude Include="..\runtime\win32_pipe_transport.hpp" />
-    <ClInclude Include="..\..\..\runtime\include\rivet\protocol.hpp" />
+    <ClInclude Include="$(RIVET_ROOT)platform\windows\runtime\backend.hpp" />
+    <ClInclude Include="$(RIVET_ROOT)platform\windows\runtime\win32_pipe_transport.hpp" />
+    <ClInclude Include="$(RIVET_ROOT)runtime\include\rivet\protocol.hpp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -127,9 +127,9 @@
     <ClCompile Include="MainWindow.xaml.cpp">
       <DependentUpon>MainWindow.xaml</DependentUpon>
     </ClCompile>
-    <ClCompile Include="..\runtime\backend.cpp" />
-    <ClCompile Include="..\runtime\win32_pipe_transport.cpp" />
-    <ClCompile Include="..\..\..\runtime\src\protocol.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)platform\windows\runtime\backend.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)platform\windows\runtime\win32_pipe_transport.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)runtime\src\protocol.cpp" />
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
   </ItemGroup>
 
@@ -143,7 +143,9 @@
     <Manifest Include="app.manifest" />
   </ItemGroup>
 
-  <Target Name="ValidateRivetRacket" BeforeTargets="ClCompile">
+  <Target Name="ValidateRivetEnvironment" BeforeTargets="ClCompile">
+    <Error Condition="'$(RIVET_ROOT)'==''"
+           Text="RIVET_ROOT is not set. Run this project through `raco rivet build`." />
     <Error Condition="'$(RIVET_RACKET_INCLUDE)'==''"
            Text="RIVET_RACKET_INCLUDE is not set. Run `raco rivet build` or set it to the exact Racket include directory." />
     <Error Condition="'$(RIVET_RACKET_IMPORT_LIB)'==''"
