@@ -8,7 +8,8 @@
          racket/system
          "codegen.rkt"
          "project.rkt"
-         "runtime.rkt")
+         "runtime.rkt"
+         "windows-tools.rkt")
 
 (provide build-project!
          dev-project!)
@@ -70,11 +71,10 @@
                     (build-path runtime-dir (file-name-from-path source))))
   core)
 
-(define (prepare-windows-import-library! project runtime)
-  (define lib-exe (find-executable-path "lib.exe"))
+(define (prepare-windows-import-library! project runtime lib-exe)
   (unless lib-exe
     (error 'build-project!
-           "lib.exe was not found; install the Visual Studio C++ desktop workload or run from a Developer shell"))
+           "MSVC lib.exe was not found; install Visual Studio Build Tools with the Desktop development with C++ workload"))
 
   (define build-dir (project-path project ".rivet" "build" "windows"))
   (make-directory* build-dir)
@@ -109,13 +109,16 @@
                            "Windows host project is missing"
                            "expected" host-project))
 
-  (define import-lib (prepare-windows-import-library! project runtime))
+  (define toolchain (discover-windows-toolchain))
+  (define import-lib
+    (prepare-windows-import-library!
+     project runtime (windows-toolchain-lib toolchain)))
   (define racketcs-dll (racket-runtime-racketcs-dll runtime))
   (copy-required! 'build-project!
                   racketcs-dll
                   (build-path stage (file-name-from-path racketcs-dll)))
 
-  (define msbuild (find-executable-path "MSBuild.exe"))
+  (define msbuild (windows-toolchain-msbuild toolchain))
   (unless msbuild
     (error 'build-project!
            "MSBuild.exe was not found; install Visual Studio Build Tools with C++/WinUI support"))
