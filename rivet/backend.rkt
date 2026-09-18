@@ -11,9 +11,10 @@
          serve
          serve-fds
          registered-rpcs
+         rpc-schema
          (struct-out rpc-info))
 
-(struct rpc-info (name arg-types result-type procedure) #:transparent)
+(struct rpc-info (name arg-names arg-types result-type procedure) #:transparent)
 
 (define registry (make-hash))
 (define current-event-emitter (make-parameter #f))
@@ -31,10 +32,51 @@
     (emit-event! 'name value)))
 
 
-(define (register-rpc! name arg-types result-type proc)
+(define (supported-type? type)
+  (or (memq type '(String Int64 Bool Bytes Void Any))
+      (match type
+        [(list 'List inner) (supported-type? inner)]
+        [(list 'Optional inner) (supported-type? inner)]
+        [_ #f])))
+
+(define (value-matches-type? type value)
+  (case type
+    [(String) (string? value)]
+    [(Int64)
+     (and (exact-integer? value)
+          (<= (- (expt 2 63)) value (sub1 (expt 2 63))))]
+    [(Bool) (boolean? value)]
+    [(Bytes) (bytes? value)]
+    [(Void) (void? value)]
+    [(Any) #t]
+    [else
+     (match type
+       [(list 'List inner)
+        (and (list? value)
+             (andmap (lambda (item) (value-matches-type? inner item)) value))]
+       [(list 'Optional inner)
+        (or (void? value) (value-matches-type? inner value))]
+       [_ #f])]))
+
+(define (validate-value who label type value)
+  (unless (value-matches-type? type value)
+    (raise-arguments-error who
+                           "value does not match declared Rivet type"
+                           "position" label
+                           "expected" type
+                           "value" value)))
+
+(define (register-rpc! name arg-names arg-types result-type proc)
   (when (hash-has-key? registry name)
     (error 'define-rpc "RPC already registered: ~a" name))
-  (hash-set! registry name (rpc-info name arg-types result-type proc))
+  (for ([type (in-list (append arg-types (list result-type)))])
+    (unless (supported-type? type)
+      (raise-arguments-error 'define-rpc
+                             "unsupported Rivet RPC type"
+                             "rpc" name
+                             "type" type)))
+  (hash-set! registry name
+             (rpc-info name arg-names arg-types result-type proc))
   (void))
 
 (define (registered-rpcs)
@@ -42,14 +84,29 @@
         string<?
         #:key (lambda (info) (symbol->string (rpc-info-name info)))))
 
+(define (rpc-schema)
+  (for/list ([info (in-list (registered-rpcs))])
+    (hasheq
+     'name (symbol->string (rpc-info-name info))
+     'arguments
+     (for/list ([name (in-list (rpc-info-arg-names info))]
+                [type (in-list (rpc-info-arg-types info))])
+       (hasheq 'name (symbol->string name)
+               'type (format "~s" type)))
+     'result (format "~s" (rpc-info-result-type info)))))
+
 ;; Intentionally small v0 syntax. Types are schema metadata today; the wire
 ;; codec validates values. Code generators will consume this schema later.
 (define-syntax define-rpc
   (syntax-rules (:)
+    [(_ (name [arg : arg-type] ... : result-type) body ...)
+     (begin
+       (define (name arg ...) body ...)
+       (register-rpc! 'name '(arg ...) '(arg-type ...) 'result-type name))]
     [(_ (name [arg arg-type] ... : result-type) body ...)
      (begin
        (define (name arg ...) body ...)
-       (register-rpc! 'name '(arg-type ...) 'result-type name))]))
+       (register-rpc! 'name '(arg ...) '(arg-type ...) 'result-type name))]))
 
 (define (request->call payload)
   (define value (decode-value payload))
@@ -125,9 +182,15 @@
                     expected
                     (if (= expected 1) "" "s")
                     (length args)))
+           (for ([arg (in-list args)]
+                 [arg-name (in-list (rpc-info-arg-names info))]
+                 [arg-type (in-list (rpc-info-arg-types info))])
+             (validate-value rpc-name arg-name arg-type arg))
+           (define result (apply (rpc-info-procedure info) args))
+           (validate-value rpc-name 'result (rpc-info-result-type info) result)
            (finish! id
                     message:response
-                    (apply (rpc-info-procedure info) args)))))))
+                    result))))))
 
   (define (cancel! id)
     (define request-custodian (hash-ref pending id #f))
