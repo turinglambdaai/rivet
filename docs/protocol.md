@@ -26,7 +26,7 @@ A transport must preserve byte order but does not need to preserve write boundar
 | 2 | Request | native → backend | RPC invocation |
 | 3 | Response | backend → native | successful RPC result |
 | 4 | Error | either | request or protocol failure |
-| 5 | Event | backend → native | asynchronous event (reserved in v1 client API) |
+| 5 | Event | backend → native | asynchronous backend event |
 | 6 | Cancel | native → backend | cancel request with matching id |
 | 7 | Shutdown | native → backend | orderly backend shutdown |
 
@@ -110,9 +110,21 @@ Shutdown uses id 0 and an empty payload. After shutdown, the backend closes its 
 
 ## Events
 
-`Event` is reserved by the framing protocol from the beginning so event delivery does not require a protocol version bump. The typed event registration/subscription layer is not part of the first runtime milestone.
+The Racket backend can declare an event with `define-event` or emit one directly with `emit-event!`.
 
-An event id is not a request id; future event schema/codegen will define its namespace.
+Event payload:
+
+```text
+["event-name", value]
+```
+
+Event IDs use their own monotonically increasing namespace and are not request IDs. Native clients deliver decoded events through their event callback. Event callbacks run on a transport/reader thread; UI code must dispatch to the WinUI dispatcher or Swift MainActor before touching native UI objects.
+
+## Typed RPC schema
+
+`define-rpc` records argument names, argument types, and the result type. Rivet validates values at the Racket boundary and generates Swift/C++ wrappers before each native build.
+
+Schema types are `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, and `(Optional T)`. Optional null is encoded with the existing Null/Void tag, so typed schema evolution does not change RVT1 framing.
 
 ## Compatibility
 
