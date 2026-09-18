@@ -9,7 +9,8 @@ let package = Package(
     ],
     products: [
         .library(name: "RivetRuntime", targets: ["RivetRuntime"]),
-        .library(name: "RivetEmbedding", targets: ["RivetEmbedding"])
+        .library(name: "RivetEmbedding", targets: ["RivetEmbedding"]),
+        .executable(name: "RivetIntegration", targets: ["RivetIntegration"])
     ],
     targets: [
         .target(
@@ -25,6 +26,11 @@ let package = Package(
             name: "RivetEmbedding",
             dependencies: ["RivetRuntime", "CRivetRacket"],
             path: "Sources/RivetEmbedding"
+        ),
+        .executableTarget(
+            name: "RivetIntegration",
+            dependencies: ["RivetRuntime", "RivetEmbedding"],
+            path: "Integration/Sources"
         ),
         .testTarget(
             name: "RivetRuntimeTests",
