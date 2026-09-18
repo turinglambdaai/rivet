@@ -1,8 +1,10 @@
 #lang racket/base
 
 (require racket/file
+         racket/list
          racket/path
          racket/runtime-path
+         racket/string
          racket/system
          "project.rkt"
          "runtime.rkt")
@@ -131,6 +133,78 @@
            (string-append "/p:OutDir=" out-dir))))
   (build-path stage "RivetHost.exe"))
 
+(define (with-rivet-root-environment thunk)
+  (define env (environment-variables-copy (current-environment-variables)))
+  (environment-variables-set!
+   env
+   #"RIVET_ROOT"
+   (path->bytes (simplify-path rivet-root #t)))
+  (parameterize ([current-environment-variables env])
+    (thunk)))
+
+(define (find-built-macos-executable build-dir)
+  (define candidates
+    (find-files
+     (lambda (p)
+       (and (file-exists? p)
+            (let ([name (file-name-from-path p)])
+              (and name (string=? (path->string name) "RivetHost")))))
+     build-dir))
+  (or (for/first ([p (in-list candidates)]
+                  #:when (regexp-match? #rx"/(debug|release)/RivetHost$"
+                                        (path->string p)))
+        p)
+      (and (pair? candidates) (car candidates))
+      (error 'build-project! "Swift build completed but RivetHost was not found")))
+
+(define (build-macos! project runtime stage configuration)
+  (define swift (find-executable-path "swift"))
+  (unless swift
+    (error 'build-project! "swift was not found; install Xcode command line tools"))
+
+  (define framework (racket-runtime-racket-framework runtime))
+  (unless framework
+    (error 'build-project! "the installed Racket CS does not provide Racket.framework"))
+
+  (define host-dir (project-path project "macos"))
+  (define package-file (build-path host-dir "Package.swift"))
+  (unless (file-exists? package-file)
+    (raise-arguments-error 'build-project!
+                           "macOS host package is missing"
+                           "expected" package-file))
+
+  (define build-dir (project-path project ".rivet" "build" "macos"))
+  (make-directory* build-dir)
+  (define swift-configuration (string-downcase configuration))
+
+  (with-rivet-root-environment
+   (lambda ()
+     (run! 'build-project!
+           swift
+           "build"
+           "--package-path" (path->string host-dir)
+           "--scratch-path" (path->string build-dir)
+           "-c" swift-configuration
+           "-Xcc" (string-append "-I" (path->string (racket-runtime-include-dir runtime)))
+           "-Xlinker" (string-append "-F" (path->string (racket-runtime-lib-dir runtime)))
+           "-Xlinker" "-framework"
+           "-Xlinker" "Racket"
+           "-Xlinker" "-rpath"
+           "-Xlinker" "@executable_path/Frameworks")))
+
+  (define built (find-built-macos-executable build-dir))
+  (define staged-executable (build-path stage "RivetHost"))
+  (copy-required! 'build-project! built staged-executable)
+  (file-or-directory-permissions staged-executable #o755)
+
+  (define frameworks-dir (build-path stage "Frameworks"))
+  (make-directory* frameworks-dir)
+  (copy-directory/files
+   framework
+   (build-path frameworks-dir "Racket.framework"))
+
+  staged-executable)
+
 (define (build-project! project #:configuration [configuration "Debug"])
   (define runtime (discover-racket-runtime))
   (define stage (project-path project ".rivet" "stage"))
@@ -141,10 +215,7 @@
     [(windows)
      (build-windows! project runtime stage configuration)]
     [(macosx)
-     ;; The Swift host is intentionally the next implementation slice. The
-     ;; backend artifact is already complete and useful for protocol tests.
-     (error 'build-project!
-            "macOS native host wiring is not implemented yet")]
+     (build-macos! project runtime stage configuration)]
     [else
      (error 'build-project!
             "Rivet native hosts currently target Windows and macOS")]))
@@ -152,7 +223,7 @@
 (define (dev-project! project)
   (define executable (build-project! project #:configuration "Debug"))
   (case (system-type 'os)
-    [(windows)
+    [(windows macosx)
      (run! 'dev-project! executable)]
     [else
      (error 'dev-project! "development runner is not available on this platform")]))
