@@ -13,6 +13,51 @@
 
 (define config-name "rivet.rktd")
 
+(define (validate-config path value)
+  (define (required key predicate description)
+    (define item
+      (hash-ref value key
+                (lambda ()
+                  (raise-arguments-error 'load-project
+                                         "missing required project setting"
+                                         "path" path
+                                         "setting" key))))
+    (unless (predicate item)
+      (raise-arguments-error 'load-project
+                             "invalid project setting"
+                             "path" path
+                             "setting" key
+                             "expected" description
+                             "value" item))
+    item)
+
+  (required 'name
+            (lambda (v) (and (string? v) (positive? (string-length v))))
+            "non-empty string")
+  (define backend
+    (required 'backend
+              (lambda (v)
+                (and (string? v)
+                     (positive? (string-length v))
+                     (relative-path? (string->path v))))
+              "non-empty relative path string"))
+  (void backend)
+  (required 'module
+            (lambda (v) (and (string? v) (positive? (string-length v))))
+            "non-empty string")
+  (required 'entry
+            (lambda (v) (and (string? v) (positive? (string-length v))))
+            "non-empty string")
+  (define protocol
+    (required 'protocol exact-integer? "integer"))
+  (unless (= protocol 1)
+    (raise-arguments-error 'load-project
+                           "unsupported Rivet project protocol"
+                           "path" path
+                           "configured" protocol
+                           "supported" 1))
+  value)
+
 (define (load-config path)
   (define value
     (call-with-input-file path
@@ -22,7 +67,7 @@
                            "rivet.rktd must contain a hash"
                            "path" path
                            "value" value))
-  value)
+  (validate-config path value))
 
 (define (load-project root)
   (define complete (simplify-path (path->complete-path root) #t))
