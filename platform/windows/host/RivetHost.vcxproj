@@ -112,6 +112,7 @@
     <ClInclude Include="MainWindow.xaml.h">
       <DependentUpon>MainWindow.xaml</DependentUpon>
     </ClInclude>
+    <ClInclude Include="GeneratedBackend.hpp" />
     <ClInclude Include="$(RIVET_ROOT)platform\windows\runtime\backend.hpp" />
     <ClInclude Include="$(RIVET_ROOT)platform\windows\runtime\win32_pipe_transport.hpp" />
     <ClInclude Include="$(RIVET_ROOT)runtime\include\rivet\protocol.hpp" />
