@@ -214,7 +214,14 @@
   (dynamic-wind
     void
     (lambda ()
-      (parameterize ([current-event-emitter emit!])
+      (parameterize ([current-event-emitter emit!]
+                     [exit-handler
+                      (lambda (value)
+                        (if (exn? value)
+                            (raise value)
+                            (error 'rivet/backend
+                                   "backend requested exit: ~e"
+                                   value)))])
         (send! (frame message:hello 0
                       (encode-value (list "rivet" protocol-version))))
         (let loop ()
@@ -248,7 +255,18 @@
   (define out (unsafe-file-descriptor->port out-fd 'rivet-out '(write)))
   (dynamic-wind
     void
-    (lambda () (serve in out))
+    (lambda ()
+      ;; Nothing from the embedded application may escape across the native
+      ;; racket_apply boundary. Request exceptions are already serialized as
+      ;; Error frames; protocol/server failures are logged and close transport.
+      (with-handlers ([exn?
+                       (lambda (e)
+                         ((error-display-handler)
+                          (format "Rivet backend terminated: ~a"
+                                  (exn-message e))
+                          e)
+                         (void))])
+        (serve in out)))
     (lambda ()
       (unless (port-closed? in) (close-input-port in))
       (unless (port-closed? out) (close-output-port out)))))
