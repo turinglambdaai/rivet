@@ -38,7 +38,7 @@
       [(macosx)
        (define swift? (tool-status "Swift" "swift"))
        (define xcode? (tool-status "Xcode build" "xcodebuild"))
-       (printf "  UI: SwiftUI / AppKit (host wiring in progress)\n")
+       (printf "  UI: SwiftUI / AppKit\n")
        (and swift? xcode? runtime)]
       [else
        (printf "  UI: unsupported (Rivet currently targets Windows and macOS)\n")
