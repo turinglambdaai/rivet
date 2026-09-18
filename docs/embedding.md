@@ -89,7 +89,7 @@ ptr args = Scons(Sfixnum(in_fd),
 
 Rivet passes plain integer file descriptors rather than Racket port objects. `rivet/backend` converts those descriptors into binary Racket ports through `serve-fds`.
 
-The application entry procedure must contain exceptions instead of allowing an exception/escape to cross the `racket_apply` boundary. Rivet's scaffold/runtime will grow a dedicated top-level error boundary before the embedding layer is considered stable.
+The application entry procedure must not allow an exception/escape to cross the `racket_apply` boundary. Rivet's `serve-fds` installs a top-level exception boundary and the server replaces the inherited `exit-handler`, so request failures become Error frames and backend-level failures are logged before transport shutdown.
 
 ## Racket values and native threads
 
@@ -118,4 +118,4 @@ The expected normal sequence is:
 5. native reader observes EOF and exits;
 6. application host joins both threads.
 
-Unexpected startup/runtime failures must eventually close the transport so the native side never waits forever for the Hello frame. That failure-path hardening is part of the Windows runtime milestone.
+Startup/runtime failure paths close their native pipe endpoints so a client waiting for Hello observes EOF instead of waiting indefinitely.
