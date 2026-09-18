@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <functional>
 #include <future>
 #include <memory>
 #include <string>
@@ -22,12 +24,21 @@ struct RacketRuntimeConfig {
   std::wstring dll_dir;
 };
 
-// Owns one embedded Racket CS instance and its RPC transport.
+struct PendingCall {
+  std::uint64_t id{};
+  std::future<Value> result;
+};
+
+using EventHandler = std::function<void(std::string const&, Value const&)>;
+
+// Owns one embedded Racket CS instance and its RVT1 transport.
 //
 // Threading contract:
-//   * start()/stop()/call() may be used by the UI layer.
+//   * start()/stop()/request()/cancel() may be used by the UI layer.
 //   * Racket CS is booted and entered on a dedicated worker thread.
-//   * one reader thread resolves native futures from Racket responses.
+//   * one reader thread resolves native futures and invokes event handlers.
+//   * event handlers therefore run on the reader thread and must dispatch to
+//     the UI thread before touching WinUI objects.
 //   * no Racket value crosses either native thread boundary.
 class Backend final {
  public:
@@ -41,7 +52,10 @@ class Backend final {
   void stop();
   bool running() const noexcept;
 
+  PendingCall request(std::string rpc_name, Value::List arguments = {});
   std::future<Value> call(std::string rpc_name, Value::List arguments = {});
+  void cancel(std::uint64_t request_id);
+  void set_event_handler(EventHandler handler);
 
  private:
   class Impl;
