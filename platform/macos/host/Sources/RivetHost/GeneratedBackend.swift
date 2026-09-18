@@ -7,6 +7,11 @@ public enum RivetGeneratedError: Error {
     case typeMismatch(String)
 }
 
+public enum RivetGeneratedConfig {
+    public static let moduleName = "backend"
+    public static let entryName = "start"
+}
+
 public struct RivetAPI: Sendable {
     public let client: RivetClient
 
