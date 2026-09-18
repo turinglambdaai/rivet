@@ -50,8 +50,8 @@ rivet::windows::RacketRuntimeConfig runtime_config() {
   config.scheme_boot = utf8(runtime / L"scheme.boot");
   config.racket_boot = utf8(runtime / L"racket.boot");
   config.backend_bundle = utf8(root / L"res" / L"core.zo");
-  config.module_name = "backend";
-  config.entry_symbol = "start";
+  config.module_name = rivet_app::kModuleName;
+  config.entry_symbol = rivet_app::kEntryName;
   config.dll_dir = runtime.wstring();
   return config;
 }
