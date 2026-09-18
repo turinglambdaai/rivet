@@ -6,6 +6,7 @@
          racket/runtime-path
          racket/string
          racket/system
+         "codegen.rkt"
          "project.rkt"
          "runtime.rkt")
 
@@ -208,6 +209,9 @@
   staged-executable)
 
 (define (build-project! project #:configuration [configuration "Debug"])
+  ;; Native hosts compile against generated typed wrappers from the exact
+  ;; backend schema. Regenerate on every build so the boundary cannot drift.
+  (generate-clients! project)
   (define runtime (discover-racket-runtime))
   (define stage (project-path project ".rivet" "stage"))
   (fresh-directory! stage)
