@@ -3,6 +3,7 @@
 (require racket/port)
 
 (provide protocol-version
+         max-frame-payload-size
          message:hello
          message:request
          message:response
@@ -31,6 +32,7 @@
 ;; without changing transport semantics.
 
 (define protocol-version 1)
+(define max-frame-payload-size (* 64 1024 1024))
 (define magic #"RVT1")
 
 (define message:hello    1)
@@ -79,6 +81,11 @@
   (define payload (frame-payload f))
   (unless (bytes? payload)
     (raise-argument-error 'write-frame "bytes? payload" payload))
+  (when (> (bytes-length payload) max-frame-payload-size)
+    (raise-arguments-error 'write-frame
+                           "payload exceeds Rivet protocol limit"
+                           "length" (bytes-length payload)
+                           "maximum" max-frame-payload-size))
   (write-bytes magic out)
   (write-byte protocol-version out)
   (write-byte (frame-type f) out)
@@ -109,6 +116,11 @@
      (when (or (eof-object? id-bytes) (eof-object? len-bytes))
        (error 'read-frame "unexpected EOF while reading frame header"))
      (define len (bytes->u32 len-bytes))
+     (when (> len max-frame-payload-size)
+       (raise-arguments-error 'read-frame
+                              "payload exceeds Rivet protocol limit"
+                              "length" len
+                              "maximum" max-frame-payload-size))
      (define payload (read-exactly in len))
      (when (eof-object? payload)
        (error 'read-frame "unexpected EOF while reading payload"))
@@ -185,7 +197,13 @@
        (when (eof-object? b) (error 'decode-value "unexpected EOF in bytes"))
        b]
       [(#x06)
-       (for/list ([i (in-range (read-u32*))]) (read-one))]
+       (define count (read-u32*))
+       (define position (file-position in))
+       (define remaining (- (bytes-length bs) position))
+       ;; Every encoded list element consumes at least one tag byte.
+       (when (> count remaining)
+         (error 'decode-value "impossible list length: ~a" count))
+       (for/list ([i (in-range count)]) (read-one))]
       [else
        (error 'decode-value "unknown value tag: ~a" tag)]))
   (define value (read-one))
