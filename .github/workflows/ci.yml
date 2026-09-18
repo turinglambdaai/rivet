@@ -55,3 +55,71 @@ jobs:
       - uses: actions/checkout@v7
       - name: Test Swift runtime
         run: swift test --package-path platform/macos
+
+  windows-host:
+    name: WinUI 3 host
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Build WinUI host
+        shell: pwsh
+        run: |
+          $include = racket -e '(require setup/dirs) (display (find-include-dir))'
+          $libdir = racket -e '(require setup/dirs) (display (find-lib-dir))'
+          $def = Get-ChildItem -Path $libdir,(Split-Path $libdir -Parent) -Recurse -Filter 'libracketcs*.def' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $def) { throw 'libracketcs .def file not found' }
+
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -property installationPath
+          $libexe = Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64\lib.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          $msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+          if (-not $libexe) { throw 'MSVC lib.exe not found' }
+          if (-not $msbuild) { throw 'MSBuild.exe not found' }
+
+          $import = Join-Path $env:RUNNER_TEMP 'libracketcs.lib'
+          & $libexe.FullName "/def:$($def.FullName)" "/out:$import" /machine:x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $env:RIVET_ROOT = "$($pwd.Path)\"
+          $env:RIVET_RACKET_INCLUDE = $include
+          $env:RIVET_RACKET_IMPORT_LIB = $import
+          & $msbuild platform\windows\host\RivetHost.vcxproj /restore /m /p:Configuration=Release /p:Platform=x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  macos-host:
+    name: SwiftUI embedded host
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Build SwiftUI host
+        shell: bash
+        run: |
+          set -euo pipefail
+          RKT_INCLUDE="$(racket -e '(require setup/dirs) (display (find-include-dir))')"
+          RKT_LIB="$(racket -e '(require setup/dirs) (display (find-lib-dir))')"
+          export RIVET_ROOT="$PWD"
+          swift build \
+            --package-path platform/macos/host \
+            -c release \
+            -Xcc "-I$RKT_INCLUDE" \
+            -Xlinker "-F$RKT_LIB" \
+            -Xlinker -framework \
+            -Xlinker Racket \
+            -Xlinker -rpath \
+            -Xlinker '@executable_path/Frameworks' \
+            -Xlinker -rpath \
+            -Xlinker '@executable_path/../Frameworks'
