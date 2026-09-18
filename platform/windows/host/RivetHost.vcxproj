@@ -26,6 +26,7 @@
     <UseWinUI>true</UseWinUI>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained Condition="'$(RivetSelfContained)'=='true'">true</WindowsAppSDKSelfContained>
   </PropertyGroup>
 
   <ItemGroup Label="ProjectConfigurations">
