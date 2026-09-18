@@ -75,7 +75,7 @@
       <WarningLevel>Level4</WarningLevel>
       <AdditionalOptions>%(AdditionalOptions) /bigobj /permissive-</AdditionalOptions>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(RIVET_RACKET_INCLUDE);$(RIVET_ROOT)runtime\include;$(RIVET_ROOT)platform\windows\runtime;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(RIVET_RACKET_INCLUDE);$(RIVET_ROOT)\runtime\include;$(RIVET_ROOT)\platform\windows\runtime;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalDependencies>$(RIVET_RACKET_IMPORT_LIB);%(AdditionalDependencies)</AdditionalDependencies>
@@ -115,9 +115,9 @@
       <DependentUpon>MainWindow.xaml</DependentUpon>
     </ClInclude>
     <ClInclude Include="GeneratedBackend.hpp" />
-    <ClInclude Include="$(RIVET_ROOT)platform\windows\runtime\backend.hpp" />
-    <ClInclude Include="$(RIVET_ROOT)platform\windows\runtime\win32_pipe_transport.hpp" />
-    <ClInclude Include="$(RIVET_ROOT)runtime\include\rivet\protocol.hpp" />
+    <ClInclude Include="$(RIVET_ROOT)\platform\windows\runtime\backend.hpp" />
+    <ClInclude Include="$(RIVET_ROOT)\platform\windows\runtime\win32_pipe_transport.hpp" />
+    <ClInclude Include="$(RIVET_ROOT)\runtime\include\rivet\protocol.hpp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -130,9 +130,9 @@
     <ClCompile Include="MainWindow.xaml.cpp">
       <DependentUpon>MainWindow.xaml</DependentUpon>
     </ClCompile>
-    <ClCompile Include="$(RIVET_ROOT)platform\windows\runtime\backend.cpp" />
-    <ClCompile Include="$(RIVET_ROOT)platform\windows\runtime\win32_pipe_transport.cpp" />
-    <ClCompile Include="$(RIVET_ROOT)runtime\src\protocol.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\platform\windows\runtime\backend.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\platform\windows\runtime\win32_pipe_transport.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\runtime\src\protocol.cpp" />
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
   </ItemGroup>
 
