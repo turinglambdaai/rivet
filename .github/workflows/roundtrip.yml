@@ -1,0 +1,81 @@
+name: Embedded Roundtrip
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-roundtrip:
+    name: Windows embedded Racket round trip
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Install Rivet
+        shell: pwsh
+        run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
+      - name: Build integration backend and host
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $env:RUNNER_TEMP 'rivet-roundtrip'
+          $runtime = Join-Path $stage 'runtime'
+          $res = Join-Path $stage 'res'
+          $nativeBuild = Join-Path $env:RUNNER_TEMP 'rivet-native-integration'
+          New-Item -ItemType Directory -Force -Path $runtime, $res | Out-Null
+
+          raco ctool `
+            --runtime $runtime `
+            --runtime-access runtime `
+            --mods (Join-Path $res 'core.zo') `
+            platform/windows/Integration/backend.rkt
+
+          $racketExe = (Get-Command racket.exe).Source
+          $racketRoot = Split-Path $racketExe -Parent
+          $include = Join-Path $racketRoot 'include'
+          $petite = Get-ChildItem $racketRoot -Recurse -File -Filter petite.boot | Select-Object -First 1
+          $scheme = Get-ChildItem $racketRoot -Recurse -File -Filter scheme.boot | Select-Object -First 1
+          $racketBoot = Get-ChildItem $racketRoot -Recurse -File -Filter racket.boot | Select-Object -First 1
+          $dll = Get-ChildItem $racketRoot -Recurse -File -Filter 'libracketcs*.dll' | Select-Object -First 1
+          $def = Get-ChildItem $racketRoot -Recurse -File -Filter 'libracketcs*.def' | Select-Object -First 1
+          foreach ($item in @($petite, $scheme, $racketBoot, $dll, $def)) {
+            if (-not $item) { throw 'required Racket CS runtime file was not found' }
+          }
+          Copy-Item $petite.FullName (Join-Path $runtime 'petite.boot') -Force
+          Copy-Item $scheme.FullName (Join-Path $runtime 'scheme.boot') -Force
+          Copy-Item $racketBoot.FullName (Join-Path $runtime 'racket.boot') -Force
+          Copy-Item $dll.FullName (Join-Path $stage $dll.Name) -Force
+
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $vsRoot = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vsRoot) { throw 'Visual Studio C++ tools were not found' }
+          $libExe = Get-ChildItem (Join-Path $vsRoot 'VC\Tools\MSVC') -Recurse -File -Filter lib.exe |
+            Where-Object { $_.FullName -match 'Hostx64\\x64\\lib\.exe$' } |
+            Select-Object -First 1
+          if (-not $libExe) { throw 'MSVC lib.exe was not found' }
+          $importLib = Join-Path $stage 'libracketcs.lib'
+          & $libExe.FullName "/def:$($def.FullName)" "/out:$importLib" /machine:x64
+          if ($LASTEXITCODE -ne 0) { throw 'failed to create Racket import library' }
+
+          cmake -S platform/windows/Integration -B $nativeBuild `
+            "-DRIVET_ROOT=$PWD" `
+            "-DRIVET_RACKET_INCLUDE=$include" `
+            "-DRIVET_RACKET_IMPORT_LIB=$importLib"
+          cmake --build $nativeBuild --config Release
+
+          $integrationExe = Join-Path $nativeBuild 'Release\RivetIntegration.exe'
+          if (-not (Test-Path $integrationExe)) { throw 'integration executable was not produced' }
+          Copy-Item $integrationExe (Join-Path $stage 'RivetIntegration.exe') -Force
+          "RIVET_ROUNDTRIP_STAGE=$stage" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Exercise embedded runtime
+        shell: pwsh
+        run: '& (Join-Path $env:RIVET_ROUNDTRIP_STAGE "RivetIntegration.exe")'
