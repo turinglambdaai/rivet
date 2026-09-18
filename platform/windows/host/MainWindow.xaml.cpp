@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "MainWindow.xaml.h"
+#include "GeneratedBackend.hpp"
 
 #include <stdexcept>
 
@@ -114,17 +115,11 @@ winrt::fire_and_forget MainWindow::IncrementAsync() {
 
   try {
     co_await winrt::resume_background();
-    auto future = backend->call(
-        "increment",
-        rivet::Value::List{rivet::Value(static_cast<std::int64_t>(current))});
-    auto value = future.get();
-    auto const* next = std::get_if<std::int64_t>(&value.data);
-    if (next == nullptr) {
-      throw std::runtime_error("increment returned a non-Int64 value");
-    }
-    count_.store(*next, std::memory_order_relaxed);
+    rivet_app::API api(*backend);
+    auto const next = api.increment(current).get();
+    count_.store(next, std::memory_order_relaxed);
 
-    dispatcher.TryEnqueue([weak, next_value = *next] {
+    dispatcher.TryEnqueue([weak, next_value = next] {
       if (auto window = weak.get()) {
         std::wstring text = L"Count: ";
         text += std::to_wstring(next_value);
