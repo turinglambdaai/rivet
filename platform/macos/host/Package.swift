@@ -18,8 +18,8 @@ let package = Package(
         .executableTarget(
             name: "RivetHost",
             dependencies: [
-                .product(name: "RivetRuntime", package: "RivetMac"),
-                .product(name: "RivetEmbedding", package: "RivetMac")
+                .product(name: "RivetRuntime", package: "macos"),
+                .product(name: "RivetEmbedding", package: "macos")
             ],
             path: "Sources/RivetHost"
         )
