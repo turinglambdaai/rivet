@@ -53,8 +53,19 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Test Swift runtime
-        run: swift test --package-path platform/macos
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Test Swift runtime and C bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          racket_include="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
+          swift test --package-path platform/macos -Xcc "-I${racket_include}"
 
   windows-host:
     name: Windows CLI package smoke
