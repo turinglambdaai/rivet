@@ -67,5 +67,7 @@ RKT
     (build-path (simplify-path rivet-root #t) "platform" "macos" "host"))
   (unless (directory-exists? macos-template)
     (error 'rivet-new "macOS host template is missing: ~a" macos-template))
-  (copy-directory/files macos-template (build-path root "macos"))
+  ;; Keep the app host directory distinct from Rivet's own platform/macos
+  ;; package. SwiftPM uses the final path element as local package identity.
+  (copy-directory/files macos-template (build-path root "macos-host"))
   root)
