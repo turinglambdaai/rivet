@@ -134,6 +134,9 @@ public final class RivetClient: @unchecked Sendable {
             (UInt32(header[15]) << 8) |
             (UInt32(header[16]) << 16) |
             (UInt32(header[17]) << 24)
+        guard Int(length) <= rivetMaxFramePayloadSize else {
+            throw RivetProtocolError.lengthOverflow
+        }
         let payload = try readExactly(Int(length))
         var complete = header
         complete.append(payload)
