@@ -8,7 +8,7 @@ namespace winrt::RivetHost::implementation {
 struct MainWindow : MainWindowT<MainWindow> {
   MainWindow();
 
-  void Increment_Click(winrt::IInspectable const& sender,
+  void Increment_Click(winrt::Windows::Foundation::IInspectable const& sender,
                        Microsoft::UI::Xaml::RoutedEventArgs const& args);
 
  private:
