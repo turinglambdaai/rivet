@@ -8,15 +8,23 @@
 (provide define-rpc
          define-event
          emit-event!
+         define-state
+         state-ref
+         state-set!
          serve
          serve-fds
          registered-rpcs
+         registered-states
          rpc-schema
-         (struct-out rpc-info))
+         state-schema
+         (struct-out rpc-info)
+         (struct-out state-info))
 
 (struct rpc-info (name arg-names arg-types result-type procedure) #:transparent)
+(struct state-info (name type cell lock) #:transparent)
 
 (define registry (make-hash))
+(define state-registry (make-hash))
 (define current-event-emitter (make-parameter #f))
 
 (define (emit-event! name value)
@@ -30,7 +38,6 @@
 (define-syntax-rule (define-event name)
   (define (name value)
     (emit-event! 'name value)))
-
 
 (define (supported-type? type)
   (or (memq type '(String Int64 Bool Bytes Void Any))
@@ -79,10 +86,59 @@
              (rpc-info name arg-names arg-types result-type proc))
   (void))
 
+(define (register-state! name type initial)
+  (when (hash-has-key? state-registry name)
+    (error 'define-state "state already registered: ~a" name))
+  (unless (supported-type? type)
+    (raise-arguments-error 'define-state
+                           "unsupported Rivet state type"
+                           "state" name
+                           "type" type))
+  (when (eq? type 'Void)
+    (raise-arguments-error 'define-state
+                           "Void is not a valid state type"
+                           "state" name))
+  (validate-value 'define-state name type initial)
+  (define info (state-info name type (box initial) (make-semaphore 1)))
+  (hash-set! state-registry name info)
+  info)
+
+(define-syntax define-state
+  (syntax-rules (:)
+    [(_ name : type initial)
+     (define name (register-state! 'name 'type initial))]
+    [(_ name type initial)
+     (define name (register-state! 'name 'type initial))]))
+
+(define (state-ref state)
+  (unless (state-info? state)
+    (raise-argument-error 'state-ref "state-info?" state))
+  (call-with-semaphore
+   (state-info-lock state)
+   (lambda () (unbox (state-info-cell state)))))
+
+(define (state-set! state value)
+  (unless (state-info? state)
+    (raise-argument-error 'state-set! "state-info?" state))
+  (validate-value 'state-set! (state-info-name state) (state-info-type state) value)
+  (call-with-semaphore
+   (state-info-lock state)
+   (lambda () (set-box! (state-info-cell state) value)))
+  (define emitter (current-event-emitter))
+  (when emitter
+    (emitter "$state"
+             (list (symbol->string (state-info-name state)) value)))
+  (void))
+
 (define (registered-rpcs)
   (sort (hash-values registry)
         string<?
         #:key (lambda (info) (symbol->string (rpc-info-name info)))))
+
+(define (registered-states)
+  (sort (hash-values state-registry)
+        string<?
+        #:key (lambda (info) (symbol->string (state-info-name info)))))
 
 (define (rpc-schema)
   (for/list ([info (in-list (registered-rpcs))])
@@ -95,8 +151,11 @@
                'type (format "~s" type)))
      'result (format "~s" (rpc-info-result-type info)))))
 
-;; Intentionally small v0 syntax. Types are schema metadata today; the wire
-;; codec validates values. Code generators will consume this schema later.
+(define (state-schema)
+  (for/list ([info (in-list (registered-states))])
+    (hasheq 'name (symbol->string (state-info-name info))
+            'type (format "~s" (state-info-type info)))))
+
 (define-syntax define-rpc
   (syntax-rules (:)
     [(_ (name [arg : arg-type] ... : result-type) body ...)
@@ -119,10 +178,28 @@
 (define (exn->payload e)
   (encode-value (exn-message e)))
 
-;; Runs the Rivet RPC server on binary ports. The native host owns the Racket
-;; runtime thread; this server owns lightweight Racket threads for individual
-;; calls. Responses are serialized by one writer thread so frames cannot
-;; interleave on the output port.
+(define (lookup-state name)
+  (unless (string? name)
+    (raise-argument-error '$state "string?" name))
+  (hash-ref state-registry
+            (string->symbol name)
+            (lambda () (error '$state "unknown state: ~a" name))))
+
+(define (invoke-state-request name args)
+  (case name
+    [($state/get)
+     (match args
+       [(list state-name) (state-ref (lookup-state state-name))]
+       [_ (error '$state/get "expected state name")])]
+    [($state/set)
+     (match args
+       [(list state-name value)
+        (define state (lookup-state state-name))
+        (state-set! state value)
+        (state-ref state)]
+       [_ (error '$state/set "expected state name and value")])]
+    [else (error 'serve "unknown internal request: ~a" name)]))
+
 (define (serve in out)
   (unless (input-port? in)
     (raise-argument-error 'serve "input-port?" in))
@@ -131,7 +208,7 @@
 
   (define root-custodian (make-custodian))
   (define responses (make-async-channel))
-  (define pending (make-hash)) ; request id -> request custodian
+  (define pending (make-hash))
   (define stopped? #f)
   (define next-event-id 1)
 
@@ -162,10 +239,13 @@
     (when (hash-has-key? pending id)
       (error 'serve "duplicate request id: ~a" id))
     (define-values (rpc-name args) (request->call (frame-payload f)))
+    (define internal-state-request?
+      (memq rpc-name '($state/get $state/set)))
     (define info
-      (hash-ref registry rpc-name
-                (lambda ()
-                  (error 'serve "unknown RPC: ~a" rpc-name))))
+      (and (not internal-state-request?)
+           (hash-ref registry rpc-name
+                     (lambda ()
+                       (error 'serve "unknown RPC: ~a" rpc-name)))))
     (define request-custodian (make-custodian root-custodian))
     (hash-set! pending id request-custodian)
     (parameterize ([current-custodian request-custodian])
@@ -175,22 +255,25 @@
                           (lambda (e)
                             (hash-remove! pending id)
                             (send! (frame message:error id (exn->payload e))))])
-           (define expected (length (rpc-info-arg-types info)))
-           (unless (= expected (length args))
-             (error rpc-name
-                    "expected ~a argument~a, received ~a"
-                    expected
-                    (if (= expected 1) "" "s")
-                    (length args)))
-           (for ([arg (in-list args)]
-                 [arg-name (in-list (rpc-info-arg-names info))]
-                 [arg-type (in-list (rpc-info-arg-types info))])
-             (validate-value rpc-name arg-name arg-type arg))
-           (define result (apply (rpc-info-procedure info) args))
-           (validate-value rpc-name 'result (rpc-info-result-type info) result)
-           (finish! id
-                    message:response
-                    result))))))
+           (define result
+             (if internal-state-request?
+                 (invoke-state-request rpc-name args)
+                 (begin
+                   (define expected (length (rpc-info-arg-types info)))
+                   (unless (= expected (length args))
+                     (error rpc-name
+                            "expected ~a argument~a, received ~a"
+                            expected
+                            (if (= expected 1) "" "s")
+                            (length args)))
+                   (for ([arg (in-list args)]
+                         [arg-name (in-list (rpc-info-arg-names info))]
+                         [arg-type (in-list (rpc-info-arg-types info))])
+                     (validate-value rpc-name arg-name arg-type arg))
+                   (define value (apply (rpc-info-procedure info) args))
+                   (validate-value rpc-name 'result (rpc-info-result-type info) value)
+                   value)))
+           (finish! id message:response result))))))
 
   (define (cancel! id)
     (define request-custodian (hash-ref pending id #f))
@@ -242,10 +325,6 @@
 
   (void))
 
-;; Native hosts deal in OS/CRT file descriptors. Keeping the conversion here
-;; means platform hosts never need to manufacture Racket port objects through
-;; the embedding API. `unsafe-file-descriptor->port` does not duplicate the
-;; descriptor, so this procedure owns the two descriptors for its lifetime.
 (define (serve-fds in-fd out-fd)
   (unless (exact-integer? in-fd)
     (raise-argument-error 'serve-fds "exact-integer?" in-fd))
@@ -256,9 +335,6 @@
   (dynamic-wind
     void
     (lambda ()
-      ;; Nothing from the embedded application may escape across the native
-      ;; racket_apply boundary. Request exceptions are already serialized as
-      ;; Error frames; protocol/server failures are logged and close transport.
       (with-handlers ([exn?
                        (lambda (e)
                          ((error-display-handler)
