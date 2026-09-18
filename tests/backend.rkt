@@ -13,12 +13,18 @@
   (progress value)
   (add1 value))
 
+(define-rpc (wait-forever : Void)
+  (sync never-evt))
+
 (check-equal?
  (rpc-schema)
  (list
   (hasheq 'name "increment"
           'arguments (list (hasheq 'name "value" 'type "Int64"))
           'result "Int64")
+  (hasheq 'name "wait-forever"
+          'arguments '()
+          'result "Void")
   (hasheq 'name "work"
           'arguments (list (hasheq 'name "value" 'type "Int64"))
           'result "Int64")))
@@ -70,6 +76,19 @@
 (check-equal? (frame-type type-error) message:error)
 (check-equal? (frame-id type-error) 3)
 (check-true (string? (decode-value (frame-payload type-error))))
+
+;; Request registration happens synchronously before the server reads the next
+;; frame, so an immediately following Cancel deterministically finds request 4.
+(write-frame
+ (frame message:request
+        4
+        (encode-value (list "wait-forever")))
+ client-out)
+(write-frame (frame message:cancel 4 #"") client-out)
+(define cancelled (read-frame client-in))
+(check-equal? (frame-type cancelled) message:error)
+(check-equal? (frame-id cancelled) 4)
+(check-equal? (decode-value (frame-payload cancelled)) "request cancelled")
 
 (write-frame (frame message:shutdown 0 #"") client-out)
 (thread-wait server-thread)
