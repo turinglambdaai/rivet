@@ -60,8 +60,6 @@
         "--mods" (path->string core)
         (path->string backend))
 
-  ;; Boot images are part of the exact Racket runtime compatibility unit, not
-  ;; generic files that Rivet downloads from a nearby release.
   (for ([source (in-list
                  (list (racket-runtime-petite-boot runtime)
                        (racket-runtime-scheme-boot runtime)
@@ -172,7 +170,7 @@
   (unless framework
     (error 'build-project! "the installed Racket CS does not provide Racket.framework"))
 
-  (define host-dir (project-path project "macos"))
+  (define host-dir (project-path project "macos-host"))
   (define package-file (build-path host-dir "Package.swift"))
   (unless (file-exists? package-file)
     (raise-arguments-error 'build-project!
@@ -216,8 +214,6 @@
 (define (build-project! project
                         #:configuration [configuration "Debug"]
                         #:self-contained? [self-contained? #f])
-  ;; Native hosts compile against generated typed wrappers from the exact
-  ;; backend schema. Regenerate on every build so the boundary cannot drift.
   (generate-clients! project)
   (define runtime (discover-racket-runtime))
   (define stage (project-path project ".rivet" "stage"))
