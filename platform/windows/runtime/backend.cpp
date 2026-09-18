@@ -61,6 +61,42 @@ class UniqueHandle {
   HANDLE handle_{INVALID_HANDLE_VALUE};
 };
 
+class UniqueFd {
+ public:
+  UniqueFd() = default;
+  explicit UniqueFd(int fd) : fd_(fd) {}
+  ~UniqueFd() { reset(); }
+
+  UniqueFd(UniqueFd const&) = delete;
+  UniqueFd& operator=(UniqueFd const&) = delete;
+
+  UniqueFd(UniqueFd&& other) noexcept : fd_(other.release()) {}
+  UniqueFd& operator=(UniqueFd&& other) noexcept {
+    if (this != &other) {
+      reset(other.release());
+    }
+    return *this;
+  }
+
+  int get() const noexcept { return fd_; }
+
+  int release() noexcept {
+    auto const result = fd_;
+    fd_ = -1;
+    return result;
+  }
+
+  void reset(int fd = -1) noexcept {
+    if (fd_ >= 0) {
+      _close(fd_);
+    }
+    fd_ = fd;
+  }
+
+ private:
+  int fd_{-1};
+};
+
 struct PipePair {
   UniqueHandle read;
   UniqueHandle write;
@@ -76,7 +112,7 @@ PipePair create_pipe() {
   return PipePair{UniqueHandle(read), UniqueHandle(write)};
 }
 
-int handle_to_binary_fd(UniqueHandle handle, int access_flags) {
+UniqueFd handle_to_binary_fd(UniqueHandle handle, int access_flags) {
   auto const raw = handle.release();
   auto const fd = _open_osfhandle(reinterpret_cast<intptr_t>(raw),
                                   access_flags | _O_BINARY);
@@ -84,7 +120,7 @@ int handle_to_binary_fd(UniqueHandle handle, int access_flags) {
     ::CloseHandle(raw);
     throw std::runtime_error("_open_osfhandle failed");
   }
-  return fd;
+  return UniqueFd(fd);
 }
 
 std::exception_ptr stopped_error() {
@@ -252,8 +288,8 @@ class Backend::Impl {
  private:
   void racket_main(UniqueHandle server_read, UniqueHandle server_write) noexcept {
     try {
-      auto const in_fd = handle_to_binary_fd(std::move(server_read), _O_RDONLY);
-      auto const out_fd = handle_to_binary_fd(std::move(server_write), _O_WRONLY);
+      auto in_fd = handle_to_binary_fd(std::move(server_read), _O_RDONLY);
+      auto out_fd = handle_to_binary_fd(std::move(server_write), _O_WRONLY);
 
       racket_boot_arguments_t boot{};
       boot.boot1_path = config_.petite_boot.c_str();
@@ -280,10 +316,15 @@ class Backend::Impl {
       // the first result.
       auto const results = racket_dynamic_require(module, entry);
       auto const procedure = Scar(results);
-      auto const args = Scons(Sfixnum(in_fd), Scons(Sfixnum(out_fd), Snil));
+      auto const args =
+          Scons(Sfixnum(in_fd.get()), Scons(Sfixnum(out_fd.get()), Snil));
 
-      // The application entry procedure owns the CRT descriptors through
-      // `serve-fds` and normally returns only after receiving Shutdown.
+      // From this point the application entry procedure owns the descriptors
+      // through serve-fds. Before this point UniqueFd guarantees that startup
+      // failures close the pipe endpoints so the reader sees EOF instead of
+      // waiting forever for Hello.
+      (void)in_fd.release();
+      (void)out_fd.release();
       (void)racket_apply(procedure, args);
       Sscheme_deinit();
     } catch (...) {
