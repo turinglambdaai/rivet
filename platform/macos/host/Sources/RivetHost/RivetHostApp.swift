@@ -61,14 +61,8 @@ final class AppModel: ObservableObject {
 
         Task {
             do {
-                let result = try await backend.client.call(
-                    "increment",
-                    arguments: [.int64(current)]
-                )
-                guard case .int64(let next) = result else {
-                    throw HostError.invalidIncrementResult
-                }
-                count = next
+                let api = RivetAPI(client: backend.client)
+                count = try await api.increment(value: current)
             } catch {
                 status = "RPC error: \(error)"
             }
@@ -107,13 +101,10 @@ final class AppModel: ObservableObject {
 }
 
 enum HostError: Error, CustomStringConvertible {
-    case invalidIncrementResult
     case missingRuntimeFile(String)
 
     var description: String {
         switch self {
-        case .invalidIncrementResult:
-            return "increment returned a non-Int64 value"
         case .missingRuntimeFile(let path):
             return "missing staged runtime file: \(path)"
         }
