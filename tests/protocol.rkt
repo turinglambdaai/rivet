@@ -33,3 +33,22 @@
 
 (check-exn exn:fail?
            (lambda () (decode-value #"\xff")))
+
+
+(check-exn exn:fail?
+           (lambda ()
+             (decode-value #"\x06\xff\xff\xff\xff")))
+
+(define oversized-header-out (open-output-bytes))
+(write-bytes #"RVT1" oversized-header-out)
+(write-byte protocol-version oversized-header-out)
+(write-byte message:request oversized-header-out)
+(write-bytes (integer->integer-bytes 0 8 #f #f) oversized-header-out)
+(write-bytes
+ (integer->integer-bytes (add1 max-frame-payload-size) 4 #f #f)
+ oversized-header-out)
+(check-exn exn:fail?
+           (lambda ()
+             (read-frame
+              (open-input-bytes
+               (get-output-bytes oversized-header-out)))))
