@@ -6,6 +6,8 @@
          "protocol.rkt")
 
 (provide define-rpc
+         define-event
+         emit-event!
          serve
          serve-fds
          registered-rpcs
@@ -14,6 +16,20 @@
 (struct rpc-info (name arg-types result-type procedure) #:transparent)
 
 (define registry (make-hash))
+(define current-event-emitter (make-parameter #f))
+
+(define (emit-event! name value)
+  (unless (or (symbol? name) (string? name))
+    (raise-argument-error 'emit-event! "(or/c symbol? string?)" name))
+  (define emitter (current-event-emitter))
+  (unless emitter
+    (error 'emit-event! "no Rivet server is active on the current Racket thread"))
+  (emitter (if (symbol? name) (symbol->string name) name) value))
+
+(define-syntax-rule (define-event name)
+  (define (name value)
+    (emit-event! 'name value)))
+
 
 (define (register-rpc! name arg-types result-type proc)
   (when (hash-has-key? registry name)
@@ -60,6 +76,7 @@
   (define responses (make-async-channel))
   (define pending (make-hash)) ; request id -> request custodian
   (define stopped? #f)
+  (define next-event-id 1)
 
   (define writer
     (parameterize ([current-custodian root-custodian])
@@ -77,6 +94,11 @@
   (define (finish! id type value)
     (hash-remove! pending id)
     (send! (frame type id (encode-value value))))
+
+  (define (emit! name value)
+    (define id next-event-id)
+    (set! next-event-id (add1 next-event-id))
+    (send! (frame message:event id (encode-value (list name value)))))
 
   (define (start-request! f)
     (define id (frame-id f))
@@ -129,16 +151,17 @@
   (dynamic-wind
     void
     (lambda ()
-      (send! (frame message:hello 0
-                    (encode-value (list "rivet" protocol-version))))
-      (let loop ()
-        (unless stopped?
-          (let ([f (read-frame in)])
-            (if (eof-object? f)
-                (set! stopped? #t)
-                (begin
-                  (dispatch! f)
-                  (loop)))))))
+      (parameterize ([current-event-emitter emit!])
+        (send! (frame message:hello 0
+                      (encode-value (list "rivet" protocol-version))))
+        (let loop ()
+          (unless stopped?
+            (let ([f (read-frame in)])
+              (if (eof-object? f)
+                  (set! stopped? #t)
+                  (begin
+                    (dispatch! f)
+                    (loop))))))))
     (lambda ()
       (for ([cust (in-hash-values pending)])
         (custodian-shutdown-all cust))
