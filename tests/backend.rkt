@@ -6,12 +6,22 @@
 
 (define-event progress)
 
-(define-rpc (increment [value Int64] : Int64)
+(define-rpc (increment [value : Int64] : Int64)
   (add1 value))
 
 (define-rpc (work [value Int64] : Int64)
   (progress value)
   (add1 value))
+
+(check-equal?
+ (rpc-schema)
+ (list
+  (hasheq 'name "increment"
+          'arguments (list (hasheq 'name "value" 'type "Int64"))
+          'result "Int64")
+  (hasheq 'name "work"
+          'arguments (list (hasheq 'name "value" 'type "Int64"))
+          'result "Int64")))
 
 (define-values (server-in client-out) (make-pipe))
 (define-values (client-in server-out) (make-pipe))
@@ -50,6 +60,16 @@
 (check-equal? (frame-type work-response) message:response)
 (check-equal? (frame-id work-response) 2)
 (check-equal? (decode-value (frame-payload work-response)) 8)
+
+(write-frame
+ (frame message:request
+        3
+        (encode-value (list "increment" "wrong-type")))
+ client-out)
+(define type-error (read-frame client-in))
+(check-equal? (frame-type type-error) message:error)
+(check-equal? (frame-id type-error) 3)
+(check-true (string? (decode-value (frame-payload type-error))))
 
 (write-frame (frame message:shutdown 0 #"") client-out)
 (thread-wait server-thread)
