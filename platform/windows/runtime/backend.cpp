@@ -186,7 +186,7 @@ class Backend::Impl {
     return running_.load(std::memory_order_acquire);
   }
 
-  std::future<Value> call(std::string rpc_name, Value::List arguments) {
+  PendingCall request(std::string rpc_name, Value::List arguments) {
     if (!running()) {
       throw std::runtime_error("Rivet backend is not running");
     }
@@ -220,7 +220,33 @@ class Backend::Impl {
       fail_request(id, std::current_exception());
     }
 
-    return future;
+    return PendingCall{id, std::move(future)};
+  }
+
+  std::future<Value> call(std::string rpc_name, Value::List arguments) {
+    return request(std::move(rpc_name), std::move(arguments)).result;
+  }
+
+  void cancel(std::uint64_t request_id) {
+    if (!running()) {
+      return;
+    }
+    {
+      std::lock_guard lock(pending_mutex_);
+      if (pending_.find(request_id) == pending_.end()) {
+        return;
+      }
+    }
+    std::lock_guard write_lock(write_mutex_);
+    auto* transport = transport_.get();
+    if (transport != nullptr) {
+      write_frame(*transport, Frame{MessageType::Cancel, request_id, {}});
+    }
+  }
+
+  void set_event_handler(EventHandler handler) {
+    std::lock_guard lock(event_mutex_);
+    event_handler_ = std::move(handler);
   }
 
  private:
@@ -303,8 +329,7 @@ class Backend::Impl {
             break;
           }
           case MessageType::Event:
-            // Event subscriptions are the next protocol milestone. Ignoring
-            // unknown events is preferable to corrupting response ordering.
+            deliver_event(decode_value(frame->payload));
             break;
           default:
             throw std::runtime_error("unexpected Rivet message from backend");
@@ -343,6 +368,34 @@ class Backend::Impl {
       throw std::runtime_error("duplicate Rivet Hello frame");
     }
     ready_->set_value();
+  }
+
+  void deliver_event(Value value) noexcept {
+    try {
+      auto const* list = std::get_if<Value::List>(&value.data);
+      if (list == nullptr || list->size() != 2) {
+        return;
+      }
+      auto const* name = std::get_if<std::string>(&(*list)[0].data);
+      if (name == nullptr) {
+        return;
+      }
+
+      EventHandler handler;
+      {
+        std::lock_guard lock(event_mutex_);
+        handler = event_handler_;
+      }
+      if (handler) {
+        try {
+          handler(*name, (*list)[1]);
+        } catch (...) {
+          // Application event handlers are isolated from the transport loop.
+        }
+      }
+    } catch (...) {
+      // Malformed events are ignored; request/response transport stays alive.
+    }
   }
 
   void set_ready_exception(std::exception_ptr error) noexcept {
@@ -403,10 +456,12 @@ class Backend::Impl {
   mutable std::mutex state_mutex_;
   std::mutex write_mutex_;
   std::mutex pending_mutex_;
+  std::mutex event_mutex_;
   std::unique_ptr<Win32PipeTransport> transport_;
   std::thread racket_thread_;
   std::thread reader_thread_;
   std::unordered_map<std::uint64_t, std::unique_ptr<std::promise<Value>>> pending_;
+  EventHandler event_handler_;
   std::atomic<std::uint64_t> next_id_{1};
   std::atomic<bool> running_{false};
   std::atomic<bool> hello_seen_{false};
@@ -424,8 +479,20 @@ void Backend::start() { impl_->start(); }
 void Backend::stop() { impl_->stop(); }
 bool Backend::running() const noexcept { return impl_->running(); }
 
+PendingCall Backend::request(std::string rpc_name, Value::List arguments) {
+  return impl_->request(std::move(rpc_name), std::move(arguments));
+}
+
 std::future<Value> Backend::call(std::string rpc_name, Value::List arguments) {
   return impl_->call(std::move(rpc_name), std::move(arguments));
+}
+
+void Backend::cancel(std::uint64_t request_id) {
+  impl_->cancel(request_id);
+}
+
+void Backend::set_event_handler(EventHandler handler) {
+  impl_->set_event_handler(std::move(handler));
 }
 
 }  // namespace rivet::windows
