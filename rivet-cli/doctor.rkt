@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require "runtime.rkt")
+(require "runtime.rkt"
+         "windows-tools.rkt")
 
 (provide run-doctor)
 
@@ -30,9 +31,13 @@
   (define native?
     (case (system-type 'os)
       [(windows)
-       (define msbuild? (tool-status "MSBuild" "MSBuild.exe"))
-       (define cl? (tool-status "C++ compiler" "cl.exe"))
-       (define lib? (tool-status "MSVC librarian" "lib.exe"))
+       (define tools (discover-windows-toolchain))
+       (define msbuild? (windows-toolchain-msbuild tools))
+       (define cl? (windows-toolchain-cl tools))
+       (define lib? (windows-toolchain-lib tools))
+       (printf "  MSBuild: ~a\n" (or msbuild? "not found"))
+       (printf "  C++ compiler: ~a\n" (or cl? "not found"))
+       (printf "  MSVC librarian: ~a\n" (or lib? "not found"))
        (printf "  UI: WinUI 3 / Windows App SDK 2.4\n")
        (and msbuild? cl? lib? runtime)]
       [(macosx)
