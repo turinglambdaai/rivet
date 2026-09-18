@@ -3,6 +3,7 @@
 (require rackunit
          racket/file
          racket/path
+         rivet/backend
          "../rivet-cli/codegen.rkt"
          "../rivet-cli/project.rkt"
          "../rivet-cli/scaffold.rkt")
