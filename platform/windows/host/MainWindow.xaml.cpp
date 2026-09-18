@@ -78,8 +78,6 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
         window->backend_ = std::move(backend);
         window->SetReadyUi();
       } else {
-        // The UI disappeared during startup. Stop without publishing the
-        // backend into a destroyed XAML object.
         std::thread([backend = std::move(backend)]() mutable {
           backend->stop();
         }).detach();
@@ -96,7 +94,7 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
 }
 
 void MainWindow::Increment_Click(
-    winrt::IInspectable const&,
+    winrt::Windows::Foundation::IInspectable const&,
     Microsoft::UI::Xaml::RoutedEventArgs const&) {
   IncrementAsync();
 }
