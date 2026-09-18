@@ -83,6 +83,7 @@ class Reader {
   }
 
   bool empty() const noexcept { return offset_ == bytes_.size(); }
+  std::size_t remaining() const noexcept { return bytes_.size() - offset_; }
 
  private:
   void require(std::size_t size) const {
@@ -162,6 +163,10 @@ Value decode_one(Reader& reader) {
     case ValueTag::List: {
       Value::List list;
       auto const count = reader.u32();
+      // Every encoded item needs at least one tag byte.
+      if (count > reader.remaining()) {
+        throw std::runtime_error("impossible Rivet list length");
+      }
       list.reserve(count);
       for (std::uint32_t i = 0; i < count; ++i) {
         list.push_back(decode_one(reader));
@@ -175,7 +180,7 @@ Value decode_one(Reader& reader) {
 }  // namespace
 
 void write_frame(Transport& transport, Frame const& frame) {
-  if (frame.payload.size() > UINT32_MAX) {
+  if (frame.payload.size() > kMaxFramePayloadSize) {
     throw std::length_error("Rivet frame payload exceeds protocol limit");
   }
 
@@ -211,6 +216,9 @@ std::optional<Frame> read_frame(Transport& transport) {
   frame.type = static_cast<MessageType>(header[5]);
   frame.id = read_u64(header.data() + 6);
   auto const payload_size = read_u32(header.data() + 14);
+  if (payload_size > kMaxFramePayloadSize) {
+    throw std::length_error("Rivet frame payload exceeds protocol limit");
+  }
   frame.payload.resize(payload_size);
   if (payload_size != 0 &&
       !transport.read_exact(frame.payload.data(), frame.payload.size())) {
