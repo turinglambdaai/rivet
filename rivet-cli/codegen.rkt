@@ -1,0 +1,289 @@
+#lang racket/base
+
+(require racket/file
+         racket/list
+         racket/match
+         racket/path
+         racket/string
+         rivet/backend
+         "project.rkt")
+
+(provide generate-clients!)
+
+(define swift-keywords
+  '("class" "struct" "enum" "protocol" "extension" "func" "let" "var"
+    "import" "return" "throw" "throws" "async" "await" "actor" "self"
+    "switch" "case" "default" "if" "else" "for" "while" "in" "where"))
+
+(define cpp-keywords
+  '("class" "struct" "enum" "template" "typename" "auto" "return" "throw"
+    "switch" "case" "default" "if" "else" "for" "while" "namespace"
+    "public" "private" "protected" "operator" "new" "delete"))
+
+(define (identifier value keywords)
+  (define raw
+    (regexp-replace* #px"[^A-Za-z0-9_]"
+                     (if (symbol? value) (symbol->string value) value)
+                     "_"))
+  (define with-prefix
+    (if (or (string=? raw "")
+            (regexp-match? #px"^[0-9]" raw))
+        (string-append "_" raw)
+        raw))
+  (if (member with-prefix keywords)
+      (string-append "rivet_" with-prefix)
+      with-prefix))
+
+(define (swift-id value) (identifier value swift-keywords))
+(define (cpp-id value) (identifier value cpp-keywords))
+
+(define (nested-types type)
+  (match type
+    [(list (or 'List 'Optional) inner)
+     (cons type (nested-types inner))]
+    [_ (list type)]))
+
+(define (all-types infos)
+  (remove-duplicates
+   (append*
+    (for/list ([info (in-list infos)])
+      (append*
+       (map nested-types
+            (append (rpc-info-arg-types info)
+                    (list (rpc-info-result-type info)))))))
+   equal?))
+
+(define (type-key type)
+  (regexp-replace* #px"[^A-Za-z0-9]+"
+                   (format "~s" type)
+                   "_"))
+
+(define (swift-type type)
+  (match type
+    ['String "String"]
+    ['Int64 "Int64"]
+    ['Bool "Bool"]
+    ['Bytes "Data"]
+    ['Void "Void"]
+    ['Any "RivetValue"]
+    [(list 'List inner) (format "[~a]" (swift-type inner))]
+    [(list 'Optional inner) (format "~a?" (swift-type inner))]
+    [_ (error 'generate-clients! "unsupported Swift type: ~e" type)]))
+
+(define (cpp-type type)
+  (match type
+    ['String "std::string"]
+    ['Int64 "std::int64_t"]
+    ['Bool "bool"]
+    ['Bytes "rivet::Bytes"]
+    ['Void "void"]
+    ['Any "rivet::Value"]
+    [(list 'List inner) (format "std::vector<~a>" (cpp-type inner))]
+    [(list 'Optional inner) (format "std::optional<~a>" (cpp-type inner))]
+    [_ (error 'generate-clients! "unsupported C++ type: ~e" type)]))
+
+(define (swift-encode-function type)
+  (define key (type-key type))
+  (match type
+    ['String
+     (format "private func encode_~a(_ value: String) -> RivetValue { .string(value) }\n" key)]
+    ['Int64
+     (format "private func encode_~a(_ value: Int64) -> RivetValue { .int64(value) }\n" key)]
+    ['Bool
+     (format "private func encode_~a(_ value: Bool) -> RivetValue { .bool(value) }\n" key)]
+    ['Bytes
+     (format "private func encode_~a(_ value: Data) -> RivetValue { .bytes(value) }\n" key)]
+    ['Void
+     (format "private func encode_~a(_ value: Void) -> RivetValue { .null }\n" key)]
+    ['Any
+     (format "private func encode_~a(_ value: RivetValue) -> RivetValue { value }\n" key)]
+    [(list 'List inner)
+     (format "private func encode_~a(_ value: ~a) -> RivetValue { .list(value.map(encode_~a)) }\n"
+             key (swift-type type) (type-key inner))]
+    [(list 'Optional inner)
+     (format "private func encode_~a(_ value: ~a) -> RivetValue { value.map(encode_~a) ?? .null }\n"
+             key (swift-type type) (type-key inner))]))
+
+(define (swift-decode-function type)
+  (define key (type-key type))
+  (define expected (format "~s" type))
+  (match type
+    ['String
+     (format "private func decode_~a(_ value: RivetValue) throws -> String { guard case .string(let result) = value else { throw RivetGeneratedError.typeMismatch(~s) }; return result }\n"
+             key expected)]
+    ['Int64
+     (format "private func decode_~a(_ value: RivetValue) throws -> Int64 { guard case .int64(let result) = value else { throw RivetGeneratedError.typeMismatch(~s) }; return result }\n"
+             key expected)]
+    ['Bool
+     (format "private func decode_~a(_ value: RivetValue) throws -> Bool { guard case .bool(let result) = value else { throw RivetGeneratedError.typeMismatch(~s) }; return result }\n"
+             key expected)]
+    ['Bytes
+     (format "private func decode_~a(_ value: RivetValue) throws -> Data { guard case .bytes(let result) = value else { throw RivetGeneratedError.typeMismatch(~s) }; return result }\n"
+             key expected)]
+    ['Void
+     (format "private func decode_~a(_ value: RivetValue) throws -> Void { guard case .null = value else { throw RivetGeneratedError.typeMismatch(~s) } }\n"
+             key expected)]
+    ['Any
+     (format "private func decode_~a(_ value: RivetValue) throws -> RivetValue { value }\n" key)]
+    [(list 'List inner)
+     (format "private func decode_~a(_ value: RivetValue) throws -> ~a { guard case .list(let items) = value else { throw RivetGeneratedError.typeMismatch(~s) }; return try items.map(decode_~a) }\n"
+             key (swift-type type) expected (type-key inner))]
+    [(list 'Optional inner)
+     (format "private func decode_~a(_ value: RivetValue) throws -> ~a { if case .null = value { return nil }; return try decode_~a(value) }\n"
+             key (swift-type type) (type-key inner))]))
+
+(define (swift-method info)
+  (define name (swift-id (rpc-info-name info)))
+  (define arg-names (map swift-id (rpc-info-arg-names info)))
+  (define arg-types (rpc-info-arg-types info))
+  (define result-type (rpc-info-result-type info))
+  (define params
+    (string-join
+     (for/list ([name (in-list arg-names)]
+                [type (in-list arg-types)])
+       (format "~a: ~a" name (swift-type type)))
+     ", "))
+  (define encoded
+    (string-join
+     (for/list ([name (in-list arg-names)]
+                [type (in-list arg-types)])
+       (format "encode_~a(~a)" (type-key type) name))
+     ", "))
+  (format
+   "    public func ~a(~a) async throws -> ~a {\n        let result = try await client.call(~s, arguments: [~a])\n        return try decode_~a(result)\n    }\n"
+   name params (swift-type result-type)
+   (symbol->string (rpc-info-name info))
+   encoded
+   (type-key result-type)))
+
+(define (generate-swift infos)
+  (define types (all-types infos))
+  (string-append
+   "// Generated by Rivet. Do not edit by hand.\n"
+   "import Foundation\nimport RivetRuntime\n\n"
+   "public enum RivetGeneratedError: Error { case typeMismatch(String) }\n\n"
+   (apply string-append (map swift-encode-function types))
+   "\n"
+   (apply string-append (map swift-decode-function types))
+   "\npublic struct RivetAPI: Sendable {\n"
+   "    public let client: RivetClient\n"
+   "    public init(client: RivetClient) { self.client = client }\n\n"
+   (apply string-append (map swift-method infos))
+   "}\n"))
+
+(define (cpp-encode-function type)
+  (define key (type-key type))
+  (match type
+    ['String
+     (format "inline rivet::Value encode_~a(std::string const& value) { return rivet::Value(value); }\n" key)]
+    ['Int64
+     (format "inline rivet::Value encode_~a(std::int64_t value) { return rivet::Value(value); }\n" key)]
+    ['Bool
+     (format "inline rivet::Value encode_~a(bool value) { return rivet::Value(value); }\n" key)]
+    ['Bytes
+     (format "inline rivet::Value encode_~a(rivet::Bytes const& value) { return rivet::Value(value); }\n" key)]
+    ['Void
+     (format "inline rivet::Value encode_~a() { return rivet::Value{}; }\n" key)]
+    ['Any
+     (format "inline rivet::Value encode_~a(rivet::Value value) { return value; }\n" key)]
+    [(list 'List inner)
+     (format "inline rivet::Value encode_~a(~a const& values) { rivet::Value::List result; result.reserve(values.size()); for (auto const& value : values) result.push_back(encode_~a(value)); return rivet::Value(std::move(result)); }\n"
+             key (cpp-type type) (type-key inner))]
+    [(list 'Optional inner)
+     (format "inline rivet::Value encode_~a(~a const& value) { return value ? encode_~a(*value) : rivet::Value{}; }\n"
+             key (cpp-type type) (type-key inner))]))
+
+(define (cpp-decode-function type)
+  (define key (type-key type))
+  (define expected (format "~s" type))
+  (match type
+    ['String
+     (format "inline std::string decode_~a(rivet::Value const& value) { if (auto p = std::get_if<std::string>(&value.data)) return *p; throw std::runtime_error(~s); }\n"
+             key (string-append "Rivet result type mismatch: " expected))]
+    ['Int64
+     (format "inline std::int64_t decode_~a(rivet::Value const& value) { if (auto p = std::get_if<std::int64_t>(&value.data)) return *p; throw std::runtime_error(~s); }\n"
+             key (string-append "Rivet result type mismatch: " expected))]
+    ['Bool
+     (format "inline bool decode_~a(rivet::Value const& value) { if (auto p = std::get_if<bool>(&value.data)) return *p; throw std::runtime_error(~s); }\n"
+             key (string-append "Rivet result type mismatch: " expected))]
+    ['Bytes
+     (format "inline rivet::Bytes decode_~a(rivet::Value const& value) { if (auto p = std::get_if<rivet::Bytes>(&value.data)) return *p; throw std::runtime_error(~s); }\n"
+             key (string-append "Rivet result type mismatch: " expected))]
+    ['Void
+     (format "inline void decode_~a(rivet::Value const& value) { if (!std::holds_alternative<std::monostate>(value.data)) throw std::runtime_error(~s); }\n"
+             key (string-append "Rivet result type mismatch: " expected))]
+    ['Any
+     (format "inline rivet::Value decode_~a(rivet::Value const& value) { return value; }\n" key)]
+    [(list 'List inner)
+     (format "inline ~a decode_~a(rivet::Value const& value) { auto p = std::get_if<rivet::Value::List>(&value.data); if (!p) throw std::runtime_error(~s); ~a result; result.reserve(p->size()); for (auto const& item : *p) result.push_back(decode_~a(item)); return result; }\n"
+             (cpp-type type) key
+             (string-append "Rivet result type mismatch: " expected)
+             (cpp-type type) (type-key inner))]
+    [(list 'Optional inner)
+     (format "inline ~a decode_~a(rivet::Value const& value) { if (std::holds_alternative<std::monostate>(value.data)) return std::nullopt; return decode_~a(value); }\n"
+             (cpp-type type) key (type-key inner))]))
+
+(define (cpp-method info)
+  (define name (cpp-id (rpc-info-name info)))
+  (define arg-names (map cpp-id (rpc-info-arg-names info)))
+  (define arg-types (rpc-info-arg-types info))
+  (define result-type (rpc-info-result-type info))
+  (define params
+    (string-join
+     (for/list ([name (in-list arg-names)]
+                [type (in-list arg-types)])
+       (format "~a ~a" (cpp-type type) name))
+     ", "))
+  (define encoded
+    (string-join
+     (for/list ([name (in-list arg-names)]
+                [type (in-list arg-types)])
+       (format "detail::encode_~a(~a)" (type-key type) name))
+     ", "))
+  (define result (cpp-type result-type))
+  (define decoder
+    (if (eq? result-type 'Void)
+        (format "detail::decode_~a(raw.get());" (type-key result-type))
+        (format "return detail::decode_~a(raw.get());" (type-key result-type))))
+  (format
+   "  std::future<~a> ~a(~a) { auto raw = backend_.call(~s, rivet::Value::List{~a}); return std::async(std::launch::deferred, [raw = std::move(raw)]() mutable -> ~a { ~a }); }\n"
+   result name params
+   (symbol->string (rpc-info-name info))
+   encoded result decoder))
+
+(define (generate-cpp infos)
+  (define types (all-types infos))
+  (string-append
+   "// Generated by Rivet. Do not edit by hand.\n#pragma once\n\n"
+   "#include <cstdint>\n#include <future>\n#include <optional>\n#include <stdexcept>\n#include <string>\n#include <utility>\n#include <vector>\n\n"
+   "#include \"backend.hpp\"\n\n"
+   "namespace rivet_app {\nnamespace detail {\n"
+   (apply string-append (map cpp-encode-function types))
+   "\n"
+   (apply string-append (map cpp-decode-function types))
+   "}  // namespace detail\n\n"
+   "class API {\n public:\n  explicit API(rivet::windows::Backend& backend) : backend_(backend) {}\n\n"
+   (apply string-append (map cpp-method infos))
+   "\n private:\n  rivet::windows::Backend& backend_;\n};\n\n"
+   "}  // namespace rivet_app\n"))
+
+(define (write-generated! path content)
+  (make-parent-directory* path)
+  (call-with-output-file path
+    #:exists 'truncate/replace
+    (lambda (out) (display content out))))
+
+(define (generate-clients! project)
+  (define backend (project-path project (project-ref project 'backend)))
+  (dynamic-require backend #f)
+  (define infos (registered-rpcs))
+  (when (null? infos)
+    (error 'generate-clients! "the backend declares no RPCs"))
+
+  (write-generated!
+   (project-path project "macos" "Sources" "RivetHost" "GeneratedBackend.swift")
+   (generate-swift infos))
+  (write-generated!
+   (project-path project "windows" "GeneratedBackend.hpp")
+   (generate-cpp infos))
+  infos)
