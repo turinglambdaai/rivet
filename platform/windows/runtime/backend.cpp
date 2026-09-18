@@ -249,8 +249,9 @@ class Backend::Impl {
 
       auto const module = quoted_symbol(config_.module_name);
       auto const entry = Sstring_to_symbol(config_.entry_symbol.c_str());
-      auto const results = racket_dynamic_require(module, entry);
-      auto const procedure = Scar(results);
+      // racket_dynamic_require returns the requested export directly.
+      // Only racket_apply wraps procedure results in a list.
+      auto const procedure = racket_dynamic_require(module, entry);
       auto const args = Scons(Sfixnum(in_fd), Scons(Sfixnum(out_fd), Snil));
 
       // The application entry procedure owns the CRT descriptors through
