@@ -12,6 +12,9 @@
 
 namespace rivet_app {
 
+inline constexpr char kModuleName[] = "backend";
+inline constexpr char kEntryName[] = "start";
+
 class API {
  public:
   explicit API(rivet::windows::Backend& backend) : backend_(backend) {}
