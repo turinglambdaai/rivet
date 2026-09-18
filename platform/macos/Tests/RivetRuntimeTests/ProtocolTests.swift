@@ -52,4 +52,18 @@ import Testing
     #expect(throws: RivetProtocolError.self) {
         try decodeRivetFrame(Data("BAD!".utf8))
     }
+    #expect(throws: RivetProtocolError.self) {
+        try decodeRivetValue(Data([0x06, 0xff, 0xff, 0xff, 0xff]))
+    }
+
+    // RVT1 header with payload length 64 MiB + 1 and no payload.
+    let oversized = Data([
+        0x52, 0x56, 0x54, 0x31,
+        0x01, 0x02,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0x01, 0x00, 0x00, 0x04
+    ])
+    #expect(throws: RivetProtocolError.self) {
+        try decodeRivetFrame(oversized)
+    }
 }
