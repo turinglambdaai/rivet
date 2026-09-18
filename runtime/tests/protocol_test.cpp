@@ -11,6 +11,10 @@ namespace {
 
 class MemoryTransport final : public rivet::Transport {
  public:
+  MemoryTransport() = default;
+  explicit MemoryTransport(std::vector<std::uint8_t> bytes)
+      : bytes_(std::move(bytes)) {}
+
   bool read_exact(std::uint8_t* destination, std::size_t size) override {
     if (read_offset_ == bytes_.size()) {
       return false;
@@ -60,6 +64,31 @@ int main() {
   assert(list.size() == 2);
   assert(std::get<std::string>(list[0].data) == "increment");
   assert(std::get<std::int64_t>(list[1].data) == 41);
+
+  bool rejected_list = false;
+  try {
+    (void)rivet::decode_value(
+        rivet::Bytes{0x06, 0xff, 0xff, 0xff, 0xff});
+  } catch (std::runtime_error const&) {
+    rejected_list = true;
+  }
+  assert(rejected_list);
+
+  std::vector<std::uint8_t> oversized_header{
+      'R', 'V', 'T', '1',
+      rivet::kProtocolVersion,
+      static_cast<std::uint8_t>(rivet::MessageType::Request),
+      0, 0, 0, 0, 0, 0, 0, 0,
+      0x01, 0x00, 0x00, 0x04  // 64 MiB + 1
+  };
+  MemoryTransport oversized(std::move(oversized_header));
+  bool rejected_frame = false;
+  try {
+    (void)rivet::read_frame(oversized);
+  } catch (std::length_error const&) {
+    rejected_frame = true;
+  }
+  assert(rejected_frame);
 
   return 0;
 }
