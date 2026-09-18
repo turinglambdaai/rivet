@@ -190,7 +190,9 @@
            "-Xlinker" "-framework"
            "-Xlinker" "Racket"
            "-Xlinker" "-rpath"
-           "-Xlinker" "@executable_path/Frameworks")))
+           "-Xlinker" "@executable_path/Frameworks"
+           "-Xlinker" "-rpath"
+           "-Xlinker" "@executable_path/../Frameworks")))
 
   (define built (find-built-macos-executable build-dir))
   (define staged-executable (build-path stage "RivetHost"))
