@@ -101,14 +101,14 @@ A `Backend` object cannot be restarted after shutdown in v0. This is intentional
 
 ## Transport
 
-The current Windows transport uses two anonymous pipes:
+Windows and macOS both use two in-process pipes with the same logical direction:
 
 ```text
 Native request writer ─────────► Racket request reader
 Native response reader ◄──────── Racket response writer
 ```
 
-The protocol is not pipe-specific. The C++ runtime exposes an abstract `Transport`, making named pipes, in-memory transports, test transports, or other platform primitives possible without changing RPC framing.
+The protocol is not pipe-specific. The C++ runtime exposes an abstract `Transport`; Swift uses `FileHandle` over `Pipe`. Named pipes, in-memory transports, or other primitives can be added without changing RPC framing.
 
 ## RPC concurrency
 
@@ -131,13 +131,13 @@ Rivet v1 begins with a small value model:
 - Bytes
 - List
 
-Records, enums, optional values and typed generated clients will be layered on top of this codec. The framing protocol does not need to change to add those schema constructs.
+Typed generated clients are layered on top of this codec. The current schema supports `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `List`, and `Optional`. Optional values reuse the Null/Void wire tag, so these schema types do not require framing changes. Records and enums remain future schema extensions.
 
 ## UI strategy
 
 Rivet deliberately does **not** provide a fake common widget toolkit in its first layer.
 
-Windows applications should be able to use everything WinUI 3 exposes. macOS applications should be able to use everything SwiftUI/AppKit exposes. A future Racket declarative UI layer can map a useful common subset to each renderer, but it must not prevent platform-native escape hatches.
+Windows applications should be able to use everything WinUI 3 exposes. macOS applications should be able to use everything SwiftUI/AppKit exposes. A future Racket declarative UI layer may map a useful common subset to each renderer, but it is deliberately outside the 0.1 runtime contract and must not prevent platform-native escape hatches.
 
 This differs from:
 
