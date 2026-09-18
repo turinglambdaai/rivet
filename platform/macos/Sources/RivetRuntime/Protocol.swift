@@ -1,6 +1,7 @@
 import Foundation
 
 public let rivetProtocolVersion: UInt8 = 1
+public let rivetMaxFramePayloadSize = 64 * 1024 * 1024
 
 public enum RivetMessageType: UInt8, Sendable {
     case hello = 1
@@ -107,6 +108,7 @@ private struct Reader {
     }
 
     var isAtEnd: Bool { offset == data.count }
+    var remaining: Int { data.count - offset }
 }
 
 public func encodeRivetValue(_ value: RivetValue) throws -> Data {
@@ -182,6 +184,9 @@ private func decodeValue(from reader: inout Reader) throws -> RivetValue {
         return .bytes(try reader.readData(count: Int(length)))
     case .list:
         let count: UInt32 = try reader.readInteger(UInt32.self)
+        guard Int(count) <= reader.remaining else {
+            throw RivetProtocolError.truncated
+        }
         var values: [RivetValue] = []
         values.reserveCapacity(Int(count))
         for _ in 0..<count {
@@ -192,7 +197,7 @@ private func decodeValue(from reader: inout Reader) throws -> RivetValue {
 }
 
 public func encodeRivetFrame(_ frame: RivetFrame) throws -> Data {
-    guard frame.payload.count <= Int(UInt32.max) else {
+    guard frame.payload.count <= rivetMaxFramePayloadSize else {
         throw RivetProtocolError.lengthOverflow
     }
 
@@ -224,6 +229,9 @@ public func decodeRivetFrame(_ data: Data) throws -> RivetFrame {
 
     let id: UInt64 = try reader.readInteger(UInt64.self)
     let length: UInt32 = try reader.readInteger(UInt32.self)
+    guard Int(length) <= rivetMaxFramePayloadSize else {
+        throw RivetProtocolError.lengthOverflow
+    }
     let payload = try reader.readData(count: Int(length))
     guard reader.isAtEnd else { throw RivetProtocolError.trailingBytes }
     return RivetFrame(type: type, id: id, payload: payload)
