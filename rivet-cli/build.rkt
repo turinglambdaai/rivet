@@ -98,7 +98,7 @@
   (parameterize ([current-environment-variables env])
     (thunk)))
 
-(define (build-windows! project runtime stage configuration)
+(define (build-windows! project runtime stage configuration self-contained?)
   (unless (eq? (system-type 'arch) 'x86_64)
     (error 'build-project!
            "the first Windows milestone supports x64 only; ARM64 support is planned"))
@@ -134,6 +134,8 @@
            "/m"
            (string-append "/p:Configuration=" configuration)
            "/p:Platform=x64"
+           (string-append "/p:RivetSelfContained="
+                          (if self-contained? "true" "false"))
            (string-append "/p:OutDir=" out-dir))))
   (build-path stage "RivetHost.exe"))
 
@@ -211,7 +213,9 @@
 
   staged-executable)
 
-(define (build-project! project #:configuration [configuration "Debug"])
+(define (build-project! project
+                        #:configuration [configuration "Debug"]
+                        #:self-contained? [self-contained? #f])
   ;; Native hosts compile against generated typed wrappers from the exact
   ;; backend schema. Regenerate on every build so the boundary cannot drift.
   (generate-clients! project)
@@ -222,7 +226,7 @@
 
   (case (system-type 'os)
     [(windows)
-     (build-windows! project runtime stage configuration)]
+     (build-windows! project runtime stage configuration self-contained?)]
     [(macosx)
      (build-macos! project runtime stage configuration)]
     [else
