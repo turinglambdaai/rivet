@@ -5,10 +5,29 @@
          racket/match
          racket/path
          racket/string
-         rivet/backend
          "project.rkt")
 
 (provide generate-clients!)
+
+(struct schema-rpc (name arg-names arg-types result-type) #:transparent)
+
+(define (load-rpc-schema backend)
+  ;; Evaluate user backend code in its own namespace. This prevents its module
+  ;; instances, side effects and global RPC registry from contaminating the CLI
+  ;; process or another build in the same process.
+  (define ns (make-base-namespace))
+  (parameterize ([current-namespace ns])
+    (dynamic-require backend #f)
+    (define get-rpcs (dynamic-require 'rivet/backend 'registered-rpcs))
+    (define info-name (dynamic-require 'rivet/backend 'rpc-info-name))
+    (define info-arg-names (dynamic-require 'rivet/backend 'rpc-info-arg-names))
+    (define info-arg-types (dynamic-require 'rivet/backend 'rpc-info-arg-types))
+    (define info-result-type (dynamic-require 'rivet/backend 'rpc-info-result-type))
+    (for/list ([info (in-list (get-rpcs))])
+      (schema-rpc (info-name info)
+                  (info-arg-names info)
+                  (info-arg-types info)
+                  (info-result-type info)))))
 
 (define swift-keywords
   '("class" "struct" "enum" "protocol" "extension" "func" "let" "var"
@@ -49,8 +68,8 @@
     (for/list ([info (in-list infos)])
       (append*
        (map nested-types
-            (append (rpc-info-arg-types info)
-                    (list (rpc-info-result-type info)))))))
+            (append (schema-rpc-arg-types info)
+                    (list (schema-rpc-result-type info)))))))
    equal?))
 
 (define (type-key type)
@@ -133,10 +152,10 @@
              key (swift-type type) (type-key inner))]))
 
 (define (swift-method info)
-  (define name (swift-id (rpc-info-name info)))
-  (define arg-names (map swift-id (rpc-info-arg-names info)))
-  (define arg-types (rpc-info-arg-types info))
-  (define result-type (rpc-info-result-type info))
+  (define name (swift-id (schema-rpc-name info)))
+  (define arg-names (map swift-id (schema-rpc-arg-names info)))
+  (define arg-types (schema-rpc-arg-types info))
+  (define result-type (schema-rpc-result-type info))
   (define params
     (string-join
      (for/list ([name (in-list arg-names)]
@@ -152,7 +171,7 @@
   (format
    "    public func ~a(~a) async throws -> ~a {\n        let result = try await client.call(~s, arguments: [~a])\n        return try decode_~a(result)\n    }\n"
    name params (swift-type result-type)
-   (symbol->string (rpc-info-name info))
+   (symbol->string (schema-rpc-name info))
    encoded
    (type-key result-type)))
 
@@ -224,10 +243,10 @@
              (cpp-type type) key (type-key inner))]))
 
 (define (cpp-method info)
-  (define name (cpp-id (rpc-info-name info)))
-  (define arg-names (map cpp-id (rpc-info-arg-names info)))
-  (define arg-types (rpc-info-arg-types info))
-  (define result-type (rpc-info-result-type info))
+  (define name (cpp-id (schema-rpc-name info)))
+  (define arg-names (map cpp-id (schema-rpc-arg-names info)))
+  (define arg-types (schema-rpc-arg-types info))
+  (define result-type (schema-rpc-result-type info))
   (define params
     (string-join
      (for/list ([name (in-list arg-names)]
@@ -248,7 +267,7 @@
   (format
    "  std::future<~a> ~a(~a) { auto raw = backend_.call(~s, rivet::Value::List{~a}); return std::async(std::launch::deferred, [raw = std::move(raw)]() mutable -> ~a { ~a }); }\n"
    result name params
-   (symbol->string (rpc-info-name info))
+   (symbol->string (schema-rpc-name info))
    encoded result decoder))
 
 (define (generate-cpp infos)
@@ -275,8 +294,7 @@
 
 (define (generate-clients! project)
   (define backend (project-path project (project-ref project 'backend)))
-  (dynamic-require backend #f)
-  (define infos (registered-rpcs))
+  (define infos (load-rpc-schema backend))
   (when (null? infos)
     (error 'generate-clients! "the backend declares no RPCs"))
 
