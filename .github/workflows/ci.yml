@@ -47,3 +47,11 @@ jobs:
         run: cmake --build build/native --config Release
       - name: Test
         run: ctest --test-dir build/native -C Release --output-on-failure
+
+  swift-runtime:
+    name: Swift protocol/runtime
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test Swift runtime
+        run: swift test --package-path platform/macos
