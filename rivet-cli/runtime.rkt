@@ -18,7 +18,8 @@
    scheme-boot
    racket-boot
    racketcs-dll
-   racketcs-def)
+   racketcs-def
+   racket-framework)
   #:transparent)
 
 (define (existing-directory p)
@@ -102,6 +103,14 @@
          (required 'discover-racket-runtime "libracketcs*.def"
                    (find-by-regexp #px"(?i:^libracketcs.*\\.def$)" roots))))
 
+  (define macos? (eq? (system-type 'os) 'macosx))
+  (define framework-candidate (build-path lib-dir "Racket.framework"))
+  (define racket-framework
+    (and macos?
+         (required 'discover-racket-runtime "Racket.framework"
+                   (and (directory-exists? framework-candidate)
+                        (simplify-path framework-candidate #t)))))
+
   (racket-runtime (version)
                   include-dir
                   lib-dir
@@ -110,4 +119,5 @@
                   scheme
                   racket
                   racketcs-dll
-                  racketcs-def))
+                  racketcs-def
+                  racket-framework))
