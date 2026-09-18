@@ -12,14 +12,14 @@ let package = Package(
     name: "RivetHost",
     platforms: [.macOS(.v14)],
     dependencies: [
-        .package(name: "RivetMac", path: rivetRoot + "/platform/macos")
+        .package(path: rivetRoot + "/platform/macos")
     ],
     targets: [
         .executableTarget(
             name: "RivetHost",
             dependencies: [
-                .product(name: "RivetRuntime", package: "RivetMac"),
-                .product(name: "RivetEmbedding", package: "RivetMac")
+                .product(name: "RivetRuntime", package: "macos"),
+                .product(name: "RivetEmbedding", package: "macos")
             ],
             path: "Sources/RivetHost"
         )
