@@ -107,7 +107,10 @@
   app)
 
 (define (package-project! project)
-  (define executable (build-project! project #:configuration "Release"))
+  (define executable
+    (build-project! project
+                    #:configuration "Release"
+                    #:self-contained? #t))
   (define stage (path-only executable))
   (define name (project-ref project 'name))
 
