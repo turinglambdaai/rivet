@@ -3,6 +3,7 @@
 (require racket/match
          "build.rkt"
          "doctor.rkt"
+         "package.rkt"
          "project.rkt"
          "scaffold.rkt")
 
@@ -22,7 +23,7 @@
     "  raco rivet doctor          inspect the local native toolchain\n"
     "  raco rivet build           compile backend and native host\n"
     "  raco rivet dev             build and run the current app\n"
-    "  raco rivet package         package for distribution (planned)\n"
+    "  raco rivet package         create a distributable native package\n"
     "  raco rivet help            show this help\n")))
 
 (define (current-project!)
@@ -49,7 +50,8 @@
     [(list "dev")
      (dev-project! (current-project!))]
     [(list "package")
-     (die "package is not wired yet; build/runtime stabilization comes first")]
+     (define output (package-project! (current-project!)))
+     (say "packaged ~a" output)]
     [_
      (usage)
      (exit 1)]))
