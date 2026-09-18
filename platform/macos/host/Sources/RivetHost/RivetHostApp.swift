@@ -95,7 +95,9 @@ final class AppModel: ObservableObject {
             petiteBoot: required[0],
             schemeBoot: required[1],
             racketBoot: required[2],
-            core: core
+            core: core,
+            moduleName: RivetGeneratedConfig.moduleName,
+            entryName: RivetGeneratedConfig.entryName
         )
     }
 }
