@@ -62,5 +62,10 @@ RKT
   (unless (directory-exists? windows-template)
     (error 'rivet-new "Windows host template is missing: ~a" windows-template))
   (copy-directory/files windows-template (build-path root "windows"))
-  (make-directory* (build-path root "macos"))
+
+  (define macos-template
+    (build-path (simplify-path rivet-root #t) "platform" "macos" "host"))
+  (unless (directory-exists? macos-template)
+    (error 'rivet-new "macOS host template is missing: ~a" macos-template))
+  (copy-directory/files macos-template (build-path root "macos"))
   root)
