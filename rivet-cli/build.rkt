@@ -92,7 +92,7 @@
   (define env (environment-variables-copy (current-environment-variables)))
   (define (set-path! key path)
     (environment-variables-set! env key (path->bytes path)))
-  (set-path! #"RIVET_ROOT" (build-path (simplify-path rivet-root #t) ""))
+  (set-path! #"RIVET_ROOT" (simplify-path rivet-root #t))
   (set-path! #"RIVET_RACKET_INCLUDE" (racket-runtime-include-dir runtime))
   (set-path! #"RIVET_RACKET_IMPORT_LIB" import-lib)
   (parameterize ([current-environment-variables env])
@@ -123,7 +123,7 @@
     (error 'build-project!
            "MSBuild.exe was not found; install Visual Studio Build Tools with C++/WinUI support"))
 
-  (define out-dir (path->string (build-path stage "")))
+  (define out-dir (path->string stage))
   (with-windows-build-environment
    runtime import-lib
    (lambda ()
