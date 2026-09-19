@@ -21,7 +21,7 @@
     (define swift
       (file->string
        (build-path project-root
-                   "macos" "Sources" "RivetHost" "GeneratedBackend.swift")))
+                   "macos-host" "Sources" "RivetHost" "GeneratedBackend.swift")))
     (define cpp
       (file->string
        (build-path project-root "windows" "GeneratedBackend.hpp")))
