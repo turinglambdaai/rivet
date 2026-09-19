@@ -137,12 +137,12 @@
            (string-append "/p:OutDir=" out-dir))))
   (build-path stage "RivetHost.exe"))
 
-(define (with-rivet-root-environment thunk)
+(define (with-macos-build-environment framework-dir thunk)
   (define env (environment-variables-copy (current-environment-variables)))
   (environment-variables-set!
-   env
-   #"RIVET_ROOT"
-   (path->bytes (simplify-path rivet-root #t)))
+   env #"RIVET_ROOT" (path->bytes (simplify-path rivet-root #t)))
+  (environment-variables-set!
+   env #"RIVET_RACKET_FRAMEWORK_DIR" (path->bytes framework-dir))
   (parameterize ([current-environment-variables env])
     (thunk)))
 
@@ -182,7 +182,8 @@
   (make-directory* build-dir)
   (define swift-configuration (string-downcase configuration))
 
-  (with-rivet-root-environment
+  (with-macos-build-environment
+   framework-dir
    (lambda ()
      (run! 'build-project!
            swift
@@ -191,10 +192,6 @@
            "--scratch-path" (path->string build-dir)
            "-c" swift-configuration
            "-Xcc" (string-append "-I" (path->string (racket-runtime-include-dir runtime)))
-           "-Xlinker" "-F"
-           "-Xlinker" (path->string framework-dir)
-           "-Xlinker" "-framework"
-           "-Xlinker" "Racket"
            "-Xlinker" "-rpath"
            "-Xlinker" "@executable_path/Frameworks"
            "-Xlinker" "-rpath"
