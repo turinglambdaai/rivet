@@ -8,6 +8,11 @@ guard let rivetRoot = ProcessInfo.processInfo.environment["RIVET_ROOT"],
     fatalError("RIVET_ROOT is not set. Build this app through raco rivet build/dev.")
 }
 
+guard let racketFrameworkDir = ProcessInfo.processInfo.environment["RIVET_RACKET_FRAMEWORK_DIR"],
+      !racketFrameworkDir.isEmpty else {
+    fatalError("RIVET_RACKET_FRAMEWORK_DIR is not set. Build this app through raco rivet build/dev.")
+}
+
 let package = Package(
     name: "RivetHost",
     platforms: [.macOS(.v14)],
@@ -21,7 +26,11 @@ let package = Package(
                 .product(name: "RivetRuntime", package: "macos"),
                 .product(name: "RivetEmbedding", package: "macos")
             ],
-            path: "Sources/RivetHost"
+            path: "Sources/RivetHost",
+            linkerSettings: [
+                .unsafeFlags(["-F", racketFrameworkDir]),
+                .linkedFramework("Racket")
+            ]
         )
     ]
 )
