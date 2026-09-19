@@ -22,7 +22,7 @@ struct ContentView: View {
 
             Text(model.status)
                 .font(.callout)
-                .foregroundStyle(model.ready ? .secondary : .orange)
+                .foregroundStyle(model.ready ? Color.secondary : Color.orange)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
         }
