@@ -169,6 +169,7 @@
   (define framework (racket-runtime-racket-framework runtime))
   (unless framework
     (error 'build-project! "the installed Racket CS does not provide Racket.framework"))
+  (define framework-dir (path-only framework))
 
   (define host-dir (project-path project "macos-host"))
   (define package-file (build-path host-dir "Package.swift"))
@@ -190,7 +191,8 @@
            "--scratch-path" (path->string build-dir)
            "-c" swift-configuration
            "-Xcc" (string-append "-I" (path->string (racket-runtime-include-dir runtime)))
-           "-Xlinker" (string-append "-F" (path->string (racket-runtime-lib-dir runtime)))
+           "-Xlinker" "-F"
+           "-Xlinker" (path->string framework-dir)
            "-Xlinker" "-framework"
            "-Xlinker" "Racket"
            "-Xlinker" "-rpath"
