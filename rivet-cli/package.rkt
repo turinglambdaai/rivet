@@ -88,10 +88,11 @@
   (copy-file source-executable target-executable #t)
   (file-or-directory-permissions target-executable #o755)
 
-  ;; Keep res/runtime beside the executable because generated hosts use
-  ;; executable-relative lookup. Preserve the framework's symlinks exactly.
-  (copy-tree! (build-path stage "res") (build-path macos "res"))
-  (copy-tree! (build-path stage "runtime") (build-path macos "runtime"))
+  ;; Keep non-code runtime assets in Contents/Resources. Putting boot files in
+  ;; Contents/MacOS makes codesign classify them as nested executable code.
+  (copy-tree! (build-path stage "res") (build-path resources "res"))
+  (copy-tree! (build-path stage "runtime") (build-path resources "runtime"))
+
   (define racket-framework (build-path frameworks "Racket.framework"))
   (copy-macos-bundle! (build-path stage "Frameworks" "Racket.framework")
                       racket-framework)
@@ -106,8 +107,7 @@
   (define codesign (find-executable-path "codesign"))
   (when codesign
     ;; Sign nested code first, then the outer app. This is more deterministic
-    ;; than asking --deep to infer the signing order and matches Apple's bundle
-    ;; signing model.
+    ;; than asking --deep to infer the signing order.
     (run! 'package-project!
           codesign
           "--force"
