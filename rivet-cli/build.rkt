@@ -161,6 +161,21 @@
       (and (pair? candidates) (car candidates))
       (error 'build-project! "Swift build completed but RivetHost was not found")))
 
+(define (framework-version-string version-name)
+  (regexp-replace #rx"_CS$" version-name ""))
+
+(define (write-framework-info! version-dir version-name)
+  (define resources-dir (build-path version-dir "Resources"))
+  (make-directory* resources-dir)
+  (define version (framework-version-string version-name))
+  (call-with-output-file (build-path resources-dir "Info.plist")
+    #:exists 'truncate/replace
+    (lambda (out)
+      (fprintf out
+               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>CFBundleDevelopmentRegion</key><string>en</string>\n  <key>CFBundleExecutable</key><string>Racket</string>\n  <key>CFBundleIdentifier</key><string>org.racket-lang.Racket</string>\n  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>\n  <key>CFBundleName</key><string>Racket</string>\n  <key>CFBundlePackageType</key><string>FMWK</string>\n  <key>CFBundleShortVersionString</key><string>~a</string>\n  <key>CFBundleVersion</key><string>~a</string>\n</dict>\n</plist>\n"
+               version
+               version))))
+
 (define (prepare-macos-framework! runtime stage)
   (define source (racket-runtime-racket-framework runtime))
   (unless source
@@ -170,8 +185,7 @@
   (define destination (build-path frameworks-dir "Racket.framework"))
   (make-directory* frameworks-dir)
 
-  ;; `ditto` preserves the framework's versioned layout and symlinks better
-  ;; than reconstructing an Apple bundle from individual files.
+  ;; Preserve the framework's versioned layout and any installer-provided links.
   (define ditto (find-executable-path "ditto"))
   (run! 'build-project! ditto (path->string source) (path->string destination))
 
@@ -197,16 +211,17 @@
                "Racket.framework contains no usable version directory")))
   (define version-name (path->string (file-name-from-path version-dir)))
 
-  ;; The official CS installer can contain the versioned framework payload
-  ;; without the conventional Current/top-level links expected by ld.
+  ;; Turn the installer payload into a conventional framework bundle. Besides
+  ;; helping ld discover it, the plist and symlinks are required for codesign to
+  ;; recognize the nested framework inside the final .app.
+  (write-framework-info! version-dir version-name)
   (define ln (find-executable-path "ln"))
   (run! 'build-project! ln "-sfn" version-name
         (path->string (build-path versions-dir "Current")))
   (run! 'build-project! ln "-sfn" "Versions/Current/Racket"
         (path->string (build-path destination "Racket")))
-  (when (directory-exists? (build-path version-dir "Resources"))
-    (run! 'build-project! ln "-sfn" "Versions/Current/Resources"
-          (path->string (build-path destination "Resources"))))
+  (run! 'build-project! ln "-sfn" "Versions/Current/Resources"
+        (path->string (build-path destination "Resources")))
 
   ;; Make the linked executable refer to the bundled framework through rpath
   ;; instead of the Racket installation path.
