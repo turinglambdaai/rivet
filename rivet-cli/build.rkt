@@ -137,12 +137,12 @@
            (string-append "/p:OutDir=" out-dir))))
   (build-path stage "RivetHost.exe"))
 
-(define (with-macos-build-environment framework-dir thunk)
+(define (with-macos-build-environment lib-dir thunk)
   (define env (environment-variables-copy (current-environment-variables)))
   (environment-variables-set!
    env #"RIVET_ROOT" (path->bytes (simplify-path rivet-root #t)))
   (environment-variables-set!
-   env #"RIVET_RACKET_FRAMEWORK_DIR" (path->bytes framework-dir))
+   env #"RIVET_RACKET_LIB_DIR" (path->bytes lib-dir))
   (parameterize ([current-environment-variables env])
     (thunk)))
 
@@ -166,10 +166,21 @@
   (unless swift
     (error 'build-project! "swift was not found; install Xcode command line tools"))
 
+  ;; Racket CS ships a static archive on macOS. Linking it directly avoids a
+  ;; deployment-time framework search dependency while keeping the boot/runtime
+  ;; files tied to the exact installed Racket version.
+  (define lib-dir (racket-runtime-lib-dir runtime))
+  (define racketcs-static (build-path lib-dir "libracketcs.a"))
+  (unless (file-exists? racketcs-static)
+    (raise-arguments-error 'build-project!
+                           "the installed Racket CS does not provide libracketcs.a"
+                           "expected" racketcs-static))
+
+  ;; Keep staging the framework for this milestone; package cleanup can remove
+  ;; it after static-link round-trip verification is green.
   (define framework (racket-runtime-racket-framework runtime))
   (unless framework
     (error 'build-project! "the installed Racket CS does not provide Racket.framework"))
-  (define framework-dir (path-only framework))
 
   (define host-dir (project-path project "macos-host"))
   (define package-file (build-path host-dir "Package.swift"))
@@ -183,7 +194,7 @@
   (define swift-configuration (string-downcase configuration))
 
   (with-macos-build-environment
-   framework-dir
+   lib-dir
    (lambda ()
      (run! 'build-project!
            swift
@@ -191,11 +202,7 @@
            "--package-path" (path->string host-dir)
            "--scratch-path" (path->string build-dir)
            "-c" swift-configuration
-           "-Xcc" (string-append "-I" (path->string (racket-runtime-include-dir runtime)))
-           "-Xlinker" "-rpath"
-           "-Xlinker" "@executable_path/Frameworks"
-           "-Xlinker" "-rpath"
-           "-Xlinker" "@executable_path/../Frameworks")))
+           "-Xcc" (string-append "-I" (path->string (racket-runtime-include-dir runtime))))))
 
   (define built (find-built-macos-executable build-dir))
   (define staged-executable (build-path stage "RivetHost"))
