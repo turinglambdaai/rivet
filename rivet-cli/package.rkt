@@ -28,6 +28,14 @@
   (remove-path! destination)
   (copy-directory/files source destination))
 
+(define (copy-macos-bundle! source destination)
+  (remove-path! destination)
+  (define ditto (find-executable-path "ditto"))
+  (run! 'package-project!
+        ditto
+        (path->string source)
+        (path->string destination)))
+
 (define (macos-identifier name)
   (string-append
    "dev.rivet."
@@ -80,12 +88,13 @@
   (copy-file source-executable target-executable #t)
   (file-or-directory-permissions target-executable #o755)
 
-  ;; Keep res/runtime beside the executable because both generated hosts use
-  ;; executable-relative lookup. Frameworks follow normal .app conventions.
+  ;; Keep res/runtime beside the executable because generated hosts use
+  ;; executable-relative lookup. Preserve the framework's symlinks exactly.
   (copy-tree! (build-path stage "res") (build-path macos "res"))
   (copy-tree! (build-path stage "runtime") (build-path macos "runtime"))
-  (copy-tree! (build-path stage "Frameworks" "Racket.framework")
-              (build-path frameworks "Racket.framework"))
+  (define racket-framework (build-path frameworks "Racket.framework"))
+  (copy-macos-bundle! (build-path stage "Frameworks" "Racket.framework")
+                      racket-framework)
 
   (write-macos-info! (build-path contents "Info.plist") name executable-name)
 
@@ -96,10 +105,18 @@
 
   (define codesign (find-executable-path "codesign"))
   (when codesign
+    ;; Sign nested code first, then the outer app. This is more deterministic
+    ;; than asking --deep to infer the signing order and matches Apple's bundle
+    ;; signing model.
     (run! 'package-project!
           codesign
           "--force"
-          "--deep"
+          "--sign" "-"
+          "--options" "runtime"
+          (path->string racket-framework))
+    (run! 'package-project!
+          codesign
+          "--force"
           "--sign" "-"
           "--options" "runtime"
           "--entitlements" (path->string entitlements)
