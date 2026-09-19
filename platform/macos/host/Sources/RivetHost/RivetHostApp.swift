@@ -32,21 +32,17 @@ final class AppModel: ObservableObject {
             let backend = EmbeddedRacketBackend(configuration: config)
             self.backend = backend
 
-            Task.detached { [weak self] in
+            Task.detached { [backend] in
                 do {
-                    try backend.start { name, value in
-                        Task { @MainActor [weak self] in
-                            self?.handleEvent(name: name, value: value)
-                        }
-                    }
+                    try backend.start()
                     await MainActor.run {
-                        self?.ready = true
-                        self?.status = "Embedded Racket CS is ready"
+                        self.ready = true
+                        self.status = "Embedded Racket CS is ready"
                     }
                 } catch {
                     await MainActor.run {
-                        self?.ready = false
-                        self?.status = "Backend error: \(error)"
+                        self.ready = false
+                        self.status = "Backend error: \(error)"
                     }
                 }
             }
@@ -67,10 +63,6 @@ final class AppModel: ObservableObject {
                 status = "RPC error: \(error)"
             }
         }
-    }
-
-    private func handleEvent(name: String, value: RivetValue) {
-        status = "Event \(name): \(String(describing: value))"
     }
 
     private static func runtimeConfiguration() throws -> EmbeddedRacketConfiguration {
