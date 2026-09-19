@@ -68,39 +68,51 @@ final class AppModel: ObservableObject {
     private static func runtimeConfiguration() throws -> EmbeddedRacketConfiguration {
         let executable = Bundle.main.executableURL
             ?? URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
-        let root = executable.deletingLastPathComponent()
-        let runtime = root.appendingPathComponent("runtime", isDirectory: true)
-        let core = root.appendingPathComponent("res/core.zo")
 
-        let required = [
-            runtime.appendingPathComponent("petite.boot"),
-            runtime.appendingPathComponent("scheme.boot"),
-            runtime.appendingPathComponent("racket.boot"),
-            core
-        ]
-        for path in required where !FileManager.default.fileExists(atPath: path.path) {
-            throw HostError.missingRuntimeFile(path.path)
+        // Packaged apps keep Racket data in Contents/Resources. `raco rivet
+        // dev` runs the staged executable directly, where runtime/res live next
+        // to the executable. Pick the first complete layout so both paths use
+        // exactly the same host binary.
+        let roots = [
+            Bundle.main.resourceURL,
+            executable.deletingLastPathComponent()
+        ].compactMap { $0 }
+
+        for root in roots {
+            let runtime = root.appendingPathComponent("runtime", isDirectory: true)
+            let core = root.appendingPathComponent("res/core.zo")
+            let required = [
+                runtime.appendingPathComponent("petite.boot"),
+                runtime.appendingPathComponent("scheme.boot"),
+                runtime.appendingPathComponent("racket.boot"),
+                core
+            ]
+            if required.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) {
+                return EmbeddedRacketConfiguration(
+                    executable: executable,
+                    petiteBoot: required[0],
+                    schemeBoot: required[1],
+                    racketBoot: required[2],
+                    core: core,
+                    moduleName: RivetGeneratedConfig.moduleName,
+                    entryName: RivetGeneratedConfig.entryName
+                )
+            }
         }
 
-        return EmbeddedRacketConfiguration(
-            executable: executable,
-            petiteBoot: required[0],
-            schemeBoot: required[1],
-            racketBoot: required[2],
-            core: core,
-            moduleName: RivetGeneratedConfig.moduleName,
-            entryName: RivetGeneratedConfig.entryName
+        throw HostError.missingRuntimeLayout(
+            roots.map(\.path).joined(separator: ", ")
         )
     }
 }
 
 enum HostError: Error, CustomStringConvertible {
-    case missingRuntimeFile(String)
+    case missingRuntimeLayout(String)
 
     var description: String {
         switch self {
-        case .missingRuntimeFile(let path):
-            return "missing staged runtime file: \(path)"
+        case .missingRuntimeLayout(let roots):
+            return "missing Rivet runtime/res layout under: \(roots)"
         }
     }
 }
