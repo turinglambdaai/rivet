@@ -8,9 +8,9 @@ guard let rivetRoot = ProcessInfo.processInfo.environment["RIVET_ROOT"],
     fatalError("RIVET_ROOT is not set. Build this app through raco rivet build/dev.")
 }
 
-guard let racketFrameworkDir = ProcessInfo.processInfo.environment["RIVET_RACKET_FRAMEWORK_DIR"],
-      !racketFrameworkDir.isEmpty else {
-    fatalError("RIVET_RACKET_FRAMEWORK_DIR is not set. Build this app through raco rivet build/dev.")
+guard let racketLibDir = ProcessInfo.processInfo.environment["RIVET_RACKET_LIB_DIR"],
+      !racketLibDir.isEmpty else {
+    fatalError("RIVET_RACKET_LIB_DIR is not set. Build this app through raco rivet build/dev.")
 }
 
 let package = Package(
@@ -28,8 +28,11 @@ let package = Package(
             ],
             path: "Sources/RivetHost",
             linkerSettings: [
-                .unsafeFlags(["-F", racketFrameworkDir]),
-                .linkedFramework("Racket")
+                .unsafeFlags(["-L", racketLibDir]),
+                .linkedLibrary("racketcs"),
+                .linkedLibrary("iconv"),
+                .linkedLibrary("ncurses"),
+                .linkedFramework("CoreFoundation")
             ]
         )
     ]
