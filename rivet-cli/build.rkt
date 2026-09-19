@@ -137,12 +137,12 @@
            (string-append "/p:OutDir=" out-dir))))
   (build-path stage "RivetHost.exe"))
 
-(define (with-macos-build-environment lib-dir thunk)
+(define (with-macos-build-environment framework-dir thunk)
   (define env (environment-variables-copy (current-environment-variables)))
   (environment-variables-set!
    env #"RIVET_ROOT" (path->bytes (simplify-path rivet-root #t)))
   (environment-variables-set!
-   env #"RIVET_RACKET_LIB_DIR" (path->bytes lib-dir))
+   env #"RIVET_RACKET_FRAMEWORK_DIR" (path->bytes framework-dir))
   (parameterize ([current-environment-variables env])
     (thunk)))
 
@@ -161,26 +161,70 @@
       (and (pair? candidates) (car candidates))
       (error 'build-project! "Swift build completed but RivetHost was not found")))
 
+(define (prepare-macos-framework! runtime stage)
+  (define source (racket-runtime-racket-framework runtime))
+  (unless source
+    (error 'build-project! "the installed Racket CS does not provide Racket.framework"))
+
+  (define frameworks-dir (build-path stage "Frameworks"))
+  (define destination (build-path frameworks-dir "Racket.framework"))
+  (make-directory* frameworks-dir)
+
+  ;; `ditto` preserves the framework's versioned layout and symlinks better
+  ;; than reconstructing an Apple bundle from individual files.
+  (define ditto (find-executable-path "ditto"))
+  (run! 'build-project! ditto (path->string source) (path->string destination))
+
+  (define versions-dir (build-path destination "Versions"))
+  (define version-dirs
+    (sort
+     (for/list ([entry (in-list (directory-list versions-dir))]
+                #:do [(define name (path->string entry))
+                      (define full (build-path versions-dir entry))]
+                #:when (and (not (string=? name "Current"))
+                            (directory-exists? full)
+                            (file-exists? (build-path full "Racket"))))
+       full)
+     string<?
+     #:key path->string))
+  (define version-dir
+    (or (for/first ([candidate (in-list version-dirs)]
+                    #:when (regexp-match? #rx"_CS$"
+                                          (path->string (file-name-from-path candidate))))
+          candidate)
+        (and (pair? version-dirs) (car version-dirs))
+        (error 'build-project!
+               "Racket.framework contains no usable version directory")))
+  (define version-name (path->string (file-name-from-path version-dir)))
+
+  ;; The official CS installer can contain the versioned framework payload
+  ;; without the conventional Current/top-level links expected by ld.
+  (define ln (find-executable-path "ln"))
+  (run! 'build-project! ln "-sfn" version-name
+        (path->string (build-path versions-dir "Current")))
+  (run! 'build-project! ln "-sfn" "Versions/Current/Racket"
+        (path->string (build-path destination "Racket")))
+  (when (directory-exists? (build-path version-dir "Resources"))
+    (run! 'build-project! ln "-sfn" "Versions/Current/Resources"
+          (path->string (build-path destination "Resources"))))
+
+  ;; Make the linked executable refer to the bundled framework through rpath
+  ;; instead of the Racket installation path.
+  (define install-name-tool (find-executable-path "install_name_tool"))
+  (run! 'build-project!
+        install-name-tool
+        "-id"
+        (format "@rpath/Racket.framework/Versions/~a/Racket" version-name)
+        (path->string (build-path version-dir "Racket")))
+
+  frameworks-dir)
+
 (define (build-macos! project runtime stage configuration)
   (define swift (find-executable-path "swift"))
   (unless swift
     (error 'build-project! "swift was not found; install Xcode command line tools"))
 
-  ;; Racket CS ships a static archive on macOS. Linking it directly avoids a
-  ;; deployment-time framework search dependency while keeping the boot/runtime
-  ;; files tied to the exact installed Racket version.
-  (define lib-dir (racket-runtime-lib-dir runtime))
-  (define racketcs-static (build-path lib-dir "libracketcs.a"))
-  (unless (file-exists? racketcs-static)
-    (raise-arguments-error 'build-project!
-                           "the installed Racket CS does not provide libracketcs.a"
-                           "expected" racketcs-static))
-
-  ;; Keep staging the framework for this milestone; package cleanup can remove
-  ;; it after static-link round-trip verification is green.
-  (define framework (racket-runtime-racket-framework runtime))
-  (unless framework
-    (error 'build-project! "the installed Racket CS does not provide Racket.framework"))
+  (define framework-dir (prepare-macos-framework! runtime stage))
 
   (define host-dir (project-path project "macos-host"))
   (define package-file (build-path host-dir "Package.swift"))
@@ -194,7 +238,7 @@
   (define swift-configuration (string-downcase configuration))
 
   (with-macos-build-environment
-   lib-dir
+   framework-dir
    (lambda ()
      (run! 'build-project!
            swift
@@ -202,19 +246,16 @@
            "--package-path" (path->string host-dir)
            "--scratch-path" (path->string build-dir)
            "-c" swift-configuration
-           "-Xcc" (string-append "-I" (path->string (racket-runtime-include-dir runtime))))))
+           "-Xcc" (string-append "-I" (path->string (racket-runtime-include-dir runtime)))
+           "-Xlinker" "-rpath"
+           "-Xlinker" "@executable_path/Frameworks"
+           "-Xlinker" "-rpath"
+           "-Xlinker" "@executable_path/../Frameworks")))
 
   (define built (find-built-macos-executable build-dir))
   (define staged-executable (build-path stage "RivetHost"))
   (copy-required! 'build-project! built staged-executable)
   (file-or-directory-permissions staged-executable #o755)
-
-  (define frameworks-dir (build-path stage "Frameworks"))
-  (make-directory* frameworks-dir)
-  (copy-directory/files
-   framework
-   (build-path frameworks-dir "Racket.framework"))
-
   staged-executable)
 
 (define (build-project! project
