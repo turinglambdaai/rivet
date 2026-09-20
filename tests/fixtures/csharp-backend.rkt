@@ -9,6 +9,10 @@
    [display-name : String]
    [nickname : (Optional String)]))
 
+(define-record Task
+  ([id : Int64]
+   [text : String]))
+
 (define-record SearchResult
   ([items : (List User)]
    [total : Int64]))
@@ -20,6 +24,12 @@
 
 (define-rpc (search [query : String] : SearchResult)
   (SearchResult '() 0))
+
+(define-rpc (get-task : Task)
+  (Task 1 "demo"))
+
+(define-rpc (close : Void)
+  (void))
 
 (define (start in-fd out-fd)
   (serve-fds in-fd out-fd))
