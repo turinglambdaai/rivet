@@ -144,6 +144,25 @@ jobs:
           if (-not (Test-Path 'dist\Smoke-windows-x64\RivetHost.exe')) {
             throw 'packaged WinUI executable was not produced'
           }
+      - name: Build embedded .NET runtime bundle
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'rivet-smoke\Smoke'
+          Set-Location $root
+          raco rivet build-dotnet
+          $stage = '.rivet\dotnet\windows-x64'
+          if (-not (Test-Path "$stage\rivet_native.dll")) {
+            throw 'rivet_native.dll was not produced'
+          }
+          if (-not (Test-Path "$stage\res\core.zo")) {
+            throw 'compiled Racket backend was not staged'
+          }
+          if (-not (Test-Path "$stage\runtime\racket.boot")) {
+            throw 'Racket boot files were not staged'
+          }
+          if (-not (Test-Path 'dotnet\GeneratedBackend.cs')) {
+            throw 'typed C# client was not generated'
+          }
 
   macos-host:
     name: macOS CLI package smoke
