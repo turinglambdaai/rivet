@@ -28,10 +28,18 @@
    [display-name : String]
    [nickname : (Optional String)]))
 
+;; Common product-domain name that collides with System.Threading.Tasks.Task.
+;; Generated async signatures must remain unambiguous without renaming it.
+(define-record Task
+  ([id : Int64]
+   [text : String]))
+
 (define-state selected : User (User 1 "Ada" (void)))
 
 (define-rpc (echo-user [user : User] : User) user)
 (define-rpc (find-users [query : String] : (List User)) '())
+(define-rpc (get-task : Task) (Task 1 "demo"))
+(define-rpc (close : Void) (void))
 
 (define (start in-fd out-fd)
   (serve-fds in-fd out-fd))
@@ -44,10 +52,13 @@ RKT
 
    (check-true (regexp-match? #rx"namespace Demo\\.RivetGenerated;" source))
    (check-true (regexp-match? #rx"public sealed record User\\(long Id, string DisplayName, string\\? Nickname\\);" source))
-   (check-true (regexp-match? #rx"Task<User> EchoUserAsync\\(User user, CancellationToken cancellationToken = default\\)" source))
-   (check-true (regexp-match? #rx"Task<IReadOnlyList<User>> FindUsersAsync" source))
-   (check-true (regexp-match? #rx"Task<User> GetSelectedAsync" source))
-   (check-true (regexp-match? #rx"Task<User> SetSelectedAsync" source)))
+   (check-true (regexp-match? #rx"public sealed record Task\\(long Id, string Text\\);" source))
+   (check-true (regexp-match? #rx"global::System\\.Threading\\.Tasks\\.Task<User> EchoUserAsync\\(User user, CancellationToken cancellationToken = default\\)" source))
+   (check-true (regexp-match? #rx"global::System\\.Threading\\.Tasks\\.Task<IReadOnlyList<User>> FindUsersAsync" source))
+   (check-true (regexp-match? #rx"global::System\\.Threading\\.Tasks\\.Task<Task> GetTaskAsync" source))
+   (check-true (regexp-match? #rx"global::System\\.Threading\\.Tasks\\.Task CloseAsync" source))
+   (check-true (regexp-match? #rx"global::System\\.Threading\\.Tasks\\.Task<User> GetSelectedAsync" source))
+   (check-true (regexp-match? #rx"global::System\\.Threading\\.Tasks\\.Task<User> SetSelectedAsync" source)))
  (lambda ()
    (when (directory-exists? temp-root)
      (delete-directory/files temp-root))))
