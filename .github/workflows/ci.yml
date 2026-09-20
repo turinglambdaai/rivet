@@ -119,6 +119,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
       - name: Set up Racket CS
         uses: Bogdanp/setup-racket@v1.15
         with:
@@ -163,6 +167,43 @@ jobs:
           if (-not (Test-Path 'dotnet\GeneratedBackend.cs')) {
             throw 'typed C# client was not generated'
           }
+      - name: Run Racket in-process from .NET
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'rivet-smoke\Smoke'
+          $dotnet = Join-Path $root 'dotnet'
+          $project = Join-Path $dotnet 'EmbeddedSmoke.csproj'
+          $program = Join-Path $dotnet 'Program.cs'
+          @"
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <OutputType>Exe</OutputType>
+              <TargetFramework>net8.0</TargetFramework>
+              <ImplicitUsings>enable</ImplicitUsings>
+              <Nullable>enable</Nullable>
+            </PropertyGroup>
+            <ItemGroup>
+              <ProjectReference Include="$env:GITHUB_WORKSPACE\platform\dotnet\Rivet.Runtime\Rivet.Runtime.csproj" />
+            </ItemGroup>
+          </Project>
+          "@ | Set-Content -Path $project
+          @'
+          using Rivet.Runtime;
+          using Smoke.RivetGenerated;
+
+          if (args.Length != 1) throw new InvalidOperationException("runtime root missing");
+          await using var client = await EmbeddedRivetClient.StartAsync(new EmbeddedRivetOptions(args[0]));
+          var api = new RivetAPI(client);
+          var greeting = await api.GreetAsync("Taskly");
+          if (greeting != "Hello, Taskly!") throw new InvalidOperationException($"unexpected greeting: {greeting}");
+          var before = await api.GetCounterAsync();
+          var after = await api.SetCounterAsync(before + 1);
+          if (after != before + 1) throw new InvalidOperationException("state round-trip failed");
+          Console.WriteLine("Embedded Rivet .NET smoke passed.");
+          '@ | Set-Content -Path $program
+          $stage = (Resolve-Path (Join-Path $root '.rivet\dotnet\windows-x64')).Path
+          $env:PATH = "$stage;$env:PATH"
+          dotnet run --project $project -c Release -- $stage
 
   macos-host:
     name: macOS CLI package smoke
