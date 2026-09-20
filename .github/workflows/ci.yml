@@ -48,6 +48,20 @@ jobs:
       - name: Test
         run: ctest --test-dir build/native -C Release --output-on-failure
 
+  dotnet-runtime:
+    name: .NET protocol/runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build managed runtime
+        run: dotnet build platform/dotnet/Rivet.Runtime/Rivet.Runtime.csproj -c Release
+      - name: Run managed smoke
+        run: dotnet run --project platform/dotnet/Rivet.Runtime.Smoke/Rivet.Runtime.Smoke.csproj -c Release
+
   swift-runtime:
     name: Swift protocol/runtime
     runs-on: macos-latest
