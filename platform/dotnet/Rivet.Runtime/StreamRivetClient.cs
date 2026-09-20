@@ -36,7 +36,7 @@ public sealed class StreamRivetClient : IRivetClient
         {
             var hello = await RivetProtocol.ReadFrameAsync(_input, cancellationToken).ConfigureAwait(false)
                 ?? throw new EndOfStreamException("Rivet backend closed before the hello frame.");
-            ValidateHello(hello.Value);
+            ValidateHello(hello);
             _readerTask = Task.Run(ReadLoopAsync);
         }
         catch
