@@ -5,6 +5,7 @@
          "codegen.rkt"
          "csharp-codegen.rkt"
          "doctor.rkt"
+         "dotnet-build.rkt"
          "package.rkt"
          "project.rkt"
          "scaffold.rkt")
@@ -21,14 +22,15 @@
    (string-append
     "Rivet — build native desktop apps with Racket\n\n"
     "Usage:\n"
-    "  raco rivet new <name>      create a new Rivet application\n"
-    "  raco rivet doctor          inspect the local native toolchain\n"
-    "  raco rivet generate        generate Swift, C++ and C# typed clients\n"
-    "  raco rivet generate-dotnet generate only the typed C# client\n"
-    "  raco rivet build           compile backend and native host\n"
-    "  raco rivet dev             build and run the current app\n"
-    "  raco rivet package         create a distributable native package\n"
-    "  raco rivet help            show this help\n")))
+    "  raco rivet new <name>       create a new Rivet application\n"
+    "  raco rivet doctor           inspect the local native toolchain\n"
+    "  raco rivet generate         generate Swift, C++ and C# typed clients\n"
+    "  raco rivet generate-dotnet  generate only the typed C# client\n"
+    "  raco rivet build-dotnet     build the embedded Windows runtime for .NET\n"
+    "  raco rivet build            compile backend and native host\n"
+    "  raco rivet dev              build and run the current app\n"
+    "  raco rivet package          create a distributable native package\n"
+    "  raco rivet help             show this help\n")))
 
 (define (current-project!)
   (or (find-project)
@@ -56,6 +58,9 @@
     [(list "generate-dotnet")
      (define output (generate-csharp-client! (current-project!)))
      (say "generated ~a" output)]
+    [(list "build-dotnet")
+     (define output (build-dotnet-runtime! (current-project!)))
+     (say "built .NET embedded runtime ~a" output)]
     [(list "build")
      (define output (build-project! (current-project!)))
      (say "built ~a" output)]
