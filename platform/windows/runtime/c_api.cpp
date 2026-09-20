@@ -111,14 +111,16 @@ std::wstring utf8_to_wide(const char* value) {
   if (length <= 0) {
     throw std::runtime_error("invalid UTF-8 in Rivet dll_dir");
   }
-  std::wstring result(static_cast<std::size_t>(length - 1), L'\0');
-  if (length > 1) {
-    auto const written = ::MultiByteToWideChar(
-        CP_UTF8, MB_ERR_INVALID_CHARS, value, -1, result.data(), length);
-    if (written != length) {
-      throw std::runtime_error("failed to convert Rivet dll_dir to UTF-16");
-    }
+
+  // `length` includes the terminating NUL. Reserve that slot for the Win32
+  // conversion, then remove it from the std::wstring logical length.
+  std::wstring result(static_cast<std::size_t>(length), L'\0');
+  auto const written = ::MultiByteToWideChar(
+      CP_UTF8, MB_ERR_INVALID_CHARS, value, -1, result.data(), length);
+  if (written != length) {
+    throw std::runtime_error("failed to convert Rivet dll_dir to UTF-16");
   }
+  result.resize(static_cast<std::size_t>(length - 1));
   return result;
 }
 
