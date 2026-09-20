@@ -36,6 +36,16 @@ jobs:
             --mods "$stage/res/core.zo" \
             platform/macos/Integration/backend.rkt
 
+          petite_source="$(find /Applications/Racket -name petite.boot -type f | head -n 1)"
+          scheme_source="$(find /Applications/Racket -name scheme.boot -type f | head -n 1)"
+          racket_boot_source="$(find /Applications/Racket -name racket.boot -type f | head -n 1)"
+          test -n "$petite_source"
+          test -n "$scheme_source"
+          test -n "$racket_boot_source"
+          cp "$petite_source" "$stage/runtime/petite.boot"
+          cp "$scheme_source" "$stage/runtime/scheme.boot"
+          cp "$racket_boot_source" "$stage/runtime/racket.boot"
+
           racket_include="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
           racket_lib="$(racket -e '(require setup/dirs) (display (path->string (find-lib-dir)))')"
           source_framework="$racket_lib/Racket.framework"
@@ -69,18 +79,14 @@ jobs:
           cp "$swift_bin/RivetIntegration" "$stage/RivetIntegration"
           chmod +x "$stage/RivetIntegration"
 
-          petite="$(find "$stage/runtime" -name petite.boot -type f | head -n 1)"
-          scheme="$(find "$stage/runtime" -name scheme.boot -type f | head -n 1)"
-          racket_boot="$(find "$stage/runtime" -name racket.boot -type f | head -n 1)"
-          test -n "$petite" && test -n "$scheme" && test -n "$racket_boot"
-
           echo "RIVET_ROUNDTRIP_STAGE=$stage" >> "$GITHUB_ENV"
           echo "RIVET_TEST_EXECUTABLE=$stage/RivetIntegration" >> "$GITHUB_ENV"
           echo "RIVET_TEST_CORE=$stage/res/core.zo" >> "$GITHUB_ENV"
-          echo "RIVET_TEST_PETITE_BOOT=$petite" >> "$GITHUB_ENV"
-          echo "RIVET_TEST_SCHEME_BOOT=$scheme" >> "$GITHUB_ENV"
-          echo "RIVET_TEST_RACKET_BOOT=$racket_boot" >> "$GITHUB_ENV"
+          echo "RIVET_TEST_PETITE_BOOT=$stage/runtime/petite.boot" >> "$GITHUB_ENV"
+          echo "RIVET_TEST_SCHEME_BOOT=$stage/runtime/scheme.boot" >> "$GITHUB_ENV"
+          echo "RIVET_TEST_RACKET_BOOT=$stage/runtime/racket.boot" >> "$GITHUB_ENV"
       - name: Exercise embedded runtime
+        timeout-minutes: 2
         run: "$RIVET_ROUNDTRIP_STAGE/RivetIntegration"
 
   windows-roundtrip:
@@ -152,5 +158,6 @@ jobs:
           Copy-Item $integrationExe (Join-Path $stage 'RivetIntegration.exe') -Force
           "RIVET_ROUNDTRIP_STAGE=$stage" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Exercise embedded runtime
+        timeout-minutes: 2
         shell: pwsh
         run: '& (Join-Path $env:RIVET_ROUNDTRIP_STAGE "RivetIntegration.exe")'

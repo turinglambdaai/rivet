@@ -50,6 +50,10 @@ std::int64_t expect_int(rivet::Value const& value, char const* operation) {
   return *result;
 }
 
+void progress(char const* message) {
+  std::cerr << "[rivet-integration] " << message << "\n" << std::flush;
+}
+
 }  // namespace
 
 int main() {
@@ -66,33 +70,41 @@ int main() {
     config.backend_bundle = utf8(root / L"res" / L"core.zo");
     config.module_name = "backend";
     config.entry_symbol = "start";
-    config.dll_dir = root.wstring();
+    config.dll_dir = runtime.wstring();
 
+    progress("starting backend");
     rivet::windows::Backend backend(std::move(config));
     backend.start();
+    progress("backend started");
 
+    progress("calling increment");
     auto increment = backend.call(
         "increment", rivet::Value::List{rivet::Value(std::int64_t{41})});
     if (expect_int(increment.get(), "increment") != 42) {
       throw std::runtime_error("increment(41) did not return 42");
     }
 
+    progress("reading initial state");
     auto initial = backend.get_state("counter");
     if (expect_int(initial.get(), "get_state") != 10) {
       throw std::runtime_error("initial counter state is not 10");
     }
 
+    progress("writing state");
     auto updated = backend.set_state("counter", rivet::Value(std::int64_t{11}));
     if (expect_int(updated.get(), "set_state") != 11) {
       throw std::runtime_error("set_state(counter, 11) did not return 11");
     }
 
+    progress("confirming state");
     auto confirmed = backend.get_state("counter");
     if (expect_int(confirmed.get(), "get_state") != 11) {
       throw std::runtime_error("counter state did not persist as 11");
     }
 
+    progress("stopping backend");
     backend.stop();
+    progress("backend stopped");
     std::cout << "Rivet embedded Windows round-trip passed\n";
     return 0;
   } catch (std::exception const& error) {
