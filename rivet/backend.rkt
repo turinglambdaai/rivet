@@ -72,7 +72,10 @@
     (validate-type! 'define-record name type))
   (define info (record-info name field-names field-types))
   (hash-set! record-registry name info)
-  info)
+  ;; Declarations can execute before a stdio transport starts. Returning a
+  ;; schema value here causes the Racket module runner to print it to stdout,
+  ;; corrupting the RVT1 byte stream before the hello frame.
+  (void))
 
 (define-syntax define-record
   (syntax-rules (:)
