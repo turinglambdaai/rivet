@@ -238,7 +238,7 @@
   (if (eq? result 'Void)
       (format
        (string-append
-        "    public async Task ~a(~a)\n"
+        "    public async global::System.Threading.Tasks.Task ~a(~a)\n"
         "    {\n"
         "        var result = await _client.CallAsync(~s, new RivetValue[] { ~a }, cancellationToken).ConfigureAwait(false);\n"
         "        Decode_~a(result);\n"
@@ -247,7 +247,7 @@
        (symbol->string (schema-rpc-name rpc)) encoded (type-key result))
       (format
        (string-append
-        "    public async Task<~a> ~a(~a)\n"
+        "    public async global::System.Threading.Tasks.Task<~a> ~a(~a)\n"
         "    {\n"
         "        var result = await _client.CallAsync(~s, new RivetValue[] { ~a }, cancellationToken).ConfigureAwait(false);\n"
         "        return Decode_~a(result);\n"
@@ -261,12 +261,12 @@
   (define type (schema-state-type state))
   (format
    (string-append
-    "    public async Task<~a> Get~aAsync(CancellationToken cancellationToken = default)\n"
+    "    public async global::System.Threading.Tasks.Task<~a> Get~aAsync(CancellationToken cancellationToken = default)\n"
     "    {\n"
     "        var result = await _client.GetStateAsync(~s, cancellationToken).ConfigureAwait(false);\n"
     "        return Decode_~a(result);\n"
     "    }\n"
-    "    public async Task<~a> Set~aAsync(~a value, CancellationToken cancellationToken = default)\n"
+    "    public async global::System.Threading.Tasks.Task<~a> Set~aAsync(~a value, CancellationToken cancellationToken = default)\n"
     "    {\n"
     "        var result = await _client.SetStateAsync(~s, Encode_~a(value), cancellationToken).ConfigureAwait(false);\n"
     "        return Decode_~a(result);\n"
