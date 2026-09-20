@@ -5,6 +5,7 @@
 #include <future>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "rivet/protocol.hpp"
@@ -54,6 +55,20 @@ class Backend final {
 
   PendingCall request(std::string rpc_name, Value::List arguments = {});
   std::future<Value> call(std::string rpc_name, Value::List arguments = {});
+
+  std::future<Value> get_state(std::string name) {
+    Value::List args;
+    args.emplace_back(std::move(name));
+    return call("$state/get", std::move(args));
+  }
+
+  std::future<Value> set_state(std::string name, Value value) {
+    Value::List args;
+    args.emplace_back(std::move(name));
+    args.emplace_back(std::move(value));
+    return call("$state/set", std::move(args));
+  }
+
   void cancel(std::uint64_t request_id);
   void set_event_handler(EventHandler handler);
 

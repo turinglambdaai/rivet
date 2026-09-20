@@ -2,6 +2,7 @@
 
 (require rackunit
          racket/file
+         racket/list
          racket/path
          "../rivet-cli/codegen.rkt"
          "../rivet-cli/project.rkt"
@@ -13,10 +14,35 @@
   void
   (lambda ()
     (define project-root (create-project! "demo" temp-root))
-    (define project (load-project project-root))
-    (define infos (generate-clients! project))
+    (call-with-output-file
+     (build-path project-root "app" "backend.rkt")
+     #:exists 'truncate/replace
+     (lambda (out)
+       (display
+        #<<RKT
+#lang racket/base
 
-    (check-equal? (length infos) 2)
+(require rivet/backend)
+
+(provide start)
+
+(define-state counter : Int64 0)
+
+(define-rpc (greet [name String] : String)
+  (format "Hello, ~a!" name))
+
+(define-rpc (increment [value Int64] : Int64)
+  (add1 value))
+
+(define (start in-fd out-fd)
+  (serve-fds in-fd out-fd))
+RKT
+        out)))
+
+    (define project (load-project project-root))
+    (define schema (generate-clients! project))
+    (check-equal? (length (first schema)) 2)
+    (check-equal? (length (second schema)) 1)
 
     (define swift
       (file->string
@@ -28,8 +54,12 @@
 
     (check-true (regexp-match? #rx"func greet\\(name: String\\)" swift))
     (check-true (regexp-match? #rx"func increment\\(value: Int64\\)" swift))
+    (check-true (regexp-match? #rx"func getCounter\\(\\) async throws -> Int64" swift))
+    (check-true (regexp-match? #rx"func setCounter\\(_ value: Int64\\)" swift))
     (check-true (regexp-match? #rx"std::future<std::string> greet" cpp))
-    (check-true (regexp-match? #rx"std::future<std::int64_t> increment" cpp)))
+    (check-true (regexp-match? #rx"std::future<std::int64_t> increment" cpp))
+    (check-true (regexp-match? #rx"std::future<std::int64_t> get_counter\\(\\)" cpp))
+    (check-true (regexp-match? #rx"std::future<std::int64_t> set_counter\\(std::int64_t value\\)" cpp)))
   (lambda ()
     (when (directory-exists? temp-root)
       (delete-directory/files temp-root))))
