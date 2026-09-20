@@ -101,11 +101,12 @@ public sealed class ProcessRivetClient : IRivetClient
             }
         }
 
+        var exitCode = _process.ExitCode;
         var stderr = await _stderr.ConfigureAwait(false);
-        _process.Dispose();
-        if (_process.ExitCode != 0 && !string.IsNullOrWhiteSpace(stderr))
+        if (exitCode != 0 && !string.IsNullOrWhiteSpace(stderr))
         {
             Debug.WriteLine($"Rivet backend stderr: {stderr}");
         }
+        _process.Dispose();
     }
 }
