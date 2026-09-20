@@ -35,7 +35,10 @@ final class AppModel: ObservableObject {
             Task.detached { [backend] in
                 do {
                     try backend.start()
+                    let api = RivetAPI(client: backend.client)
+                    let initialCount = try await api.getCounter()
                     await MainActor.run {
+                        self.count = initialCount
                         self.ready = true
                         self.status = "Embedded Racket CS is ready"
                     }
@@ -53,14 +56,14 @@ final class AppModel: ObservableObject {
 
     func increment() {
         guard let backend, ready else { return }
-        let current = count
+        let next = count + 1
 
         Task {
             do {
                 let api = RivetAPI(client: backend.client)
-                count = try await api.increment(value: current)
+                count = try await api.setCounter(next)
             } catch {
-                status = "RPC error: \(error)"
+                status = "State error: \(error)"
             }
         }
     }
