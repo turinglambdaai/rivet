@@ -57,10 +57,43 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Install Rivet
+        run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Build managed runtime
         run: dotnet build platform/dotnet/Rivet.Runtime/Rivet.Runtime.csproj -c Release
       - name: Run managed smoke
         run: dotnet run --project platform/dotnet/Rivet.Runtime.Smoke/Rivet.Runtime.Smoke.csproj -c Release
+      - name: Compile generated C# client
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          cd "$root"
+          raco rivet new Smoke
+          cd Smoke
+          cp "$GITHUB_WORKSPACE/tests/fixtures/csharp-backend.rkt" app/backend.rkt
+          raco rivet generate-dotnet
+          cat > dotnet/GeneratedSmoke.csproj <<EOF
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <TargetFramework>net8.0</TargetFramework>
+              <ImplicitUsings>disable</ImplicitUsings>
+              <Nullable>enable</Nullable>
+              <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+            </PropertyGroup>
+            <ItemGroup>
+              <ProjectReference Include="$GITHUB_WORKSPACE/platform/dotnet/Rivet.Runtime/Rivet.Runtime.csproj" />
+            </ItemGroup>
+          </Project>
+          EOF
+          dotnet build dotnet/GeneratedSmoke.csproj -c Release
 
   swift-runtime:
     name: Swift protocol/runtime
