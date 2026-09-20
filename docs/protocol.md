@@ -23,8 +23,8 @@ A transport must preserve byte order but does not need to preserve write boundar
 | Value | Name | Direction | Meaning |
 |---:|---|---|---|
 | 1 | Hello | backend → native | handshake after the Racket server is ready |
-| 2 | Request | native → backend | RPC invocation |
-| 3 | Response | backend → native | successful RPC result |
+| 2 | Request | native → backend | RPC or built-in State request |
+| 3 | Response | backend → native | successful request result |
 | 4 | Error | either | request or protocol failure |
 | 5 | Event | backend → native | asynchronous backend event |
 | 6 | Cancel | native → backend | cancel request with matching id |
@@ -66,7 +66,7 @@ The native host should not report the backend as ready until it validates this f
 
 Request `id` is allocated by the native client and must be unique among outstanding requests.
 
-Payload:
+Application RPC payload:
 
 ```text
 ["rpc-name", arg0, arg1, ...]
@@ -80,6 +80,15 @@ frame.id   = 42
 payload    = ["increment", 41]
 ```
 
+State uses the same Request/Response framing through reserved built-in request names:
+
+```text
+["$state/get", "counter"]
+["$state/set", "counter", 42]
+```
+
+No additional frame type is required for State, so RPC and State share the same request IDs, error handling, cancellation boundary, and transport implementation.
+
 ## Response
 
 A successful response carries the same request id and one encoded result value.
@@ -90,7 +99,7 @@ frame.id   = 42
 payload    = 42
 ```
 
-Void procedures return the Null/Void value.
+Void procedures return the Null/Void value. `$state/get` and `$state/set` return the current State value.
 
 ## Error
 
@@ -120,11 +129,21 @@ Event payload:
 
 Event IDs use their own monotonically increasing namespace and are not request IDs. Native clients deliver decoded events through their event callback. Event callbacks run on a transport/reader thread; UI code must dispatch to the WinUI dispatcher or Swift MainActor before touching native UI objects.
 
-## Typed RPC schema
+A successful State update emits the reserved `$state` event. Its value is `[state-name, value]`, so the complete Event payload is:
 
-`define-rpc` records argument names, argument types, and the result type. Rivet validates values at the Racket boundary and generates Swift/C++ wrappers before each native build.
+```text
+["$state", ["counter", 42]]
+```
 
-Schema types are `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, and `(Optional T)`. Optional null is encoded with the existing Null/Void tag, so typed schema evolution does not change RVT1 framing.
+Native code can therefore subscribe once and react to State changes without polling.
+
+## Typed RPC and State schema
+
+`define-rpc` records argument names, argument types, and the result type. `define-state` records the State name, value type, and current value. Rivet validates values at the Racket boundary and generates Swift/C++ wrappers before each native build.
+
+Schema types are `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, and `(Optional T)`. State accepts the same value types except `Void`. Optional null is encoded with the existing Null/Void tag, so typed schema evolution does not change RVT1 framing.
+
+Generated State accessors use `$state/get` and `$state/set` internally; applications normally call the typed Swift/C++ API rather than constructing those reserved requests directly.
 
 ## Compatibility
 

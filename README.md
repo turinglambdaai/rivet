@@ -6,7 +6,7 @@ Rivet embeds Racket CS behind first-party native desktop UI:
 
 - **Windows:** WinUI 3 + C++/WinRT
 - **macOS:** SwiftUI/AppKit + Swift
-- **Shared backend:** Racket business logic, typed RPC, events, cancellation, lifecycle, and code generation
+- **Shared backend:** Racket business logic, typed RPC, events, shared state, cancellation, lifecycle, and code generation
 
 Rivet is not a WebView framework and not a cross-platform widget toolkit. Each platform keeps its native UI stack while sharing one Racket backend contract.
 
@@ -38,6 +38,7 @@ raco rivet package
 (provide start)
 
 (define-event progress)
+(define-state counter : Int64 0)
 
 (define-rpc (greet [name : String] : String)
   (format "Hello, ~a!" name))
@@ -53,16 +54,18 @@ raco rivet package
   (serve-fds in-fd out-fd))
 ```
 
-Rivet records the RPC schema and validates arguments/results at the Racket boundary. `raco rivet build` generates native wrappers, so Swift and C++ call typed methods instead of spelling RPC names and decoding wire values manually.
+Rivet records RPC and State schemas and validates values at the Racket boundary. `raco rivet build` generates native wrappers, so Swift and C++ call typed APIs instead of spelling protocol names and decoding wire values manually.
 
-Current schema types are `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, and `(Optional T)`.
+For the `counter` State above, generated clients expose typed accessors such as `getCounter()` / `setCounter(_:)` in Swift and `get_counter()` / `set_counter(...)` in C++. Updating State also emits a `$state` event so native views can react without polling.
+
+Current schema types are `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, and `(Optional T)`. State supports the same value types except `Void`.
 
 ## Runtime model
 
 ```text
                     Racket application
                           │
-               typed RPC / events
+             typed RPC / events / state
                           │
                     RVT1 protocol
                     ┌─────┴─────┐
@@ -83,7 +86,7 @@ The runtime model takes inspiration from Bogdan Popa's Noise project—embed Rac
 4. **Racket runtime artifacts must match exactly.** Rivet never silently chooses a nearby release.
 5. **Racket/Chez pointers never cross ordinary native thread boundaries.**
 6. **Native UI remains native.** WinUI and SwiftUI/AppKit stay fully available.
-7. **Generated clients are derived from the Racket RPC schema on every build.**
+7. **Generated clients are derived from the Racket RPC and State schemas on every build.**
 
 See [docs/architecture.md](docs/architecture.md), [docs/protocol.md](docs/protocol.md), and [docs/embedding.md](docs/embedding.md).
 
