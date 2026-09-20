@@ -24,6 +24,7 @@
     "  raco rivet new <name>      create a new Rivet application\n"
     "  raco rivet doctor          inspect the local native toolchain\n"
     "  raco rivet generate        generate Swift, C++ and C# typed clients\n"
+    "  raco rivet generate-dotnet generate only the typed C# client\n"
     "  raco rivet build           compile backend and native host\n"
     "  raco rivet dev             build and run the current app\n"
     "  raco rivet package         create a distributable native package\n"
@@ -52,6 +53,9 @@
      (generate-clients! project)
      (define csharp (generate-csharp-client! project))
      (say "generated Swift/C++ clients and ~a" csharp)]
+    [(list "generate-dotnet")
+     (define output (generate-csharp-client! (current-project!)))
+     (say "generated ~a" output)]
     [(list "build")
      (define output (build-project! (current-project!)))
      (say "built ~a" output)]
