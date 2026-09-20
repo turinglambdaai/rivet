@@ -75,17 +75,24 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
   try {
     co_await winrt::resume_background();
     backend->start();
+    rivet_app::API api(*backend);
+    auto const initial = api.get_counter().get();
 
-    dispatcher.TryEnqueue([weak, backend = std::move(backend)]() mutable {
-      if (auto window = weak.get()) {
-        window->backend_ = std::move(backend);
-        window->SetReadyUi();
-      } else {
-        std::thread([backend = std::move(backend)]() mutable {
-          backend->stop();
-        }).detach();
-      }
-    });
+    dispatcher.TryEnqueue(
+        [weak, backend = std::move(backend), initial]() mutable {
+          if (auto window = weak.get()) {
+            window->backend_ = std::move(backend);
+            window->count_.store(initial, std::memory_order_relaxed);
+            std::wstring text = L"Count: ";
+            text += std::to_wstring(initial);
+            window->CountText().Text(winrt::hstring(text));
+            window->SetReadyUi();
+          } else {
+            std::thread([backend = std::move(backend)]() mutable {
+              backend->stop();
+            }).detach();
+          }
+        });
   } catch (std::exception const& e) {
     auto message = std::string(e.what());
     dispatcher.TryEnqueue([weak, message = std::move(message)] {
@@ -111,19 +118,19 @@ winrt::fire_and_forget MainWindow::IncrementAsync() {
     co_return;
   }
 
-  auto const current = count_.load(std::memory_order_relaxed);
+  auto const next = count_.load(std::memory_order_relaxed) + 1;
   IncrementButton().IsEnabled(false);
 
   try {
     co_await winrt::resume_background();
     rivet_app::API api(*backend);
-    auto const next = api.increment(current).get();
-    count_.store(next, std::memory_order_relaxed);
+    auto const stored = api.set_counter(next).get();
+    count_.store(stored, std::memory_order_relaxed);
 
-    dispatcher.TryEnqueue([weak, next_value = next] {
+    dispatcher.TryEnqueue([weak, stored] {
       if (auto window = weak.get()) {
         std::wstring text = L"Count: ";
-        text += std::to_wstring(next_value);
+        text += std::to_wstring(stored);
         window->CountText().Text(winrt::hstring(text));
         window->IncrementButton().IsEnabled(true);
       }
