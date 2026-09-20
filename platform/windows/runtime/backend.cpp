@@ -5,8 +5,6 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
-#include <fcntl.h>
-#include <io.h>
 
 #include <atomic>
 #include <exception>
@@ -61,42 +59,6 @@ class UniqueHandle {
   HANDLE handle_{INVALID_HANDLE_VALUE};
 };
 
-class UniqueFd {
- public:
-  UniqueFd() = default;
-  explicit UniqueFd(int fd) : fd_(fd) {}
-  ~UniqueFd() { reset(); }
-
-  UniqueFd(UniqueFd const&) = delete;
-  UniqueFd& operator=(UniqueFd const&) = delete;
-
-  UniqueFd(UniqueFd&& other) noexcept : fd_(other.release()) {}
-  UniqueFd& operator=(UniqueFd&& other) noexcept {
-    if (this != &other) {
-      reset(other.release());
-    }
-    return *this;
-  }
-
-  int get() const noexcept { return fd_; }
-
-  int release() noexcept {
-    auto const result = fd_;
-    fd_ = -1;
-    return result;
-  }
-
-  void reset(int fd = -1) noexcept {
-    if (fd_ >= 0) {
-      _close(fd_);
-    }
-    fd_ = fd;
-  }
-
- private:
-  int fd_{-1};
-};
-
 struct PipePair {
   UniqueHandle read;
   UniqueHandle write;
@@ -110,17 +72,6 @@ PipePair create_pipe() {
                              std::to_string(::GetLastError()));
   }
   return PipePair{UniqueHandle(read), UniqueHandle(write)};
-}
-
-UniqueFd handle_to_binary_fd(UniqueHandle handle, int access_flags) {
-  auto const raw = handle.release();
-  auto const fd = _open_osfhandle(reinterpret_cast<intptr_t>(raw),
-                                  access_flags | _O_BINARY);
-  if (fd == -1) {
-    ::CloseHandle(raw);
-    throw std::runtime_error("_open_osfhandle failed");
-  }
-  return UniqueFd(fd);
 }
 
 std::exception_ptr stopped_error() {
@@ -288,8 +239,12 @@ class Backend::Impl {
  private:
   void racket_main(UniqueHandle server_read, UniqueHandle server_write) noexcept {
     try {
-      auto in_fd = handle_to_binary_fd(std::move(server_read), _O_RDONLY);
-      auto out_fd = handle_to_binary_fd(std::move(server_write), _O_WRONLY);
+      // `unsafe-file-descriptor->port` consumes a Rktio system descriptor.
+      // On Windows that descriptor is the native HANDLE value, not a CRT fd.
+      // Keep ownership in UniqueHandle through startup and transfer it to the
+      // Racket ports immediately before entering the application procedure.
+      auto const in_handle = reinterpret_cast<intptr_t>(server_read.get());
+      auto const out_handle = reinterpret_cast<intptr_t>(server_write.get());
 
       racket_boot_arguments_t boot{};
       boot.boot1_path = config_.petite_boot.c_str();
@@ -317,20 +272,18 @@ class Backend::Impl {
       auto const results = racket_dynamic_require(module, entry);
       auto const procedure = Scar(results);
       auto const args =
-          Scons(Sfixnum(in_fd.get()), Scons(Sfixnum(out_fd.get()), Snil));
+          Scons(Sfixnum(in_handle), Scons(Sfixnum(out_handle), Snil));
 
-      // From this point the application entry procedure owns the descriptors
-      // through serve-fds. Before this point UniqueFd guarantees that startup
-      // failures close the pipe endpoints so the reader sees EOF instead of
-      // waiting forever for Hello.
-      (void)in_fd.release();
-      (void)out_fd.release();
+      // From this point the Racket ports created by serve-fds own the native
+      // handles and close them during server teardown.
+      (void)server_read.release();
+      (void)server_write.release();
       (void)racket_apply(procedure, args);
       Sscheme_deinit();
     } catch (...) {
-      // Closing server handles/fds makes the native reader observe EOF. Racket
-      // exceptions must be contained on the Racket side because the embedding
-      // API requires entry procedures not to escape through racket_apply.
+      // UniqueHandle closes endpoints for native startup failures. Once the
+      // handles are transferred, serve-fds owns their lifetime on the Racket
+      // side. Closing the server ends makes the native reader observe EOF.
     }
 
     running_.store(false, std::memory_order_release);
