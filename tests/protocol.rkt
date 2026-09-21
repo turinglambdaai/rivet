@@ -1,6 +1,7 @@
 #lang racket/base
 
 (require rackunit
+         racket/list
          "../rivet/protocol.rkt")
 
 (define values
