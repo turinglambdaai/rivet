@@ -9,7 +9,7 @@
 (provide (struct-out windows-toolchain)
          discover-windows-toolchain)
 
-(struct windows-toolchain (msbuild cl lib dumpbin vswhere) #:transparent)
+(struct windows-toolchain (msbuild cl lib dumpbin signtool vswhere) #:transparent)
 
 (define (existing-file path)
   (and path (file-exists? path) (simplify-path path #t)))
@@ -51,6 +51,20 @@
           "-requires" component
           "-find" pattern))))
 
+(define (candidate-windows-kit-tool filename)
+  (for/or ([root (in-list
+                  (filter values
+                          (list (getenv "ProgramFiles(x86)")
+                                (getenv "ProgramFiles"))))])
+    (define bin-root (build-path root "Windows Kits" "10" "bin"))
+    (and (directory-exists? bin-root)
+         (for/or ([entry (in-list
+                          (sort (directory-list bin-root)
+                                string>?
+                                #:key path->string))])
+           (define candidate (build-path bin-root entry "x64" filename))
+           (existing-file candidate)))))
+
 (define (discover-windows-toolchain)
   (define vswhere (candidate-vswhere))
 
@@ -86,4 +100,8 @@
               "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
               "VC\\Tools\\MSVC\\**\\bin\\Hostx64\\x64\\dumpbin.exe"))))
 
-  (windows-toolchain msbuild cl lib dumpbin vswhere))
+  (define signtool
+    (or (existing-file (find-executable-path "signtool.exe"))
+        (candidate-windows-kit-tool "signtool.exe")))
+
+  (windows-toolchain msbuild cl lib dumpbin signtool vswhere))
