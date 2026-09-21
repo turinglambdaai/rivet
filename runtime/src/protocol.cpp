@@ -96,7 +96,7 @@ class Reader {
   std::size_t offset_{};
 };
 
-void encode_into(Bytes& out, Value const& value) {
+void encode_into(Bytes& out, Value const& value, std::size_t depth) {
   std::visit(
       [&](auto const& data) {
         using T = std::decay_t<decltype(data)>;
@@ -125,20 +125,23 @@ void encode_into(Bytes& out, Value const& value) {
           append_u32(out, static_cast<std::uint32_t>(data.size()));
           out.insert(out.end(), data.begin(), data.end());
         } else if constexpr (std::is_same_v<T, Value::List>) {
+          if (depth >= kMaxValueDepth) {
+            throw std::length_error("Rivet value nesting exceeds protocol limit");
+          }
           out.push_back(static_cast<std::uint8_t>(ValueTag::List));
           if (data.size() > UINT32_MAX) {
             throw std::length_error("Rivet list exceeds protocol limit");
           }
           append_u32(out, static_cast<std::uint32_t>(data.size()));
           for (auto const& item : data) {
-            encode_into(out, item);
+            encode_into(out, item, depth + 1);
           }
         }
       },
       value.data);
 }
 
-Value decode_one(Reader& reader) {
+Value decode_one(Reader& reader, std::size_t depth) {
   auto const tag = static_cast<ValueTag>(reader.byte());
   switch (tag) {
     case ValueTag::Null:
@@ -161,6 +164,9 @@ Value decode_one(Reader& reader) {
     case ValueTag::Bytes:
       return Value(reader.bytes(reader.u32()));
     case ValueTag::List: {
+      if (depth >= kMaxValueDepth) {
+        throw std::runtime_error("Rivet value nesting exceeds protocol limit");
+      }
       Value::List list;
       auto const count = reader.u32();
       // Every encoded item needs at least one tag byte.
@@ -169,7 +175,7 @@ Value decode_one(Reader& reader) {
       }
       list.reserve(count);
       for (std::uint32_t i = 0; i < count; ++i) {
-        list.push_back(decode_one(reader));
+        list.push_back(decode_one(reader, depth + 1));
       }
       return Value(std::move(list));
     }
@@ -229,13 +235,13 @@ std::optional<Frame> read_frame(Transport& transport) {
 
 Bytes encode_value(Value const& value) {
   Bytes result;
-  encode_into(result, value);
+  encode_into(result, value, 0);
   return result;
 }
 
 Value decode_value(Bytes const& bytes) {
   Reader reader(bytes);
-  auto value = decode_one(reader);
+  auto value = decode_one(reader, 0);
   if (!reader.empty()) {
     throw std::runtime_error("trailing bytes after Rivet value");
   }
