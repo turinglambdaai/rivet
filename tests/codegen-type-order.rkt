@@ -3,11 +3,13 @@
 (require rackunit
          racket/file
          racket/path
+         racket/runtime-path
          "../rivet-cli/codegen.rkt"
          "../rivet-cli/project.rkt"
          "../rivet-cli/scaffold.rkt")
 
 (define temp-root (make-temporary-file "rivet-codegen-order-~a" 'directory))
+(define-runtime-path schema-fixture "fixtures/schema-matrix-backend.rkt")
 
 (define (match-position rx text)
   (define matches (regexp-match-positions rx text))
@@ -24,8 +26,7 @@
   void
   (lambda ()
     (define project-root (create-project! "order" temp-root))
-    (copy-file (build-path (current-directory)
-                           "tests" "fixtures" "schema-matrix-backend.rkt")
+    (copy-file schema-fixture
                (build-path project-root "app" "backend.rkt")
                #t)
     (generate-clients! (load-project project-root))
