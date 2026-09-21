@@ -14,6 +14,7 @@ Rivet 0.2 hardens the native runtime contract and release path while preserving 
 - Shared RVT1 golden vectors consumed by Racket, C++, and Swift tests.
 - Strict UTF-8 validation and unknown message-type rejection across protocol implementations.
 - Generated Windows RPC/State completion APIs provide non-blocking, cancellable WinUI-friendly calls while preserving the existing `std::future` API.
+- `raco rivet package` now verifies the produced dependency closure, and `raco rivet verify` can re-audit an existing Windows/macOS artifact.
 - Tag-driven release workflow with version/changelog validation and packaged Racket artifacts.
 
 ## 0.1.0

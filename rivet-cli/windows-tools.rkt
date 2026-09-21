@@ -9,7 +9,7 @@
 (provide (struct-out windows-toolchain)
          discover-windows-toolchain)
 
-(struct windows-toolchain (msbuild cl lib vswhere) #:transparent)
+(struct windows-toolchain (msbuild cl lib dumpbin vswhere) #:transparent)
 
 (define (existing-file path)
   (and path (file-exists? path) (simplify-path path #t)))
@@ -78,4 +78,12 @@
               "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
               "VC\\Tools\\MSVC\\**\\bin\\Hostx64\\x64\\lib.exe"))))
 
-  (windows-toolchain msbuild cl lib vswhere))
+  (define dumpbin
+    (or (existing-file (find-executable-path "dumpbin.exe"))
+        (and vswhere
+             (vswhere-find
+              vswhere
+              "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
+              "VC\\Tools\\MSVC\\**\\bin\\Hostx64\\x64\\dumpbin.exe"))))
+
+  (windows-toolchain msbuild cl lib dumpbin vswhere))
