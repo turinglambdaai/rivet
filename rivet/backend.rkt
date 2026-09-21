@@ -338,12 +338,12 @@
                     [arg-name (in-list (rpc-info-arg-names info))]
                     [arg-type (in-list (rpc-info-arg-types info))])
                 (validate-value rpc-name arg-name arg-type arg))
-              (define value (apply (rpc-info-procedure info) args))
-              (validate-value rpc-name
-                              'result
-                              (rpc-info-result-type info)
-                              value)
-              value)))
+              (let ([value (apply (rpc-info-procedure info) args)])
+                (validate-value rpc-name
+                                'result
+                                (rpc-info-result-type info)
+                                value)
+                value))))
       (finish! id message:response result)))
 
   (define (start-request! f)
