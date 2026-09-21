@@ -16,7 +16,7 @@ or, for an embedded native host:
 (serve-fds in-fd out-fd #:max-pending-requests 256)
 ```
 
-A request occupies one pending slot after it has been admitted and before it returns, fails, or is cancelled. The limit applies to both application RPCs and Rivet's reserved State requests because they share the same request lifecycle. When the limit is reached, Rivet returns an Error frame for the new request instead of creating another request custodian and Racket thread.
+A request occupies one pending slot after it has been admitted and before it returns, fails, or is cancelled. The limit applies to both application RPCs and Rivet's reserved State requests because they share the same request lifecycle. When the limit is reached, Rivet returns a normal request-scoped Error frame for the new request instead of creating another request custodian and Racket thread; the existing requests continue running.
 
 Cancellation and normal completion compete for ownership of the pending entry. Exactly one side removes that entry and emits the terminal response/error for the request. Cancelling a request therefore releases its slot before another request is admitted.
 
