@@ -31,9 +31,21 @@
                              "value" item))
     item)
 
-  (required 'name
-            (lambda (v) (and (string? v) (positive? (string-length v))))
-            "non-empty string")
+  (define (optional key predicate description)
+    (when (hash-has-key? value key)
+      (define item (hash-ref value key))
+      (unless (predicate item)
+        (raise-arguments-error 'load-project
+                               "invalid project setting"
+                               "path" path
+                               "setting" key
+                               "expected" description
+                               "value" item))))
+
+  (define non-empty-string?
+    (lambda (v) (and (string? v) (positive? (string-length v)))))
+
+  (required 'name non-empty-string? "non-empty string")
   (define backend
     (required 'backend
               (lambda (v)
@@ -42,12 +54,8 @@
                      (relative-path? (string->path v))))
               "non-empty relative path string"))
   (void backend)
-  (required 'module
-            (lambda (v) (and (string? v) (positive? (string-length v))))
-            "non-empty string")
-  (required 'entry
-            (lambda (v) (and (string? v) (positive? (string-length v))))
-            "non-empty string")
+  (required 'module non-empty-string? "non-empty string")
+  (required 'entry non-empty-string? "non-empty string")
   (define protocol
     (required 'protocol exact-integer? "integer"))
   (unless (= protocol 1)
@@ -56,6 +64,19 @@
                            "path" path
                            "configured" protocol
                            "supported" 1))
+
+  ;; Release metadata is optional for compatibility with 0.1 projects. New
+  ;; projects include it so packaging does not need to hard-code app identity.
+  (optional 'version non-empty-string? "non-empty version string")
+  (optional 'build
+            (lambda (v) (and (exact-integer? v) (positive? v)))
+            "positive integer")
+  (optional 'display-name non-empty-string? "non-empty string")
+  (optional 'identifier
+            (lambda (v)
+              (and (string? v)
+                   (regexp-match? #px"^[A-Za-z0-9][A-Za-z0-9.-]*$" v)))
+            "bundle/application identifier containing letters, digits, '.' or '-'")
   value)
 
 (define (load-config path)
