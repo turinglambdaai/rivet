@@ -2,6 +2,7 @@
 
 (require racket/match
          "build.rkt"
+         "clean.rkt"
          "doctor.rkt"
          "package.rkt"
          "project.rkt"
@@ -22,6 +23,8 @@
     "Usage:\n"
     "  raco rivet new <name>              create a new Rivet application\n"
     "  raco rivet doctor                  inspect the local native toolchain\n"
+    "  raco rivet doctor --json           emit machine-readable toolchain diagnostics\n"
+    "  raco rivet clean                   remove generated .rivet/build/dist artifacts\n"
     "  raco rivet build                   compile backend and native host\n"
     "  raco rivet dev                     build and run the current app\n"
     "  raco rivet package                 create and verify a development distributable\n"
@@ -48,6 +51,18 @@
      (displayln "  raco rivet dev")]
     [(list "doctor")
      (exit (run-doctor))]
+    [(list "doctor" "--json")
+     (exit (run-doctor #:json? #t))]
+    [(list "clean")
+     (define removed (clean-project! (current-project!)))
+     (if (null? removed)
+         (say "project is already clean")
+         (begin
+           (say "removed ~a generated path~a"
+                (length removed)
+                (if (= (length removed) 1) "" "s"))
+           (for ([path (in-list removed)])
+             (printf "  ~a\n" path))))]
     [(list "build")
      (define output (build-project! (current-project!)))
      (say "built ~a" output)]
