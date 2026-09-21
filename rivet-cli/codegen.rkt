@@ -165,7 +165,7 @@
        (list (cons (string-append "get_" name)
                    (format "State getter ~a" (schema-state-name state)))
              (cons (string-append "set_" name)
-                   (format "State setter ~a" (schema-state-name state)))))))))
+                   (format "State setter ~a" (schema-state-name state))))))))
 
   (check-unique-native-names!
    "Swift Event"
