@@ -1,11 +1,14 @@
 // swift-tools-version: 6.0
 
+import Foundation
 import PackageDescription
+
+let macosMinVersion = ProcessInfo.processInfo.environment["RIVET_MACOS_MIN_VERSION"] ?? "14.0"
 
 let package = Package(
     name: "RivetMac",
     platforms: [
-        .macOS(.v14)
+        .macOS(macosMinVersion)
     ],
     products: [
         .library(name: "RivetRuntime", targets: ["RivetRuntime"]),
