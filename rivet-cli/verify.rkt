@@ -41,7 +41,7 @@
      "executable" executable
      "arguments" args
      "stderr" (string-trim (get-output-string err))))
-  (get-output-string out))
+  (string-append (get-output-string out) (get-output-string err)))
 
 (define (run-command! who executable . args)
   (apply capture-command! who executable args)
@@ -75,10 +75,11 @@
              (or (file-exists? (build-path root "System32" dll))
                  (file-exists? (build-path root "SysWOW64" dll)))))))
 
-(define (verify-windows-package! package)
+(define (verify-windows-package! package production?)
   (define who 'verify-package!)
   (required-directory! who package "Windows portable package")
-  (required-file! who (build-path package "RivetHost.exe") "WinUI executable")
+  (define executable (build-path package "RivetHost.exe"))
+  (required-file! who executable "WinUI executable")
   (required-file! who (build-path package "res" "core.zo") "compiled Racket backend")
   (for ([name (in-list '("petite.boot" "scheme.boot" "racket.boot"))])
     (required-file! who (build-path package "runtime" name) "embedded Racket boot file"))
@@ -118,9 +119,16 @@
          "Windows package has an unresolved DLL dependency"
          "binary" binary
          "dependency" dll))))
+
+  (when production?
+    (define signtool (windows-toolchain-signtool tools))
+    (unless signtool
+      (error who
+             "signtool.exe was not found; install the Windows SDK to verify Authenticode production packages"))
+    (run-command! who signtool "verify" "/pa" "/v" (path->string executable)))
   package)
 
-(define (verify-macos-package! app)
+(define (verify-macos-package! app production?)
   (define who 'verify-package!)
   (required-directory! who app "macOS app bundle")
   (define contents (build-path app "Contents"))
@@ -189,17 +197,30 @@
   (define plutil (find-executable-path "plutil"))
   (when plutil
     (run-command! who plutil "-lint" (path->string info)))
+
+  (when production?
+    (define xcrun (find-executable-path "xcrun"))
+    (define spctl (find-executable-path "spctl"))
+    (unless xcrun
+      (error who "xcrun was not found; cannot validate notarization ticket"))
+    (unless spctl
+      (error who "spctl was not found; cannot assess production macOS package"))
+    (run-command! who xcrun "stapler" "validate" (path->string app))
+    (run-command! who spctl
+                  "--assess" "--type" "execute" "--verbose=4"
+                  (path->string app)))
   app)
 
-(define (verify-package! project package)
+(define (verify-package! project package #:production? [production? #f])
+  (void project)
   (case (system-type 'os)
-    [(windows) (verify-windows-package! package)]
-    [(macosx) (verify-macos-package! package)]
+    [(windows) (verify-windows-package! package production?)]
+    [(macosx) (verify-macos-package! package production?)]
     [else
      (error 'verify-package!
             "Rivet package verification currently targets Windows and macOS")]))
 
-(define (verify-project-package! project)
+(define (verify-project-package! project #:production? [production? #f])
   (define name (project-ref project 'name))
   (define package
     (case (system-type 'os)
@@ -210,4 +231,4 @@
       [else
        (error 'verify-project-package!
               "Rivet package verification currently targets Windows and macOS")]))
-  (verify-package! project package))
+  (verify-package! project package #:production? production?))
