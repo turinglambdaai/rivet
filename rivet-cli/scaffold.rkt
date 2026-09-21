@@ -3,7 +3,8 @@
 (require racket/file
          racket/path
          racket/runtime-path
-         racket/string)
+         racket/string
+         "project.rkt")
 
 (provide create-project!)
 
@@ -64,10 +65,12 @@ RKT
   (write-text
    (build-path root "rivet.rktd")
    (format
-    "#hasheq((name . ~s) (display-name . ~s) (version . \"0.1.0\") (build . 1) (identifier . ~s) (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1))\n"
+    "#hasheq((name . ~s) (display-name . ~s) (version . \"0.1.0\") (build . 1) (identifier . ~s) (macos-min-version . ~s) (windows-min-version . ~s) (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1))\n"
     name
     name
-    (default-identifier name)))
+    (default-identifier name)
+    default-macos-min-version
+    default-windows-min-version))
   (write-text (build-path root "app" "backend.rkt") backend-template)
   (write-text (build-path root ".gitignore") ".rivet/\nbuild/\ndist/\n.DS_Store\n")
 
