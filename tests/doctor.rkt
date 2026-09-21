@@ -1,6 +1,7 @@
 #lang racket/base
 
 (require json
+         racket/port
          rackunit
          "../rivet-cli/doctor.rkt")
 
