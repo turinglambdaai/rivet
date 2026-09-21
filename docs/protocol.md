@@ -16,7 +16,7 @@ Offset  Size  Field
 18      N     payload bytes
 ```
 
-A transport must preserve byte order but does not need to preserve write boundaries. Readers therefore use exact-length reads.
+A transport must preserve byte order but does not need to preserve write boundaries. Readers therefore use exact-length reads. RVT1 v1 limits a frame payload to 64 MiB before allocation or decoding.
 
 ## Message types
 
@@ -47,6 +47,8 @@ Payloads use tagged values.
 | `0x06` | List | u32 element count + recursively encoded elements |
 
 A decoder rejects trailing bytes after the top-level value. Strings are UTF-8; invalid UTF-8 is a decoding error.
+
+Racket, C++, and Swift enforce the same maximum nested List depth of 64. This is a codec resource bound rather than a schema restriction: ordinary application values are unaffected, while adversarial or accidentally recursive payloads cannot drive unbounded recursive parsing.
 
 ## Hello
 
@@ -115,7 +117,7 @@ The Racket server associates each request with a custodian. Cancellation shuts d
 
 ## Shutdown
 
-Shutdown uses id 0 and an empty payload. After shutdown, the backend closes its protocol ports and the native client joins its runtime threads.
+Shutdown uses id 0 and an empty payload. After shutdown, the backend closes its protocol ports and the native host waits for its runtime/reader workers before teardown completes. An embedded backend instance is process-scoped and is not restartable after shutdown in the current runtime contract.
 
 ## Events
 
@@ -129,22 +131,42 @@ Event payload:
 
 Event IDs use their own monotonically increasing namespace and are not request IDs. Native clients deliver decoded events through their event callback. Event callbacks run on a transport/reader thread; UI code must dispatch to the WinUI dispatcher or Swift MainActor before touching native UI objects.
 
+Events may be typed:
+
+```racket
+(define-event progress : Int64)
+```
+
+The payload is validated at the Racket boundary before it is emitted. The legacy form remains supported:
+
+```racket
+(define-event progress)
+```
+
+and is equivalent to an `Any` payload for compatibility with pre-0.2 applications.
+
+Typed Event declarations are included in code generation. Swift receives a `RivetEvent` enum with typed associated values and a decoder from the generic transport callback. C++ receives typed Event structs, an `Event` `std::variant`, and a decoder. The wire representation remains the same RVT1 Event payload; typed Events are a schema/codegen layer rather than a framing change.
+
 A successful State update emits the reserved `$state` event. Its value is `[state-name, value]`, so the complete Event payload is:
 
 ```text
 ["$state", ["counter", 42]]
 ```
 
-Native code can therefore subscribe once and react to State changes without polling.
+`$state` is a reserved runtime event rather than an application `define-event` declaration. Native code can subscribe once and react to State changes without polling.
 
-## Typed RPC and State schema
+## Typed RPC, Event, and State schema
 
-`define-rpc` records argument names, argument types, and the result type. `define-state` records the State name, value type, and current value. Rivet validates values at the Racket boundary and generates Swift/C++ wrappers before each native build.
+`define-rpc` records argument names, argument types, and the result type. `define-event` records the Event name and payload type. `define-state` records the State name, value type, and current value. Rivet validates values at the Racket boundary and generates Swift/C++ wrappers before each native build.
 
-Schema types are `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, and `(Optional T)`. State accepts the same value types except `Void`. Optional null is encoded with the existing Null/Void tag, so typed schema evolution does not change RVT1 framing.
+Schema types are `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, and `(Optional T)`. State and Event payloads accept the same value types except `Void`. Optional null is encoded with the existing Null/Void tag, so typed schema evolution does not change RVT1 framing.
 
 Generated State accessors use `$state/get` and `$state/set` internally; applications normally call the typed Swift/C++ API rather than constructing those reserved requests directly.
+
+Code generation rejects declarations that normalize to the same Swift or C++ identifier. Rivet reports the conflicting source declarations instead of writing native source that later fails with an opaque compiler error.
 
 ## Compatibility
 
 Rivet will keep framing changes explicit. If a future release cannot decode the v1 frame/value format, it must increment the protocol version and fail the Hello negotiation instead of guessing.
+
+Resource limits such as maximum frame size and value nesting are part of the v1 decoder contract and are tested consistently across the Racket, C++, and Swift implementations.
