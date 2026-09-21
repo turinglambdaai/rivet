@@ -33,7 +33,7 @@ private func loadGoldenRecords() throws -> [GoldenRecord] {
     url.appendPathComponent("tests/protocol-golden.txt")
 
     let contents = try String(contentsOf: url, encoding: .utf8)
-    return try contents.split(whereSeparator: \ .isNewline).compactMap { rawLine in
+    return try contents.split(whereSeparator: \.isNewline).compactMap { rawLine in
         let line = rawLine.trimmingCharacters(in: .whitespaces)
         guard !line.isEmpty, !line.hasPrefix("#") else { return nil }
         let parts = line.split(separator: "|", omittingEmptySubsequences: false)
