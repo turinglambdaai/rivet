@@ -160,6 +160,7 @@ jobs:
           assert report["usable"] is True
           assert report["runtime"]["petite-boot"]
           assert report["runtime"]["racket-framework"]
+          assert report["tools"]["plutil"]
           PY
       - name: Scaffold, build, package, verify, and clean SwiftUI app
         shell: bash
