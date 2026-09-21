@@ -1,10 +1,9 @@
 #lang racket/base
 
 (require racket/file
-         racket/format
-         racket/list
          racket/path
-         racket/runtime-path)
+         racket/runtime-path
+         racket/string)
 
 (provide create-project!)
 
@@ -12,6 +11,13 @@
 
 (define (safe-project-name? s)
   (regexp-match? #px"^[A-Za-z][A-Za-z0-9_-]*$" s))
+
+(define (default-identifier name)
+  (string-append
+   "dev.rivet."
+   (regexp-replace* #px"[^a-z0-9.-]"
+                    (string-downcase name)
+                    "-")))
 
 (define (write-text path text)
   (make-parent-directory* path)
@@ -52,7 +58,11 @@ RKT
    (format "# ~a\n\nA native desktop app powered by Racket and Rivet.\n\n```bash\nraco rivet doctor\nraco rivet dev\n```\n" name))
   (write-text
    (build-path root "rivet.rktd")
-   (format "#hasheq((name . ~s) (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1))\n" name))
+   (format
+    "#hasheq((name . ~s) (display-name . ~s) (version . \"0.1.0\") (build . 1) (identifier . ~s) (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1))\n"
+    name
+    name
+    (default-identifier name)))
   (write-text (build-path root "app" "backend.rkt") backend-template)
   (write-text (build-path root ".gitignore") ".rivet/\nbuild/\ndist/\n.DS_Store\n")
 
