@@ -161,7 +161,9 @@
      "macOS executable does not reference the bundled Racket.framework through @rpath"
      "executable" executable
      "otool -L" linked-libraries))
-  (when (regexp-match? #px"(?m:^\\s*/[^\\n]*Racket\\.framework/)" linked-libraries)
+  (when (for/or ([line (in-list (string-split linked-libraries "\n"))])
+          (and (regexp-match? #px"^\\s*/" line)
+               (string-contains? line "Racket.framework/")))
     (raise-arguments-error
      who
      "macOS executable still references an absolute developer-machine Racket.framework path"
