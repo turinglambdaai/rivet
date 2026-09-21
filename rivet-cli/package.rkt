@@ -7,7 +7,9 @@
          racket/system
          "build.rkt"
          "project.rkt"
-         "verify.rkt")
+         "signing-options.rkt"
+         "verify.rkt"
+         "windows-tools.rkt")
 
 (provide package-project!)
 
@@ -68,14 +70,95 @@
        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\"><dict>\n  <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>\n</dict></plist>\n"
        out))))
 
-(define (package-windows! project stage name)
+(define (sign-windows-production! executable settings)
+  (define tools (discover-windows-toolchain))
+  (define signtool (windows-toolchain-signtool tools))
+  (unless signtool
+    (error 'package-project!
+           "signtool.exe was not found; install the Windows SDK before production packaging"))
+
+  (define identity-args
+    (cond
+      [(windows-signing-certificate-sha1 settings)
+       (list "/sha1" (windows-signing-certificate-sha1 settings))]
+      [else
+       (define pfx (string->path (windows-signing-pfx settings)))
+       (unless (file-exists? pfx)
+         (raise-arguments-error 'package-project!
+                                "configured Windows signing PFX does not exist"
+                                "RIVET_WINDOWS_SIGN_PFX" pfx))
+       (list "/f" (path->string pfx)
+             "/p" (windows-signing-pfx-password settings))]))
+
+  (apply run!
+         'package-project!
+         signtool
+         (append
+          (list "sign" "/fd" "SHA256")
+          identity-args
+          (list "/tr" (windows-signing-timestamp-url settings)
+                "/td" "SHA256"
+                (path->string executable)))))
+
+(define (package-windows! project stage name production?)
   (define destination
     (project-path project "dist" (string-append name "-windows-x64")))
   (make-directory* (path-only destination))
   (copy-tree! stage destination)
+  (when production?
+    (define settings (load-windows-production-signing))
+    ;; Sign Rivet's application executable. Bundled Windows App SDK/Racket DLLs
+    ;; remain byte-for-byte upstream artifacts instead of being re-signed.
+    (sign-windows-production! (build-path destination "RivetHost.exe") settings))
   destination)
 
-(define (package-macos! project stage name)
+(define (sign-macos! codesign identity entitlements racket-framework app production?)
+  (define common
+    (append
+     (list "--force" "--sign" identity "--options" "runtime")
+     (if production? (list "--timestamp") '())))
+  ;; Sign nested code first, then the outer app. This is more deterministic
+  ;; than asking --deep to infer the signing order.
+  (apply run!
+         'package-project!
+         codesign
+         (append common (list (path->string racket-framework))))
+  (apply run!
+         'package-project!
+         codesign
+         (append common
+                 (list "--entitlements" (path->string entitlements)
+                       (path->string app)))))
+
+(define (notarize-macos! project app name notary-profile)
+  (define xcrun (find-executable-path "xcrun"))
+  (define ditto (find-executable-path "ditto"))
+  (unless xcrun
+    (error 'package-project! "xcrun was not found; install Xcode command line tools"))
+  (unless ditto
+    (error 'package-project! "ditto was not found"))
+
+  (define notary-dir (project-path project ".rivet" "notary"))
+  (make-directory* notary-dir)
+  (define archive (build-path notary-dir (string-append name ".zip")))
+  (remove-path! archive)
+  (run! 'package-project!
+        ditto
+        "-c" "-k" "--keepParent"
+        (path->string app)
+        (path->string archive))
+  (run! 'package-project!
+        xcrun
+        "notarytool" "submit"
+        (path->string archive)
+        "--keychain-profile" notary-profile
+        "--wait")
+  (run! 'package-project!
+        xcrun
+        "stapler" "staple"
+        (path->string app)))
+
+(define (package-macos! project stage name production?)
   (define dist (project-path project "dist"))
   (make-directory* dist)
   (define app (build-path dist (string-append name ".app")))
@@ -123,25 +206,27 @@
   (write-entitlements! entitlements)
 
   (define codesign (find-executable-path "codesign"))
-  (when codesign
-    ;; Sign nested code first, then the outer app. This is more deterministic
-    ;; than asking --deep to infer the signing order.
-    (run! 'package-project!
-          codesign
-          "--force"
-          "--sign" "-"
-          "--options" "runtime"
-          (path->string racket-framework))
-    (run! 'package-project!
-          codesign
-          "--force"
-          "--sign" "-"
-          "--options" "runtime"
-          "--entitlements" (path->string entitlements)
-          (path->string app)))
+  (unless codesign
+    (error 'package-project! "codesign was not found"))
+
+  (cond
+    [production?
+     (define settings (load-macos-production-signing))
+     (sign-macos! codesign
+                  (macos-signing-identity settings)
+                  entitlements
+                  racket-framework
+                  app
+                  #t)
+     (notarize-macos! project
+                       app
+                       name
+                       (macos-signing-notary-profile settings))]
+    [else
+     (sign-macos! codesign "-" entitlements racket-framework app #f)])
   app)
 
-(define (package-project! project)
+(define (package-project! project #:production? [production? #f])
   (define executable
     (build-project! project
                     #:configuration "Release"
@@ -151,14 +236,14 @@
 
   (define packaged
     (case (system-type 'os)
-      [(windows) (package-windows! project stage name)]
-      [(macosx) (package-macos! project stage name)]
+      [(windows) (package-windows! project stage name production?)]
+      [(macosx) (package-macos! project stage name production?)]
       [else
        (error 'package-project!
               "Rivet packages currently target Windows and macOS")]))
 
   ;; `package` should never report success for an artifact that still depends
-  ;; on the developer machine. Verification is part of packaging, not an
-  ;; optional CI-only check.
-  (verify-package! project packaged)
+  ;; on the developer machine. Production mode additionally verifies the
+  ;; platform trust/notarization result.
+  (verify-package! project packaged #:production? production?)
   packaged)
