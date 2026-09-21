@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Validate and publish Racket package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: '9.3'
+
+      - name: Validate release version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "release tag must be vMAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
+          tag_version="${GITHUB_REF_NAME#v}"
+          package_version="$(sed -n 's/^(define version "\([^"]*\)")/\1/p' info.rkt)"
+          if [[ -z "$package_version" ]]; then
+            echo "could not read version from info.rkt" >&2
+            exit 1
+          fi
+          if [[ "$tag_version" != "$package_version" ]]; then
+            echo "tag version $tag_version does not match info.rkt $package_version" >&2
+            exit 1
+          fi
+          if ! grep -Fxq "## $package_version" CHANGELOG.md; then
+            echo "CHANGELOG.md has no ## $package_version section" >&2
+            exit 1
+          fi
+          echo "RIVET_VERSION=$package_version" >> "$GITHUB_ENV"
+
+      - name: Install and test Rivet
+        shell: bash
+        run: |
+          set -euo pipefail
+          raco pkg install --auto --no-docs --name rivet --link "$PWD"
+          raco test tests/
+          raco rivet help
+
+      - name: Build source package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          raco pkg create --from-dir --source --format zip --dest dist "$PWD"
+          archive="$(find dist -maxdepth 1 -type f -name '*.zip' -print -quit)"
+          if [[ -z "$archive" ]]; then
+            echo "raco pkg create did not produce a zip archive" >&2
+            exit 1
+          fi
+          destination="dist/rivet-${RIVET_VERSION}.zip"
+          if [[ "$archive" != "$destination" ]]; then
+            mv "$archive" "$destination"
+          fi
+          sha256sum "$destination" > "${destination}.sha256"
+          awk -v version="$RIVET_VERSION" '
+            $0 == "## " version { capture = 1; next }
+            capture && /^## / { exit }
+            capture { print }
+          ' CHANGELOG.md > dist/release-notes.md
+          test -s dist/release-notes.md
+
+      - name: Upload release package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rivet-${{ env.RIVET_VERSION }}
+          path: |
+            dist/rivet-${{ env.RIVET_VERSION }}.zip
+            dist/rivet-${{ env.RIVET_VERSION }}.zip.sha256
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/rivet-${RIVET_VERSION}.zip" \
+            "dist/rivet-${RIVET_VERSION}.zip.sha256" \
+            --verify-tag \
+            --title "Rivet ${RIVET_VERSION}" \
+            --notes-file dist/release-notes.md

@@ -1,44 +1,80 @@
 #lang racket/base
 
 (require rackunit
+         racket/file
          racket/list
+         racket/runtime-path
+         racket/string
          "../rivet/protocol.rkt")
 
-(define values
-  (list (void)
-        #f
-        #t
-        -42
-        0
-        42
-        "hello"
-        #"bytes"
-        (list "nested" 7 #t)))
+(define-runtime-path golden-path "protocol-golden.txt")
 
-(for ([v (in-list values)])
-  (define decoded (decode-value (encode-value v)))
+(define (hex->bytes text)
+  (unless (even? (string-length text))
+    (error 'hex->bytes "odd-length hex string: ~a" text))
+  (apply bytes
+         (for/list ([i (in-range 0 (string-length text) 2)])
+           (define value (string->number (substring text i (+ i 2)) 16))
+           (unless value
+             (error 'hex->bytes "invalid hex string: ~a" text))
+           value)))
+
+(define golden-records
+  (for/list ([line (in-list (file->lines golden-path))]
+             #:unless (or (string=? "" (string-trim line))
+                          (string-prefix? (string-trim line) "#")))
+    (define parts (string-split line "|"))
+    (unless (= (length parts) 3)
+      (error 'protocol-golden "invalid fixture line: ~a" line))
+    (list (first parts) (second parts) (hex->bytes (third parts)))))
+
+(define (golden-value name)
   (cond
-    [(void? v) (check-true (void? decoded))]
-    [else (check-equal? decoded v)]))
+    [(string=? name "null") (void)]
+    [(string=? name "false") #f]
+    [(string=? name "true") #t]
+    [(string=? name "int64-neg2") -2]
+    [(string=? name "int64-42") 42]
+    [(string=? name "string-hello") "hello"]
+    [(string=? name "string-unicode") "你好 Rivet"]
+    [(string=? name "bytes-binary") #"\x00\xff\x7f"]
+    [(string=? name "list-nested") (list "nested" 7 #t)]
+    [else (error 'protocol-golden "unknown value fixture: ~a" name)]))
 
-(define payload (encode-value (list "increment" 41)))
-(define original (frame message:request 99 payload))
-(define out (open-output-bytes))
-(write-frame original out)
-(define decoded-frame (read-frame (open-input-bytes (get-output-bytes out))))
+(for ([record (in-list golden-records)])
+  (define kind (first record))
+  (define name (second record))
+  (define encoded (third record))
+  (cond
+    [(string=? kind "value")
+     (define expected (golden-value name))
+     (check-equal? (encode-value expected) encoded name)
+     (define decoded (decode-value encoded))
+     (if (void? expected)
+         (check-true (void? decoded) name)
+         (check-equal? decoded expected name))]
+    [(string=? kind "frame")
+     (unless (string=? name "request-99")
+       (error 'protocol-golden "unknown frame fixture: ~a" name))
+     (define decoded (read-frame (open-input-bytes encoded)))
+     (check-equal? (frame-type decoded) message:request name)
+     (check-equal? (frame-id decoded) 99 name)
+     (check-equal? (decode-value (frame-payload decoded))
+                   (list "increment" 41)
+                   name)
+     (define out (open-output-bytes))
+     (write-frame decoded out)
+     (check-equal? (get-output-bytes out) encoded name)]
+    [(string=? kind "invalid-value")
+     (check-exn exn:fail? (lambda () (decode-value encoded)) name)]
+    [(string=? kind "invalid-frame")
+     (check-exn exn:fail?
+                (lambda () (read-frame (open-input-bytes encoded)))
+                name)]
+    [else
+     (error 'protocol-golden "unknown fixture kind: ~a" kind)]))
 
-(check-equal? (frame-type decoded-frame) message:request)
-(check-equal? (frame-id decoded-frame) 99)
-(check-equal? (decode-value (frame-payload decoded-frame))
-              (list "increment" 41))
-
-(check-exn exn:fail?
-           (lambda () (decode-value #"\xff")))
-
-(check-exn exn:fail?
-           (lambda ()
-             (decode-value #"\x06\xff\xff\xff\xff")))
-
+;; Resource-limit regressions stay separate from the fixed byte vectors.
 (define too-deep-value
   (for/fold ([value (void)])
             ([i (in-range (add1 max-value-depth))])

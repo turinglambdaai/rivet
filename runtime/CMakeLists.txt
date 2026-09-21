@@ -22,6 +22,11 @@ option(RIVET_BUILD_TESTS "Build Rivet native runtime tests" ON)
 
 if(RIVET_BUILD_TESTS)
   enable_testing()
+  configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/../tests/protocol-golden.txt
+    ${CMAKE_CURRENT_BINARY_DIR}/protocol-golden.txt
+    COPYONLY
+  )
   add_executable(rivet_protocol_test tests/protocol_test.cpp)
   target_link_libraries(rivet_protocol_test PRIVATE rivet_protocol)
   target_compile_features(rivet_protocol_test PRIVATE cxx_std_17)
