@@ -96,10 +96,17 @@ jobs:
       - name: Install Rivet
         shell: pwsh
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
-      - name: Check toolchain
+      - name: Check toolchain and JSON diagnostics
         shell: pwsh
-        run: raco rivet doctor
-      - name: Scaffold, build, package, and verify WinUI app
+        run: |
+          raco rivet doctor
+          $json = raco rivet doctor --json
+          if ($LASTEXITCODE -ne 0) { throw 'raco rivet doctor --json failed' }
+          $report = $json | ConvertFrom-Json
+          if (-not $report.usable) { throw 'doctor JSON did not report a usable Windows toolchain' }
+          if (-not $report.runtime.'petite-boot') { throw 'doctor JSON omitted the selected petite.boot' }
+          if (-not $report.runtime.'racketcs-dll') { throw 'doctor JSON omitted the selected Racket CS DLL' }
+      - name: Scaffold, build, package, verify, and clean WinUI app
         shell: pwsh
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'rivet-smoke'
@@ -112,6 +119,13 @@ jobs:
           raco rivet verify
           if (-not (Test-Path 'dist\Smoke-windows-x64\RivetHost.exe')) {
             throw 'packaged WinUI executable was not produced'
+          }
+          raco rivet clean
+          foreach ($path in @('.rivet', 'build', 'dist')) {
+            if (Test-Path $path) { throw "raco rivet clean left generated path: $path" }
+          }
+          if (-not (Test-Path 'app\backend.rkt')) {
+            throw 'raco rivet clean removed application source'
           }
 
   macos-host:
@@ -128,9 +142,22 @@ jobs:
           version: '9.3'
       - name: Install Rivet
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
-      - name: Check toolchain
-        run: raco rivet doctor
-      - name: Scaffold, build, package, and verify SwiftUI app
+      - name: Check toolchain and JSON diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          raco rivet doctor
+          report="$RUNNER_TEMP/rivet-doctor.json"
+          raco rivet doctor --json > "$report"
+          python3 - "$report" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as f:
+              report = json.load(f)
+          assert report["usable"] is True
+          assert report["runtime"]["petite-boot"]
+          assert report["runtime"]["racket-framework"]
+          PY
+      - name: Scaffold, build, package, verify, and clean SwiftUI app
         shell: bash
         run: |
           set -euo pipefail
@@ -143,3 +170,8 @@ jobs:
           raco rivet verify
           test -x dist/Smoke.app/Contents/MacOS/Smoke
           codesign --verify --deep --strict dist/Smoke.app
+          raco rivet clean
+          test ! -e .rivet
+          test ! -e build
+          test ! -e dist
+          test -f app/backend.rkt
