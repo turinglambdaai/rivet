@@ -34,10 +34,25 @@
 (check-exn exn:fail?
            (lambda () (decode-value #"\xff")))
 
-
 (check-exn exn:fail?
            (lambda ()
              (decode-value #"\x06\xff\xff\xff\xff")))
+
+(define too-deep-value
+  (for/fold ([value (void)])
+            ([i (in-range (add1 max-value-depth))])
+    (list value)))
+(check-exn #rx"nesting exceeds Rivet protocol limit"
+           (lambda () (encode-value too-deep-value)))
+
+(define list-prefix #"\x06\x01\x00\x00\x00")
+(define too-deep-payload
+  (bytes-append
+   (apply bytes-append
+          (make-list (add1 max-value-depth) list-prefix))
+   #"\x00"))
+(check-exn #rx"nesting exceeds Rivet protocol limit"
+           (lambda () (decode-value too-deep-payload)))
 
 (define oversized-header-out (open-output-bytes))
 (write-bytes #"RVT1" oversized-header-out)
