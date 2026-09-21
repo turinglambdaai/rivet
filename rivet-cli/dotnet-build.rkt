@@ -84,7 +84,11 @@
         (find-executable-path "raco")
         "ctool"
         "--runtime" (path->string runtime-dir)
-        "--runtime-access" "runtime"
+        ;; The embedded module bundle itself is the stable, existing resource
+        ;; anchor. Runtime paths are therefore recorded relative to res/core.zo:
+        ;;   res/core.zo -> ../runtime/...
+        ;; This keeps the whole Rivet bundle relocatable inside any host app.
+        "--runtime-access" "../runtime"
         "--mods" (path->string core)
         (path->string backend))
 

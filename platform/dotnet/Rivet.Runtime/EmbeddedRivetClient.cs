@@ -18,20 +18,20 @@ public sealed record EmbeddedRivetOptions(
         ArgumentException.ThrowIfNullOrWhiteSpace(RuntimeRoot);
         var root = Path.GetFullPath(RuntimeRoot);
         var runtime = Path.Combine(root, "runtime");
+        var backendBundle = Path.Combine(root, "res", "core.zo");
         return new NativeRuntimeConfig
         {
-            // `raco ctool --runtime-access runtime` rewrites define-runtime-path
-            // references relative to Racket's logical executable path. An embedded
-            // bundle can live anywhere inside the managed host, so anchoring this
-            // to Environment.ProcessPath would make packaged runtime files resolve
-            // relative to the .NET executable instead of RuntimeRoot. Use a stable
-            // logical executable inside the bundle by default; callers that need
-            // a specific `(system-type 'exec-file)` value can still override it.
-            ExecutablePath = ExecutablePath ?? Path.Combine(root, "rivet-embedded-host.exe"),
+            // `raco ctool --runtime-access ../runtime` rewrites define-runtime-path
+            // references relative to Racket's logical executable path. Use the
+            // compiled backend bundle itself as that stable, existing anchor:
+            //   res/core.zo -> ../runtime/...
+            // This makes RuntimeRoot a relocatable product component instead of
+            // accidentally anchoring resources to the managed host executable.
+            ExecutablePath = ExecutablePath ?? backendBundle,
             PetiteBoot = Path.Combine(runtime, "petite.boot"),
             SchemeBoot = Path.Combine(runtime, "scheme.boot"),
             RacketBoot = Path.Combine(runtime, "racket.boot"),
-            BackendBundle = Path.Combine(root, "res", "core.zo"),
+            BackendBundle = backendBundle,
             ModuleName = ModuleName,
             EntrySymbol = EntrySymbol,
             CollectsDir = string.Empty,
