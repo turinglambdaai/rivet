@@ -22,7 +22,7 @@
     <ApplicationType>Windows Store</ApplicationType>
     <ApplicationTypeRevision>10.0</ApplicationTypeRevision>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <WindowsTargetPlatformMinVersion>10.0.19041.0</WindowsTargetPlatformMinVersion>
+    <WindowsTargetPlatformMinVersion>$(RIVET_WINDOWS_MIN_VERSION)</WindowsTargetPlatformMinVersion>
     <UseWinUI>true</UseWinUI>
     <RuntimeIdentifiers>win10-x64</RuntimeIdentifiers>
     <WindowsPackageType>None</WindowsPackageType>
@@ -95,10 +95,11 @@
   <ItemGroup><Midl Include="Project.idl"><SubType>Code</SubType></Midl></ItemGroup>
   <ItemGroup><Manifest Include="app.manifest" /></ItemGroup>
 
-  <Target Name="ValidateRivetEnvironment" BeforeTargets="ClCompile">
+  <Target Name="ValidateRivetEnvironment" BeforeTargets="PrepareForBuild">
     <Error Condition="'$(RIVET_ROOT)'==''" Text="RIVET_ROOT is not set. Run this project through `raco rivet build`." />
     <Error Condition="'$(RIVET_RACKET_INCLUDE)'==''" Text="RIVET_RACKET_INCLUDE is not set. Run `raco rivet build` or set it to the exact Racket include directory." />
     <Error Condition="'$(RIVET_RACKET_IMPORT_LIB)'==''" Text="RIVET_RACKET_IMPORT_LIB is not set. Rivet generates this import library from the exact installed libracketcs .def file." />
+    <Error Condition="'$(RIVET_WINDOWS_MIN_VERSION)'==''" Text="RIVET_WINDOWS_MIN_VERSION is not set. Run this project through `raco rivet build` so the value comes from rivet.rktd." />
   </Target>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

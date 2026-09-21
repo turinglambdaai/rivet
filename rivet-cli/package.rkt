@@ -59,18 +59,25 @@
 (define (project-setting project key default)
   (project-ref project key (lambda () default)))
 
-(define (write-macos-info! path display-name executable identifier version build)
+(define (write-macos-info! path
+                           display-name
+                           executable
+                           identifier
+                           version
+                           build
+                           minimum-version)
   (call-with-output-file path
     #:exists 'truncate/replace
     (lambda (out)
       (fprintf out
-               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>CFBundleDevelopmentRegion</key><string>en</string>\n  <key>CFBundleExecutable</key><string>~a</string>\n  <key>CFBundleIdentifier</key><string>~a</string>\n  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>\n  <key>CFBundleName</key><string>~a</string>\n  <key>CFBundleDisplayName</key><string>~a</string>\n  <key>CFBundlePackageType</key><string>APPL</string>\n  <key>CFBundleShortVersionString</key><string>~a</string>\n  <key>CFBundleVersion</key><string>~a</string>\n  <key>LSMinimumSystemVersion</key><string>14.0</string>\n  <key>NSHighResolutionCapable</key><true/>\n</dict>\n</plist>\n"
+               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>CFBundleDevelopmentRegion</key><string>en</string>\n  <key>CFBundleExecutable</key><string>~a</string>\n  <key>CFBundleIdentifier</key><string>~a</string>\n  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>\n  <key>CFBundleName</key><string>~a</string>\n  <key>CFBundleDisplayName</key><string>~a</string>\n  <key>CFBundlePackageType</key><string>APPL</string>\n  <key>CFBundleShortVersionString</key><string>~a</string>\n  <key>CFBundleVersion</key><string>~a</string>\n  <key>LSMinimumSystemVersion</key><string>~a</string>\n  <key>NSHighResolutionCapable</key><true/>\n</dict>\n</plist>\n"
                executable
                identifier
                display-name
                display-name
                version
-               build))))
+               build
+               minimum-version))))
 
 (define (write-entitlements! path)
   (call-with-output-file path
@@ -210,7 +217,8 @@
                      executable-name
                      identifier
                      version
-                     build)
+                     build
+                     (project-macos-min-version project))
 
   (define entitlements
     (project-path project ".rivet" "macos-entitlements.plist"))

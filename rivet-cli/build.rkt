@@ -86,13 +86,17 @@
         "/machine:x64")
   output)
 
-(define (with-windows-build-environment runtime import-lib thunk)
+(define (with-windows-build-environment project runtime import-lib thunk)
   (define env (environment-variables-copy (current-environment-variables)))
   (define (set-path! key path)
     (environment-variables-set! env key (path->bytes path)))
   (set-path! #"RIVET_ROOT" (simplify-path rivet-root #t))
   (set-path! #"RIVET_RACKET_INCLUDE" (racket-runtime-include-dir runtime))
   (set-path! #"RIVET_RACKET_IMPORT_LIB" import-lib)
+  (environment-variables-set!
+   env
+   #"RIVET_WINDOWS_MIN_VERSION"
+   (string->bytes/utf-8 (project-windows-min-version project)))
   (parameterize ([current-environment-variables env])
     (thunk)))
 
@@ -123,7 +127,7 @@
 
   (define out-dir (path->string stage))
   (with-windows-build-environment
-   runtime import-lib
+   project runtime import-lib
    (lambda ()
      (run! 'build-project!
            msbuild
@@ -137,12 +141,15 @@
            (string-append "/p:OutDir=" out-dir))))
   (build-path stage "RivetHost.exe"))
 
-(define (with-macos-build-environment framework-dir thunk)
+(define (with-macos-build-environment project framework-dir thunk)
   (define env (environment-variables-copy (current-environment-variables)))
   (environment-variables-set!
    env #"RIVET_ROOT" (path->bytes (simplify-path rivet-root #t)))
   (environment-variables-set!
    env #"RIVET_RACKET_FRAMEWORK_DIR" (path->bytes framework-dir))
+  (environment-variables-set!
+   env #"RIVET_MACOS_MIN_VERSION"
+   (string->bytes/utf-8 (project-macos-min-version project)))
   (parameterize ([current-environment-variables env])
     (thunk)))
 
@@ -253,7 +260,7 @@
   (define swift-configuration (string-downcase configuration))
 
   (with-macos-build-environment
-   framework-dir
+   project framework-dir
    (lambda ()
      (run! 'build-project!
            swift

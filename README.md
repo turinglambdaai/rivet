@@ -2,7 +2,7 @@
 
 Build first-party native desktop apps with [Racket](https://racket-lang.org/). Use WinUI 3 on Windows and SwiftUI on macOS, keep your application logic in Racket, and ship a real native app instead of a WebView or a cross-platform widget layer.
 
-[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Release](https://img.shields.io/badge/release-0.1.0-C15F3C)](CHANGELOG.md)
+[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Release](https://img.shields.io/badge/release-0.2.0-C15F3C)](CHANGELOG.md)
 
 **English** · [中文](README.zh-CN.md)
 
@@ -81,7 +81,7 @@ Racket CS runs on a dedicated runtime thread. Native UI code never manipulates R
 
 The embedding model is inspired by [Noise](https://github.com/Bogdanp/Noise), but Rivet makes the runtime contract, protocol, code generation, and lifecycle cross-platform instead of Swift-first.
 
-See [docs/architecture.md](docs/architecture.md), [docs/protocol.md](docs/protocol.md), and [docs/embedding.md](docs/embedding.md) for the details.
+See [architecture](docs/architecture.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [project configuration](docs/configuration.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
 
 ## Platform status
 
@@ -97,6 +97,8 @@ See [docs/architecture.md](docs/architecture.md), [docs/protocol.md](docs/protoc
 | `raco rivet build` | ✅ | ✅ |
 | `raco rivet dev` | ✅ | ✅ |
 | `raco rivet package` | ✅ native distribution | ✅ `.app` bundle |
+| Package verification | ✅ dependency audit | ✅ signing/rpath/plist audit |
+| Production signing path | ✅ Authenticode | ✅ Developer ID + notarization |
 | CI protocol coverage | ✅ | ✅ |
 
 Current scope: Windows targets x64 first. Linux is not a Rivet target today because Rivet deliberately follows first-party platform UI stacks rather than defining another universal widget API.
@@ -138,7 +140,7 @@ The generated project contains a shared Racket backend plus native Windows and m
 raco rivet doctor
 ```
 
-`doctor` checks the current OS toolchain and the exact Racket CS runtime that Rivet will embed.
+`doctor` checks the current OS toolchain and the exact Racket CS runtime that Rivet will embed. `raco rivet doctor --json` exposes the same data to CI and developer agents.
 
 ### 4. Run in development
 
@@ -153,9 +155,12 @@ This recompiles the Racket backend, regenerates native clients, builds the nativ
 ```bash
 raco rivet build
 raco rivet package
+raco rivet verify
 ```
 
-`build` produces the native host and staged runtime. `package` turns that output into a distributable Windows directory or a macOS `.app` bundle.
+`build` produces the native host and staged runtime. `package` turns that output into a distributable Windows directory or a macOS `.app` bundle and verifies it before reporting success. `verify` re-audits an existing package.
+
+For publisher-signed output, use `raco rivet package --production` with the platform signing credentials described in [docs/production-signing.md](docs/production-signing.md).
 
 ## RPC, Event, State, Cancel
 
@@ -193,12 +198,17 @@ Long-running requests use RVT1 request IDs. Native clients can cancel an outstan
 ## CLI
 
 ```text
-raco rivet new <name>     Create a Rivet application
-raco rivet doctor         Inspect Racket and native toolchains
-raco rivet build          Compile backend, generate clients, build native host
-raco rivet dev            Build and run the current application
-raco rivet package        Create a distributable native package
-raco rivet help           Show CLI help
+raco rivet new <name>              Create a Rivet application
+raco rivet doctor                  Inspect Racket and native toolchains
+raco rivet doctor --json           Emit machine-readable diagnostics
+raco rivet clean                   Remove generated .rivet/build/dist artifacts
+raco rivet build                   Compile backend, generate clients, build native host
+raco rivet dev                     Build and run the current application
+raco rivet package                 Create and verify a development distributable
+raco rivet package --production    Create, sign, and verify a production distributable
+raco rivet verify                  Re-verify the current packaged artifact
+raco rivet verify --production     Verify production trust/notarization requirements
+raco rivet help                    Show CLI help
 ```
 
 ## Project Structure
@@ -222,12 +232,14 @@ hello/
 
 You own the native UI source. Rivet owns the runtime bridge, protocol, code generation, and build orchestration.
 
+`rivet.rktd` is also the source of truth for application identity, release version/build number, and the Windows/macOS minimum deployment versions. See [docs/configuration.md](docs/configuration.md).
+
 ## Repository Structure
 
 ```text
 rivet/
 ├── rivet/                    # Racket backend, protocol and State/RPC definitions
-├── rivet-cli/                # new / doctor / build / dev / package / codegen
+├── rivet-cli/                # new / doctor / clean / build / dev / package / verify / codegen
 ├── runtime/                  # shared C++ RVT1 codec and tests
 ├── platform/
 │   ├── windows/
@@ -250,14 +262,14 @@ ctest --test-dir runtime/build
 swift test --package-path platform/macos
 ```
 
-CI runs the protocol implementation across Windows, macOS, and Linux and also smoke-builds the native Windows and macOS application packaging paths.
+CI runs the protocol implementation across Windows, macOS, and Linux, exercises real embedded Racket round trips on Windows/macOS, and smoke-builds, packages, verifies, and cleans generated native applications on both supported desktop platforms.
 
 ## Honest gaps
 
 - **No Linux host** — Rivet is intentionally about first-party Windows and macOS UI stacks.
 - **Windows starts with x64** — additional architectures can be added after the runtime packaging path is stable.
 - **No cross-platform declarative UI DSL** — native UI code remains SwiftUI/AppKit or WinUI 3/C++/WinRT.
-- **macOS production signing/notarization is not automated end-to-end yet** — local/CI packaging can produce an app bundle, but shipping credentials remain application-specific.
+- **Publisher credentials remain application-specific** — Rivet automates Authenticode and Developer ID/notarization flows, but certificates, PFX passwords, and Apple notary profiles are intentionally supplied by the application/CI environment rather than stored by Rivet.
 - **The public API is still pre-1.0** — protocol compatibility is versioned, but higher-level APIs may still evolve.
 
 ## Roadmap
@@ -266,8 +278,8 @@ CI runs the protocol implementation across Windows, macOS, and Linux and also sm
 - [x] **Phase 2** — embedded Racket CS on Windows and macOS
 - [x] **Phase 3** — typed RPC, Event, State, Cancel, generated Swift/C++ clients
 - [x] **Phase 4** — `new` / `doctor` / `build` / `dev` / `package`
-- [ ] **Phase 5** — production signing/notarization and broader architecture packaging
-- [ ] **Phase 6** — richer schema/codegen types and long-term protocol compatibility tooling
+- [x] **Phase 5** — package verification, production signing/notarization entry points, and tag-driven release engineering
+- [ ] **Phase 6** — broader architectures, richer schema/codegen types, and long-term protocol compatibility tooling
 
 ## License
 

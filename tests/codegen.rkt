@@ -26,10 +26,24 @@
       (file->string (build-path project-root "windows" "App.xaml.cpp")))
     (define windows-project
       (file->string (build-path project-root "windows" "RivetHost.vcxproj")))
+    (define macos-package
+      (file->string (build-path project-root "macos-host" "Package.swift")))
+    (define project-config
+      (file->string (build-path project-root "rivet.rktd")))
     (check-true (regexp-match? #rx"XamlControlsResources" app-xaml))
     (check-true
      (regexp-match? #rx"Windows::Foundation::IInspectable" app-cpp))
     (check-true (regexp-match? #rx"/utf-8" windows-project))
+    (check-true (regexp-match? #rx"RIVET_WINDOWS_MIN_VERSION" windows-project))
+    (check-false
+     (regexp-match? #rx"<WindowsTargetPlatformMinVersion>10\\.0\\.19041\\.0"
+                    windows-project))
+    (check-true (regexp-match? #rx"RIVET_MACOS_MIN_VERSION" macos-package))
+    (check-true
+     (regexp-match? #rx"\\(macos-min-version \\. \"14\\.0\"\\)" project-config))
+    (check-true
+     (regexp-match? #rx"\\(windows-min-version \\. \"10\\.0\\.19041\\.0\"\\)"
+                    project-config))
 
     (write-backend!
      project-root
@@ -55,6 +69,8 @@ RKT
      )
 
     (define project (load-project project-root))
+    (check-equal? (project-macos-min-version project) "14.0")
+    (check-equal? (project-windows-min-version project) "10.0.19041.0")
     (define schema (generate-clients! project))
     (check-equal? (length (first schema)) 2)
     (check-equal? (length (second schema)) 1)

@@ -4,14 +4,28 @@
          racket/path)
 
 (provide (struct-out rivet-project)
+         default-macos-min-version
+         default-windows-min-version
          find-project
          load-project
          project-ref
-         project-path)
+         project-path
+         project-macos-min-version
+         project-windows-min-version)
 
 (struct rivet-project (root config) #:transparent)
 
 (define config-name "rivet.rktd")
+(define default-macos-min-version "14.0")
+(define default-windows-min-version "10.0.19041.0")
+
+(define (macos-version-string? value)
+  (and (string? value)
+       (regexp-match? #px"^[0-9]+\\.[0-9]+(?:\\.[0-9]+)?$" value)))
+
+(define (windows-version-string? value)
+  (and (string? value)
+       (regexp-match? #px"^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$" value)))
 
 (define (validate-config path value)
   (define (required key predicate description)
@@ -65,8 +79,9 @@
                            "configured" protocol
                            "supported" 1))
 
-  ;; Release metadata is optional for compatibility with 0.1 projects. New
-  ;; projects include it so packaging does not need to hard-code app identity.
+  ;; Release/platform metadata is optional for compatibility with 0.1
+  ;; projects. New projects include it so build and packaging consume one
+  ;; project-level source of truth instead of native-template literals.
   (optional 'version non-empty-string? "non-empty version string")
   (optional 'build
             (lambda (v) (and (exact-integer? v) (positive? v)))
@@ -77,6 +92,12 @@
               (and (string? v)
                    (regexp-match? #px"^[A-Za-z0-9][A-Za-z0-9.-]*$" v)))
             "bundle/application identifier containing letters, digits, '.' or '-'")
+  (optional 'macos-min-version
+            macos-version-string?
+            "macOS version with two or three numeric components, for example 14.0")
+  (optional 'windows-min-version
+            windows-version-string?
+            "Windows version with four numeric components, for example 10.0.19041.0")
   value)
 
 (define (load-config path)
@@ -122,3 +143,13 @@
 
 (define (project-path project . pieces)
   (apply build-path (rivet-project-root project) pieces))
+
+(define (project-macos-min-version project)
+  (project-ref project
+               'macos-min-version
+               (lambda () default-macos-min-version)))
+
+(define (project-windows-min-version project)
+  (project-ref project
+               'windows-min-version
+               (lambda () default-windows-min-version)))

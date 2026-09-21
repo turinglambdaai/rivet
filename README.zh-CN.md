@@ -2,7 +2,7 @@
 
 用 [Racket](https://racket-lang.org/) 构建第一方原生桌面应用。Windows 使用 WinUI 3，macOS 使用 SwiftUI，把应用逻辑放在 Racket 中，最终交付的是真正的原生应用，而不是 WebView 或跨平台控件封装层。
 
-[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Release](https://img.shields.io/badge/release-0.1.0-C15F3C)](CHANGELOG.md)
+[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Release](https://img.shields.io/badge/release-0.2.0-C15F3C)](CHANGELOG.md)
 
 [English](README.md) · **中文**
 
@@ -81,7 +81,7 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 
 嵌入模型受到 [Noise](https://github.com/Bogdanp/Noise) 的启发，但 Rivet 把 runtime contract、协议、代码生成和生命周期都做成平台无关的统一核心，而不是以 Swift 为中心。
 
-深入设计见 [docs/architecture.md](docs/architecture.md)、[docs/protocol.md](docs/protocol.md) 与 [docs/embedding.md](docs/embedding.md)。
+深入设计见 [架构](docs/architecture.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[项目配置](docs/configuration.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
 
 ## 平台支持状态
 
@@ -97,6 +97,8 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 | `raco rivet build` | ✅ | ✅ |
 | `raco rivet dev` | ✅ | ✅ |
 | `raco rivet package` | ✅ 原生分发目录 | ✅ `.app` bundle |
+| 发布物验证 | ✅ DLL 依赖闭包 | ✅ 签名/rpath/plist |
+| 生产签名路径 | ✅ Authenticode | ✅ Developer ID + notarization |
 | CI 协议覆盖 | ✅ | ✅ |
 
 当前优先支持 Windows x64。Linux 不是 Rivet 目前的目标，因为 Rivet 的定位就是绑定各平台第一方 UI，而不是再定义一套统一跨平台控件系统。
@@ -138,7 +140,7 @@ cd hello
 raco rivet doctor
 ```
 
-`doctor` 会检查当前平台工具链以及 Rivet 实际要嵌入的精确 Racket CS runtime。
+`doctor` 会检查当前平台工具链以及 Rivet 实际要嵌入的精确 Racket CS runtime。`raco rivet doctor --json` 会把同样的诊断数据提供给 CI 和 Agent。
 
 ### 4. 开发运行
 
@@ -153,9 +155,12 @@ raco rivet dev
 ```bash
 raco rivet build
 raco rivet package
+raco rivet verify
 ```
 
-`build` 负责生成 native host 和 staged runtime；`package` 输出可分发的 Windows 目录或 macOS `.app`。
+`build` 负责生成 native host 和 staged runtime；`package` 输出可分发的 Windows 目录或 macOS `.app`，并在成功前自动验证发布物；`verify` 可以重新检查已有发布物。
+
+需要正式发行签名时，按 [生产签名文档](docs/production-signing.md) 配置凭据后执行 `raco rivet package --production`。
 
 ## RPC、Event、State、Cancel
 
@@ -193,12 +198,17 @@ native client 可以通过生成的类型化 getter/setter 读取和更新 State
 ## CLI
 
 ```text
-raco rivet new <name>     创建新的 Rivet 应用
-raco rivet doctor         检查 Racket 与 native 工具链
-raco rivet build          编译 backend、生成 client、构建 native host
-raco rivet dev            构建并运行当前应用
-raco rivet package        生成可分发的原生包
-raco rivet help           显示帮助
+raco rivet new <name>              创建新的 Rivet 应用
+raco rivet doctor                  检查 Racket 与 native 工具链
+raco rivet doctor --json           输出机器可读诊断
+raco rivet clean                   删除 .rivet/build/dist 生成物
+raco rivet build                   编译 backend、生成 client、构建 native host
+raco rivet dev                     构建并运行当前应用
+raco rivet package                 创建并验证开发发布物
+raco rivet package --production    创建、签名并验证正式发布物
+raco rivet verify                  重新验证当前发布物
+raco rivet verify --production     验证生产签名/公证信任状态
+raco rivet help                    显示帮助
 ```
 
 ## 项目结构
@@ -222,12 +232,14 @@ hello/
 
 原生 UI 源码属于应用本身；Rivet 负责 runtime bridge、协议、codegen 和构建编排。
 
+`rivet.rktd` 同时是应用 identity、版本/build number、Windows/macOS 最低系统版本的唯一应用级配置源。具体字段见 [docs/configuration.md](docs/configuration.md)。
+
 ## 仓库结构
 
 ```text
 rivet/
 ├── rivet/                    # Racket backend、协议、State/RPC 定义
-├── rivet-cli/                # new / doctor / build / dev / package / codegen
+├── rivet-cli/                # new / doctor / clean / build / dev / package / verify / codegen
 ├── runtime/                  # 共享 C++ RVT1 codec 与测试
 ├── platform/
 │   ├── windows/
@@ -250,14 +262,14 @@ ctest --test-dir runtime/build
 swift test --package-path platform/macos
 ```
 
-CI 会在 Windows、macOS、Linux 上验证协议实现，同时对 Windows 和 macOS 的原生应用打包链做 smoke build。
+CI 会在 Windows、macOS、Linux 上验证协议实现；在 Windows/macOS 上执行真实 embedded Racket round-trip，并对新生成项目运行 build、package、verify、clean smoke。
 
 ## 诚实的局限
 
 - **当前没有 Linux host** —— Rivet 的目标是 Windows/macOS 第一方 UI，而不是统一跨平台控件。
 - **Windows 先支持 x64** —— runtime 打包链稳定后再扩展其他架构。
 - **没有统一声明式跨平台 UI DSL** —— UI 代码仍然直接写 SwiftUI/AppKit 或 WinUI 3/C++/WinRT。
-- **macOS 生产签名/公证尚未完全自动化** —— 本地与 CI 已能生成 `.app`，但正式发布凭据仍属于应用自身配置。
+- **正式发布凭据仍属于应用自身** —— Rivet 已自动化 Authenticode、Developer ID、notarization 流程，但证书、PFX 密码、Apple notary profile 会由应用/CI 环境注入，不由 Rivet 保存。
 - **Public API 仍处于 pre-1.0** —— 协议有版本控制，但高层 API 仍可能继续调整。
 
 ## 路线图
@@ -266,8 +278,8 @@ CI 会在 Windows、macOS、Linux 上验证协议实现，同时对 Windows 和 
 - [x] **Phase 2** —— Windows 与 macOS 嵌入 Racket CS
 - [x] **Phase 3** —— Typed RPC、Event、State、Cancel、Swift/C++ codegen
 - [x] **Phase 4** —— `new` / `doctor` / `build` / `dev` / `package`
-- [ ] **Phase 5** —— 生产级签名、公证与更多架构的打包支持
-- [ ] **Phase 6** —— 更丰富 schema/codegen 类型与长期协议兼容工具
+- [x] **Phase 5** —— 发布物验证、生产签名/公证入口与 tag-driven release engineering
+- [ ] **Phase 6** —— 更多架构、更丰富 schema/codegen 类型与长期协议兼容工具
 
 ## 许可证
 

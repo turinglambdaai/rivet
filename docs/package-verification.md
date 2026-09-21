@@ -16,6 +16,8 @@ It then uses the MSVC `dumpbin /DEPENDENTS` tool on each root EXE/DLL. Every imp
 
 This catches a common release failure mode where a package builds correctly on the developer machine but accidentally relies on a locally installed Racket runtime, Visual Studio runtime component, or Windows App Runtime component that was not copied into the distributable directory.
 
+`windows-min-version` is configured in `rivet.rktd`. The Rivet build environment passes it to the generated WinUI project as `WindowsTargetPlatformMinVersion`, rather than storing a second application-specific minimum version in the project template.
+
 `raco rivet doctor` reports the discovered `dumpbin.exe`. The Visual Studio C++ tools are therefore part of the Windows packaging toolchain, not only the compile toolchain.
 
 In production verification mode, Rivet additionally requires Windows SDK `signtool.exe` and runs `signtool verify /pa /v` against `RivetHost.exe` after the normal dependency-closure audit.
@@ -31,7 +33,8 @@ It then verifies:
 - the main executable links to Racket through `@rpath/Racket.framework/...` rather than an absolute developer-machine path;
 - the executable contains `@executable_path/../Frameworks` in its load commands;
 - the bundled Racket framework has an `@rpath/Racket.framework/Versions/.../Racket` install name;
-- `Info.plist` passes `plutil -lint` when `plutil` is available.
+- `Info.plist` passes `plutil -lint`;
+- `LSMinimumSystemVersion` exactly matches `macos-min-version` from `rivet.rktd`.
 
 The development package may use ad-hoc signing, but its runtime layout must already be relocatable and internally consistent.
 
@@ -39,6 +42,6 @@ In production verification mode, Rivet additionally runs `xcrun stapler validate
 
 ## CI
 
-The Windows and macOS package-smoke jobs run `raco rivet package` and then run `raco rivet verify` again. This validates both the automatic package gate and the standalone re-verification command on real platform runners.
+The Windows and macOS package-smoke jobs run `raco rivet package` and then run `raco rivet verify` again. They intentionally override the scaffold deployment targets with non-default values so the real platform builds exercise the configuration propagation path rather than only the fallback defaults.
 
 Normal pull-request CI does not contain publisher certificates or Apple notarization credentials, so it intentionally exercises development packaging. Production credential parsing is covered by platform-independent Racket tests; certificate-backed production signing belongs in a trusted publisher release environment.
