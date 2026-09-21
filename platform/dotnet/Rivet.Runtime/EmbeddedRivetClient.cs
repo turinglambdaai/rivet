@@ -20,8 +20,14 @@ public sealed record EmbeddedRivetOptions(
         var runtime = Path.Combine(root, "runtime");
         return new NativeRuntimeConfig
         {
-            ExecutablePath = ExecutablePath ?? Environment.ProcessPath
-                ?? throw new InvalidOperationException("The current executable path is unavailable."),
+            // `raco ctool --runtime-access runtime` rewrites define-runtime-path
+            // references relative to Racket's logical executable path. An embedded
+            // bundle can live anywhere inside the managed host, so anchoring this
+            // to Environment.ProcessPath would make packaged runtime files resolve
+            // relative to the .NET executable instead of RuntimeRoot. Use a stable
+            // logical executable inside the bundle by default; callers that need
+            // a specific `(system-type 'exec-file)` value can still override it.
+            ExecutablePath = ExecutablePath ?? Path.Combine(root, "rivet-embedded-host.exe"),
             PetiteBoot = Path.Combine(runtime, "petite.boot"),
             SchemeBoot = Path.Combine(runtime, "scheme.boot"),
             RacketBoot = Path.Combine(runtime, "racket.boot"),
