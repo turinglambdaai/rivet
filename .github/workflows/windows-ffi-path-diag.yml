@@ -77,6 +77,34 @@ jobs:
             (serve-fds in-fd out-fd))
           '@ | Set-Content -Path 'app\backend.rkt'
           raco rivet build-dotnet
+      - name: Inspect packaged SQLite dependencies
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'rivet-ffi-path\Smoke'
+          $stage = (Resolve-Path (Join-Path $root '.rivet\dotnet\windows-x64')).Path
+          $sqlite = Get-ChildItem (Join-Path $stage 'runtime') -Recurse -Filter 'sqlite3.dll' |
+            Where-Object { $_.FullName -ne (Join-Path $stage 'runtime\sqlite3.dll') } |
+            Select-Object -First 1
+          if (-not $sqlite) {
+            throw 'ctool-packaged sqlite3.dll was not found'
+          }
+          Write-Host "ctool sqlite=$($sqlite.FullName)"
+          Write-Host 'nested directory contents:'
+          Get-ChildItem $sqlite.Directory.FullName | Select-Object Name,Length
+          $dumpbin = Get-Command dumpbin.exe -ErrorAction SilentlyContinue
+          if (-not $dumpbin) {
+            $candidate = Get-ChildItem 'C:\Program Files\Microsoft Visual Studio' -Recurse -Filter dumpbin.exe -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match '\\Hostx64\\x64\\dumpbin\.exe$' } |
+              Select-Object -First 1
+            if (-not $candidate) {
+              throw 'dumpbin.exe was not found'
+            }
+            $dumpbin = $candidate.FullName
+          } else {
+            $dumpbin = $dumpbin.Source
+          }
+          Write-Host "dumpbin=$dumpbin"
+          & $dumpbin /DEPENDENTS $sqlite.FullName
       - name: Run with runtime directory on PATH
         shell: pwsh
         run: |
