@@ -3,6 +3,7 @@
 (require racket/file
          racket/path
          racket/runtime-path
+         racket/string
          racket/system
          "csharp-codegen.rkt"
          "project.rkt"
@@ -35,6 +36,37 @@
   (make-parent-directory* destination)
   (copy-file source destination #t))
 
+(define (dll-path? path)
+  (and (file-exists? path)
+       (regexp-match? #px"(?i:\\.dll$)"
+                      (path->string (file-name-from-path path)))))
+
+(define (stage-foreign-libraries! runtime runtime-dir)
+  ;; Racket packages declare native dependencies through `copy-foreign-libs`.
+  ;; During a normal Racket installation those files are copied into
+  ;; `find-lib-dir`; an embedded bundle has no installation-wide lib directory,
+  ;; so mirror the installed Windows DLL payload into the bundle's runtime dir.
+  ;; `racket_boot` receives this directory as `dll_dir`, which is also where
+  ;; Racket's FFI searches for packaged foreign libraries such as sqlite3.dll.
+  (define lib-dir (racket-runtime-lib-dir runtime))
+  (unless (directory-exists? lib-dir)
+    (raise-arguments-error 'build-dotnet-runtime!
+                           "Racket foreign-library directory does not exist"
+                           "directory" lib-dir))
+  (define racketcs-name
+    (string-downcase
+     (path->string (file-name-from-path (racket-runtime-racketcs-dll runtime)))))
+  (for/list ([source (in-list (directory-list lib-dir #:build? #t))]
+             #:when (dll-path? source)
+             #:unless (string=?
+                       (string-downcase
+                        (path->string (file-name-from-path source)))
+                       racketcs-name))
+    (define destination
+      (build-path runtime-dir (file-name-from-path source)))
+    (copy-required! 'build-dotnet-runtime! source destination)
+    destination))
+
 (define (compile-backend! project runtime stage)
   (define backend (project-path project (project-ref project 'backend)))
   (unless (file-exists? backend)
@@ -63,6 +95,7 @@
     (copy-required! 'build-dotnet-runtime!
                     source
                     (build-path runtime-dir (file-name-from-path source))))
+  (stage-foreign-libraries! runtime runtime-dir)
   core)
 
 (define (prepare-import-library! project runtime lib-exe)

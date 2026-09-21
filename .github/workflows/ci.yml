@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, 'feature/**']
+    branches: [main, 'feature/**', 'fix/**']
   pull_request:
 
 permissions:
@@ -153,6 +153,33 @@ jobs:
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'rivet-smoke\Smoke'
           Set-Location $root
+          @'
+          #lang racket/base
+
+          (require db
+                   rivet/backend)
+
+          (provide start)
+
+          (define-state counter : Int64 0)
+
+          (define-rpc (greet [name String] : String)
+            (format "Hello, ~a!" name))
+
+          (define-rpc (sqlite-roundtrip [value String] : String)
+            (define conn (sqlite3-connect #:database 'memory))
+            (dynamic-wind
+             void
+             (lambda ()
+               (query-exec conn "CREATE TABLE smoke (value TEXT NOT NULL)")
+               (query-exec conn "INSERT INTO smoke (value) VALUES (?)" value)
+               (query-value conn "SELECT value FROM smoke LIMIT 1"))
+             (lambda ()
+               (disconnect conn))))
+
+          (define (start in-fd out-fd)
+            (serve-fds in-fd out-fd))
+          '@ | Set-Content -Path 'app\backend.rkt'
           raco rivet build-dotnet
           $stage = '.rivet\dotnet\windows-x64'
           if (-not (Test-Path "$stage\rivet_native.dll")) {
@@ -163,6 +190,9 @@ jobs:
           }
           if (-not (Test-Path "$stage\runtime\racket.boot")) {
             throw 'Racket boot files were not staged'
+          }
+          if (-not (Test-Path "$stage\runtime\sqlite3.dll")) {
+            throw 'Racket SQLite foreign library was not staged'
           }
           if (-not (Test-Path 'dotnet\GeneratedBackend.cs')) {
             throw 'typed C# client was not generated'
@@ -199,7 +229,9 @@ jobs:
           var before = await api.GetCounterAsync();
           var after = await api.SetCounterAsync(before + 1);
           if (after != before + 1) throw new InvalidOperationException("state round-trip failed");
-          Console.WriteLine("Embedded Rivet .NET smoke passed.");
+          var sqlite = await api.SqliteRoundtripAsync("sqlite-ok");
+          if (sqlite != "sqlite-ok") throw new InvalidOperationException($"unexpected SQLite result: {sqlite}");
+          Console.WriteLine("Embedded Rivet .NET + SQLite smoke passed.");
           '@ | Set-Content -Path $program
           $stage = (Resolve-Path (Join-Path $root '.rivet\dotnet\windows-x64')).Path
           $env:PATH = "$stage;$env:PATH"
