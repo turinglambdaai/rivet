@@ -292,9 +292,15 @@
             "Rivet native hosts currently target Windows and macOS")]))
 
 (define (dev-project! project)
-  (define executable (build-project! project #:configuration "Debug"))
+  ;; Development should start the generated app on a clean machine, not fail
+  ;; because a matching Windows App Runtime happens not to be installed.
+  (define executable
+    (build-project! project
+                    #:configuration "Debug"
+                    #:self-contained? #t))
   (case (system-type 'os)
     [(windows macosx)
-     (run! 'dev-project! executable)]
+     (parameterize ([current-directory (path-only executable)])
+       (run! 'dev-project! executable))]
     [else
      (error 'dev-project! "development runner is not available on this platform")]))

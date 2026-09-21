@@ -14,6 +14,16 @@
   void
   (lambda ()
     (define project-root (create-project! "demo" temp-root))
+    (define app-xaml
+      (file->string (build-path project-root "windows" "App.xaml")))
+    (define app-cpp
+      (file->string (build-path project-root "windows" "App.xaml.cpp")))
+    (define windows-project
+      (file->string (build-path project-root "windows" "RivetHost.vcxproj")))
+    (check-true (regexp-match? #rx"XamlControlsResources" app-xaml))
+    (check-true
+     (regexp-match? #rx"Windows::Foundation::IInspectable" app-cpp))
+    (check-true (regexp-match? #rx"/utf-8" windows-project))
     (call-with-output-file
      (build-path project-root "app" "backend.rkt")
      #:exists 'truncate/replace
