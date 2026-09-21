@@ -30,9 +30,11 @@
     (define boots (find-complete-boot-files (list incomplete complete)))
     (check-equal? (map file-name-from-path boots)
                   (map string->path '("petite.boot" "scheme.boot" "racket.boot")))
+    (define complete-directory
+      (path->directory-path (simplify-path complete #t)))
     (for ([path (in-list boots)])
       (check-equal? (simplify-path (path-only path) #t)
-                    (simplify-path complete #t)))
+                    complete-directory))
 
     ;; Runtime discovery is deliberately non-recursive. A matching artifact in
     ;; a nested directory is invisible unless that directory is an explicit
