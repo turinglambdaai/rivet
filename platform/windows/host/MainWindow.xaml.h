@@ -13,7 +13,7 @@ struct MainWindow : MainWindowT<MainWindow> {
 
  private:
   winrt::fire_and_forget InitializeBackendAsync();
-  winrt::fire_and_forget IncrementAsync();
+  void IncrementAsync();
   void SetReadyUi();
   void SetErrorUi(std::string const& message);
 
