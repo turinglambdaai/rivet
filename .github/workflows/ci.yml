@@ -43,7 +43,7 @@ jobs:
           grep -Fxq "## $version" CHANGELOG.md
           package_dir="$RUNNER_TEMP/rivet-package"
           mkdir -p "$package_dir"
-          raco pkg create --source --format zip --dest "$package_dir" .
+          raco pkg create --from-dir --source --format zip --dest "$package_dir" "$PWD"
           find "$package_dir" -maxdepth 1 -type f -name '*.zip' -print -quit | grep -q .
 
   native-protocol:
