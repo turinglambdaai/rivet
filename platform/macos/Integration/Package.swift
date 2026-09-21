@@ -13,9 +13,11 @@ guard let racketFrameworkDir = ProcessInfo.processInfo.environment["RIVET_RACKET
     fatalError("RIVET_RACKET_FRAMEWORK_DIR is required")
 }
 
+let macosMinVersion = ProcessInfo.processInfo.environment["RIVET_MACOS_MIN_VERSION"] ?? "14.0"
+
 let package = Package(
     name: "RivetIntegration",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(macosMinVersion)],
     dependencies: [
         .package(path: rivetRoot + "/platform/macos")
     ],
