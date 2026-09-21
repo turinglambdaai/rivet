@@ -6,8 +6,11 @@
 #endif
 #include <windows.h>
 
+#include <algorithm>
 #include <atomic>
+#include <cwchar>
 #include <exception>
+#include <filesystem>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -16,6 +19,7 @@
 #include <thread>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "chezscheme.h"
 #include "racketcs.h"
@@ -59,6 +63,63 @@ class UniqueHandle {
   HANDLE handle_{INVALID_HANDLE_VALUE};
 };
 
+class UniqueModule {
+ public:
+  UniqueModule() = default;
+  explicit UniqueModule(HMODULE module) : module_(module) {}
+  ~UniqueModule() { reset(); }
+
+  UniqueModule(UniqueModule const&) = delete;
+  UniqueModule& operator=(UniqueModule const&) = delete;
+
+  UniqueModule(UniqueModule&& other) noexcept : module_(other.release()) {}
+  UniqueModule& operator=(UniqueModule&& other) noexcept {
+    if (this != &other) {
+      reset(other.release());
+    }
+    return *this;
+  }
+
+  HMODULE release() noexcept {
+    auto const result = module_;
+    module_ = nullptr;
+    return result;
+  }
+
+  void reset(HMODULE module = nullptr) noexcept {
+    if (module_ != nullptr) {
+      ::FreeLibrary(module_);
+    }
+    module_ = module;
+  }
+
+ private:
+  HMODULE module_{nullptr};
+};
+
+class DllDirectoryRegistration {
+ public:
+  explicit DllDirectoryRegistration(std::filesystem::path const& directory) {
+    cookie_ = ::AddDllDirectory(directory.c_str());
+    if (cookie_ == nullptr) {
+      throw std::runtime_error("AddDllDirectory failed with Win32 error " +
+                               std::to_string(::GetLastError()));
+    }
+  }
+
+  ~DllDirectoryRegistration() {
+    if (cookie_ != nullptr) {
+      (void)::RemoveDllDirectory(cookie_);
+    }
+  }
+
+  DllDirectoryRegistration(DllDirectoryRegistration const&) = delete;
+  DllDirectoryRegistration& operator=(DllDirectoryRegistration const&) = delete;
+
+ private:
+  DLL_DIRECTORY_COOKIE cookie_{nullptr};
+};
+
 struct PipePair {
   UniqueHandle read;
   UniqueHandle write;
@@ -82,6 +143,67 @@ ptr quoted_symbol(std::string const& name) {
   auto const quote = Sstring_to_symbol("quote");
   auto const module = Sstring_to_symbol(name.c_str());
   return Scons(quote, Scons(module, Snil));
+}
+
+bool is_dll(std::filesystem::path const& path) {
+  return ::_wcsicmp(path.extension().c_str(), L".dll") == 0;
+}
+
+std::vector<UniqueModule> preload_bundled_runtime_dlls(
+    std::wstring const& runtime_directory) {
+  std::vector<UniqueModule> modules;
+  if (runtime_directory.empty()) {
+    return modules;
+  }
+
+  auto const runtime = std::filesystem::path(runtime_directory);
+  if (!std::filesystem::is_directory(runtime)) {
+    throw std::runtime_error("Rivet runtime directory does not exist");
+  }
+
+  // `raco ctool --runtime` places runtime-path resources (for example
+  // db/sqlite3's sqlite3.dll) below the bundle's runtime directory. Racket
+  // later opens those DLLs by absolute path. On Windows, dependencies of an
+  // absolute-path LoadLibrary call are still resolved with the process DLL
+  // search rules, so support DLLs staged at runtime/ are otherwise invisible
+  // unless the host application mutates PATH.
+  //
+  // Do not change the host's process-wide default DLL search policy. Instead,
+  // temporarily register runtime/ only for our explicit LoadLibraryEx calls,
+  // preload the ctool-collected nested DLLs with safe search flags, then remove
+  // the registration. The modules stay loaded until Racket shuts down, making
+  // the subsequent Racket FFI LoadLibrary calls deterministic and self-contained.
+  DllDirectoryRegistration const runtime_search(runtime);
+
+  std::vector<std::filesystem::path> candidates;
+  for (auto const& entry : std::filesystem::recursive_directory_iterator(runtime)) {
+    if (!entry.is_regular_file() || !is_dll(entry.path())) {
+      continue;
+    }
+    if (entry.path().parent_path() == runtime) {
+      // Top-level DLLs are dependency/search support files staged from the
+      // Racket distribution. Only ctool runtime-path DLLs need preloading.
+      continue;
+    }
+    candidates.push_back(entry.path());
+  }
+  std::sort(candidates.begin(), candidates.end());
+
+  constexpr DWORD kLoadFlags =
+      LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS;
+  modules.reserve(candidates.size());
+  for (auto const& path : candidates) {
+    auto const module = ::LoadLibraryExW(path.c_str(), nullptr, kLoadFlags);
+    if (module == nullptr) {
+      throw std::runtime_error(
+          "LoadLibraryExW failed for bundled Racket runtime DLL '" +
+          path.u8string() + "' with Win32 error " +
+          std::to_string(::GetLastError()));
+    }
+    modules.emplace_back(module);
+  }
+
+  return modules;
 }
 
 }  // namespace
@@ -246,6 +368,12 @@ class Backend::Impl {
       auto const in_handle = reinterpret_cast<intptr_t>(server_read.get());
       auto const out_handle = reinterpret_cast<intptr_t>(server_write.get());
 
+      // Load ctool-collected foreign runtime DLLs before Racket instantiates
+      // the embedded backend. Keep our references alive until Sscheme_deinit so
+      // Racket FFI modules never observe their dependencies being unloaded.
+      auto bundled_runtime_modules =
+          preload_bundled_runtime_dlls(config_.dll_dir);
+
       racket_boot_arguments_t boot{};
       boot.boot1_path = config_.petite_boot.c_str();
       boot.boot2_path = config_.scheme_boot.c_str();
@@ -280,6 +408,7 @@ class Backend::Impl {
       (void)server_write.release();
       (void)racket_apply(procedure, args);
       Sscheme_deinit();
+      (void)bundled_runtime_modules;
     } catch (...) {
       // UniqueHandle closes endpoints for native startup failures. Once the
       // handles are transferred, serve-fds owns their lifetime on the Racket
