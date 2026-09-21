@@ -237,15 +237,20 @@
        [_ (error '$state/set "expected state name and value")])]
     [else (error 'serve "unknown internal request: ~a" name)]))
 
-(define (serve in out)
+(define (serve in out #:max-pending-requests [max-pending-requests 1024])
   (unless (input-port? in)
     (raise-argument-error 'serve "input-port?" in))
   (unless (output-port? out)
     (raise-argument-error 'serve "output-port?" out))
+  (unless (and (exact-integer? max-pending-requests)
+               (positive? max-pending-requests))
+    (raise-argument-error 'serve "positive exact integer" max-pending-requests))
 
   (define root-custodian (make-custodian))
   (define responses (make-async-channel))
   (define pending (make-hash))
+  (define pending-lock (make-semaphore 1))
+  (define event-id-lock (make-semaphore 1))
   (define stopped? #f)
   (define next-event-id 1)
 
@@ -262,61 +267,126 @@
   (define (send! f)
     (async-channel-put responses f))
 
+  (define (admit-request! id custodian)
+    (call-with-semaphore
+     pending-lock
+     (lambda ()
+       (cond
+         [(hash-has-key? pending id) 'duplicate]
+         [(>= (hash-count pending) max-pending-requests) 'full]
+         [else
+          (hash-set! pending id custodian)
+          'admitted]))))
+
+  (define (take-pending! id)
+    (call-with-semaphore
+     pending-lock
+     (lambda ()
+       (define custodian (hash-ref pending id #f))
+       (when custodian
+         (hash-remove! pending id))
+       custodian)))
+
+  (define (take-all-pending!)
+    (call-with-semaphore
+     pending-lock
+     (lambda ()
+       (define custodians (hash-values pending))
+       (hash-clear! pending)
+       custodians)))
+
   (define (finish! id type value)
-    (hash-remove! pending id)
-    (send! (frame type id (encode-value value))))
+    ;; Cancellation and normal completion race for ownership of the pending
+    ;; entry. Only the winner may emit a terminal frame for this request.
+    (when (take-pending! id)
+      (send! (frame type id (encode-value value)))))
+
+  (define (allocate-event-id!)
+    (call-with-semaphore
+     event-id-lock
+     (lambda ()
+       (define id next-event-id)
+       (set! next-event-id (add1 next-event-id))
+       id)))
 
   (define (emit! name value)
-    (define id next-event-id)
-    (set! next-event-id (add1 next-event-id))
-    (send! (frame message:event id (encode-value (list name value)))))
+    (send! (frame message:event
+                  (allocate-event-id!)
+                  (encode-value (list name value)))))
+
+  (define (reject-request! id message)
+    (send! (frame message:error id (encode-value message))))
+
+  (define (request-error! id e)
+    (when (take-pending! id)
+      (send! (frame message:error id (exn->payload e)))))
+
+  (define (run-request! id rpc-name args internal-state-request? info)
+    (with-handlers ((exn:fail? (lambda (e) (request-error! id e))))
+      (define result
+        (if internal-state-request?
+            (invoke-state-request rpc-name args)
+            (let ([expected (length (rpc-info-arg-types info))])
+              (unless (= expected (length args))
+                (error rpc-name
+                       "expected ~a argument~a, received ~a"
+                       expected
+                       (if (= expected 1) "" "s")
+                       (length args)))
+              (for ([arg (in-list args)]
+                    [arg-name (in-list (rpc-info-arg-names info))]
+                    [arg-type (in-list (rpc-info-arg-types info))])
+                (validate-value rpc-name arg-name arg-type arg))
+              (let ([value (apply (rpc-info-procedure info) args)])
+                (validate-value rpc-name
+                                'result
+                                (rpc-info-result-type info)
+                                value)
+                value))))
+      (finish! id message:response result)))
 
   (define (start-request! f)
     (define id (frame-id f))
-    (when (hash-has-key? pending id)
-      (error 'serve "duplicate request id: ~a" id))
-    (define-values (rpc-name args) (request->call (frame-payload f)))
-    (define internal-state-request?
-      (memq rpc-name '($state/get $state/set)))
-    (define info
-      (and (not internal-state-request?)
-           (hash-ref registry rpc-name
-                     (lambda ()
-                       (error 'serve "unknown RPC: ~a" rpc-name)))))
-    (define request-custodian (make-custodian root-custodian))
-    (hash-set! pending id request-custodian)
-    (parameterize ([current-custodian request-custodian])
-      (thread
-       (lambda ()
-         (with-handlers ([exn:fail?
-                          (lambda (e)
-                            (hash-remove! pending id)
-                            (send! (frame message:error id (exn->payload e))))])
-           (define result
-             (if internal-state-request?
-                 (invoke-state-request rpc-name args)
-                 (let ([expected (length (rpc-info-arg-types info))])
-                   (unless (= expected (length args))
-                     (error rpc-name
-                            "expected ~a argument~a, received ~a"
-                            expected
-                            (if (= expected 1) "" "s")
-                            (length args)))
-                   (for ([arg (in-list args)]
-                         [arg-name (in-list (rpc-info-arg-names info))]
-                         [arg-type (in-list (rpc-info-arg-types info))])
-                     (validate-value rpc-name arg-name arg-type arg))
-                   (let ([value (apply (rpc-info-procedure info) args)])
-                     (validate-value rpc-name 'result (rpc-info-result-type info) value)
-                     value))))
-           (finish! id message:response result))))))
+    ;; Bad application requests must fail that request rather than tear down the
+    ;; entire embedded runtime. The native client generated by Rivet should not
+    ;; produce these frames, but keeping the server alive makes failures local.
+    (with-handlers ((exn:fail?
+                     (lambda (e)
+                       (reject-request! id (exn-message e)))))
+      (define-values (rpc-name args) (request->call (frame-payload f)))
+      (define internal-state-request?
+        (memq rpc-name '($state/get $state/set)))
+      (define info
+        (and (not internal-state-request?)
+             (hash-ref registry rpc-name
+                       (lambda ()
+                         (error 'serve "unknown RPC: ~a" rpc-name)))))
+      (define request-custodian (make-custodian root-custodian))
+      (define admission (admit-request! id request-custodian))
+      (cond
+        ((eq? admission 'duplicate)
+         (custodian-shutdown-all request-custodian)
+         (reject-request! id (format "duplicate request id: ~a" id)))
+        ((eq? admission 'full)
+         (custodian-shutdown-all request-custodian)
+         (reject-request!
+          id
+          (format "too many pending requests (limit ~a)" max-pending-requests)))
+        (else
+         (parameterize ([current-custodian request-custodian])
+           (thread
+            (lambda ()
+              (run-request! id
+                            rpc-name
+                            args
+                            internal-state-request?
+                            info))))))))
 
   (define (cancel! id)
-    (define request-custodian (hash-ref pending id #f))
+    (define request-custodian (take-pending! id))
     (when request-custodian
       (custodian-shutdown-all request-custodian)
-      (hash-remove! pending id)
-      (send! (frame message:error id (encode-value "request cancelled")))))
+      (reject-request! id "request cancelled")))
 
   (define (dispatch! f)
     (case (frame-type f)
@@ -352,16 +422,15 @@
                     (dispatch! f)
                     (loop))))))))
     (lambda ()
-      (for ([cust (in-hash-values pending)])
+      (for ([cust (in-list (take-all-pending!))])
         (custodian-shutdown-all cust))
-      (hash-clear! pending)
       (async-channel-put responses 'stop)
       (thread-wait writer)
       (custodian-shutdown-all root-custodian)))
 
   (void))
 
-(define (serve-fds in-fd out-fd)
+(define (serve-fds in-fd out-fd #:max-pending-requests [max-pending-requests 1024])
   (unless (exact-integer? in-fd)
     (raise-argument-error 'serve-fds "exact-integer?" in-fd))
   (unless (exact-integer? out-fd)
@@ -378,7 +447,7 @@
                                   (exn-message e))
                           e)
                          (void))])
-        (serve in out)))
+        (serve in out #:max-pending-requests max-pending-requests)))
     (lambda ()
       (unless (port-closed? in) (close-input-port in))
       (unless (port-closed? out) (close-output-port out)))))
