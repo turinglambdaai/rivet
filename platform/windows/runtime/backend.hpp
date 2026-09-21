@@ -47,9 +47,12 @@ using EventHandler = std::function<void(std::string const&, Value const&)>;
 // Threading contract:
 //   * start()/stop()/request()/request_async()/cancel() may be used by the UI layer.
 //   * Racket CS is booted and entered on a dedicated worker thread.
-//   * one reader thread resolves native futures and invokes completion/event handlers.
-//   * completion and event handlers therefore run on the reader thread and must
-//     dispatch to the UI thread before touching WinUI objects.
+//   * one reader thread resolves native futures and receives normal RPC completions.
+//   * completion handlers are not UI-thread-affine: normal replies run them on
+//     the reader thread, while immediate submission/shutdown failures can run
+//     them on the initiating/shutdown thread. Always dispatch before touching
+//     WinUI objects.
+//   * event handlers run on the reader thread and require the same UI dispatch.
 //   * completion/event handler exceptions are isolated from the transport loop.
 //   * no Racket value crosses either native thread boundary.
 class Backend final {
@@ -67,9 +70,9 @@ class Backend final {
   PendingCall request(std::string rpc_name, Value::List arguments = {});
   std::future<Value> call(std::string rpc_name, Value::List arguments = {});
 
-  // Non-blocking request API. The returned id can be passed to cancel(). The
-  // completion handler is invoked exactly once on the reader thread after a
-  // response/error is received, or when the backend stops.
+  // Non-blocking request API. The returned id can be passed to cancel(). Every
+  // accepted request produces exactly one completion unless the completion
+  // itself throws, in which case the exception is isolated by the runtime.
   std::uint64_t request_async(std::string rpc_name,
                               Value::List arguments,
                               CompletionHandler completion);
