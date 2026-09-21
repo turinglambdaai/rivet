@@ -23,6 +23,77 @@ enum class ValueTag : std::uint8_t {
   List = 0x06,
 };
 
+MessageType decode_message_type(std::uint8_t raw) {
+  switch (raw) {
+    case 1: return MessageType::Hello;
+    case 2: return MessageType::Request;
+    case 3: return MessageType::Response;
+    case 4: return MessageType::Error;
+    case 5: return MessageType::Event;
+    case 6: return MessageType::Cancel;
+    case 7: return MessageType::Shutdown;
+    default: throw std::runtime_error("unknown Rivet message type");
+  }
+}
+
+bool is_continuation(std::uint8_t byte) {
+  return (byte & 0xc0u) == 0x80u;
+}
+
+bool valid_utf8(std::uint8_t const* data, std::size_t size) {
+  std::size_t i = 0;
+  while (i < size) {
+    auto const first = data[i];
+    if (first <= 0x7f) {
+      ++i;
+      continue;
+    }
+    if (first >= 0xc2 && first <= 0xdf) {
+      if (i + 1 >= size || !is_continuation(data[i + 1])) return false;
+      i += 2;
+      continue;
+    }
+    if (first == 0xe0) {
+      if (i + 2 >= size || data[i + 1] < 0xa0 || data[i + 1] > 0xbf ||
+          !is_continuation(data[i + 2])) return false;
+      i += 3;
+      continue;
+    }
+    if ((first >= 0xe1 && first <= 0xec) || (first >= 0xee && first <= 0xef)) {
+      if (i + 2 >= size || !is_continuation(data[i + 1]) ||
+          !is_continuation(data[i + 2])) return false;
+      i += 3;
+      continue;
+    }
+    if (first == 0xed) {
+      if (i + 2 >= size || data[i + 1] < 0x80 || data[i + 1] > 0x9f ||
+          !is_continuation(data[i + 2])) return false;
+      i += 3;
+      continue;
+    }
+    if (first == 0xf0) {
+      if (i + 3 >= size || data[i + 1] < 0x90 || data[i + 1] > 0xbf ||
+          !is_continuation(data[i + 2]) || !is_continuation(data[i + 3])) return false;
+      i += 4;
+      continue;
+    }
+    if (first >= 0xf1 && first <= 0xf3) {
+      if (i + 3 >= size || !is_continuation(data[i + 1]) ||
+          !is_continuation(data[i + 2]) || !is_continuation(data[i + 3])) return false;
+      i += 4;
+      continue;
+    }
+    if (first == 0xf4) {
+      if (i + 3 >= size || data[i + 1] < 0x80 || data[i + 1] > 0x8f ||
+          !is_continuation(data[i + 2]) || !is_continuation(data[i + 3])) return false;
+      i += 4;
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
 void append_u32(Bytes& out, std::uint32_t value) {
   for (int i = 0; i < 4; ++i) {
     out.push_back(static_cast<std::uint8_t>((value >> (8 * i)) & 0xff));
@@ -111,6 +182,10 @@ void encode_into(Bytes& out, Value const& value, std::size_t depth) {
           std::memcpy(&bits, &data, sizeof(bits));
           append_u64(out, bits);
         } else if constexpr (std::is_same_v<T, std::string>) {
+          auto const* raw = reinterpret_cast<std::uint8_t const*>(data.data());
+          if (!valid_utf8(raw, data.size())) {
+            throw std::runtime_error("invalid UTF-8 in Rivet string");
+          }
           out.push_back(static_cast<std::uint8_t>(ValueTag::String));
           if (data.size() > UINT32_MAX) {
             throw std::length_error("Rivet string exceeds protocol limit");
@@ -159,6 +234,9 @@ Value decode_one(Reader& reader, std::size_t depth) {
     }
     case ValueTag::String: {
       auto const raw = reader.bytes(reader.u32());
+      if (!valid_utf8(raw.data(), raw.size())) {
+        throw std::runtime_error("invalid UTF-8 in Rivet string");
+      }
       return Value(std::string(raw.begin(), raw.end()));
     }
     case ValueTag::Bytes:
@@ -186,6 +264,7 @@ Value decode_one(Reader& reader, std::size_t depth) {
 }  // namespace
 
 void write_frame(Transport& transport, Frame const& frame) {
+  (void)decode_message_type(static_cast<std::uint8_t>(frame.type));
   if (frame.payload.size() > kMaxFramePayloadSize) {
     throw std::length_error("Rivet frame payload exceeds protocol limit");
   }
@@ -219,7 +298,7 @@ std::optional<Frame> read_frame(Transport& transport) {
   }
 
   Frame frame;
-  frame.type = static_cast<MessageType>(header[5]);
+  frame.type = decode_message_type(header[5]);
   frame.id = read_u64(header.data() + 6);
   auto const payload_size = read_u32(header.data() + 14);
   if (payload_size > kMaxFramePayloadSize) {
