@@ -139,3 +139,75 @@
 
 (write-frame (frame message:shutdown 0 #"") client-out)
 (thread-wait server-thread)
+
+;; Resource limits and malformed application requests are request-local. They
+;; must not terminate the embedded server or leak a pending slot.
+(define-values (limited-server-in limited-client-out) (make-pipe))
+(define-values (limited-client-in limited-server-out) (make-pipe))
+(define limited-server-thread
+  (thread
+   (lambda ()
+     (serve limited-server-in
+            limited-server-out
+            #:max-pending-requests 1))))
+
+(check-equal? (frame-type (read-frame limited-client-in)) message:hello)
+
+(write-frame
+ (frame message:request
+        100
+        (encode-value (list "wait-forever")))
+ limited-client-out)
+(write-frame
+ (frame message:request
+        101
+        (encode-value (list "increment" 1)))
+ limited-client-out)
+(define overload (read-frame limited-client-in))
+(check-equal? (frame-type overload) message:error)
+(check-equal? (frame-id overload) 101)
+(check-regexp-match #rx"too many pending requests"
+                    (decode-value (frame-payload overload)))
+
+(write-frame (frame message:cancel 100 #"") limited-client-out)
+(define limited-cancelled (read-frame limited-client-in))
+(check-equal? (frame-type limited-cancelled) message:error)
+(check-equal? (frame-id limited-cancelled) 100)
+(check-equal? (decode-value (frame-payload limited-cancelled))
+              "request cancelled")
+
+;; Cancelling request 100 freed the only pending slot.
+(write-frame
+ (frame message:request
+        102
+        (encode-value (list "increment" 1)))
+ limited-client-out)
+(define after-cancel (read-frame limited-client-in))
+(check-equal? (frame-type after-cancel) message:response)
+(check-equal? (frame-id after-cancel) 102)
+(check-equal? (decode-value (frame-payload after-cancel)) 2)
+
+;; Unknown RPCs are rejected without killing the server.
+(write-frame
+ (frame message:request
+        103
+        (encode-value (list "does-not-exist")))
+ limited-client-out)
+(define unknown-rpc (read-frame limited-client-in))
+(check-equal? (frame-type unknown-rpc) message:error)
+(check-equal? (frame-id unknown-rpc) 103)
+(check-regexp-match #rx"unknown RPC"
+                    (decode-value (frame-payload unknown-rpc)))
+
+(write-frame
+ (frame message:request
+        104
+        (encode-value (list "increment" 9)))
+ limited-client-out)
+(define after-error (read-frame limited-client-in))
+(check-equal? (frame-type after-error) message:response)
+(check-equal? (frame-id after-error) 104)
+(check-equal? (decode-value (frame-payload after-error)) 10)
+
+(write-frame (frame message:shutdown 0 #"") limited-client-out)
+(thread-wait limited-server-thread)
