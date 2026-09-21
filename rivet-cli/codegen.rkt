@@ -153,19 +153,29 @@
              (cons (string-append "set" suffix)
                    (format "State setter ~a" (schema-state-name state))))))))
 
+  ;; C++ emits both the historical future API and a non-blocking completion API.
+  ;; Check all generated names together so an RPC named foo_async cannot collide
+  ;; with the async companion generated for an RPC named foo.
   (check-unique-native-names!
    "C++ API"
    (append
-    (for/list ([info (in-list rpcs)])
-      (cons (cpp-id (schema-rpc-name info))
-            (format "RPC ~a" (schema-rpc-name info))))
+    (append*
+     (for/list ([info (in-list rpcs)])
+       (define name (cpp-id (schema-rpc-name info)))
+       (list (cons name (format "RPC ~a" (schema-rpc-name info)))
+             (cons (string-append name "_async")
+                   (format "RPC async companion ~a" (schema-rpc-name info))))))
     (append*
      (for/list ([state (in-list states)])
        (define name (cpp-id (schema-state-name state)))
        (list (cons (string-append "get_" name)
                    (format "State getter ~a" (schema-state-name state)))
+             (cons (string-append "get_" name "_async")
+                   (format "State async getter ~a" (schema-state-name state)))
              (cons (string-append "set_" name)
-                   (format "State setter ~a" (schema-state-name state))))))))
+                   (format "State setter ~a" (schema-state-name state)))
+             (cons (string-append "set_" name "_async")
+                   (format "State async setter ~a" (schema-state-name state))))))))
 
   (check-unique-native-names!
    "Swift Event"
@@ -374,6 +384,22 @@
    "auto raw = ~a; return std::async(std::launch::deferred, [raw = std::move(raw)]() mutable -> ~a { ~a });"
    raw-expression result decode))
 
+(define (cpp-async-handler result-type)
+  (define result (cpp-type result-type))
+  (define decode
+    (if (eq? result-type 'Void)
+        (format "detail::decode_~a(*raw.value);" (type-key result-type))
+        (format "result.value = detail::decode_~a(*raw.value);" (type-key result-type))))
+  (format
+   "[completion = std::move(completion)](rivet::windows::CallResult raw) mutable { Result<~a> result; if (raw.error) { result.error = raw.error; } else { try { if (!raw.value) throw std::runtime_error(\"Rivet async call completed without a value\"); ~a } catch (...) { result.error = std::current_exception(); } } completion(std::move(result)); }"
+   result decode))
+
+(define (cpp-completion-type type)
+  (format "std::function<void(Result<~a>)>" (cpp-type type)))
+
+(define (cpp-append-param params extra)
+  (if (string=? params "") extra (string-append params ", " extra)))
+
 (define (cpp-rpc-method info)
   (define names (map cpp-id (schema-rpc-arg-names info)))
   (define types (schema-rpc-arg-types info))
@@ -388,28 +414,38 @@
      (for/list ([name (in-list names)] [type (in-list types)])
        (format "detail::encode_~a(~a)" (type-key type) name))
      ", "))
+  (define rpc-name (cpp-string-literal (symbol->string (schema-rpc-name info))))
+  (define async-params
+    (cpp-append-param params
+                      (format "~a completion" (cpp-completion-type result-type))))
   (format
-   "  std::future<~a> ~a(~a) { ~a }\n"
+   "  std::future<~a> ~a(~a) { ~a }\n  [[nodiscard]] std::uint64_t ~a_async(~a) { if (!completion) throw std::invalid_argument(\"Rivet async completion handler is empty\"); return backend_.request_async(~a, rivet::Value::List{~a}, ~a); }\n"
    (cpp-type result-type)
    (cpp-id (schema-rpc-name info))
    params
    (cpp-future result-type
                (format "backend_.call(~a, rivet::Value::List{~a})"
-                       (cpp-string-literal (symbol->string (schema-rpc-name info)))
-                       encoded))))
+                       rpc-name encoded))
+   (cpp-id (schema-rpc-name info))
+   async-params
+   rpc-name encoded (cpp-async-handler result-type)))
 
 (define (cpp-state-methods state)
   (define name (cpp-id (schema-state-name state)))
   (define raw-name (symbol->string (schema-state-name state)))
   (define type (schema-state-type state))
+  (define completion-type (cpp-completion-type type))
   (format
-   "  std::future<~a> get_~a() { ~a }\n  std::future<~a> set_~a(~a value) { ~a }\n"
+   "  std::future<~a> get_~a() { ~a }\n  [[nodiscard]] std::uint64_t get_~a_async(~a completion) { if (!completion) throw std::invalid_argument(\"Rivet async completion handler is empty\"); return backend_.get_state_async(~a, ~a); }\n  std::future<~a> set_~a(~a value) { ~a }\n  [[nodiscard]] std::uint64_t set_~a_async(~a value, ~a completion) { if (!completion) throw std::invalid_argument(\"Rivet async completion handler is empty\"); return backend_.set_state_async(~a, detail::encode_~a(value), ~a); }\n"
    (cpp-type type) name
    (cpp-future type (format "backend_.get_state(~a)" (cpp-string-literal raw-name)))
+   name completion-type (cpp-string-literal raw-name) (cpp-async-handler type)
    (cpp-type type) name (cpp-type type)
    (cpp-future type
                (format "backend_.set_state(~a, detail::encode_~a(value))"
-                       (cpp-string-literal raw-name) (type-key type)))))
+                       (cpp-string-literal raw-name) (type-key type)))
+   name (cpp-type type) completion-type
+   (cpp-string-literal raw-name) (type-key type) (cpp-async-handler type)))
 
 (define (generate-cpp-events events)
   (if (null? events)
@@ -436,10 +472,11 @@
 (define (generate-cpp rpcs events states module-name entry-name)
   (define types (all-types rpcs events states))
   (string-append
-   "// Generated by Rivet. Do not edit by hand.\n#pragma once\n\n#include <cstdint>\n#include <future>\n#include <optional>\n#include <stdexcept>\n#include <string>\n#include <utility>\n#include <variant>\n#include <vector>\n\n#include \"backend.hpp\"\n\nnamespace rivet_app {\n"
+   "// Generated by Rivet. Do not edit by hand.\n#pragma once\n\n#include <cstdint>\n#include <exception>\n#include <functional>\n#include <future>\n#include <optional>\n#include <stdexcept>\n#include <string>\n#include <utility>\n#include <variant>\n#include <vector>\n\n#include \"backend.hpp\"\n\nnamespace rivet_app {\n"
    (format "inline constexpr char kModuleName[] = ~a;\ninline constexpr char kEntryName[] = ~a;\n\n"
            (cpp-string-literal module-name)
            (cpp-string-literal entry-name))
+   "template <typename T>\nstruct Result {\n  std::optional<T> value;\n  std::exception_ptr error;\n  bool succeeded() const noexcept { return value.has_value() && !error; }\n  T const& get() const { if (error) std::rethrow_exception(error); if (!value) throw std::runtime_error(\"Rivet async result has no value\"); return *value; }\n};\n\ntemplate <>\nstruct Result<void> {\n  std::exception_ptr error;\n  bool succeeded() const noexcept { return !error; }\n  void get() const { if (error) std::rethrow_exception(error); }\n};\n\n"
    "namespace detail {\n"
    (apply string-append (map cpp-encoder types))
    "\n"

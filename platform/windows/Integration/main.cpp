@@ -5,7 +5,9 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <future>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -82,6 +84,36 @@ int main() {
         "increment", rivet::Value::List{rivet::Value(std::int64_t{41})});
     if (expect_int(increment.get(), "increment") != 42) {
       throw std::runtime_error("increment(41) did not return 42");
+    }
+
+    progress("calling increment through completion API");
+    auto async_value = std::make_shared<std::promise<std::int64_t>>();
+    auto async_future = async_value->get_future();
+    auto const async_id = backend.request_async(
+        "increment", rivet::Value::List{rivet::Value(std::int64_t{99})},
+        [async_value](rivet::windows::CallResult result) {
+          try {
+            if (result.error) {
+              std::rethrow_exception(result.error);
+            }
+            if (!result.value.has_value()) {
+              throw std::runtime_error("async increment completed without a value");
+            }
+            async_value->set_value(expect_int(*result.value, "async increment"));
+            // The runtime must isolate application completion exceptions from
+            // the reader loop so subsequent requests can still complete.
+            throw std::runtime_error("intentional completion exception");
+          } catch (...) {
+            try {
+              async_value->set_exception(std::current_exception());
+            } catch (...) {
+              // set_value above may already have fulfilled the promise.
+            }
+            throw;
+          }
+        });
+    if (async_id == 0 || async_future.get() != 100) {
+      throw std::runtime_error("async increment(99) did not return 100");
     }
 
     progress("reading initial state");

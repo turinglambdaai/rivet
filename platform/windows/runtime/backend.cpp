@@ -64,6 +64,11 @@ struct PipePair {
   UniqueHandle write;
 };
 
+struct PendingRequest {
+  std::unique_ptr<std::promise<Value>> promise;
+  CompletionHandler completion;
+};
+
 PipePair create_pipe() {
   HANDLE read = INVALID_HANDLE_VALUE;
   HANDLE write = INVALID_HANDLE_VALUE;
@@ -174,44 +179,27 @@ class Backend::Impl {
   }
 
   PendingCall request(std::string rpc_name, Value::List arguments) {
-    if (!running()) {
-      throw std::runtime_error("Rivet backend is not running");
-    }
-
     auto promise = std::make_unique<std::promise<Value>>();
     auto future = promise->get_future();
-    auto const id = next_id_.fetch_add(1, std::memory_order_relaxed);
-
-    {
-      std::lock_guard pending_lock(pending_mutex_);
-      pending_.emplace(id, std::move(promise));
-    }
-
-    Value::List request;
-    request.reserve(arguments.size() + 1);
-    request.emplace_back(std::move(rpc_name));
-    for (auto& argument : arguments) {
-      request.emplace_back(std::move(argument));
-    }
-
-    try {
-      std::lock_guard write_lock(write_mutex_);
-      auto* transport = transport_.get();
-      if (transport == nullptr) {
-        throw std::runtime_error("Rivet backend transport is closed");
-      }
-      write_frame(*transport,
-                  Frame{MessageType::Request, id,
-                        encode_value(Value(std::move(request)))});
-    } catch (...) {
-      fail_request(id, std::current_exception());
-    }
-
+    auto const id = submit_request(
+        std::move(rpc_name), std::move(arguments),
+        PendingRequest{std::move(promise), CompletionHandler{}});
     return PendingCall{id, std::move(future)};
   }
 
   std::future<Value> call(std::string rpc_name, Value::List arguments) {
     return request(std::move(rpc_name), std::move(arguments)).result;
+  }
+
+  std::uint64_t request_async(std::string rpc_name,
+                              Value::List arguments,
+                              CompletionHandler completion) {
+    if (!completion) {
+      throw std::invalid_argument("Rivet async completion handler is empty");
+    }
+    return submit_request(
+        std::move(rpc_name), std::move(arguments),
+        PendingRequest{nullptr, std::move(completion)});
   }
 
   void cancel(std::uint64_t request_id) {
@@ -237,6 +225,42 @@ class Backend::Impl {
   }
 
  private:
+  std::uint64_t submit_request(std::string rpc_name,
+                               Value::List arguments,
+                               PendingRequest pending) {
+    if (!running()) {
+      throw std::runtime_error("Rivet backend is not running");
+    }
+
+    auto const id = next_id_.fetch_add(1, std::memory_order_relaxed);
+    {
+      std::lock_guard pending_lock(pending_mutex_);
+      pending_.emplace(id, std::move(pending));
+    }
+
+    Value::List request;
+    request.reserve(arguments.size() + 1);
+    request.emplace_back(std::move(rpc_name));
+    for (auto& argument : arguments) {
+      request.emplace_back(std::move(argument));
+    }
+
+    try {
+      std::lock_guard write_lock(write_mutex_);
+      auto* transport = transport_.get();
+      if (transport == nullptr) {
+        throw std::runtime_error("Rivet backend transport is closed");
+      }
+      write_frame(*transport,
+                  Frame{MessageType::Request, id,
+                        encode_value(Value(std::move(request)))});
+    } catch (...) {
+      fail_request(id, std::current_exception());
+    }
+
+    return id;
+  }
+
   void racket_main(UniqueHandle server_read, UniqueHandle server_write) noexcept {
     try {
       // `unsafe-file-descriptor->port` consumes a Rktio system descriptor.
@@ -405,45 +429,82 @@ class Backend::Impl {
     }
   }
 
-  std::unique_ptr<std::promise<Value>> take_request(std::uint64_t id) {
+  std::optional<PendingRequest> take_request(std::uint64_t id) {
     std::lock_guard lock(pending_mutex_);
     auto it = pending_.find(id);
     if (it == pending_.end()) {
-      return nullptr;
+      return std::nullopt;
     }
-    auto promise = std::move(it->second);
+    auto pending = std::move(it->second);
     pending_.erase(it);
-    return promise;
+    return pending;
   }
 
-  void resolve_request(std::uint64_t id, Value value) {
-    auto promise = take_request(id);
-    if (promise != nullptr) {
-      promise->set_value(std::move(value));
+  void resolve_request(std::uint64_t id, Value value) noexcept {
+    auto pending = take_request(id);
+    if (!pending.has_value()) {
+      return;
+    }
+
+    if (pending->promise != nullptr) {
+      try {
+        pending->promise->set_value(std::move(value));
+      } catch (...) {
+      }
+      return;
+    }
+
+    if (pending->completion) {
+      try {
+        pending->completion(CallResult{std::move(value), nullptr});
+      } catch (...) {
+        // Application completions are isolated from the transport loop.
+      }
     }
   }
 
   void fail_request(std::uint64_t id, std::exception_ptr error) noexcept {
-    auto promise = take_request(id);
-    if (promise != nullptr) {
+    auto pending = take_request(id);
+    if (!pending.has_value()) {
+      return;
+    }
+
+    if (pending->promise != nullptr) {
       try {
-        promise->set_exception(error);
+        pending->promise->set_exception(error);
       } catch (...) {
+      }
+      return;
+    }
+
+    if (pending->completion) {
+      try {
+        pending->completion(CallResult{std::nullopt, error});
+      } catch (...) {
+        // Application completions are isolated from the transport loop.
       }
     }
   }
 
   void reject_all(std::exception_ptr error) noexcept {
-    std::unordered_map<std::uint64_t, std::unique_ptr<std::promise<Value>>> pending;
+    std::unordered_map<std::uint64_t, PendingRequest> pending;
     {
       std::lock_guard lock(pending_mutex_);
       pending.swap(pending_);
     }
-    for (auto& [id, promise] : pending) {
+    for (auto& [id, request] : pending) {
       (void)id;
-      try {
-        promise->set_exception(error);
-      } catch (...) {
+      if (request.promise != nullptr) {
+        try {
+          request.promise->set_exception(error);
+        } catch (...) {
+        }
+      } else if (request.completion) {
+        try {
+          request.completion(CallResult{std::nullopt, error});
+        } catch (...) {
+          // Application completions must not interrupt shutdown.
+        }
       }
     }
   }
@@ -456,7 +517,7 @@ class Backend::Impl {
   std::unique_ptr<Win32PipeTransport> transport_;
   std::thread racket_thread_;
   std::thread reader_thread_;
-  std::unordered_map<std::uint64_t, std::unique_ptr<std::promise<Value>>> pending_;
+  std::unordered_map<std::uint64_t, PendingRequest> pending_;
   EventHandler event_handler_;
   std::atomic<std::uint64_t> next_id_{1};
   std::atomic<bool> running_{false};
@@ -481,6 +542,13 @@ PendingCall Backend::request(std::string rpc_name, Value::List arguments) {
 
 std::future<Value> Backend::call(std::string rpc_name, Value::List arguments) {
   return impl_->call(std::move(rpc_name), std::move(arguments));
+}
+
+std::uint64_t Backend::request_async(std::string rpc_name,
+                                     Value::List arguments,
+                                     CompletionHandler completion) {
+  return impl_->request_async(
+      std::move(rpc_name), std::move(arguments), std::move(completion));
 }
 
 void Backend::cancel(std::uint64_t request_id) {

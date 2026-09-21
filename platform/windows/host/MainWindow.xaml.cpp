@@ -73,26 +73,51 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
   auto backend = std::make_shared<rivet::windows::Backend>(runtime_config());
 
   try {
+    // Booting the embedded runtime can block on file I/O, so only startup is
+    // moved off the UI thread. RPC/State traffic below is completion-driven.
     co_await winrt::resume_background();
     backend->start();
-    rivet_app::API api(*backend);
-    auto const initial = api.get_counter().get();
 
-    dispatcher.TryEnqueue(
-        [weak, backend = std::move(backend), initial]() mutable {
-          if (auto window = weak.get()) {
-            window->backend_ = std::move(backend);
-            window->count_.store(initial, std::memory_order_relaxed);
-            std::wstring text = L"Count: ";
-            text += std::to_wstring(initial);
-            window->CountText().Text(winrt::hstring(text));
-            window->SetReadyUi();
-          } else {
-            std::thread([backend = std::move(backend)]() mutable {
-              backend->stop();
-            }).detach();
-          }
-        });
+    dispatcher.TryEnqueue([weak, backend = std::move(backend)]() mutable {
+      if (auto window = weak.get()) {
+        window->backend_ = std::move(backend);
+        try {
+          rivet_app::API api(*window->backend_);
+          auto const callbackDispatcher = window->DispatcherQueue();
+          auto const callbackWeak = window->get_weak();
+          (void)api.get_counter_async(
+              [callbackDispatcher, callbackWeak](rivet_app::Result<std::int64_t> result) {
+                try {
+                  auto const initial = result.get();
+                  callbackDispatcher.TryEnqueue([callbackWeak, initial] {
+                    if (auto current = callbackWeak.get()) {
+                      current->count_.store(initial, std::memory_order_relaxed);
+                      std::wstring text = L"Count: ";
+                      text += std::to_wstring(initial);
+                      current->CountText().Text(winrt::hstring(text));
+                      current->SetReadyUi();
+                    }
+                  });
+                } catch (std::exception const& e) {
+                  auto message = std::string(e.what());
+                  callbackDispatcher.TryEnqueue(
+                      [callbackWeak, message = std::move(message)] {
+                        if (auto current = callbackWeak.get()) {
+                          current->SetErrorUi(message);
+                        }
+                      });
+                }
+              });
+        } catch (std::exception const& e) {
+          window->SetErrorUi(e.what());
+        }
+      } else {
+        // Never destroy the last Backend reference on its own reader thread.
+        std::thread([backend = std::move(backend)]() mutable {
+          backend->stop();
+        }).detach();
+      }
+    });
   } catch (std::exception const& e) {
     auto message = std::string(e.what());
     dispatcher.TryEnqueue([weak, message = std::move(message)] {
@@ -109,40 +134,47 @@ void MainWindow::Increment_Click(
   IncrementAsync();
 }
 
-winrt::fire_and_forget MainWindow::IncrementAsync() {
+void MainWindow::IncrementAsync() {
   auto const dispatcher = DispatcherQueue();
   auto const weak = get_weak();
   auto backend = backend_;
   if (backend == nullptr || !backend->running()) {
     SetErrorUi("Racket backend is not running");
-    co_return;
+    return;
   }
 
   auto const next = count_.load(std::memory_order_relaxed) + 1;
   IncrementButton().IsEnabled(false);
 
   try {
-    co_await winrt::resume_background();
     rivet_app::API api(*backend);
-    auto const stored = api.set_counter(next).get();
-    count_.store(stored, std::memory_order_relaxed);
-
-    dispatcher.TryEnqueue([weak, stored] {
-      if (auto window = weak.get()) {
-        std::wstring text = L"Count: ";
-        text += std::to_wstring(stored);
-        window->CountText().Text(winrt::hstring(text));
-        window->IncrementButton().IsEnabled(true);
-      }
-    });
+    (void)api.set_counter_async(
+        next,
+        [dispatcher, weak](rivet_app::Result<std::int64_t> result) {
+          try {
+            auto const stored = result.get();
+            dispatcher.TryEnqueue([weak, stored] {
+              if (auto window = weak.get()) {
+                window->count_.store(stored, std::memory_order_relaxed);
+                std::wstring text = L"Count: ";
+                text += std::to_wstring(stored);
+                window->CountText().Text(winrt::hstring(text));
+                window->IncrementButton().IsEnabled(true);
+              }
+            });
+          } catch (std::exception const& e) {
+            auto message = std::string(e.what());
+            dispatcher.TryEnqueue([weak, message = std::move(message)] {
+              if (auto window = weak.get()) {
+                window->SetErrorUi(message);
+                window->IncrementButton().IsEnabled(true);
+              }
+            });
+          }
+        });
   } catch (std::exception const& e) {
-    auto message = std::string(e.what());
-    dispatcher.TryEnqueue([weak, message = std::move(message)] {
-      if (auto window = weak.get()) {
-        window->SetErrorUi(message);
-        window->IncrementButton().IsEnabled(true);
-      }
-    });
+    SetErrorUi(e.what());
+    IncrementButton().IsEnabled(true);
   }
 }
 
