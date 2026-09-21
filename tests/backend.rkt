@@ -4,7 +4,7 @@
          "../rivet/backend.rkt"
          "../rivet/protocol.rkt")
 
-(define-event progress)
+(define-event progress : Int64)
 (define-state counter : Int64 10)
 
 (define-rpc (increment [value : Int64] : Int64)
@@ -29,6 +29,11 @@
   (hasheq 'name "work"
           'arguments (list (hasheq 'name "value" 'type "Int64"))
           'result "Int64")))
+
+(check-equal? (event-schema)
+              (list (hasheq 'name "progress" 'type "Int64")))
+(check-exn #rx"value does not match declared Rivet type"
+           (lambda () (progress "wrong-type")))
 
 (check-equal? (state-schema)
               (list (hasheq 'name "counter" 'type "Int64")))
