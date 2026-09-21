@@ -191,7 +191,9 @@
 
 (define (nested-types type)
   (match type
-    [(list (or 'List 'Optional) inner) (cons type (nested-types inner))]
+    ;; C++ emits inline helpers that call the helper for their inner type, so
+    ;; dependencies must be defined before the outer List/Optional helper.
+    [(list (or 'List 'Optional) inner) (append (nested-types inner) (list type))]
     [_ (list type)]))
 
 (define (all-types rpcs events states)
