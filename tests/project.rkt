@@ -21,6 +21,8 @@
              'version "1.2.3"
              'build 7
              'identifier "dev.example.demo"
+             'macos-min-version "14.1"
+             'windows-min-version "10.0.19045.0"
              'backend "app/backend.rkt"
              'module "backend"
              'entry "start"
@@ -31,16 +33,23 @@
     (check-equal? (project-ref project 'version) "1.2.3")
     (check-equal? (project-ref project 'build) 7)
     (check-equal? (project-ref project 'identifier) "dev.example.demo")
+    (check-equal? (project-macos-min-version project) "14.1")
+    (check-equal? (project-windows-min-version project) "10.0.19045.0")
     (check-equal? (find-project temp-root) project)
 
-    ;; 0.1 projects without release metadata remain valid.
+    ;; 0.1 projects without release/platform metadata remain valid and retain
+    ;; the deployment targets Rivet historically used.
     (write-config
      (hasheq 'name "demo"
              'backend "app/backend.rkt"
              'module "backend"
              'entry "start"
              'protocol 1))
-    (check-not-exn (lambda () (load-project temp-root)))
+    (define legacy-project (load-project temp-root))
+    (check-equal? (project-macos-min-version legacy-project)
+                  default-macos-min-version)
+    (check-equal? (project-windows-min-version legacy-project)
+                  default-windows-min-version)
 
     (write-config
      (hasheq 'name "demo"
@@ -78,6 +87,24 @@
     (write-config
      (hasheq 'name "demo"
              'identifier "bad identifier"
+             'backend "app/backend.rkt"
+             'module "backend"
+             'entry "start"
+             'protocol 1))
+    (check-exn exn:fail? (lambda () (load-project temp-root)))
+
+    (write-config
+     (hasheq 'name "demo"
+             'macos-min-version "14"
+             'backend "app/backend.rkt"
+             'module "backend"
+             'entry "start"
+             'protocol 1))
+    (check-exn exn:fail? (lambda () (load-project temp-root)))
+
+    (write-config
+     (hasheq 'name "demo"
+             'windows-min-version "10.0.19041"
              'backend "app/backend.rkt"
              'module "backend"
              'entry "start"
