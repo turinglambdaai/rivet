@@ -114,6 +114,10 @@ jobs:
           Set-Location $root
           raco rivet new Smoke
           Set-Location (Join-Path $root 'Smoke')
+          $config = Get-Content 'rivet.rktd' -Raw
+          $updated = $config.Replace('(windows-min-version . "10.0.19041.0")', '(windows-min-version . "10.0.19045.0")')
+          if ($updated -eq $config) { throw 'failed to customize windows-min-version smoke value' }
+          Set-Content -Path 'rivet.rktd' -Value $updated -NoNewline
           raco rivet build
           raco rivet package
           raco rivet verify
@@ -165,11 +169,21 @@ jobs:
           cd "$root"
           raco rivet new Smoke
           cd Smoke
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("rivet.rktd")
+          original = path.read_text(encoding="utf-8")
+          updated = original.replace('(macos-min-version . "14.0")', '(macos-min-version . "14.1")')
+          if updated == original:
+              raise SystemExit("failed to customize macos-min-version smoke value")
+          path.write_text(updated, encoding="utf-8")
+          PY
           raco rivet build
           raco rivet package
           raco rivet verify
           test -x dist/Smoke.app/Contents/MacOS/Smoke
           codesign --verify --deep --strict dist/Smoke.app
+          test "$(plutil -extract LSMinimumSystemVersion raw -o - dist/Smoke.app/Contents/Info.plist)" = "14.1"
           raco rivet clean
           test ! -e .rivet
           test ! -e build
