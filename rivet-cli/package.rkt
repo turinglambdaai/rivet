@@ -43,15 +43,21 @@
                     (string-downcase name)
                     "-")))
 
-(define (write-macos-info! path name executable)
+(define (project-setting project key default)
+  (project-ref project key (lambda () default)))
+
+(define (write-macos-info! path display-name executable identifier version build)
   (call-with-output-file path
     #:exists 'truncate/replace
     (lambda (out)
       (fprintf out
-               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>CFBundleDevelopmentRegion</key><string>en</string>\n  <key>CFBundleExecutable</key><string>~a</string>\n  <key>CFBundleIdentifier</key><string>~a</string>\n  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>\n  <key>CFBundleName</key><string>~a</string>\n  <key>CFBundlePackageType</key><string>APPL</string>\n  <key>CFBundleShortVersionString</key><string>0.1.0</string>\n  <key>CFBundleVersion</key><string>1</string>\n  <key>LSMinimumSystemVersion</key><string>14.0</string>\n  <key>NSHighResolutionCapable</key><true/>\n</dict>\n</plist>\n"
+               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>CFBundleDevelopmentRegion</key><string>en</string>\n  <key>CFBundleExecutable</key><string>~a</string>\n  <key>CFBundleIdentifier</key><string>~a</string>\n  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>\n  <key>CFBundleName</key><string>~a</string>\n  <key>CFBundleDisplayName</key><string>~a</string>\n  <key>CFBundlePackageType</key><string>APPL</string>\n  <key>CFBundleShortVersionString</key><string>~a</string>\n  <key>CFBundleVersion</key><string>~a</string>\n  <key>LSMinimumSystemVersion</key><string>14.0</string>\n  <key>NSHighResolutionCapable</key><true/>\n</dict>\n</plist>\n"
                executable
-               (macos-identifier name)
-               name))))
+               identifier
+               display-name
+               display-name
+               version
+               build))))
 
 (define (write-entitlements! path)
   (call-with-output-file path
@@ -83,6 +89,12 @@
   (make-directory* resources)
 
   (define executable-name name)
+  (define display-name (project-setting project 'display-name name))
+  (define version (project-setting project 'version "0.1.0"))
+  (define build (project-setting project 'build 1))
+  (define identifier
+    (project-setting project 'identifier (macos-identifier name)))
+
   (define source-executable (build-path stage "RivetHost"))
   (define target-executable (build-path macos executable-name))
   (copy-file source-executable target-executable #t)
@@ -97,7 +109,12 @@
   (copy-macos-bundle! (build-path stage "Frameworks" "Racket.framework")
                       racket-framework)
 
-  (write-macos-info! (build-path contents "Info.plist") name executable-name)
+  (write-macos-info! (build-path contents "Info.plist")
+                     display-name
+                     executable-name
+                     identifier
+                     version
+                     build)
 
   (define entitlements
     (project-path project ".rivet" "macos-entitlements.plist"))

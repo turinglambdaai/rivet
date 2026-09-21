@@ -26,7 +26,6 @@ struct RivetIntegration {
         )
 
         try backend.start()
-        defer { backend.stop() }
 
         let incremented = try await backend.client.call(
             "increment",
@@ -54,6 +53,16 @@ struct RivetIntegration {
             throw IntegrationError.unexpected("confirmed state", confirmedState)
         }
 
+        backend.stop()
+        backend.stop() // stop is intentionally idempotent.
+
+        do {
+            try backend.start()
+            throw IntegrationError.restartWasAllowed
+        } catch EmbeddedBackendError.alreadyStarted {
+            // Expected: an embedded Racket runtime is process-scoped and cannot restart.
+        }
+
         print("Rivet embedded macOS round-trip passed")
     }
 }
@@ -61,6 +70,7 @@ struct RivetIntegration {
 enum IntegrationError: Error, CustomStringConvertible {
     case missingEnvironment(String)
     case unexpected(String, RivetValue)
+    case restartWasAllowed
 
     var description: String {
         switch self {
@@ -68,6 +78,8 @@ enum IntegrationError: Error, CustomStringConvertible {
             return "missing integration environment variable: \(key)"
         case .unexpected(let operation, let value):
             return "unexpected \(operation) result: \(value)"
+        case .restartWasAllowed:
+            return "embedded Racket backend unexpectedly allowed restart after stop"
         }
     }
 }

@@ -14,16 +14,21 @@
          serve
          serve-fds
          registered-rpcs
+         registered-events
          registered-states
          rpc-schema
+         event-schema
          state-schema
          (struct-out rpc-info)
+         (struct-out event-info)
          (struct-out state-info))
 
 (struct rpc-info (name arg-names arg-types result-type procedure) #:transparent)
+(struct event-info (name type) #:transparent)
 (struct state-info (name type cell lock) #:transparent)
 
 (define registry (make-hash))
+(define event-registry (make-hash))
 (define state-registry (make-hash))
 (define current-event-emitter (make-parameter #f))
 
@@ -34,10 +39,6 @@
   (unless emitter
     (error 'emit-event! "no Rivet server is active on the current Racket thread"))
   (emitter (if (symbol? name) (symbol->string name) name) value))
-
-(define-syntax-rule (define-event name)
-  (define (name value)
-    (emit-event! 'name value)))
 
 (define (supported-type? type)
   (or (memq type '(String Int64 Bool Bytes Void Any))
@@ -85,6 +86,32 @@
   (hash-set! registry name
              (rpc-info name arg-names arg-types result-type proc))
   (void))
+
+(define (register-event! name type)
+  (when (hash-has-key? event-registry name)
+    (error 'define-event "Event already registered: ~a" name))
+  (unless (supported-type? type)
+    (raise-arguments-error 'define-event
+                           "unsupported Rivet Event type"
+                           "event" name
+                           "type" type))
+  (when (eq? type 'Void)
+    (raise-arguments-error 'define-event
+                           "Void is not a valid Event payload type"
+                           "event" name))
+  (hash-set! event-registry name (event-info name type))
+  (void))
+
+(define-syntax define-event
+  (syntax-rules (:)
+    [(_ name : type)
+     (begin
+       (register-event! 'name 'type)
+       (define (name value)
+         (validate-value 'name 'event 'type value)
+         (emit-event! 'name value)))]
+    [(_ name)
+     (define-event name : Any)]))
 
 (define (register-state! name type initial)
   (when (hash-has-key? state-registry name)
@@ -135,6 +162,11 @@
         string<?
         #:key (lambda (info) (symbol->string (rpc-info-name info)))))
 
+(define (registered-events)
+  (sort (hash-values event-registry)
+        string<?
+        #:key (lambda (info) (symbol->string (event-info-name info)))))
+
 (define (registered-states)
   (sort (hash-values state-registry)
         string<?
@@ -150,6 +182,11 @@
        (hasheq 'name (symbol->string name)
                'type (format "~s" type)))
      'result (format "~s" (rpc-info-result-type info)))))
+
+(define (event-schema)
+  (for/list ([info (in-list (registered-events))])
+    (hasheq 'name (symbol->string (event-info-name info))
+            'type (format "~s" (event-info-type info)))))
 
 (define (state-schema)
   (for/list ([info (in-list (registered-states))])

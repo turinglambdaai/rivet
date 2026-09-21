@@ -2,6 +2,7 @@ import Foundation
 
 public let rivetProtocolVersion: UInt8 = 1
 public let rivetMaxFramePayloadSize = 64 * 1024 * 1024
+public let rivetMaxValueDepth = 64
 
 public enum RivetMessageType: UInt8, Sendable {
     case hello = 1
@@ -43,6 +44,7 @@ public enum RivetProtocolError: Error, Equatable, CustomStringConvertible {
     case invalidUTF8
     case trailingBytes
     case lengthOverflow
+    case nestingTooDeep
 
     public var description: String {
         switch self {
@@ -53,7 +55,8 @@ public enum RivetProtocolError: Error, Equatable, CustomStringConvertible {
         case .unknownValueTag(let value): return "unknown Rivet value tag \(value)"
         case .invalidUTF8: return "invalid UTF-8 in Rivet string"
         case .trailingBytes: return "trailing bytes after Rivet value"
-        case .lengthOverflow: return "Rivet value exceeds UInt32 protocol limit"
+        case .lengthOverflow: return "Rivet value exceeds protocol length limit"
+        case .nestingTooDeep: return "Rivet value nesting exceeds protocol limit"
         }
     }
 }
@@ -113,11 +116,11 @@ private struct Reader {
 
 public func encodeRivetValue(_ value: RivetValue) throws -> Data {
     var result = Data()
-    try encode(value, into: &result)
+    try encode(value, into: &result, depth: 0)
     return result
 }
 
-private func encode(_ value: RivetValue, into output: inout Data) throws {
+private func encode(_ value: RivetValue, into output: inout Data, depth: Int) throws {
     switch value {
     case .null:
         output.append(ValueTag.null.rawValue)
@@ -140,23 +143,24 @@ private func encode(_ value: RivetValue, into output: inout Data) throws {
         output.appendLE(UInt32(bytes.count))
         output.append(bytes)
     case .list(let values):
+        guard depth < rivetMaxValueDepth else { throw RivetProtocolError.nestingTooDeep }
         guard values.count <= Int(UInt32.max) else { throw RivetProtocolError.lengthOverflow }
         output.append(ValueTag.list.rawValue)
         output.appendLE(UInt32(values.count))
         for value in values {
-            try encode(value, into: &output)
+            try encode(value, into: &output, depth: depth + 1)
         }
     }
 }
 
 public func decodeRivetValue(_ data: Data) throws -> RivetValue {
     var reader = Reader(data: data)
-    let value = try decodeValue(from: &reader)
+    let value = try decodeValue(from: &reader, depth: 0)
     guard reader.isAtEnd else { throw RivetProtocolError.trailingBytes }
     return value
 }
 
-private func decodeValue(from reader: inout Reader) throws -> RivetValue {
+private func decodeValue(from reader: inout Reader, depth: Int) throws -> RivetValue {
     let rawTag = try reader.readByte()
     guard let tag = ValueTag(rawValue: rawTag) else {
         throw RivetProtocolError.unknownValueTag(rawTag)
@@ -183,6 +187,7 @@ private func decodeValue(from reader: inout Reader) throws -> RivetValue {
         let length: UInt32 = try reader.readInteger(UInt32.self)
         return .bytes(try reader.readData(count: Int(length)))
     case .list:
+        guard depth < rivetMaxValueDepth else { throw RivetProtocolError.nestingTooDeep }
         let count: UInt32 = try reader.readInteger(UInt32.self)
         guard Int(count) <= reader.remaining else {
             throw RivetProtocolError.truncated
@@ -190,7 +195,7 @@ private func decodeValue(from reader: inout Reader) throws -> RivetValue {
         var values: [RivetValue] = []
         values.reserveCapacity(Int(count))
         for _ in 0..<count {
-            values.append(try decodeValue(from: &reader))
+            values.append(try decodeValue(from: &reader, depth: depth + 1))
         }
         return .list(values)
     }

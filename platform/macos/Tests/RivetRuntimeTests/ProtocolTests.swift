@@ -42,6 +42,25 @@ import Testing
     ])
 }
 
+@Test func rejectsExcessiveNesting() throws {
+    var value: RivetValue = .null
+    for _ in 0...rivetMaxValueDepth {
+        value = .list([value])
+    }
+    #expect(throws: RivetProtocolError.nestingTooDeep) {
+        try encodeRivetValue(value)
+    }
+
+    var encoded = Data()
+    for _ in 0...rivetMaxValueDepth {
+        encoded.append(contentsOf: [0x06, 0x01, 0x00, 0x00, 0x00])
+    }
+    encoded.append(0x00)
+    #expect(throws: RivetProtocolError.nestingTooDeep) {
+        try decodeRivetValue(encoded)
+    }
+}
+
 @Test func rejectsMalformedPayloads() throws {
     #expect(throws: RivetProtocolError.self) {
         try decodeRivetValue(Data([0xff]))
