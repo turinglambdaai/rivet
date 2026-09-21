@@ -7,6 +7,7 @@
          "../rivet-cli/project.rkt")
 
 (define root (make-temporary-file "rivet-clean-~a" 'directory))
+(define external (make-temporary-file "rivet-clean-external-~a" 'directory))
 
 (dynamic-wind
   void
@@ -32,7 +33,23 @@
     (check-true (file-exists? source))
 
     ;; Clean is idempotent when no generated artifacts exist.
-    (check-equal? (clean-project! project) '()))
+    (check-equal? (clean-project! project) '())
+
+    ;; A generated path may be redirected through a symlink/junction. Clean
+    ;; must remove the link itself and never recurse into an external target.
+    (define external-marker (build-path external "keep-me"))
+    (call-with-output-file external-marker
+      #:exists 'truncate/replace
+      (lambda (out) (display "external" out)))
+    (define linked-build (build-path root "build"))
+    (make-file-or-directory-link external linked-build)
+    (check-true (link-exists? linked-build))
+    (check-equal? (clean-project! project) (list linked-build))
+    (check-false (link-exists? linked-build))
+    (check-true (file-exists? external-marker))
+    (check-true (file-exists? source)))
   (lambda ()
     (when (directory-exists? root)
-      (delete-directory/files root))))
+      (delete-directory/files root))
+    (when (directory-exists? external)
+      (delete-directory/files external))))
