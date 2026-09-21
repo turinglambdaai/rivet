@@ -36,10 +36,13 @@
        (define cl? (windows-toolchain-cl tools))
        (define lib? (windows-toolchain-lib tools))
        (define dumpbin? (windows-toolchain-dumpbin tools))
+       (define signtool? (windows-toolchain-signtool tools))
        (printf "  MSBuild: ~a\n" (or msbuild? "not found"))
        (printf "  C++ compiler: ~a\n" (or cl? "not found"))
        (printf "  MSVC librarian: ~a\n" (or lib? "not found"))
        (printf "  dependency audit (dumpbin): ~a\n" (or dumpbin? "not found"))
+       (printf "  production signing (signtool): ~a\n"
+               (or signtool? "not found (development packaging is still available)"))
        (printf "  UI: WinUI 3 / Windows App SDK 2.4\n")
        (and msbuild? cl? lib? dumpbin? runtime)]
       [(macosx)
@@ -47,6 +50,8 @@
        (define xcode? (tool-status "Xcode build" "xcodebuild"))
        (define otool? (tool-status "otool" "otool"))
        (define codesign? (tool-status "codesign" "codesign"))
+       (tool-status "production notarization (xcrun)" "xcrun")
+       (tool-status "Gatekeeper assessment (spctl)" "spctl")
        (printf "  UI: SwiftUI / AppKit\n")
        (and swift? xcode? otool? codesign? runtime)]
       [else

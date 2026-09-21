@@ -20,13 +20,15 @@
    (string-append
     "Rivet — build native desktop apps with Racket\n\n"
     "Usage:\n"
-    "  raco rivet new <name>      create a new Rivet application\n"
-    "  raco rivet doctor          inspect the local native toolchain\n"
-    "  raco rivet build           compile backend and native host\n"
-    "  raco rivet dev             build and run the current app\n"
-    "  raco rivet package         create and verify a distributable native package\n"
-    "  raco rivet verify          re-verify the current packaged artifact\n"
-    "  raco rivet help            show this help\n")))
+    "  raco rivet new <name>              create a new Rivet application\n"
+    "  raco rivet doctor                  inspect the local native toolchain\n"
+    "  raco rivet build                   compile backend and native host\n"
+    "  raco rivet dev                     build and run the current app\n"
+    "  raco rivet package                 create and verify a development distributable\n"
+    "  raco rivet package --production    create, sign, and verify a production distributable\n"
+    "  raco rivet verify                  re-verify the current packaged artifact\n"
+    "  raco rivet verify --production     verify production trust/notarization requirements\n"
+    "  raco rivet help                    show this help\n")))
 
 (define (current-project!)
   (or (find-project)
@@ -54,9 +56,17 @@
     [(list "package")
      (define output (package-project! (current-project!)))
      (say "packaged and verified ~a" output)]
+    [(list "package" "--production")
+     (define output
+       (package-project! (current-project!) #:production? #t))
+     (say "production packaged, signed, and verified ~a" output)]
     [(list "verify")
      (define output (verify-project-package! (current-project!)))
      (say "verified ~a" output)]
+    [(list "verify" "--production")
+     (define output
+       (verify-project-package! (current-project!) #:production? #t))
+     (say "production trust verified ~a" output)]
     [_
      (usage)
      (exit 1)]))
