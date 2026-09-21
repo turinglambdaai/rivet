@@ -1,0 +1,23 @@
+# Shared RVT1 v1 golden vectors.
+# Format: kind|name|lowercase hex bytes
+# Every Racket/C++/Swift protocol implementation consumes this exact file.
+value|null|00
+value|false|01
+value|true|02
+value|int64-neg2|03feffffffffffffff
+value|int64-42|032a00000000000000
+value|string-hello|040500000068656c6c6f
+value|string-unicode|040c000000e4bda0e5a5bd205269766574
+value|bytes-binary|050300000000ff7f
+value|list-nested|060300000004060000006e657374656403070000000000000002
+frame|request-99|52565431010263000000000000001c00000006020000000409000000696e6372656d656e74032900000000000000
+invalid-value|unknown-tag|ff
+invalid-value|truncated-int64|0301
+invalid-value|trailing-bytes|0000
+invalid-value|invalid-utf8|0401000000ff
+invalid-value|impossible-list|06ffffffff
+invalid-value|truncated-list|0601000000
+invalid-frame|bad-magic|424144210102000000000000000000000000
+invalid-frame|bad-version|525654310202000000000000000000000000
+invalid-frame|truncated-header|52565431010200
+invalid-frame|missing-payload|525654310102000000000000000001000000
