@@ -22,6 +22,16 @@
                            "executable" executable
                            "arguments" args)))
 
+;; Use for commands whose argv may contain secrets. In particular, signtool's
+;; PFX mode receives the certificate password through `/p`. Never include that
+;; argv in an exception or diagnostic string.
+(define (run-sensitive! who executable description args)
+  (unless executable
+    (error who "required executable was not found"))
+  (unless (apply system* executable args)
+    (error who "~a failed; sensitive command arguments were intentionally omitted"
+           description)))
+
 (define (remove-path! path)
   (cond
     [(directory-exists? path) (delete-directory/files path)]
@@ -90,15 +100,17 @@
        (list "/f" (path->string pfx)
              "/p" (windows-signing-pfx-password settings))]))
 
-  (apply run!
-         'package-project!
-         signtool
-         (append
-          (list "sign" "/fd" "SHA256")
-          identity-args
-          (list "/tr" (windows-signing-timestamp-url settings)
-                "/td" "SHA256"
-                (path->string executable)))))
+  (define args
+    (append
+     (list "sign" "/fd" "SHA256")
+     identity-args
+     (list "/tr" (windows-signing-timestamp-url settings)
+           "/td" "SHA256"
+           (path->string executable))))
+  (run-sensitive! 'package-project!
+                  signtool
+                  "Windows Authenticode signing"
+                  args))
 
 (define (package-windows! project stage name production?)
   (define destination
