@@ -5,7 +5,8 @@
          "doctor.rkt"
          "package.rkt"
          "project.rkt"
-         "scaffold.rkt")
+         "scaffold.rkt"
+         "verify.rkt")
 
 (define (say fmt . args)
   (apply printf (string-append "rivet: " fmt "\n") args))
@@ -23,7 +24,8 @@
     "  raco rivet doctor          inspect the local native toolchain\n"
     "  raco rivet build           compile backend and native host\n"
     "  raco rivet dev             build and run the current app\n"
-    "  raco rivet package         create a distributable native package\n"
+    "  raco rivet package         create and verify a distributable native package\n"
+    "  raco rivet verify          re-verify the current packaged artifact\n"
     "  raco rivet help            show this help\n")))
 
 (define (current-project!)
@@ -51,7 +53,10 @@
      (dev-project! (current-project!))]
     [(list "package")
      (define output (package-project! (current-project!)))
-     (say "packaged ~a" output)]
+     (say "packaged and verified ~a" output)]
+    [(list "verify")
+     (define output (verify-project-package! (current-project!)))
+     (say "verified ~a" output)]
     [_
      (usage)
      (exit 1)]))
