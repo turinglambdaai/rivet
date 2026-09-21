@@ -6,7 +6,8 @@
          racket/string
          racket/system
          "build.rkt"
-         "project.rkt")
+         "project.rkt"
+         "verify.rkt")
 
 (provide package-project!)
 
@@ -148,9 +149,16 @@
   (define stage (path-only executable))
   (define name (project-ref project 'name))
 
-  (case (system-type 'os)
-    [(windows) (package-windows! project stage name)]
-    [(macosx) (package-macos! project stage name)]
-    [else
-     (error 'package-project!
-            "Rivet packages currently target Windows and macOS")]))
+  (define packaged
+    (case (system-type 'os)
+      [(windows) (package-windows! project stage name)]
+      [(macosx) (package-macos! project stage name)]
+      [else
+       (error 'package-project!
+              "Rivet packages currently target Windows and macOS")]))
+
+  ;; `package` should never report success for an artifact that still depends
+  ;; on the developer machine. Verification is part of packaging, not an
+  ;; optional CI-only check.
+  (verify-package! project packaged)
+  packaged)
