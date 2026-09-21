@@ -64,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          raco pkg create --source --format zip --dest dist .
+          raco pkg create --from-dir --source --format zip --dest dist "$PWD"
           archive="$(find dist -maxdepth 1 -type f -name '*.zip' -print -quit)"
           if [[ -z "$archive" ]]; then
             echo "raco pkg create did not produce a zip archive" >&2
