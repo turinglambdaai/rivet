@@ -4,6 +4,7 @@
 
 (provide protocol-version
          max-frame-payload-size
+         max-value-depth
          message:hello
          message:request
          message:response
@@ -33,6 +34,7 @@
 
 (define protocol-version 1)
 (define max-frame-payload-size (* 64 1024 1024))
+(define max-value-depth 64)
 (define magic #"RVT1")
 
 (define message:hello    1)
@@ -137,7 +139,7 @@
 
 (define (encode-value v)
   (define out (open-output-bytes))
-  (define (emit value)
+  (define (emit value depth)
     (cond
       [(void? value) (write-byte tag:null out)]
       [(eq? value #f) (write-byte tag:false out)]
@@ -156,14 +158,18 @@
        (write-u32 (bytes-length value) out)
        (write-bytes value out)]
       [(list? value)
+       (when (>= depth max-value-depth)
+         (raise-arguments-error 'encode-value
+                                "value nesting exceeds Rivet protocol limit"
+                                "maximum depth" max-value-depth))
        (write-byte tag:list out)
        (write-u32 (length value) out)
-       (for ([item (in-list value)]) (emit item))]
+       (for ([item (in-list value)]) (emit item (add1 depth)))]
       [else
        (raise-arguments-error 'encode-value
                               "value is not supported by protocol v1"
                               "value" value)]))
-  (emit v)
+  (emit v 0)
   (get-output-bytes out))
 
 (define (decode-value bs)
@@ -174,7 +180,7 @@
     (define b (read-exactly in 4))
     (when (eof-object? b) (error 'decode-value "unexpected EOF"))
     (bytes->u32 b))
-  (define (read-one)
+  (define (read-one depth)
     (define tag (read-byte in))
     (when (eof-object? tag)
       (error 'decode-value "unexpected EOF"))
@@ -197,16 +203,20 @@
        (when (eof-object? b) (error 'decode-value "unexpected EOF in bytes"))
        b]
       [(#x06)
+       (when (>= depth max-value-depth)
+         (error 'decode-value
+                "value nesting exceeds Rivet protocol limit (~a)"
+                max-value-depth))
        (define count (read-u32*))
        (define position (file-position in))
        (define remaining (- (bytes-length bs) position))
        ;; Every encoded list element consumes at least one tag byte.
        (when (> count remaining)
          (error 'decode-value "impossible list length: ~a" count))
-       (for/list ([i (in-range count)]) (read-one))]
+       (for/list ([i (in-range count)]) (read-one (add1 depth)))]
       [else
        (error 'decode-value "unknown value tag: ~a" tag)]))
-  (define value (read-one))
+  (define value (read-one 0))
   (unless (eof-object? (peek-byte in))
     (error 'decode-value "trailing bytes after value"))
   value)
