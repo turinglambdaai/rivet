@@ -99,7 +99,7 @@ jobs:
       - name: Check toolchain
         shell: pwsh
         run: raco rivet doctor
-      - name: Scaffold, build, and package WinUI app
+      - name: Scaffold, build, package, and verify WinUI app
         shell: pwsh
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'rivet-smoke'
@@ -109,6 +109,7 @@ jobs:
           Set-Location (Join-Path $root 'Smoke')
           raco rivet build
           raco rivet package
+          raco rivet verify
           if (-not (Test-Path 'dist\Smoke-windows-x64\RivetHost.exe')) {
             throw 'packaged WinUI executable was not produced'
           }
@@ -129,7 +130,7 @@ jobs:
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Check toolchain
         run: raco rivet doctor
-      - name: Scaffold, build, and package SwiftUI app
+      - name: Scaffold, build, package, and verify SwiftUI app
         shell: bash
         run: |
           set -euo pipefail
@@ -139,5 +140,6 @@ jobs:
           cd Smoke
           raco rivet build
           raco rivet package
+          raco rivet verify
           test -x dist/Smoke.app/Contents/MacOS/Smoke
           codesign --verify --deep --strict dist/Smoke.app
