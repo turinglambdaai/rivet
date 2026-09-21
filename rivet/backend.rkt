@@ -317,6 +317,35 @@
   (define (reject-request! id message)
     (send! (frame message:error id (encode-value message))))
 
+  (define (run-request! id rpc-name args internal-state-request? info)
+    (with-handlers ([exn:fail?
+                     (lambda (e)
+                       (when (take-pending! id)
+                         (send! (frame message:error
+                                       id
+                                       (exn->payload e))))))])
+      (define result
+        (if internal-state-request?
+            (invoke-state-request rpc-name args)
+            (let ([expected (length (rpc-info-arg-types info))])
+              (unless (= expected (length args))
+                (error rpc-name
+                       "expected ~a argument~a, received ~a"
+                       expected
+                       (if (= expected 1) "" "s")
+                       (length args)))
+              (for ([arg (in-list args)]
+                    [arg-name (in-list (rpc-info-arg-names info))]
+                    [arg-type (in-list (rpc-info-arg-types info))])
+                (validate-value rpc-name arg-name arg-type arg))
+              (define value (apply (rpc-info-procedure info) args))
+              (validate-value rpc-name
+                              'result
+                              (rpc-info-result-type info)
+                              value)
+              value)))
+      (finish! id message:response result)))
+
   (define (start-request! f)
     (define id (frame-id f))
     ;; Bad application requests must fail that request rather than tear down the
@@ -334,46 +363,25 @@
                        (lambda ()
                          (error 'serve "unknown RPC: ~a" rpc-name)))))
       (define request-custodian (make-custodian root-custodian))
-      (case (admit-request! id request-custodian)
-        [(duplicate)
+      (define admission (admit-request! id request-custodian))
+      (cond
+        [(eq? admission 'duplicate)
          (custodian-shutdown-all request-custodian)
          (reject-request! id (format "duplicate request id: ~a" id))]
-        [(full)
+        [(eq? admission 'full)
          (custodian-shutdown-all request-custodian)
          (reject-request!
           id
           (format "too many pending requests (limit ~a)" max-pending-requests))]
-        [(admitted)
+        [else
          (parameterize ([current-custodian request-custodian])
            (thread
             (lambda ()
-              (with-handlers ([exn:fail?
-                               (lambda (e)
-                                 (when (take-pending! id)
-                                   (send! (frame message:error
-                                                 id
-                                                 (exn->payload e))))))])
-                (define result
-                  (if internal-state-request?
-                      (invoke-state-request rpc-name args)
-                      (let ([expected (length (rpc-info-arg-types info))])
-                        (unless (= expected (length args))
-                          (error rpc-name
-                                 "expected ~a argument~a, received ~a"
-                                 expected
-                                 (if (= expected 1) "" "s")
-                                 (length args)))
-                        (for ([arg (in-list args)]
-                              [arg-name (in-list (rpc-info-arg-names info))]
-                              [arg-type (in-list (rpc-info-arg-types info))])
-                          (validate-value rpc-name arg-name arg-type arg))
-                        (let ([value (apply (rpc-info-procedure info) args)])
-                          (validate-value rpc-name
-                                          'result
-                                          (rpc-info-result-type info)
-                                          value)
-                          value))))
-                (finish! id message:response result))))))]))
+              (run-request! id
+                            rpc-name
+                            args
+                            internal-state-request?
+                            info))))])))
 
   (define (cancel! id)
     (define request-custodian (take-pending! id))
