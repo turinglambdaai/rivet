@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0
+
+Rivet 0.2 hardens the native runtime contract and release path while preserving the existing WinUI 3 / SwiftUI architecture.
+
+- Deterministic embedded Racket lifecycle on macOS, including idempotent stop and restart rejection.
+- Typed Event schema validation and generated Swift/C++ Event APIs.
+- Native identifier collision detection and language-specific codegen string escaping.
+- Bounded RVT1 value nesting and bounded concurrent backend requests.
+- Synchronized request cancellation/completion ownership and Event ID allocation.
+- Request-local handling for malformed application RPC requests.
+- Application version, build, display-name, and identifier package metadata.
+- Shared RVT1 golden vectors consumed by Racket, C++, and Swift tests.
+- Strict UTF-8 validation and unknown message-type rejection across protocol implementations.
+- Tag-driven release workflow with version/changelog validation and packaged Racket artifacts.
+
 ## 0.1.0
 
 Initial Rivet runtime milestone.
