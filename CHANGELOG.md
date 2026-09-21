@@ -10,7 +10,7 @@ Rivet 0.2 hardens the native runtime contract and release path while preserving 
 - Bounded RVT1 value nesting and bounded concurrent backend requests.
 - Synchronized request cancellation/completion ownership and Event ID allocation.
 - Request-local handling for malformed application RPC requests.
-- Application version, build, display-name, and identifier package metadata.
+- Application version, build, display-name, identifier, and Windows/macOS minimum-version metadata are centralized in `rivet.rktd` with backwards-compatible defaults.
 - Shared RVT1 golden vectors consumed by Racket, C++, and Swift tests.
 - Strict UTF-8 validation and unknown message-type rejection across protocol implementations.
 - Generated Windows RPC/State completion APIs provide non-blocking, cancellable WinUI-friendly calls while preserving the existing `std::future` API.
