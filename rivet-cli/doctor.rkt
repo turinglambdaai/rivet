@@ -35,16 +35,20 @@
        (define msbuild? (windows-toolchain-msbuild tools))
        (define cl? (windows-toolchain-cl tools))
        (define lib? (windows-toolchain-lib tools))
+       (define dumpbin? (windows-toolchain-dumpbin tools))
        (printf "  MSBuild: ~a\n" (or msbuild? "not found"))
        (printf "  C++ compiler: ~a\n" (or cl? "not found"))
        (printf "  MSVC librarian: ~a\n" (or lib? "not found"))
+       (printf "  dependency audit (dumpbin): ~a\n" (or dumpbin? "not found"))
        (printf "  UI: WinUI 3 / Windows App SDK 2.4\n")
-       (and msbuild? cl? lib? runtime)]
+       (and msbuild? cl? lib? dumpbin? runtime)]
       [(macosx)
        (define swift? (tool-status "Swift" "swift"))
        (define xcode? (tool-status "Xcode build" "xcodebuild"))
+       (define otool? (tool-status "otool" "otool"))
+       (define codesign? (tool-status "codesign" "codesign"))
        (printf "  UI: SwiftUI / AppKit\n")
-       (and swift? xcode? runtime)]
+       (and swift? xcode? otool? codesign? runtime)]
       [else
        (printf "  UI: unsupported (Rivet currently targets Windows and macOS)\n")
        #f]))
