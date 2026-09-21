@@ -38,6 +38,7 @@
         'xcodebuild (executable-string "xcodebuild")
         'otool (executable-string "otool")
         'codesign (executable-string "codesign")
+        'plutil (executable-string "plutil")
         'xcrun (executable-string "xcrun")
         'spctl (executable-string "spctl")))
 
@@ -75,7 +76,8 @@
                (and (hash-ref report 'swift)
                     (hash-ref report 'xcodebuild)
                     (hash-ref report 'otool)
-                    (hash-ref report 'codesign)))]
+                    (hash-ref report 'codesign)
+                    (hash-ref report 'plutil)))]
       [else
        (values #f "unsupported" (hash) #f)]))
 
@@ -138,6 +140,7 @@
      (display-path "Xcode build" (hash-ref tools 'xcodebuild))
      (display-path "otool" (hash-ref tools 'otool))
      (display-path "codesign" (hash-ref tools 'codesign))
+     (display-path "plist verification (plutil)" (hash-ref tools 'plutil))
      (display-path "production notarization (xcrun)"
                    (hash-ref tools 'xcrun)
                    "development packaging is still available")
