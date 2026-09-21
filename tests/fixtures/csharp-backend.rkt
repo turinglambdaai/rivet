@@ -23,7 +23,7 @@
   user)
 
 (define-rpc (search [query : String] : SearchResult)
-  (SearchResult '() 0))
+  (SearchResult (list (User 7 query (void))) 1))
 
 (define-rpc (get-task : Task)
   (Task 1 "demo"))

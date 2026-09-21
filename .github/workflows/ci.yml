@@ -148,11 +148,12 @@ jobs:
           if (-not (Test-Path 'dist\Smoke-windows-x64\RivetHost.exe')) {
             throw 'packaged WinUI executable was not produced'
           }
-      - name: Build embedded .NET runtime bundle
+      - name: Build embedded .NET Record runtime bundle
         shell: pwsh
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'rivet-smoke\Smoke'
           Set-Location $root
+          Copy-Item "$env:GITHUB_WORKSPACE\tests\fixtures\csharp-backend.rkt" 'app\backend.rkt' -Force
           raco rivet build-dotnet
           $stage = '.rivet\dotnet\windows-x64'
           if (-not (Test-Path "$stage\rivet_native.dll")) {
@@ -167,7 +168,7 @@ jobs:
           if (-not (Test-Path 'dotnet\GeneratedBackend.cs')) {
             throw 'typed C# client was not generated'
           }
-      - name: Run Racket in-process from .NET
+      - name: Run Record/List/Optional Racket RPCs in-process from .NET
         shell: pwsh
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'rivet-smoke\Smoke'
@@ -194,12 +195,24 @@ jobs:
           if (args.Length != 1) throw new InvalidOperationException("runtime root missing");
           await using var client = await EmbeddedRivetClient.StartAsync(new EmbeddedRivetOptions(args[0]));
           var api = new RivetAPI(client);
-          var greeting = await api.GreetAsync("Taskly");
-          if (greeting != "Hello, Taskly!") throw new InvalidOperationException($"unexpected greeting: {greeting}");
-          var before = await api.GetCounterAsync();
-          var after = await api.SetCounterAsync(before + 1);
-          if (after != before + 1) throw new InvalidOperationException("state round-trip failed");
-          Console.WriteLine("Embedded Rivet .NET smoke passed.");
+
+          var user = new User(42, "Ada", null);
+          var echoed = await api.EchoUserAsync(user);
+          if (echoed.Id != 42 || echoed.DisplayName != "Ada" || echoed.Nickname is not null)
+              throw new InvalidOperationException("Record/Optional round-trip failed");
+
+          var task = await api.GetTaskAsync();
+          if (task.Id != 1 || task.Text != "demo")
+              throw new InvalidOperationException("Task Record round-trip failed");
+
+          var result = await api.SearchAsync("needle");
+          if (result.Total != 1 || result.Items.Count != 1 ||
+              result.Items[0].Id != 7 || result.Items[0].DisplayName != "needle" ||
+              result.Items[0].Nickname is not null)
+              throw new InvalidOperationException("nested List<Record> round-trip failed");
+
+          await api.CloseAsync();
+          Console.WriteLine("Embedded Rivet Record/List/Optional smoke passed.");
           '@ | Set-Content -Path $program
           $stage = (Resolve-Path (Join-Path $root '.rivet\dotnet\windows-x64')).Path
           $env:PATH = "$stage;$env:PATH"
