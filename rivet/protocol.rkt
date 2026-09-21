@@ -45,6 +45,10 @@
 (define message:cancel   6)
 (define message:shutdown 7)
 
+(define (valid-message-type? type)
+  (and (exact-integer? type)
+       (<= message:hello type message:shutdown)))
+
 (struct frame (type id payload) #:transparent)
 
 (define (write-u32 n out)
@@ -80,6 +84,10 @@
 (define (write-frame f [out (current-output-port)])
   (unless (frame? f)
     (raise-argument-error 'write-frame "frame?" f))
+  (unless (valid-message-type? (frame-type f))
+    (raise-arguments-error 'write-frame
+                           "unknown Rivet message type"
+                           "type" (frame-type f)))
   (define payload (frame-payload f))
   (unless (bytes? payload)
     (raise-argument-error 'write-frame "bytes? payload" payload))
@@ -113,6 +121,8 @@
      (define type (read-byte in))
      (when (eof-object? type)
        (error 'read-frame "unexpected EOF while reading message type"))
+     (unless (valid-message-type? type)
+       (error 'read-frame "unknown Rivet message type: ~a" type))
      (define id-bytes (read-exactly in 8))
      (define len-bytes (read-exactly in 4))
      (when (or (eof-object? id-bytes) (eof-object? len-bytes))
