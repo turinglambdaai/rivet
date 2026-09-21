@@ -12,9 +12,15 @@
   (define kind (file-or-directory-type path #f))
   (case kind
     [(link file)
-     ;; Do not follow a project-local symlink/junction into an arbitrary
-     ;; external directory. Removing the link itself is the safe clean action.
+     ;; A file/symbolic link is removed as a link; its destination is never
+     ;; traversed by the cleaner.
      (delete-file path)
+     #t]
+    [(directory-link)
+     ;; Racket reports Windows junctions/directory symlinks separately and
+     ;; requires delete-directory for that link kind. This removes the link
+     ;; itself instead of recursively deleting its target.
+     (delete-directory path)
      #t]
     [(directory)
      (delete-directory/files path)
