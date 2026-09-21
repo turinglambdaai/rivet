@@ -19,5 +19,6 @@ invalid-value|impossible-list|06ffffffff
 invalid-value|truncated-list|0601000000
 invalid-frame|bad-magic|424144210102000000000000000000000000
 invalid-frame|bad-version|525654310202000000000000000000000000
+invalid-frame|unknown-message-type|525654310108000000000000000000000000
 invalid-frame|truncated-header|52565431010200
 invalid-frame|missing-payload|525654310102000000000000000001000000
