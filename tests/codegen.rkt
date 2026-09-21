@@ -73,11 +73,24 @@ RKT
     (check-true (regexp-match? #rx"case progress\\(Int64\\)" swift))
     (check-true (regexp-match? #rx"func getCounter\\(\\) async throws -> Int64" swift))
     (check-true (regexp-match? #rx"func setCounter\\(_ value: Int64\\)" swift))
+
+    ;; Existing future APIs remain source-compatible.
     (check-true (regexp-match? #rx"std::future<std::string> greet" cpp))
     (check-true (regexp-match? #rx"std::future<std::int64_t> increment" cpp))
-    (check-true (regexp-match? #rx"struct ProgressEvent \\{ std::int64_t value; \\};" cpp))
     (check-true (regexp-match? #rx"std::future<std::int64_t> get_counter\\(\\)" cpp))
     (check-true (regexp-match? #rx"std::future<std::int64_t> set_counter\\(std::int64_t value\\)" cpp))
+
+    ;; Windows also gets typed, cancellable completion APIs with no blocking get().
+    (check-true (regexp-match? #rx"struct Result" cpp))
+    (check-true (regexp-match? #rx"std::uint64_t greet_async" cpp))
+    (check-true (regexp-match? #rx"std::function<void\\(Result<std::string>\\)> completion" cpp))
+    (check-true (regexp-match? #rx"std::uint64_t increment_async" cpp))
+    (check-true (regexp-match? #rx"std::uint64_t get_counter_async" cpp))
+    (check-true (regexp-match? #rx"std::uint64_t set_counter_async" cpp))
+    (check-true (regexp-match? #rx"backend_\\.request_async" cpp))
+    (check-true (regexp-match? #rx"backend_\\.get_state_async" cpp))
+    (check-true (regexp-match? #rx"backend_\\.set_state_async" cpp))
+    (check-true (regexp-match? #rx"struct ProgressEvent \\{ std::int64_t value; \\};" cpp))
 
     ;; Distinct Racket identifiers can normalize to the same native API name.
     ;; Codegen must reject these cases instead of emitting uncompilable Swift/C++.
@@ -91,6 +104,25 @@ RKT
 
 (define-rpc (foo-bar [value Int64] : Int64) value)
 (define-rpc (foo_bar [value Int64] : Int64) value)
+
+(define (start in-fd out-fd)
+  (serve-fds in-fd out-fd))
+RKT
+     )
+    (check-exn #rx"native API name collision"
+               (lambda () (generate-clients! project)))
+
+    ;; Generated async companions are part of the C++ API namespace too.
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-rpc (foo [value Int64] : Int64) value)
+(define-rpc (foo_async [value Int64] : Int64) value)
 
 (define (start in-fd out-fd)
   (serve-fds in-fd out-fd))
