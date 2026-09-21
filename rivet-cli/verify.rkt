@@ -128,7 +128,7 @@
     (run-command! who signtool "verify" "/pa" "/v" (path->string executable)))
   package)
 
-(define (verify-macos-package! app production?)
+(define (verify-macos-package! project app production?)
   (define who 'verify-package!)
   (required-directory! who app "macOS app bundle")
   (define contents (build-path app "Contents"))
@@ -155,8 +155,10 @@
 
   (define codesign (find-executable-path "codesign"))
   (define otool (find-executable-path "otool"))
+  (define plutil (find-executable-path "plutil"))
   (unless codesign (error who "codesign was not found"))
   (unless otool (error who "otool was not found"))
+  (unless plutil (error who "plutil was not found"))
 
   (run-command! who codesign "--verify" "--strict" (path->string racket-framework))
   (run-command! who codesign "--verify" "--deep" "--strict" (path->string app))
@@ -194,9 +196,22 @@
      "Racket.framework has an unexpected install name"
      "otool -D" framework-id))
 
-  (define plutil (find-executable-path "plutil"))
-  (when plutil
-    (run-command! who plutil "-lint" (path->string info)))
+  (run-command! who plutil "-lint" (path->string info))
+  (define packaged-minimum-version
+    (string-trim
+     (capture-command! who
+                       plutil
+                       "-extract" "LSMinimumSystemVersion" "raw"
+                       "-o" "-"
+                       (path->string info))))
+  (define configured-minimum-version (project-macos-min-version project))
+  (unless (string=? packaged-minimum-version configured-minimum-version)
+    (raise-arguments-error
+     who
+     "macOS package minimum version does not match rivet.rktd"
+     "configured" configured-minimum-version
+     "packaged" packaged-minimum-version
+     "Info.plist" info))
 
   (when production?
     (define xcrun (find-executable-path "xcrun"))
@@ -212,10 +227,9 @@
   app)
 
 (define (verify-package! project package #:production? [production? #f])
-  (void project)
   (case (system-type 'os)
     [(windows) (verify-windows-package! package production?)]
-    [(macosx) (verify-macos-package! package production?)]
+    [(macosx) (verify-macos-package! project package production?)]
     [else
      (error 'verify-package!
             "Rivet package verification currently targets Windows and macOS")]))
