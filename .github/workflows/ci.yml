@@ -31,6 +31,20 @@ jobs:
         run: raco test tests/
       - name: Check CLI
         run: raco rivet help
+      - name: Check release metadata and source package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^(define version "\([^"]*\)")/\1/p' info.rkt)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "info.rkt version must be MAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
+          grep -Fxq "## $version" CHANGELOG.md
+          package_dir="$RUNNER_TEMP/rivet-package"
+          mkdir -p "$package_dir"
+          raco pkg create --source --format zip --dest "$package_dir" .
+          find "$package_dir" -maxdepth 1 -type f -name '*.zip' -print -quit | grep -q .
 
   native-protocol:
     name: Native protocol (${{ matrix.os }})
