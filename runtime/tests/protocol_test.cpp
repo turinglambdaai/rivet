@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -73,6 +74,33 @@ int main() {
     rejected_list = true;
   }
   assert(rejected_list);
+
+  rivet::Value too_deep;
+  for (std::size_t i = 0; i <= rivet::kMaxValueDepth; ++i) {
+    rivet::Value::List layer;
+    layer.push_back(std::move(too_deep));
+    too_deep = rivet::Value(std::move(layer));
+  }
+  bool rejected_deep_encode = false;
+  try {
+    (void)rivet::encode_value(too_deep);
+  } catch (std::length_error const&) {
+    rejected_deep_encode = true;
+  }
+  assert(rejected_deep_encode);
+
+  rivet::Bytes too_deep_bytes;
+  for (std::size_t i = 0; i <= rivet::kMaxValueDepth; ++i) {
+    too_deep_bytes.insert(too_deep_bytes.end(), {0x06, 0x01, 0x00, 0x00, 0x00});
+  }
+  too_deep_bytes.push_back(0x00);
+  bool rejected_deep_decode = false;
+  try {
+    (void)rivet::decode_value(too_deep_bytes);
+  } catch (std::runtime_error const&) {
+    rejected_deep_decode = true;
+  }
+  assert(rejected_deep_decode);
 
   std::vector<std::uint8_t> oversized_header{
       'R', 'V', 'T', '1',
