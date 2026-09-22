@@ -145,14 +145,14 @@ private func goldenValue(_ name: String) throws -> RivetValue {
 
 @Test func rejectsExcessiveValueNodes() throws {
     let value = RivetValue.list(Array(repeating: .null, count: rivetMaxValueNodes))
-    #expect(throws: RivetProtocolError.valueNodeLimit) {
+    #expect(throws: RivetProtocolError.lengthOverflow) {
         try encodeRivetValue(value)
     }
 
     // List root + 262,144 declared children exceeds the 262,144 total-node
     // budget. The decoder must reject this five-byte input before allocation.
     let encoded = Data([0x06, 0x00, 0x00, 0x04, 0x00])
-    #expect(throws: RivetProtocolError.valueNodeLimit) {
+    #expect(throws: RivetProtocolError.lengthOverflow) {
         try decodeRivetValue(encoded)
     }
 }
