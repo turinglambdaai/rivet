@@ -49,16 +49,16 @@ The Racket backend declares the API shared by both native hosts:
 
 ### How it compares
 
-| | Rivet | Glaze | Bezel | Tessera |
-|---|---|---|---|---|
-| UI stack | **WinUI 3 / SwiftUI** | HTML/CSS/JS + WebView | Qt 6 Widgets | Custom GPU-rendered UI |
-| Racket role | shared backend | backend + local web server | application + bindings | application + renderer |
-| Native widgets | **first-party OS UI** | no | Qt widgets | no, custom drawn |
-| One UI codebase | no | yes | yes | yes |
-| Styling model | platform native | CSS | QSS | Tessera view/style API |
-| Best fit | platform-native commercial apps | web-tech desktop apps | traditional cross-platform GUI | fully custom declarative Racket UI |
+| | Rivet | Glaze | Bezel |
+|---|---|---|---|
+| UI stack | **WinUI 3 / SwiftUI** | HTML/CSS/JS + WebView | Qt 6 Widgets |
+| Racket role | shared backend | backend + local web server | application + bindings |
+| Native widgets | **first-party OS UI** | no | Qt widgets |
+| One UI codebase | no | yes | yes |
+| Styling model | platform native | CSS | QSS |
+| Best fit | platform-native commercial apps | web-tech desktop apps | traditional cross-platform GUI |
 
-The four projects serve different trade-offs rather than replacing one another.
+The three projects serve different trade-offs rather than replacing one another.
 
 ## How it works
 
