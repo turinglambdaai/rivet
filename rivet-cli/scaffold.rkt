@@ -3,7 +3,6 @@
 (require racket/file
          racket/path
          racket/runtime-path
-         racket/string
          "project.rkt")
 
 (provide create-project!)
@@ -12,13 +11,6 @@
 
 (define (safe-project-name? s)
   (regexp-match? #px"^[A-Za-z][A-Za-z0-9_-]*$" s))
-
-(define (default-identifier name)
-  (string-append
-   "dev.rivet."
-   (regexp-replace* #px"[^a-z0-9.-]"
-                    (string-downcase name)
-                    "-")))
 
 (define (write-text path text)
   (make-parent-directory* path)
@@ -65,10 +57,12 @@ RKT
   (write-text
    (build-path root "rivet.rktd")
    (format
-    "#hasheq((name . ~s) (display-name . ~s) (version . \"0.1.0\") (build . 1) (identifier . ~s) (macos-min-version . ~s) (windows-min-version . ~s) (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1))\n"
+    "#hasheq((name . ~s) (display-name . ~s) (version . ~s) (build . ~s) (identifier . ~s) (macos-min-version . ~s) (windows-min-version . ~s) (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1))\n"
     name
     name
-    (default-identifier name)
+    default-project-version
+    default-project-build
+    (default-project-identifier name)
     default-macos-min-version
     default-windows-min-version))
   (write-text (build-path root "app" "backend.rkt") backend-template)
