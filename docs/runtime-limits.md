@@ -30,7 +30,13 @@ Event handlers execute on native runtime/reader threads. Application UI code mus
 
 ## Wire values
 
-RVT1 v1 limits a single frame payload to 64 MiB and a recursively encoded value to 64 nested List levels. Racket, C++, and Swift enforce the same limits.
+RVT1 v1 applies the same resource limits in Racket, C++, and Swift:
+
+- a single frame payload is at most 64 MiB;
+- a recursively encoded value is at most 64 nested `List` levels;
+- one encoded/decoded value contains at most 262,144 total value nodes, including the root value and every nested `List` element.
+
+The node budget prevents a small or merely frame-sized wire payload from expanding into an unbounded number of language-level `Value`/list objects. Decoders validate a declared `List` count against the remaining node budget before reserving or constructing the destination container. Encoders apply the same budget, so an accidental application-side giant `List` fails before traversal. Large binary payloads should use `Bytes`, which counts as one value node regardless of byte length and remains governed by the frame-size limit.
 
 These are defensive resource limits, not application schema limits. Normal `String`, `Bytes`, `List`, `Optional`, RPC, State, and Event usage is unchanged.
 
