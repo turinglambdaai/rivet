@@ -28,24 +28,31 @@
              'entry "start"
              'protocol 1))
     (define project (load-project temp-root))
-    (check-equal? (project-ref project 'name) "demo")
-    (check-equal? (project-ref project 'display-name) "Demo App")
-    (check-equal? (project-ref project 'version) "1.2.3")
-    (check-equal? (project-ref project 'build) 7)
-    (check-equal? (project-ref project 'identifier) "dev.example.demo")
+    (check-equal? (project-name project) "demo")
+    (check-equal? (project-display-name project) "Demo App")
+    (check-equal? (project-version project) "1.2.3")
+    (check-equal? (project-build project) 7)
+    (check-equal? (project-identifier project) "dev.example.demo")
     (check-equal? (project-macos-min-version project) "14.1")
     (check-equal? (project-windows-min-version project) "10.0.19045.0")
     (check-equal? (find-project temp-root) project)
 
-    ;; 0.1 projects without release/platform metadata remain valid and retain
-    ;; the deployment targets Rivet historically used.
+    ;; 0.1 projects without release/platform metadata remain valid. All
+    ;; consumers resolve the same compatibility defaults through project.rkt.
     (write-config
-     (hasheq 'name "demo"
+     (hasheq 'name "Demo_App"
              'backend "app/backend.rkt"
              'module "backend"
              'entry "start"
              'protocol 1))
     (define legacy-project (load-project temp-root))
+    (check-equal? (project-name legacy-project) "Demo_App")
+    (check-equal? (project-display-name legacy-project) "Demo_App")
+    (check-equal? (project-version legacy-project) default-project-version)
+    (check-equal? (project-build legacy-project) default-project-build)
+    (check-equal? (project-identifier legacy-project)
+                  (default-project-identifier "Demo_App"))
+    (check-equal? (project-identifier legacy-project) "dev.rivet.demo-app")
     (check-equal? (project-macos-min-version legacy-project)
                   default-macos-min-version)
     (check-equal? (project-windows-min-version legacy-project)

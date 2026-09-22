@@ -3,7 +3,6 @@
 (require racket/file
          racket/format
          racket/path
-         racket/string
          racket/system
          "build.rkt"
          "project.rkt"
@@ -48,16 +47,6 @@
         ditto
         (path->string source)
         (path->string destination)))
-
-(define (macos-identifier name)
-  (string-append
-   "dev.rivet."
-   (regexp-replace* #px"[^a-z0-9.-]"
-                    (string-downcase name)
-                    "-")))
-
-(define (project-setting project key default)
-  (project-ref project key (lambda () default)))
 
 (define (write-macos-info! path
                            display-name
@@ -192,11 +181,10 @@
   (make-directory* resources)
 
   (define executable-name name)
-  (define display-name (project-setting project 'display-name name))
-  (define version (project-setting project 'version "0.1.0"))
-  (define build (project-setting project 'build 1))
-  (define identifier
-    (project-setting project 'identifier (macos-identifier name)))
+  (define display-name (project-display-name project))
+  (define version (project-version project))
+  (define build (project-build project))
+  (define identifier (project-identifier project))
 
   (define source-executable (build-path stage "RivetHost"))
   (define target-executable (build-path macos executable-name))
@@ -252,7 +240,7 @@
                     #:configuration "Release"
                     #:self-contained? #t))
   (define stage (path-only executable))
-  (define name (project-ref project 'name))
+  (define name (project-name project))
 
   (define packaged
     (case (system-type 'os)

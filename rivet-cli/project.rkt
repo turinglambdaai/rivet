@@ -1,23 +1,41 @@
 #lang racket/base
 
 (require racket/file
-         racket/path)
+         racket/path
+         racket/string)
 
 (provide (struct-out rivet-project)
+         default-project-version
+         default-project-build
          default-macos-min-version
          default-windows-min-version
+         default-project-identifier
          find-project
          load-project
          project-ref
          project-path
+         project-name
+         project-display-name
+         project-version
+         project-build
+         project-identifier
          project-macos-min-version
          project-windows-min-version)
 
 (struct rivet-project (root config) #:transparent)
 
 (define config-name "rivet.rktd")
+(define default-project-version "0.1.0")
+(define default-project-build 1)
 (define default-macos-min-version "14.0")
 (define default-windows-min-version "10.0.19041.0")
+
+(define (default-project-identifier name)
+  (string-append
+   "dev.rivet."
+   (regexp-replace* #px"[^a-z0-9.-]"
+                    (string-downcase name)
+                    "-")))
 
 (define (macos-version-string? value)
   (and (string? value)
@@ -143,6 +161,29 @@
 
 (define (project-path project . pieces)
   (apply build-path (rivet-project-root project) pieces))
+
+(define (project-name project)
+  (project-ref project 'name))
+
+(define (project-display-name project)
+  (project-ref project
+               'display-name
+               (lambda () (project-name project))))
+
+(define (project-version project)
+  (project-ref project
+               'version
+               (lambda () default-project-version)))
+
+(define (project-build project)
+  (project-ref project
+               'build
+               (lambda () default-project-build)))
+
+(define (project-identifier project)
+  (project-ref project
+               'identifier
+               (lambda () (default-project-identifier (project-name project)))))
 
 (define (project-macos-min-version project)
   (project-ref project
