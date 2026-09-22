@@ -33,11 +33,18 @@
     [(string=? name "null") (void)]
     [(string=? name "false") #f]
     [(string=? name "true") #t]
+    [(string=? name "int64-min") -9223372036854775808]
     [(string=? name "int64-neg2") -2]
     [(string=? name "int64-42") 42]
+    [(string=? name "int64-max") 9223372036854775807]
+    [(string=? name "string-empty") ""]
     [(string=? name "string-hello") "hello"]
+    [(string=? name "string-nul") (string #\a (integer->char 0) #\b)]
     [(string=? name "string-unicode") "你好 Rivet"]
+    [(string=? name "string-emoji") "🙂"]
+    [(string=? name "bytes-empty") #""]
     [(string=? name "bytes-binary") #"\x00\xff\x7f"]
+    [(string=? name "list-empty") '()]
     [(string=? name "list-nested") (list "nested" 7 #t)]
     [else (error 'protocol-golden "unknown value fixture: ~a" name)]))
 
