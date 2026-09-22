@@ -59,7 +59,14 @@
      (define decoded (decode-value encoded))
      (if (void? expected)
          (check-true (void? decoded) name)
-         (check-equal? decoded expected name))]
+         (check-equal? decoded expected name))
+     ;; A valid canonical value becomes invalid at every strict byte prefix.
+     ;; This covers empty input plus every possible truncation boundary for
+     ;; all value shapes represented in the shared cross-language fixture.
+     (for ([prefix-length (in-range (bytes-length encoded))])
+       (check-exn exn:fail?
+                  (lambda ()
+                    (decode-value (subbytes encoded 0 prefix-length)))))]
     [(string=? kind "frame")
      (unless (string=? name "request-99")
        (error 'protocol-golden "unknown frame fixture: ~a" name))
