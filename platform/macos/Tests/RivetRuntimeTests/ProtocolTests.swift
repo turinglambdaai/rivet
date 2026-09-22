@@ -77,6 +77,13 @@ private func goldenValue(_ name: String) throws -> RivetValue {
             let expected = try goldenValue(record.name)
             #expect(try encodeRivetValue(expected) == record.bytes)
             #expect(try decodeRivetValue(record.bytes) == expected)
+            // Every strict prefix is a truncated value, including empty input.
+            for prefixCount in 0..<record.bytes.count {
+                let prefix = Data(record.bytes.prefix(prefixCount))
+                #expect(throws: RivetProtocolError.self) {
+                    try decodeRivetValue(prefix)
+                }
+            }
         case "frame":
             #expect(record.name == "request-99")
             let decoded = try decodeRivetFrame(record.bytes)
