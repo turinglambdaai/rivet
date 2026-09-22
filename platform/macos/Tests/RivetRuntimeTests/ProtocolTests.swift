@@ -53,11 +53,18 @@ private func goldenValue(_ name: String) throws -> RivetValue {
     case "null": return .null
     case "false": return .bool(false)
     case "true": return .bool(true)
+    case "int64-min": return .int64(Int64.min)
     case "int64-neg2": return .int64(-2)
     case "int64-42": return .int64(42)
+    case "int64-max": return .int64(Int64.max)
+    case "string-empty": return .string("")
     case "string-hello": return .string("hello")
+    case "string-nul": return .string("a\u{0000}b")
     case "string-unicode": return .string("你好 Rivet")
+    case "string-emoji": return .string("🙂")
+    case "bytes-empty": return .bytes(Data())
     case "bytes-binary": return .bytes(Data([0x00, 0xff, 0x7f]))
+    case "list-empty": return .list([])
     case "list-nested": return .list([.string("nested"), .int64(7), .bool(true)])
     default: throw NSError(domain: "RivetGolden", code: 4)
     }
