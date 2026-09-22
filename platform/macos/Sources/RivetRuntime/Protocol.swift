@@ -46,7 +46,6 @@ public enum RivetProtocolError: Error, Equatable, CustomStringConvertible {
     case trailingBytes
     case lengthOverflow
     case nestingTooDeep
-    case valueNodeLimit
 
     public var description: String {
         switch self {
@@ -59,7 +58,6 @@ public enum RivetProtocolError: Error, Equatable, CustomStringConvertible {
         case .trailingBytes: return "trailing bytes after Rivet value"
         case .lengthOverflow: return "Rivet value exceeds protocol length limit"
         case .nestingTooDeep: return "Rivet value nesting exceeds protocol limit"
-        case .valueNodeLimit: return "Rivet value node count exceeds protocol limit"
         }
     }
 }
@@ -130,7 +128,7 @@ private func encode(
     depth: Int,
     remainingNodes: inout Int
 ) throws {
-    guard remainingNodes > 0 else { throw RivetProtocolError.valueNodeLimit }
+    guard remainingNodes > 0 else { throw RivetProtocolError.lengthOverflow }
     remainingNodes -= 1
 
     switch value {
@@ -157,7 +155,7 @@ private func encode(
     case .list(let values):
         guard depth < rivetMaxValueDepth else { throw RivetProtocolError.nestingTooDeep }
         guard values.count <= Int(UInt32.max) else { throw RivetProtocolError.lengthOverflow }
-        guard values.count <= remainingNodes else { throw RivetProtocolError.valueNodeLimit }
+        guard values.count <= remainingNodes else { throw RivetProtocolError.lengthOverflow }
         output.append(ValueTag.list.rawValue)
         output.appendLE(UInt32(values.count))
         for value in values {
@@ -179,7 +177,7 @@ private func decodeValue(
     depth: Int,
     remainingNodes: inout Int
 ) throws -> RivetValue {
-    guard remainingNodes > 0 else { throw RivetProtocolError.valueNodeLimit }
+    guard remainingNodes > 0 else { throw RivetProtocolError.lengthOverflow }
     remainingNodes -= 1
 
     let rawTag = try reader.readByte()
@@ -210,7 +208,7 @@ private func decodeValue(
     case .list:
         guard depth < rivetMaxValueDepth else { throw RivetProtocolError.nestingTooDeep }
         let count: UInt32 = try reader.readInteger(UInt32.self)
-        guard Int(count) <= remainingNodes else { throw RivetProtocolError.valueNodeLimit }
+        guard Int(count) <= remainingNodes else { throw RivetProtocolError.lengthOverflow }
         guard Int(count) <= reader.remaining else {
             throw RivetProtocolError.truncated
         }
