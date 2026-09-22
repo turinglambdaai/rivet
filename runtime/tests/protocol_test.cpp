@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -94,11 +95,18 @@ rivet::Value golden_value(std::string const& name) {
   if (name == "null") return rivet::Value{};
   if (name == "false") return rivet::Value(false);
   if (name == "true") return rivet::Value(true);
+  if (name == "int64-min") return rivet::Value(std::numeric_limits<std::int64_t>::min());
   if (name == "int64-neg2") return rivet::Value(std::int64_t{-2});
   if (name == "int64-42") return rivet::Value(std::int64_t{42});
+  if (name == "int64-max") return rivet::Value(std::numeric_limits<std::int64_t>::max());
+  if (name == "string-empty") return rivet::Value("");
   if (name == "string-hello") return rivet::Value("hello");
+  if (name == "string-nul") return rivet::Value(std::string("a\0b", 3));
   if (name == "string-unicode") return rivet::Value(std::string("\xe4\xbd\xa0\xe5\xa5\xbd Rivet"));
+  if (name == "string-emoji") return rivet::Value(std::string("\xf0\x9f\x99\x82"));
+  if (name == "bytes-empty") return rivet::Value(rivet::Bytes{});
   if (name == "bytes-binary") return rivet::Value(rivet::Bytes{0x00, 0xff, 0x7f});
+  if (name == "list-empty") return rivet::Value(rivet::Value::List{});
   if (name == "list-nested") {
     rivet::Value::List values;
     values.emplace_back("nested");
