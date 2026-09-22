@@ -279,18 +279,69 @@ backend.onProgress { pct <span class="kw">in</span>
     </footer>
 
     <script>
-        // Bilingual content: data-en / data-zh attributes, English default.
-        function setLanguage(lang) {
+        // Unified language policy: explicit choice wins; otherwise follow system/browser locale.
+        var LANGUAGE_OVERRIDE_KEY = 'rivet-lang-override-v2';
+        var LEGACY_LANGUAGE_KEY = 'site-lang';
+        var pageMetadata = {
+            en: {
+                title: 'Rivet — Racket logic, first-party native apps',
+                description: 'Build first-party native desktop apps with Racket. WinUI 3 on Windows and SwiftUI on macOS, application logic in Racket — not a WebView, not a cross-platform widget layer.'
+            },
+            zh: {
+                title: 'Rivet — 用 Racket 构建一等原生桌面应用',
+                description: '用 Racket 构建一等原生桌面应用：Windows 使用 WinUI 3，macOS 使用 SwiftUI，应用逻辑运行在 Racket 中；不是 WebView，也不是跨平台控件层。'
+            }
+        };
+
+        function readLanguageOverride() {
+            try {
+                var saved = localStorage.getItem(LANGUAGE_OVERRIDE_KEY);
+                return saved === 'zh' || saved === 'en' ? saved : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function detectBrowserLanguage() {
+            var locale = (navigator.languages && navigator.languages[0]) || navigator.language || '';
+            if (!locale) return 'zh';
+            return String(locale).toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en';
+        }
+
+        function applyLanguage(lang, persist) {
+            if (persist) {
+                try { localStorage.setItem(LANGUAGE_OVERRIDE_KEY, lang); } catch (e) { /* private mode */ }
+            }
+
             document.querySelectorAll('[data-en]').forEach(function (el) {
-                el.textContent = el.getAttribute('data-' + lang);
+                var text = el.getAttribute('data-' + lang);
+                if (text !== null) el.textContent = text;
             });
             document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
-            try { localStorage.setItem('site-lang', lang); } catch (e) { /* private mode */ }
+            document.documentElement.setAttribute('data-language', lang);
+
+            var label = document.getElementById('current-lang-label');
+            if (label) label.textContent = lang === 'zh' ? '简体中文' : 'English';
+
+            var metadata = pageMetadata[lang];
+            if (metadata) {
+                document.title = metadata.title;
+                var description = document.querySelector('meta[name="description"]');
+                if (description) description.setAttribute('content', metadata.description);
+            }
         }
-        try {
-            var saved = localStorage.getItem('site-lang');
-            if (saved && saved !== 'en') setLanguage(saved);
-        } catch (e) { /* private mode */ }
+
+        function setLanguage(lang) {
+            if (lang !== 'zh' && lang !== 'en') return;
+            applyLanguage(lang, true);
+        }
+
+        try { localStorage.removeItem(LEGACY_LANGUAGE_KEY); } catch (e) { /* private mode */ }
+        applyLanguage(readLanguageOverride() || detectBrowserLanguage(), false);
+
+        window.addEventListener('languagechange', function () {
+            if (!readLanguageOverride()) applyLanguage(detectBrowserLanguage(), false);
+        });
 
         // Scroll-in animation.
         var observer = new IntersectionObserver(function (entries) {
