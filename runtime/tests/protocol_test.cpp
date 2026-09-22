@@ -146,6 +146,11 @@ int main() {
       assert(rivet::encode_value(expected) == record.bytes);
       auto decoded = rivet::decode_value(record.bytes);
       assert(rivet::encode_value(decoded) == record.bytes);
+      // Every strict prefix of a canonical value is truncated and must fail.
+      for (std::size_t prefix_size = 0; prefix_size < record.bytes.size(); ++prefix_size) {
+        auto const end = record.bytes.begin() + static_cast<std::ptrdiff_t>(prefix_size);
+        assert(throws_value_decode(rivet::Bytes(record.bytes.begin(), end)));
+      }
     } else if (record.kind == "frame") {
       assert(record.name == "request-99");
       MemoryTransport input(record.bytes);
