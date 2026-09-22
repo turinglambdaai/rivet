@@ -26,6 +26,7 @@ invalid-value|invalid-utf8-overlong|0402000000c080
 invalid-value|invalid-utf8-surrogate|0403000000eda080
 invalid-value|invalid-utf8-too-high|0404000000f4908080
 invalid-value|invalid-utf8-truncated|0402000000e282
+invalid-value|value-node-budget|0600000400
 invalid-value|impossible-list|06ffffffff
 invalid-value|truncated-list|0601000000
 invalid-frame|bad-magic|424144210102000000000000000000000000
