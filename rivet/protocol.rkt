@@ -41,6 +41,7 @@
 ;; including the root, so malformed or accidental values cannot amplify
 ;; memory without bound. Bulk payloads should use Bytes instead of huge Lists.
 (define max-value-nodes (expt 2 18))
+(define max-frame-id (sub1 (expt 2 64)))
 (define magic #"RVT1")
 
 (define message:hello    1)
@@ -54,6 +55,10 @@
 (define (valid-message-type? type)
   (and (exact-integer? type)
        (<= message:hello type message:shutdown)))
+
+(define (valid-frame-id? id)
+  (and (exact-integer? id)
+       (<= 0 id max-frame-id)))
 
 (struct frame (type id payload) #:transparent)
 
@@ -94,6 +99,15 @@
     (raise-arguments-error 'write-frame
                            "unknown Rivet message type"
                            "type" (frame-type f)))
+  ;; C++ and Swift expose the wire id as UInt64. Validate the Racket value
+  ;; before writing any header bytes so a local argument error cannot leave a
+  ;; partial frame on the transport and desynchronize every subsequent frame.
+  (unless (valid-frame-id? (frame-id f))
+    (raise-arguments-error 'write-frame
+                           "frame id is outside the unsigned 64-bit range"
+                           "id" (frame-id f)
+                           "minimum" 0
+                           "maximum" max-frame-id))
   (define payload (frame-payload f))
   (unless (bytes? payload)
     (raise-argument-error 'write-frame "bytes? payload" payload))
