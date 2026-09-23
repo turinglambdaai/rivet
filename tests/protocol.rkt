@@ -107,6 +107,15 @@
 (check-exn #rx"node count exceeds Rivet protocol limit"
            (lambda () (encode-value too-many-node-value)))
 
+;; A standalone encoded value must itself fit in one legal frame payload.
+;; Reuse one 64 MiB+1 Bytes object to prove both directions reject before the
+;; encoder builds another giant output buffer or the decoder starts parsing it.
+(let ([oversized-value (make-bytes (add1 max-frame-payload-size) 0)])
+  (check-exn #rx"encoded value exceeds Rivet payload limit"
+             (lambda () (decode-value oversized-value)))
+  (check-exn #rx"encoded value exceeds Rivet payload limit"
+             (lambda () (encode-value oversized-value))))
+
 (define list-prefix #"\x06\x01\x00\x00\x00")
 (define too-deep-payload
   (bytes-append
