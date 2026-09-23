@@ -104,13 +104,30 @@
         (or (void? value) (value-matches-type? inner value))]
        [_ #f])]))
 
+(define (safe-value-kind value)
+  ;; Diagnostics must never print an arbitrary application value just to report
+  ;; a type mismatch. In particular, custom writers can perform unbounded work
+  ;; or raise while an Error is being constructed. Classify with predicates
+  ;; only and report this small symbol instead.
+  (cond
+    [(void? value) 'Void]
+    [(string? value) 'String]
+    [(boolean? value) 'Bool]
+    [(bytes? value) 'Bytes]
+    [(and (exact-integer? value)
+          (<= (- (expt 2 63)) value (sub1 (expt 2 63))))
+     'Int64]
+    [(exact-integer? value) 'Integer]
+    [(list? value) 'List]
+    [else 'Unsupported]))
+
 (define (validate-value who label type value)
   (unless (value-matches-type? type value)
     (raise-arguments-error who
                            "value does not match declared Rivet type"
                            "position" label
                            "expected" type
-                           "value" value)))
+                           "received" (safe-value-kind value))))
 
 (define (register-rpc! name arg-names arg-types result-type proc)
   (check-api-name-length! 'define-rpc "RPC" (symbol->string name))
@@ -274,7 +291,7 @@
     [(list (? string? name) args ...)
      (values (wire-api-name->symbol 'serve "RPC" name) args)]
     [_
-     (error 'serve "invalid RPC request payload: ~e" value)]))
+     (error 'serve "invalid RPC request payload shape")]))
 
 ;; Error frames are diagnostic terminal messages, not bulk payloads. Keep them
 ;; bounded well below the RVT1 64 MiB value limit so an application exception
@@ -603,8 +620,7 @@
                              (if (exn? value)
                                  (raise value)
                                  (error 'rivet/backend
-                                        "backend requested exit: ~e"
-                                        value)))])
+                                        "backend requested exit with non-exception value")))])
              (send! (frame message:hello 0
                            (encode-value (list "rivet" protocol-version))))
              (let loop ()

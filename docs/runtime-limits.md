@@ -73,6 +73,8 @@ Application RPC workers also isolate every value that Racket can raise, not only
 
 Backend-generated Error diagnostics are capped at 4096 Unicode characters and longer messages end with `[truncated]`. Admitted requests prepare this bounded Error payload before they compete with cancellation for terminal ownership. Rejections that happen before admission use the same bounded encoder, so an oversized unknown RPC name or exception message cannot escape the reader loop merely while Rivet is trying to report the failure.
 
+Diagnostic construction is bounded before that final truncation step as well. Type mismatches report only the argument/result position, declared type, and a small safe value-kind label instead of printing the actual application object. Structurally invalid decoded RPC payloads use a fixed diagnostic rather than rendering the entire decoded tree, and non-exception values passed to the inherited `exit` handler are not formatted. Custom writers or very large values therefore cannot perform unbounded work merely because Rivet is constructing an Error message.
+
 A failed State serialization preflight is request-local as well: the State cell is not changed and no `$state` Event is queued. This gives State updates a wire-atomic boundary rather than mutating backend state first and discovering later that native clients cannot observe the new value.
 
 Framing failures are different: invalid RVT1 magic/version, truncated transport data, output-port failure, or other transport-level corruption can terminate the connection because reliable frame delivery can no longer be guaranteed.
