@@ -167,6 +167,19 @@
 (define tag:bytes  #x05)
 (define tag:list   #x06)
 
+;; Racket lists do not carry their length. A plain `list?` followed by `length`
+;; traverses the entire value twice before the encoder can apply its node
+;; budget. Stop as soon as the remaining value-node budget would be exceeded.
+;; Return #f for an improper list and 'too-many when the proper-list prefix has
+;; already exhausted the budget.
+(define (bounded-list-length value limit)
+  (let loop ([rest value] [count 0])
+    (cond
+      [(null? rest) count]
+      [(not (pair? rest)) #f]
+      [(>= count limit) 'too-many]
+      [else (loop (cdr rest) (add1 count))])))
+
 (define (encode-value v)
   (define out (open-output-bytes))
   (define remaining-nodes max-value-nodes)
@@ -216,22 +229,25 @@
        (write-byte tag:bytes out)
        (write-u32 len out)
        (write-bytes value out)]
-      [(list? value)
+      [(or (null? value) (pair? value))
        (when (>= depth max-value-depth)
          (raise-arguments-error 'encode-value
                                 "value nesting exceeds Rivet protocol limit"
                                 "maximum depth" max-value-depth))
-       (define count (length value))
-       ;; Each immediate element consumes at least one node. Reject before
-       ;; emitting/recursing when even the shallow shape cannot fit the budget.
-       (when (> count remaining-nodes)
-         (raise-arguments-error 'encode-value
-                                "value node count exceeds Rivet protocol limit"
-                                "maximum nodes" max-value-nodes))
-       (consume-bytes! 5)
-       (write-byte tag:list out)
-       (write-u32 count out)
-       (for ([item (in-list value)]) (emit item (add1 depth)))]
+       (define count (bounded-list-length value remaining-nodes))
+       (cond
+         [(eq? count 'too-many)
+          (raise-arguments-error 'encode-value
+                                 "value node count exceeds Rivet protocol limit"
+                                 "maximum nodes" max-value-nodes)]
+         [(not count)
+          (error 'encode-value "value is not a proper List")]
+         [else
+          (consume-bytes! 5)
+          (write-byte tag:list out)
+          (write-u32 count out)
+          (for ([item (in-list value)])
+            (emit item (add1 depth)))])]
       [else
        (raise-arguments-error 'encode-value
                               "value is not supported by protocol v1"
