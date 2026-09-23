@@ -116,10 +116,18 @@
 (check-not-exn (lambda () (decode-value max-node-encoded)))
 
 ;; The root List itself consumes one node, so max-value-nodes elements exceed
-;; the total value-node budget by one and must fail before element traversal.
+;; the total value-node budget by one. The Racket encoder must discover this
+;; while counting only up to the remaining budget instead of fully traversing
+;; an arbitrarily larger List first.
 (define too-many-node-value (make-list max-value-nodes (void)))
 (check-exn #rx"node count exceeds Rivet protocol limit"
            (lambda () (encode-value too-many-node-value)))
+
+;; Pair-shaped values are only valid when they are proper Lists. Keep this
+;; failure explicit so an improper or cyclic pair cannot fall through to a
+;; generic diagnostic that attempts to print the entire application value.
+(check-exn #rx"not a proper List"
+           (lambda () (encode-value (cons 1 2))))
 
 ;; A standalone encoded value must itself fit in one legal frame payload.
 ;; Reuse one 64 MiB+1 Bytes object to prove both directions reject before the
