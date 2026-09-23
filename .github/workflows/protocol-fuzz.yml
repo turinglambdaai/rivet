@@ -1,0 +1,48 @@
+name: Protocol Fuzz Smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protocol-fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-protocol-fuzz:
+    name: Native protocol fuzz (Clang ASan/UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure libFuzzer target
+        env:
+          CC: clang
+          CXX: clang++
+        run: >-
+          cmake -S runtime -B build/fuzz
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DRIVET_BUILD_TESTS=OFF
+          -DRIVET_BUILD_FUZZERS=ON
+
+      - name: Build libFuzzer target
+        run: cmake --build build/fuzz --config RelWithDebInfo --target rivet_protocol_fuzz
+
+      - name: Build seed corpus from shared protocol vectors
+        run: python3 runtime/fuzz/seed_corpus.py "$RUNNER_TEMP/rivet-fuzz-corpus"
+
+      - name: Fuzz value and frame decoders
+        env:
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: >-
+          build/fuzz/rivet_protocol_fuzz
+          "$RUNNER_TEMP/rivet-fuzz-corpus"
+          -runs=20000
+          -max_len=65536
+          -timeout=5
+          -rss_limit_mb=2048
