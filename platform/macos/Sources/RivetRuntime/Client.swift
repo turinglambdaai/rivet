@@ -77,6 +77,16 @@ public final class RivetClient: @unchecked Sendable {
                 throw error
             }
 
+            // Cancellation may have arrived while a large request payload was
+            // being encoded. Avoid installing a continuation or touching the
+            // transport when the Task is already known to be cancelled. A
+            // cancellation racing after this check is still serialized by the
+            // reservation marker and submit/cancel write-lock ordering below.
+            if Task.isCancelled {
+                releaseRequestReservation(id)
+                throw CancellationError()
+            }
+
             return try await withCheckedThrowingContinuation { continuation in
                 submitReservedRequest(id, data: requestData, continuation: continuation)
             }
