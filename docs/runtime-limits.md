@@ -16,11 +16,25 @@ or, for an embedded native host:
 (serve-fds in-fd out-fd #:max-pending-requests 256)
 ```
 
-A request occupies one pending slot after it has been admitted and before it returns, fails, or is cancelled. The limit applies to both application RPCs and Rivet's reserved State requests because they share the same request lifecycle. When the limit is reached, Rivet returns a normal request-scoped Error frame for the new request instead of creating another request custodian and Racket thread; the existing requests continue running.
+A request occupies one pending slot after it has been admitted and before its terminal Response/Error has been accepted by the output queue. The limit applies to both application RPCs and Rivet's reserved State requests because they share the same request lifecycle. When the limit is reached, Rivet returns a normal request-scoped Error frame for the new request instead of creating another request custodian and Racket thread; the existing requests continue running.
 
-Cancellation and normal completion compete for ownership of the pending entry. Exactly one side removes that entry and emits the terminal response/error for the request. Cancelling a request therefore releases its slot before another request is admitted.
+Cancellation, normal completion, and request failure compete for terminal ownership of the pending entry. Exactly one side can claim that ownership. A claimed request stays in the pending table until its terminal frame is admitted to the output queue; only then is its slot released. This matters when native output is stalled: completed requests cannot free their slots early and allow an unbounded number of additional workers to accumulate behind output backpressure.
 
 The pending table is synchronized because request workers complete concurrently with the server reader loop. Shutdown snapshots and clears the table under the same lock before stopping the remaining request custodians.
+
+## Output backpressure
+
+`serve` and `serve-fds` also accept `#:max-outgoing-frames`. The default output queue holds at most 64 frames waiting for the single writer thread.
+
+```racket
+(serve in out #:max-outgoing-frames 32)
+```
+
+The queue is intentionally bounded. If the native peer stops reading, RPC workers and Event producers block instead of appending frames to an unbounded in-memory queue. The reader itself is backpressured when it needs to emit a rejection or protocol Error, which prevents it from continuing to admit work faster than the transport can drain it.
+
+The writer and application runtime are supervised separately. Producers wait for either output capacity or writer termination. If the output port fails, blocked producers are released, the internal reader/request runtime is shut down, and `serve` propagates the writer error rather than remaining blocked in `read-frame`. On orderly shutdown Rivet stops all producers first, drains every frame that was already accepted by the output queue, then stops the writer.
+
+The queue limit is a frame-count bound, not a replacement for the RVT1 per-frame 64 MiB limit or the pending-request limit. These limits work together: value/frame limits bound each item, the outgoing queue bounds buffered frames, and the pending table bounds admitted request workers, including requests whose terminal frames are waiting for output capacity.
 
 ## Events
 
@@ -49,10 +63,10 @@ These are defensive resource limits, not application schema limits. Normal `Stri
 
 ## Failure isolation
 
-Malformed application-level requests, including unknown RPC names and invalid argument shapes, are returned as request-local Error frames. Application RPC results that cannot be serialized within RVT1 resource limits are also converted to request-local Error frames: a request remains pending until response encoding succeeds, so a serialization failure cannot silently consume terminal-response ownership and leave the native client waiting indefinitely.
+Malformed application-level requests, including unknown RPC names and invalid argument shapes, are returned as request-local Error frames. Application RPC results that cannot be serialized within RVT1 resource limits are also converted to request-local Error frames: a request remains claimable until response encoding succeeds, so a serialization failure cannot silently consume terminal-response ownership and leave the native client waiting indefinitely.
 
 Backend-generated Error diagnostics are capped at 4096 Unicode characters and longer messages end with `[truncated]`. Admitted requests prepare this bounded Error payload before they compete with cancellation for terminal ownership. Rejections that happen before admission use the same bounded encoder, so an oversized unknown RPC name or exception message cannot escape the reader loop merely while Rivet is trying to report the failure.
 
 A failed State serialization preflight is request-local as well: the State cell is not changed and no `$state` Event is queued. This gives State updates a wire-atomic boundary rather than mutating backend state first and discovering later that native clients cannot observe the new value.
 
-Framing failures are different: invalid RVT1 magic/version, truncated transport data, or other transport-level corruption can terminate the connection because frame boundaries can no longer be trusted.
+Framing failures are different: invalid RVT1 magic/version, truncated transport data, output-port failure, or other transport-level corruption can terminate the connection because reliable frame delivery can no longer be guaranteed.
