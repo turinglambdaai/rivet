@@ -31,7 +31,7 @@ public final class RivetClient: @unchecked Sendable {
         }
         stateLock.unlock()
 
-        let hello = try readFrame()
+        let hello = try Self.readFrame(from: input)
         try validateHello(hello)
 
         stateLock.lock()
@@ -39,8 +39,24 @@ public final class RivetClient: @unchecked Sendable {
         running = true
         stateLock.unlock()
 
-        readerQueue.async { [weak self] in
-            self?.readLoop()
+        // Do not turn the weak capture into one long-lived strong reference by
+        // calling a blocking instance readLoop(). The queue owns only the input
+        // handle while blocked. It upgrades `self` briefly after each complete
+        // frame, so dropping the last external client reference can run deinit,
+        // send Shutdown, and let the peer close this reader naturally.
+        let readerInput = input
+        readerQueue.async { [weak self, readerInput] in
+            do {
+                while self?.isRunning == true {
+                    let frame = try Self.readFrame(from: readerInput)
+                    // stop()/deinit may have run while the read was blocked. Do
+                    // not deliver a late Event or terminal frame after stop.
+                    guard self?.isRunning == true else { return }
+                    try self?.handleIncomingFrame(frame)
+                }
+            } catch {
+                self?.finishWithError(error)
+            }
         }
     }
 
@@ -127,8 +143,8 @@ public final class RivetClient: @unchecked Sendable {
         try output.write(contentsOf: data)
     }
 
-    private func readFrame() throws -> RivetFrame {
-        let header = try readExactly(18)
+    private static func readFrame(from input: FileHandle) throws -> RivetFrame {
+        let header = try readExactly(18, from: input)
         let length =
             UInt32(header[14]) |
             (UInt32(header[15]) << 8) |
@@ -137,13 +153,13 @@ public final class RivetClient: @unchecked Sendable {
         guard Int(length) <= rivetMaxFramePayloadSize else {
             throw RivetProtocolError.lengthOverflow
         }
-        let payload = try readExactly(Int(length))
+        let payload = try readExactly(Int(length), from: input)
         var complete = header
         complete.append(payload)
         return try decodeRivetFrame(complete)
     }
 
-    private func readExactly(_ count: Int) throws -> Data {
+    private static func readExactly(_ count: Int, from input: FileHandle) throws -> Data {
         if count == 0 { return Data() }
         var result = Data()
         result.reserveCapacity(count)
@@ -169,35 +185,26 @@ public final class RivetClient: @unchecked Sendable {
         }
     }
 
-    private func readLoop() {
-        do {
-            while isRunning {
-                let frame = try readFrame()
-                switch frame.type {
-                case .response:
-                    let value = try decodeRivetValue(frame.payload)
-                    takePending(frame.id)?.resume(returning: value)
-                case .error:
-                    let value = try decodeRivetValue(frame.payload)
-                    let message: String
-                    if case .string(let text) = value {
-                        message = text
-                    } else {
-                        message = "Rivet backend error"
-                    }
-                    takePending(frame.id)?.resume(throwing: ClientError.backend(message))
-                case .event:
-                    deliverEvent(frame)
-                case .hello:
-                    finishWithError(ClientError.duplicateHello)
-                    return
-                default:
-                    finishWithError(ClientError.unexpectedMessage(frame.type))
-                    return
-                }
+    private func handleIncomingFrame(_ frame: RivetFrame) throws {
+        switch frame.type {
+        case .response:
+            let value = try decodeRivetValue(frame.payload)
+            takePending(frame.id)?.resume(returning: value)
+        case .error:
+            let value = try decodeRivetValue(frame.payload)
+            let message: String
+            if case .string(let text) = value {
+                message = text
+            } else {
+                message = "Rivet backend error"
             }
-        } catch {
-            finishWithError(error)
+            takePending(frame.id)?.resume(throwing: ClientError.backend(message))
+        case .event:
+            deliverEvent(frame)
+        case .hello:
+            throw ClientError.duplicateHello
+        default:
+            throw ClientError.unexpectedMessage(frame.type)
         }
     }
 
