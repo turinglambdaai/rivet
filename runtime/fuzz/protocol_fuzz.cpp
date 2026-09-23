@@ -48,7 +48,9 @@ void fuzz_value(rivet::Bytes const& input) {
   std::optional<rivet::Value> decoded;
   try {
     decoded = rivet::decode_value(input);
-  } catch (std::exception const&) {
+  } catch (std::runtime_error const&) {
+    return;
+  } catch (std::length_error const&) {
     return;
   }
 
@@ -66,7 +68,9 @@ void fuzz_frame(rivet::Bytes const& input) {
   try {
     MemoryTransport transport(input);
     decoded = rivet::read_frame(transport);
-  } catch (std::exception const&) {
+  } catch (std::runtime_error const&) {
+    return;
+  } catch (std::length_error const&) {
     return;
   }
 
