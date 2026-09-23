@@ -300,32 +300,73 @@
 (check-equal? (frame-id after-cancel) 102)
 (check-equal? (decode-value (frame-payload after-cancel)) 2)
 
-;; Unknown RPC rejection happens before a pending slot exists. Even a very long
-;; RPC name must therefore produce a bounded Error rather than escape the
-;; reader loop while trying to serialize its diagnostic text.
+;; Reject oversized RPC names before converting them to interned symbols. The
+;; Error reports only lengths/limits, not the attacker-controlled name itself.
 (define large-unknown-rpc-name (make-string 10000 #\q))
 (write-frame
  (frame message:request
         103
         (encode-value (list large-unknown-rpc-name)))
  limited-client-out)
-(define unknown-rpc (read-frame/timeout limited-client-in))
-(check-equal? (frame-type unknown-rpc) message:error)
-(check-equal? (frame-id unknown-rpc) 103)
-(define unknown-rpc-message (decode-value (frame-payload unknown-rpc)))
-(check-regexp-match #rx"unknown RPC" unknown-rpc-message)
-(check-regexp-match #rx"truncated" unknown-rpc-message)
-(check-true (<= (string-length unknown-rpc-message) 4096))
+(define oversized-rpc-name-error (read-frame/timeout limited-client-in))
+(check-equal? (frame-type oversized-rpc-name-error) message:error)
+(check-equal? (frame-id oversized-rpc-name-error) 103)
+(define oversized-rpc-name-message
+  (decode-value (frame-payload oversized-rpc-name-error)))
+(check-regexp-match #rx"RPC name exceeds Rivet API limit"
+                    oversized-rpc-name-message)
+(check-true (< (string-length oversized-rpc-name-message) 256))
 
+;; The limit is measured in UTF-8 bytes, not Unicode character count.
+(define multibyte-rpc-name (make-string 400 #\你))
 (write-frame
  (frame message:request
         104
+        (encode-value (list multibyte-rpc-name)))
+ limited-client-out)
+(define multibyte-name-error (read-frame/timeout limited-client-in))
+(check-equal? (frame-type multibyte-name-error) message:error)
+(check-equal? (frame-id multibyte-name-error) 104)
+(check-regexp-match #rx"RPC name exceeds Rivet API limit"
+                    (decode-value (frame-payload multibyte-name-error)))
+
+;; State lookup has the same pre-interning bound.
+(define large-state-name (make-string 10000 #\s))
+(write-frame
+ (frame message:request
+        105
+        (encode-value (list "$state/get" large-state-name)))
+ limited-client-out)
+(define oversized-state-name-error (read-frame/timeout limited-client-in))
+(check-equal? (frame-type oversized-state-name-error) message:error)
+(check-equal? (frame-id oversized-state-name-error) 105)
+(check-regexp-match #rx"State name exceeds Rivet API limit"
+                    (decode-value (frame-payload oversized-state-name-error)))
+
+;; Exactly 1024 ASCII bytes remains inside the API-name limit and proceeds to
+;; ordinary lookup, where this deliberately unregistered name is rejected.
+(define boundary-rpc-name (make-string 1024 #\b))
+(write-frame
+ (frame message:request
+        106
+        (encode-value (list boundary-rpc-name)))
+ limited-client-out)
+(define boundary-name-error (read-frame/timeout limited-client-in))
+(check-equal? (frame-type boundary-name-error) message:error)
+(check-equal? (frame-id boundary-name-error) 106)
+(check-regexp-match #rx"unknown RPC"
+                    (decode-value (frame-payload boundary-name-error)))
+
+;; All name-limit failures remain request-local and leave the server usable.
+(write-frame
+ (frame message:request
+        107
         (encode-value (list "increment" 9)))
  limited-client-out)
-(define after-error (read-frame limited-client-in))
-(check-equal? (frame-type after-error) message:response)
-(check-equal? (frame-id after-error) 104)
-(check-equal? (decode-value (frame-payload after-error)) 10)
+(define after-name-errors (read-frame limited-client-in))
+(check-equal? (frame-type after-name-errors) message:response)
+(check-equal? (frame-id after-name-errors) 107)
+(check-equal? (decode-value (frame-payload after-name-errors)) 10)
 
 (write-frame (frame message:shutdown 0 #"") limited-client-out)
 (thread-wait limited-server-thread)
