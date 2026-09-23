@@ -2,7 +2,8 @@
 
 (require rackunit
          racket/list
-         (for-syntax racket/base)
+         (for-syntax racket/base
+                     "../rivet/protocol.rkt")
          "../rivet/backend.rkt"
          "../rivet/protocol.rkt")
 
