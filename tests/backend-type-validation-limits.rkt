@@ -24,15 +24,18 @@
              (lambda () (bounded-int-list-event value))))
 
 ;; Build a declaration with one List layer beyond the RVT1 nesting limit
-;; without hand-writing dozens of nested forms.
+;; without hand-writing dozens of nested forms. Accept the event identifier from
+;; the use site so the generated binding remains visible under macro hygiene.
 (define-syntax (define-too-deep-event stx)
-  (define type-stx
-    (for/fold ([type-stx #'Int64])
-              ([i (in-range (add1 max-value-depth))])
-      #`(List #,type-stx)))
-  #`(define-event too-deep-event : #,type-stx))
+  (syntax-case stx ()
+    [(_ name)
+     (define type-stx
+       (for/fold ([type-stx #'Int64])
+                 ([i (in-range (add1 max-value-depth))])
+         #`(List #,type-stx)))
+     #`(define-event name : #,type-stx)]))
 
-(define-too-deep-event)
+(define-too-deep-event too-deep-event)
 
 (define too-deep-value
   (for/fold ([value 1])
