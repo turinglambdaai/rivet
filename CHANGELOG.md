@@ -10,6 +10,7 @@ Rivet 0.2 hardens the native runtime contract and release path while preserving 
 - Bounded RVT1 frame/value byte size, value nesting, total value-node count, and concurrent backend requests.
 - Synchronized request cancellation/completion ownership and Event ID allocation.
 - Request-local handling for malformed application RPC requests and response-serialization failures, with bounded backend Error diagnostics that cannot consume terminal-response ownership before encoding succeeds.
+- State initial values and updates are preflighted as complete `$state` Events, so serialization failures cannot partially commit backend state without notifying native clients.
 - Application version, build, display-name, identifier, and Windows/macOS minimum-version metadata are centralized in `rivet.rktd` with backwards-compatible defaults.
 - Shared RVT1 golden vectors consumed by Racket, C++, and Swift tests.
 - Strict UTF-8 validation and unknown message-type rejection across protocol implementations.
