@@ -7,6 +7,7 @@
 
 (define-event progress : Int64)
 (define-state counter : Int64 10)
+(define-state payload : Any "initial")
 
 (define-rpc (fail-with-large-message : Void)
   (error 'fail-with-large-message "~a" (make-string 10000 #\x)))
@@ -17,6 +18,12 @@
 (define-rpc (oversized-result : Any)
   ;; The root List plus max-value-nodes children exceeds the total node budget.
   (make-list max-value-nodes (void)))
+
+(define-rpc (set-oversized-state : Void)
+  ;; `Any` accepts this Racket value at the schema boundary, but the complete
+  ;; reserved $state Event cannot fit the RVT1 node budget. state-set! must
+  ;; reject it before committing the shared cell.
+  (state-set! payload (make-list max-value-nodes (void))))
 
 (define-rpc (work [value Int64] : Int64)
   (progress value)
@@ -45,6 +52,9 @@
   (hasheq 'name "oversized-result"
           'arguments '()
           'result "Any")
+  (hasheq 'name "set-oversized-state"
+          'arguments '()
+          'result "Void")
   (hasheq 'name "wait-forever"
           'arguments '()
           'result "Void")
@@ -58,8 +68,10 @@
            (lambda () (progress "wrong-type")))
 
 (check-equal? (state-schema)
-              (list (hasheq 'name "counter" 'type "Int64")))
+              (list (hasheq 'name "counter" 'type "Int64")
+                    (hasheq 'name "payload" 'type "Any")))
 (check-equal? (state-ref counter) 10)
+(check-equal? (state-ref payload) "initial")
 (check-exn exn:fail?
            (lambda () (state-set! counter "wrong-type")))
 
@@ -209,6 +221,34 @@
 (check-equal? (frame-type after-large-error) message:response)
 (check-equal? (frame-id after-large-error) 11)
 (check-equal? (decode-value (frame-payload after-large-error)) 11)
+
+;; A State value can satisfy its declared schema while still exceeding RVT1
+;; resource limits. The complete $state Event must be encoded before the shared
+;; cell changes, so this request fails atomically.
+(write-frame
+ (frame message:request
+        12
+        (encode-value (list "set-oversized-state")))
+ client-out)
+(define oversized-state-error (read-frame/timeout client-in))
+(check-equal? (frame-type oversized-state-error) message:error)
+(check-equal? (frame-id oversized-state-error) 12)
+(check-regexp-match #rx"node count exceeds Rivet protocol limit"
+                    (decode-value (frame-payload oversized-state-error)))
+(check-equal? (state-ref payload) "initial")
+
+;; The very next frame must be the get response. If the failed set leaked a
+;; $state Event, this assertion observes it immediately rather than silently
+;; consuming it later.
+(write-frame
+ (frame message:request
+        13
+        (encode-value (list "$state/get" "payload")))
+ client-out)
+(define payload-after-failed-set (read-frame/timeout client-in))
+(check-equal? (frame-type payload-after-failed-set) message:response)
+(check-equal? (frame-id payload-after-failed-set) 13)
+(check-equal? (decode-value (frame-payload payload-after-failed-set)) "initial")
 
 (write-frame (frame message:shutdown 0 #"") client-out)
 (thread-wait server-thread)

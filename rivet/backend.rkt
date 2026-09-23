@@ -113,6 +113,12 @@
     [(_ name)
      (define-event name : Any)]))
 
+(define (state-event-value name value)
+  (list (symbol->string name) value))
+
+(define (encode-state-event-payload event-value)
+  (encode-value (list "$state" event-value)))
+
 (define (register-state! name type initial)
   (when (hash-has-key? state-registry name)
     (error 'define-state "state already registered: ~a" name))
@@ -126,6 +132,10 @@
                            "Void is not a valid state type"
                            "state" name))
   (validate-value 'define-state name type initial)
+  ;; A State is a wire-visible value even before a server starts. Validate the
+  ;; complete reserved Event shape before storing the initial value so every
+  ;; registered State can later be synchronized to native clients.
+  (encode-state-event-payload (state-event-value name initial))
   (define info (state-info name type (box initial) (make-semaphore 1)))
   (hash-set! state-registry name info)
   info)
@@ -147,14 +157,23 @@
 (define (state-set! state value)
   (unless (state-info? state)
     (raise-argument-error 'state-set! "state-info?" state))
-  (validate-value 'state-set! (state-info-name state) (state-info-type state) value)
+  (define name (state-info-name state))
+  (validate-value 'state-set! name (state-info-type state) value)
+  ;; Pre-encode the exact Event before committing the cell. If the value is
+  ;; type-correct but violates RVT1 byte/node/depth limits, state-set! fails
+  ;; without mutating shared state or emitting a partial update.
+  (define event-value (state-event-value name value))
+  (define event-payload (encode-state-event-payload event-value))
+  (define emitter (current-event-emitter))
   (call-with-semaphore
    (state-info-lock state)
-   (lambda () (set-box! (state-info-cell state) value)))
-  (define emitter (current-event-emitter))
-  (when emitter
-    (emitter "$state"
-             (list (symbol->string (state-info-name state)) value)))
+   (lambda ()
+     (set-box! (state-info-cell state) value)
+     ;; Reuse the already validated bytes so successful State updates encode
+     ;; once. Queueing while holding the per-State lock preserves update/event
+     ;; order among concurrent setters for the same State.
+     (when emitter
+       (emitter "$state" event-value event-payload))))
   (void))
 
 (define (registered-rpcs)
@@ -340,10 +359,16 @@
        (set! next-event-id (add1 next-event-id))
        id)))
 
-  (define (emit! name value)
+  (define (emit! name value [encoded-payload #f])
+    ;; Encode before allocating an Event id so a rejected Event does not create
+    ;; a gap. State updates can supply a pre-encoded payload that was validated
+    ;; before the State cell was committed.
+    (define payload
+      (or encoded-payload
+          (encode-value (list name value))))
     (send! (frame message:event
                   (allocate-event-id!)
-                  (encode-value (list name value)))))
+                  payload)))
 
   (define (reject-request! id message)
     (send! (frame message:error id (error-message->payload message))))

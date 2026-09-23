@@ -157,6 +157,8 @@ A successful State update emits the reserved `$state` event. Its value is `[stat
 ["$state", ["counter", 42]]
 ```
 
+State values are wire-validated against this complete reserved Event shape before they are stored. `define-state` rejects an initial value that cannot be represented within RVT1 limits. `state-set!` pre-encodes the `$state` Event before committing the new cell value and reuses those bytes when emitting the event. If that preflight fails, the State remains unchanged and no `$state` Event is emitted.
+
 `$state` is a reserved runtime event rather than an application `define-event` declaration. Native code can subscribe once and react to State changes without polling.
 
 ## Typed RPC, Event, and State schema
