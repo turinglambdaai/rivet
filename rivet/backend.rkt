@@ -88,30 +88,73 @@
         [(list 'Optional inner) (supported-type? inner)]
         [_ #f])))
 
-(define (value-matches-type? type value)
-  (case type
-    [(String) (string? value)]
-    [(Int64)
-     (and (exact-integer? value)
-          (<= (- (expt 2 63)) value (sub1 (expt 2 63))))]
-    [(Bool) (boolean? value)]
-    [(Bytes) (bytes? value)]
-    [(Void) (void? value)]
-    [(Any) #t]
-    [else
-     (match type
-       [(list 'List inner)
-        (and (list? value)
-             (andmap (lambda (item) (value-matches-type? inner item)) value))]
-       [(list 'Optional inner)
-        (or (void? value) (value-matches-type? inner value))]
-       [_ #f])]))
+;; Typed validation must not do more structural work than the protocol encoder
+;; it protects. Track the same total value-node and List-nesting budgets while
+;; walking only the structure required by the declared type. `Any` is accepted
+;; without recursively inspecting its contents; encode-value remains the final
+;; authority for arbitrary Any subtrees.
+(define (value-validation-result type value)
+  (define remaining-nodes max-value-nodes)
+
+  (define (consume-node!)
+    (cond
+      [(zero? remaining-nodes) #f]
+      [else
+       (set! remaining-nodes (sub1 remaining-nodes))
+       #t]))
+
+  (define (matches type value depth)
+    ;; Optional is a schema wrapper, not an extra wire node. A present Optional
+    ;; delegates node accounting to its inner type; absent Optional uses the one
+    ;; Null node that is actually encoded.
+    (match type
+      [(list 'Optional inner)
+       (if (void? value)
+           (if (consume-node!) 'valid 'node-limit)
+           (matches inner value depth))]
+      [_
+       (cond
+         [(not (consume-node!)) 'node-limit]
+         [else
+          (case type
+            [(String) (if (string? value) 'valid 'mismatch)]
+            [(Int64)
+             (if (and (exact-integer? value)
+                      (<= (- (expt 2 63)) value (sub1 (expt 2 63))))
+                 'valid
+                 'mismatch)]
+            [(Bool) (if (boolean? value) 'valid 'mismatch)]
+            [(Bytes) (if (bytes? value) 'valid 'mismatch)]
+            [(Void) (if (void? value) 'valid 'mismatch)]
+            [(Any) 'valid]
+            [else
+             (match type
+               [(list 'List inner)
+                (cond
+                  [(>= depth max-value-depth) 'depth-limit]
+                  [else
+                   ;; Avoid `list?` + `andmap`: both can traverse an arbitrarily
+                   ;; large application List before the RVT1 budget is applied.
+                   ;; Walking cdrs here terminates as soon as an element consumes
+                   ;; the last available protocol node.
+                   (let loop ([rest value])
+                     (cond
+                       [(null? rest) 'valid]
+                       [(not (pair? rest)) 'mismatch]
+                       [else
+                        (define item-result
+                          (matches inner (car rest) (add1 depth)))
+                        (if (eq? item-result 'valid)
+                            (loop (cdr rest))
+                            item-result)]))])]
+               [_ 'mismatch])])])]))
+
+  (matches type value 0))
 
 (define (safe-value-kind value)
-  ;; Diagnostics must never print an arbitrary application value just to report
-  ;; a type mismatch. In particular, custom writers can perform unbounded work
-  ;; or raise while an Error is being constructed. Classify with predicates
-  ;; only and report this small symbol instead.
+  ;; Diagnostics must never print or fully traverse an arbitrary application
+  ;; value. Pair/null classification is O(1); proving proper-List-ness belongs
+  ;; to bounded typed validation or the protocol encoder, not error reporting.
   (cond
     [(void? value) 'Void]
     [(string? value) 'String]
@@ -121,16 +164,28 @@
           (<= (- (expt 2 63)) value (sub1 (expt 2 63))))
      'Int64]
     [(exact-integer? value) 'Integer]
-    [(list? value) 'List]
+    [(or (null? value) (pair? value)) 'ListLike]
     [else 'Unsupported]))
 
 (define (validate-value who label type value)
-  (unless (value-matches-type? type value)
-    (raise-arguments-error who
-                           "value does not match declared Rivet type"
-                           "position" label
-                           "expected" type
-                           "received" (safe-value-kind value))))
+  (case (value-validation-result type value)
+    [(valid) (void)]
+    [(node-limit)
+     (raise-arguments-error who
+                            "value node count exceeds Rivet protocol limit"
+                            "position" label
+                            "maximum nodes" max-value-nodes)]
+    [(depth-limit)
+     (raise-arguments-error who
+                            "value nesting exceeds Rivet protocol limit"
+                            "position" label
+                            "maximum depth" max-value-depth)]
+    [else
+     (raise-arguments-error who
+                            "value does not match declared Rivet type"
+                            "position" label
+                            "expected" type
+                            "received" (safe-value-kind value))]))
 
 (define (register-rpc! name arg-names arg-types result-type proc)
   (check-api-name-length! 'define-rpc "RPC" (symbol->string name))
