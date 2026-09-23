@@ -16,6 +16,7 @@ Rivet 0.2 hardens the native runtime contract and release path while preserving 
 - Application version, build, display-name, identifier, and Windows/macOS minimum-version metadata are centralized in `rivet.rktd` with backwards-compatible defaults.
 - Shared RVT1 golden vectors consumed by Racket, C++, and Swift tests.
 - Strict UTF-8 validation and unknown message-type rejection across protocol implementations.
+- Racket validates frame IDs as unsigned 64-bit values before writing any bytes, matching native UInt64 semantics and preventing local argument errors from leaving partial frames on the transport.
 - Generated Windows RPC/State completion APIs provide non-blocking, cancellable WinUI-friendly calls while preserving the existing `std::future` API.
 - `raco rivet package` now verifies the produced dependency closure, and `raco rivet verify` can re-audit an existing Windows/macOS artifact.
 - Explicit `--production` packaging supports Windows Authenticode + RFC 3161 timestamping and macOS Developer ID signing + notarization/stapling without storing publisher credentials in project files.
