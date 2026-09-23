@@ -33,6 +33,22 @@
 (define state-registry (make-hash))
 (define current-event-emitter (make-parameter #f))
 
+;; `state-info` is public through struct-out, so keep update-order bookkeeping
+;; private instead of adding a field that would break constructor/pattern source
+;; compatibility. Weak identity keys also avoid retaining externally constructed
+;; State values after the application releases them.
+(define state-update-locks (make-weak-hasheq))
+(define state-update-locks-lock (make-semaphore 1))
+
+(define (state-update-lock state)
+  (call-with-semaphore
+   state-update-locks-lock
+   (lambda ()
+     (or (hash-ref state-update-locks state #f)
+         (let ([lock (make-semaphore 1)])
+           (hash-set! state-update-locks state lock)
+           lock)))))
+
 ;; RPC/State lookup names arrive as untrusted wire Strings and are converted to
 ;; interned Racket symbols for registry lookup. Bound API identifiers before
 ;; that conversion so a tiny request cannot force an arbitrarily large symbol
@@ -190,13 +206,17 @@
   (define event-value (state-event-value name value))
   (define event-payload (encode-state-event-payload event-value))
   (define emitter (current-event-emitter))
+  (define update-lock (state-update-lock state))
+  ;; Serialize commits and their Events without holding the small cell lock
+  ;; across transport backpressure. Readers can observe the committed value as
+  ;; soon as set-box! finishes, while another setter still waits behind this
+  ;; update-order lock until the preceding Event has been admitted for output.
   (call-with-semaphore
-   (state-info-lock state)
+   update-lock
    (lambda ()
-     (set-box! (state-info-cell state) value)
-     ;; Reuse the already validated bytes so successful State updates encode
-     ;; once. Queueing while holding the per-State lock preserves update/event
-     ;; order among concurrent setters for the same State.
+     (call-with-semaphore
+      (state-info-lock state)
+      (lambda () (set-box! (state-info-cell state) value)))
      (when emitter
        (emitter "$state" event-value event-payload))))
   (void))
