@@ -144,6 +144,10 @@ private func goldenValue(_ name: String) throws -> RivetValue {
 }
 
 @Test func rejectsExcessiveValueNodes() throws {
+    let maxValue = RivetValue.list(Array(repeating: .null, count: rivetMaxValueNodes - 1))
+    let maxEncoded = try encodeRivetValue(maxValue)
+    _ = try decodeRivetValue(maxEncoded)
+
     let value = RivetValue.list(Array(repeating: .null, count: rivetMaxValueNodes))
     #expect(throws: RivetProtocolError.lengthOverflow) {
         try encodeRivetValue(value)
