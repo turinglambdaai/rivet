@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <optional>
+#include <stdexcept>
 #include <utility>
 
 namespace {
