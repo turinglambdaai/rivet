@@ -47,4 +47,6 @@ These are defensive resource limits, not application schema limits. Normal `Stri
 
 Malformed application-level requests, including unknown RPC names and invalid argument shapes, are returned as request-local Error frames. Application RPC results that cannot be serialized within RVT1 resource limits are also converted to request-local Error frames: a request remains pending until response encoding succeeds, so a serialization failure cannot silently consume terminal-response ownership and leave the native client waiting indefinitely.
 
+Backend-generated Error diagnostics are capped at 4096 Unicode characters and longer messages end with `[truncated]`. Admitted requests prepare this bounded Error payload before they compete with cancellation for terminal ownership. Rejections that happen before admission use the same bounded encoder, so an oversized unknown RPC name or exception message cannot escape the reader loop merely while Rivet is trying to report the failure.
+
 Framing failures are different: invalid RVT1 magic/version, truncated transport data, or other transport-level corruption can terminate the connection because frame boundaries can no longer be trusted.
