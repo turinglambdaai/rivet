@@ -10,6 +10,10 @@
 (define-rpc (increment [value : Int64] : Int64)
   (add1 value))
 
+(define-rpc (oversized-result : Any)
+  ;; The root List plus max-value-nodes children exceeds the total node budget.
+  (make-list max-value-nodes (void)))
+
 (define-rpc (work [value Int64] : Int64)
   (progress value)
   (add1 value))
@@ -17,12 +21,23 @@
 (define-rpc (wait-forever : Void)
   (sync never-evt))
 
+(define (read-frame/timeout in [seconds 2])
+  (define result (make-channel))
+  (thread (lambda () (channel-put result (read-frame in))))
+  (define value (sync/timeout seconds result))
+  (unless value
+    (error 'read-frame/timeout "timed out waiting for Rivet frame"))
+  value)
+
 (check-equal?
  (rpc-schema)
  (list
   (hasheq 'name "increment"
           'arguments (list (hasheq 'name "value" 'type "Int64"))
           'result "Int64")
+  (hasheq 'name "oversized-result"
+          'arguments '()
+          'result "Any")
   (hasheq 'name "wait-forever"
           'arguments '()
           'result "Void")
@@ -136,6 +151,32 @@
 (check-equal? (frame-type state-type-error) message:error)
 (check-equal? (frame-id state-type-error) 7)
 (check-equal? (state-ref counter) 11)
+
+;; Response encoding can fail after application code has completed. The request
+;; must stay pending until encoding succeeds so the worker can convert an
+;; encoding failure into a request-scoped Error rather than silently dropping
+;; the terminal response.
+(write-frame
+ (frame message:request
+        8
+        (encode-value (list "oversized-result")))
+ client-out)
+(define encoding-error (read-frame/timeout client-in))
+(check-equal? (frame-type encoding-error) message:error)
+(check-equal? (frame-id encoding-error) 8)
+(check-regexp-match #rx"node count exceeds Rivet protocol limit"
+                    (decode-value (frame-payload encoding-error)))
+
+;; The failed response released its pending slot and left the server usable.
+(write-frame
+ (frame message:request
+        9
+        (encode-value (list "increment" 9)))
+ client-out)
+(define after-encoding-error (read-frame/timeout client-in))
+(check-equal? (frame-type after-encoding-error) message:response)
+(check-equal? (frame-id after-encoding-error) 9)
+(check-equal? (decode-value (frame-payload after-encoding-error)) 10)
 
 (write-frame (frame message:shutdown 0 #"") client-out)
 (thread-wait server-thread)
