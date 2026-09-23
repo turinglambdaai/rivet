@@ -181,6 +181,13 @@ void consume_decode_node(std::size_t& remaining_nodes) {
   --remaining_nodes;
 }
 
+void ensure_encode_bytes(Bytes const& out, std::size_t additional) {
+  if (out.size() > kMaxFramePayloadSize ||
+      additional > kMaxFramePayloadSize - out.size()) {
+    throw std::length_error("Rivet encoded value exceeds payload limit");
+  }
+}
+
 void encode_into(Bytes& out,
                  Value const& value,
                  std::size_t depth,
@@ -190,31 +197,36 @@ void encode_into(Bytes& out,
       [&](auto const& data) {
         using T = std::decay_t<decltype(data)>;
         if constexpr (std::is_same_v<T, std::monostate>) {
+          ensure_encode_bytes(out, 1);
           out.push_back(static_cast<std::uint8_t>(ValueTag::Null));
         } else if constexpr (std::is_same_v<T, bool>) {
+          ensure_encode_bytes(out, 1);
           out.push_back(static_cast<std::uint8_t>(data ? ValueTag::True : ValueTag::False));
         } else if constexpr (std::is_same_v<T, std::int64_t>) {
+          ensure_encode_bytes(out, 9);
           out.push_back(static_cast<std::uint8_t>(ValueTag::Int64));
           std::uint64_t bits = 0;
           static_assert(sizeof(bits) == sizeof(data));
           std::memcpy(&bits, &data, sizeof(bits));
           append_u64(out, bits);
         } else if constexpr (std::is_same_v<T, std::string>) {
+          if (data.size() > UINT32_MAX) {
+            throw std::length_error("Rivet string exceeds protocol limit");
+          }
+          ensure_encode_bytes(out, 5 + data.size());
           auto const* raw = reinterpret_cast<std::uint8_t const*>(data.data());
           if (!valid_utf8(raw, data.size())) {
             throw std::runtime_error("invalid UTF-8 in Rivet string");
           }
           out.push_back(static_cast<std::uint8_t>(ValueTag::String));
-          if (data.size() > UINT32_MAX) {
-            throw std::length_error("Rivet string exceeds protocol limit");
-          }
           append_u32(out, static_cast<std::uint32_t>(data.size()));
           out.insert(out.end(), data.begin(), data.end());
         } else if constexpr (std::is_same_v<T, Bytes>) {
-          out.push_back(static_cast<std::uint8_t>(ValueTag::Bytes));
           if (data.size() > UINT32_MAX) {
             throw std::length_error("Rivet byte vector exceeds protocol limit");
           }
+          ensure_encode_bytes(out, 5 + data.size());
+          out.push_back(static_cast<std::uint8_t>(ValueTag::Bytes));
           append_u32(out, static_cast<std::uint32_t>(data.size()));
           out.insert(out.end(), data.begin(), data.end());
         } else if constexpr (std::is_same_v<T, Value::List>) {
@@ -227,6 +239,7 @@ void encode_into(Bytes& out,
           if (data.size() > remaining_nodes) {
             throw std::length_error("Rivet value node count exceeds protocol limit");
           }
+          ensure_encode_bytes(out, 5);
           out.push_back(static_cast<std::uint8_t>(ValueTag::List));
           append_u32(out, static_cast<std::uint32_t>(data.size()));
           for (auto const& item : data) {
@@ -349,6 +362,9 @@ Bytes encode_value(Value const& value) {
 }
 
 Value decode_value(Bytes const& bytes) {
+  if (bytes.size() > kMaxFramePayloadSize) {
+    throw std::length_error("Rivet encoded value exceeds payload limit");
+  }
   Reader reader(bytes);
   std::size_t remaining_nodes = kMaxValueNodes;
   auto value = decode_one(reader, 0, remaining_nodes);
