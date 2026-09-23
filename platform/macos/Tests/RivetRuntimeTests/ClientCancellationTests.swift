@@ -133,7 +133,8 @@ private func makeClientHarness() throws -> ClientHarness {
         to: harness.backendOutput
     )
 
-    #expect(try await normalTask.value == .int64(42))
+    let normalResult = try await normalTask.value
+    #expect(normalResult == .int64(42))
     do {
         _ = try await cancelledTask.value
         Issue.record("pre-cancelled Rivet call unexpectedly succeeded")
