@@ -36,7 +36,7 @@ RVT1 v1 applies the same resource limits in Racket, C++, and Swift:
 - a recursively encoded value is at most 64 nested `List` levels;
 - one encoded/decoded value contains at most 262,144 total value nodes, including the root value and every nested `List` element.
 
-The node budget prevents a small or merely frame-sized wire payload from expanding into an unbounded number of language-level `Value`/list objects. Decoders validate a declared `List` count against the remaining node budget before reserving or constructing the destination container. Encoders apply the same budget, so an accidental application-side giant `List` fails before traversal. Large binary payloads should use `Bytes`, which counts as one value node regardless of byte length and remains governed by the frame-size limit.
+The node budget prevents a small or merely frame-sized wire payload from expanding into an unbounded number of language-level `Value`/list objects. Decoders validate a declared `List` count against the remaining node budget before reserving or constructing the destination container. Encoders apply the same budget, so an accidental application-side giant `List` is rejected before recursively encoding its elements. Large binary payloads should use `Bytes`, which counts as one value node regardless of byte length and remains governed by the frame-size limit.
 
 These are defensive resource limits, not application schema limits. Normal `String`, `Bytes`, `List`, `Optional`, RPC, State, and Event usage is unchanged.
 
