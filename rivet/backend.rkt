@@ -26,6 +26,7 @@
 (struct rpc-info (name arg-names arg-types result-type procedure) #:transparent)
 (struct event-info (name type) #:transparent)
 (struct state-info (name type cell lock) #:transparent)
+(struct pending-request (custodian terminal-owned) #:mutable)
 
 (define registry (make-hash))
 (define event-registry (make-hash))
@@ -306,7 +307,9 @@
        [_ (error '$state/set "expected state name and value")])]
     [else (error 'serve "unknown internal request: ~a" name)]))
 
-(define (serve in out #:max-pending-requests [max-pending-requests 1024])
+(define (serve in out
+               #:max-pending-requests [max-pending-requests 1024]
+               #:max-outgoing-frames [max-outgoing-frames 64])
   (unless (input-port? in)
     (raise-argument-error 'serve "input-port?" in))
   (unless (output-port? out)
@@ -314,27 +317,59 @@
   (unless (and (exact-integer? max-pending-requests)
                (positive? max-pending-requests))
     (raise-argument-error 'serve "positive exact integer" max-pending-requests))
+  (unless (and (exact-integer? max-outgoing-frames)
+               (positive? max-outgoing-frames))
+    (raise-argument-error 'serve "positive exact integer" max-outgoing-frames))
 
-  (define root-custodian (make-custodian))
-  (define responses (make-async-channel))
+  ;; Keep application/request threads and the writer in separate custodians.
+  ;; Graceful shutdown can stop every producer first, drain already accepted
+  ;; frames, and only then stop the writer. An abort can still tear down the
+  ;; whole server domain at once.
+  (define server-custodian (make-custodian))
+  (define runtime-custodian (make-custodian server-custodian))
+  (define writer-custodian (make-custodian server-custodian))
+  (define responses (make-async-channel max-outgoing-frames))
   (define pending (make-hash))
   (define pending-lock (make-semaphore 1))
   (define event-id-lock (make-semaphore 1))
+  (define writer-error (box #f))
+  (define reader-error (box #f))
   (define stopped? #f)
   (define next-event-id 1)
 
   (define writer
-    (parameterize ([current-custodian root-custodian])
+    (parameterize ([current-custodian writer-custodian])
       (thread
        (lambda ()
-         (let loop ()
-           (define response (async-channel-get responses))
-           (unless (eq? response 'stop)
-             (write-frame response out)
-             (loop)))))))
+         (with-handlers ([exn?
+                          (lambda (e)
+                            (set-box! writer-error e))])
+           (let loop ()
+             (define response (async-channel-get responses))
+             (unless (eq? response 'stop)
+               (write-frame response out)
+               (loop))))))))
+  (define writer-dead-evt (thread-dead-evt writer))
 
-  (define (send! f)
-    (async-channel-put responses f))
+  (define (raise-writer-failure!)
+    (define failure (unbox writer-error))
+    (if failure
+        (raise failure)
+        (error 'serve "response writer terminated unexpectedly")))
+
+  (define (send! value)
+    ;; A bounded channel applies output backpressure. Waiting producers also
+    ;; observe writer death, so a broken transport cannot strand request/Event
+    ;; threads forever behind a full queue.
+    (define outcome
+      (sync
+       (handle-evt (async-channel-put-evt responses value)
+                   (lambda (_) 'sent))
+       (handle-evt writer-dead-evt
+                   (lambda (_) 'writer-dead))))
+    (when (eq? outcome 'writer-dead)
+      (raise-writer-failure!))
+    (void))
 
   (define (admit-request! id custodian)
     (call-with-semaphore
@@ -344,35 +379,59 @@
          [(hash-has-key? pending id) 'duplicate]
          [(>= (hash-count pending) max-pending-requests) 'full]
          [else
-          (hash-set! pending id custodian)
+          (hash-set! pending id (pending-request custodian #f))
           'admitted]))))
 
-  (define (take-pending! id)
+  (define (claim-pending! id)
+    ;; Completion/error/cancellation claim terminal ownership without removing
+    ;; the entry yet. The request continues to occupy its pending slot while a
+    ;; terminal frame is waiting for output capacity, so backpressure cannot be
+    ;; bypassed by admitting an unbounded stream of newly completed requests.
     (call-with-semaphore
      pending-lock
      (lambda ()
-       (define custodian (hash-ref pending id #f))
-       (when custodian
-         (hash-remove! pending id))
-       custodian)))
+       (define request (hash-ref pending id #f))
+       (cond
+         [(and request
+               (not (pending-request-terminal-owned request)))
+          (set-pending-request-terminal-owned! request #t)
+          request]
+         [else #f]))))
+
+  (define (release-pending! id request)
+    (call-with-semaphore
+     pending-lock
+     (lambda ()
+       (when (eq? (hash-ref pending id #f) request)
+         (hash-remove! pending id)))))
 
   (define (take-all-pending!)
     (call-with-semaphore
      pending-lock
      (lambda ()
-       (define custodians (hash-values pending))
+       (define requests (hash-values pending))
        (hash-clear! pending)
-       custodians)))
+       (map pending-request-custodian requests))))
+
+  (define (send-claimed! id request response)
+    ;; Always release the pending slot after the send attempt, including an
+    ;; asynchronous break or writer failure. On transport failure the outer
+    ;; server supervisor tears down the remaining runtime immediately.
+    (dynamic-wind
+      void
+      (lambda () (send! response))
+      (lambda () (release-pending! id request))))
 
   (define (finish! id type value)
-    ;; Encode while the request is still pending. If encoding fails, the
-    ;; request worker's handler still owns a live pending entry and can convert
-    ;; that failure into a request-scoped Error frame instead of dropping the
-    ;; terminal response. Cancellation may still win while encoding; in that
-    ;; case take-pending! returns #f and the encoded response is discarded.
+    ;; Encode while the request is still claimable. If encoding fails, the
+    ;; worker's handler can claim the same request and send Error. Cancellation
+    ;; may still win during encoding; after a completion claim succeeds, the
+    ;; pending slot remains occupied until its terminal frame enters the output
+    ;; queue.
     (define payload (encode-value value))
-    (when (take-pending! id)
-      (send! (frame type id payload))))
+    (define request (claim-pending! id))
+    (when request
+      (send-claimed! id request (frame type id payload))))
 
   (define (allocate-event-id!)
     (call-with-semaphore
@@ -397,12 +456,13 @@
     (send! (frame message:error id (error-message->payload message))))
 
   (define (request-error! id e)
-    ;; Build a guaranteed-small Error payload before competing with
-    ;; cancellation for terminal ownership. If encoding somehow fails, the
-    ;; request remains pending instead of being consumed without a response.
+    ;; Build the guaranteed-small Error payload before claiming terminal
+    ;; ownership. A claimed request stays pending until the Error is admitted to
+    ;; the bounded output queue.
     (define payload (exn->payload e))
-    (when (take-pending! id)
-      (send! (frame message:error id payload))))
+    (define request (claim-pending! id))
+    (when request
+      (send-claimed! id request (frame message:error id payload))))
 
   (define (run-request! id rpc-name args internal-state-request? info)
     (with-handlers ((exn:fail? (lambda (e) (request-error! id e))))
@@ -444,7 +504,7 @@
              (hash-ref registry rpc-name
                        (lambda ()
                          (error 'serve "unknown RPC: ~a" rpc-name)))))
-      (define request-custodian (make-custodian root-custodian))
+      (define request-custodian (make-custodian runtime-custodian))
       (define admission (admit-request! id request-custodian))
       (cond
         ((eq? admission 'duplicate)
@@ -466,10 +526,13 @@
                             info))))))))
 
   (define (cancel! id)
-    (define request-custodian (take-pending! id))
-    (when request-custodian
-      (custodian-shutdown-all request-custodian)
-      (reject-request! id "request cancelled")))
+    (define request (claim-pending! id))
+    (when request
+      (custodian-shutdown-all (pending-request-custodian request))
+      (send-claimed!
+       id
+       request
+       (frame message:error id (error-message->payload "request cancelled")))))
 
   (define (dispatch! f)
     (case (frame-type f)
@@ -483,37 +546,103 @@
                       (format "unsupported message type: ~a"
                               (frame-type f)))))]))
 
+  (define reader
+    (parameterize ([current-custodian runtime-custodian])
+      (thread
+       (lambda ()
+         (with-handlers ([exn?
+                          (lambda (e)
+                            (set-box! reader-error e))])
+           (parameterize ([current-event-emitter emit!]
+                          [exit-handler
+                           (lambda (value)
+                             (if (exn? value)
+                                 (raise value)
+                                 (error 'rivet/backend
+                                        "backend requested exit: ~e"
+                                        value)))])
+             (send! (frame message:hello 0
+                           (encode-value (list "rivet" protocol-version))))
+             (let loop ()
+               (unless stopped?
+                 (define f (read-frame in))
+                 (if (eof-object? f)
+                     (set! stopped? #t)
+                     (begin
+                       (dispatch! f)
+                       (loop)))))))))))
+  (define reader-dead-evt (thread-dead-evt reader))
+
+  (define cleanup-done? #f)
+
+  (define (shutdown-runtime!)
+    (for ([cust (in-list (take-all-pending!))])
+      (custodian-shutdown-all cust))
+    ;; Also terminate child threads spawned by completed RPCs, which are no
+    ;; longer represented in the pending table but still belong to the runtime
+    ;; custodian and could otherwise emit after the writer stop marker.
+    (custodian-shutdown-all runtime-custodian))
+
+  (define (abort-server!)
+    (unless cleanup-done?
+      (for ([cust (in-list (take-all-pending!))])
+        (custodian-shutdown-all cust))
+      (custodian-shutdown-all server-custodian)
+      (set! cleanup-done? #t)))
+
+  (define (finish-after-reader!)
+    (shutdown-runtime!)
+    (define writer-problem #f)
+    (cond
+      [(sync/timeout 0 writer-dead-evt)
+       (set! writer-problem
+             (or (unbox writer-error) 'unexpected-writer-exit))]
+      [else
+       (with-handlers ([exn?
+                        (lambda (e)
+                          (set! writer-problem e))])
+         ;; No producers remain after shutdown-runtime!, so this marker is
+         ;; ordered after every frame that was successfully admitted.
+         (send! 'stop)
+         (sync writer-dead-evt)
+         (when (unbox writer-error)
+           (set! writer-problem (unbox writer-error))))])
+    (custodian-shutdown-all writer-custodian)
+    (custodian-shutdown-all server-custodian)
+    (set! cleanup-done? #t)
+    (define reader-problem (unbox reader-error))
+    (cond
+      [(exn? writer-problem) (raise writer-problem)]
+      [writer-problem
+       (error 'serve "response writer terminated unexpectedly")]
+      [reader-problem (raise reader-problem)]
+      [else (void)]))
+
   (dynamic-wind
     void
     (lambda ()
-      (parameterize ([current-event-emitter emit!]
-                     [exit-handler
-                      (lambda (value)
-                        (if (exn? value)
-                            (raise value)
-                            (error 'rivet/backend
-                                   "backend requested exit: ~e"
-                                   value)))])
-        (send! (frame message:hello 0
-                      (encode-value (list "rivet" protocol-version))))
-        (let loop ()
-          (unless stopped?
-            (let ([f (read-frame in)])
-              (if (eof-object? f)
-                  (set! stopped? #t)
-                  (begin
-                    (dispatch! f)
-                    (loop))))))))
+      (define first-exit
+        (sync
+         (handle-evt reader-dead-evt (lambda (_) 'reader))
+         (handle-evt writer-dead-evt (lambda (_) 'writer))))
+      (cond
+        [(eq? first-exit 'writer)
+         (define failure (unbox writer-error))
+         (abort-server!)
+         (if failure
+             (raise failure)
+             (error 'serve "response writer terminated unexpectedly"))]
+        [else
+         (finish-after-reader!)]))
     (lambda ()
-      (for ([cust (in-list (take-all-pending!))])
-        (custodian-shutdown-all cust))
-      (async-channel-put responses 'stop)
-      (thread-wait writer)
-      (custodian-shutdown-all root-custodian)))
+      (unless cleanup-done?
+        (abort-server!))))
 
   (void))
 
-(define (serve-fds in-fd out-fd #:max-pending-requests [max-pending-requests 1024])
+(define (serve-fds in-fd out-fd
+                   #:max-pending-requests [max-pending-requests 1024]
+                   #:max-outgoing-frames [max-outgoing-frames 64])
   (unless (exact-integer? in-fd)
     (raise-argument-error 'serve-fds "exact-integer?" in-fd))
   (unless (exact-integer? out-fd)
@@ -530,7 +659,10 @@
                                   (exn-message e))
                           e)
                          (void))])
-        (serve in out #:max-pending-requests max-pending-requests)))
+        (serve in
+               out
+               #:max-pending-requests max-pending-requests
+               #:max-outgoing-frames max-outgoing-frames)))
     (lambda ()
       (unless (port-closed? in) (close-input-port in))
       (unless (port-closed? out) (close-output-port out)))))
