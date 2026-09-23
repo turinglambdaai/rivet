@@ -53,10 +53,15 @@
 (check-not-false (sync/timeout 2 original-started))
 (write-frame (frame message:request 77 #"\xff") client-out)
 
+;; The same first-request-wins rule applies to syntactically valid RVT1 frame
+;; types that are illegal in the native-to-backend direction. Returning an
+;; Error 77 for this forged Event would also steal the original continuation.
+(write-frame (frame message:event 77 #"") client-out)
+
 ;; A later independent request provides deterministic ordering. The reader sees
-;; the duplicate frame before request 78, so any duplicate Error would reach the
-;; writer before this Response. First-request-wins semantics therefore require
-;; request 78 to be the first terminal frame we observe.
+;; both conflicting frames before request 78, so any duplicate/collision Error
+;; would reach the writer before this Response. First-request-wins semantics
+;; therefore require request 78 to be the first terminal frame we observe.
 (write-request client-out 78 "duplicate-probe")
 (define probe-response (read-frame/timeout client-in))
 (check-equal? (frame-type probe-response) message:response)
@@ -77,6 +82,13 @@
 (check-equal? (frame-type reused-response) message:response)
 (check-equal? (frame-id reused-response) 77)
 (check-equal? (decode-value (frame-payload reused-response)) 7)
+
+;; Illegal inbound frame types with an otherwise unowned id keep the existing
+;; request-local diagnostic behavior.
+(write-frame (frame message:event 79 #"") client-out)
+(define illegal-response (read-frame/timeout client-in))
+(check-equal? (frame-type illegal-response) message:error)
+(check-equal? (frame-id illegal-response) 79)
 
 (write-frame (frame message:shutdown 0 #"") client-out)
 (check-equal? (sync/timeout 2 server-result) 'completed)
