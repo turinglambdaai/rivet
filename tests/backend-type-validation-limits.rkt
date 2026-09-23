@@ -29,11 +29,11 @@
 (define-syntax (define-too-deep-event stx)
   (syntax-case stx ()
     [(_ name)
-     (define type-stx
-       (for/fold ([type-stx #'Int64])
-                 ([i (in-range (add1 max-value-depth))])
-         #`(List #,type-stx)))
-     #`(define-event name : #,type-stx)]))
+     (let ([type-stx
+            (for/fold ([type-stx #'Int64])
+                      ([i (in-range (add1 max-value-depth))])
+              #`(List #,type-stx))])
+       #`(define-event name : #,type-stx))]))
 
 (define-too-deep-event too-deep-event)
 
