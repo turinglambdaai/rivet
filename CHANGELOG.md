@@ -5,6 +5,7 @@
 Rivet 0.2 hardens the native runtime contract and release path while preserving the existing WinUI 3 / SwiftUI architecture.
 
 - Deterministic embedded Racket lifecycle on macOS, including idempotent stop and restart rejection.
+- Swift `RivetClient` no longer strongly retains itself across a blocking protocol read, so dropping the last client reference can run `deinit`, send Shutdown, and release pending calls even when the reader is idle.
 - Typed Event schema validation and generated Swift/C++ Event APIs.
 - Native identifier collision detection and language-specific codegen string escaping.
 - Bounded RVT1 frame/value byte size, value nesting, total value-node count, concurrent backend requests, declared/incoming API-name size, and queued backend output.
