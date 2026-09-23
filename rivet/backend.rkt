@@ -32,6 +32,27 @@
 (define state-registry (make-hash))
 (define current-event-emitter (make-parameter #f))
 
+;; RPC/State lookup names arrive as untrusted wire Strings and are converted to
+;; interned Racket symbols for registry lookup. Bound API identifiers before
+;; that conversion so a tiny request cannot force an arbitrarily large symbol
+;; allocation. Apply the same limit at declaration time so registered APIs are
+;; always reachable through the wire protocol.
+(define max-api-name-bytes 1024)
+
+(define (check-api-name-length! who kind name)
+  (unless (string? name)
+    (raise-argument-error who "string?" name))
+  (define length (string-utf-8-length name))
+  (when (> length max-api-name-bytes)
+    (raise-arguments-error who
+                           (format "~a name exceeds Rivet API limit" kind)
+                           "length bytes" length
+                           "maximum bytes" max-api-name-bytes)))
+
+(define (wire-api-name->symbol who kind name)
+  (check-api-name-length! who kind name)
+  (string->symbol name))
+
 (define (emit-event! name value)
   (unless (or (symbol? name) (string? name))
     (raise-argument-error 'emit-event! "(or/c symbol? string?)" name))
@@ -75,6 +96,7 @@
                            "value" value)))
 
 (define (register-rpc! name arg-names arg-types result-type proc)
+  (check-api-name-length! 'define-rpc "RPC" (symbol->string name))
   (when (hash-has-key? registry name)
     (error 'define-rpc "RPC already registered: ~a" name))
   (for ([type (in-list (append arg-types (list result-type)))])
@@ -88,6 +110,7 @@
   (void))
 
 (define (register-event! name type)
+  (check-api-name-length! 'define-event "Event" (symbol->string name))
   (when (hash-has-key? event-registry name)
     (error 'define-event "Event already registered: ~a" name))
   (unless (supported-type? type)
@@ -120,6 +143,7 @@
   (encode-value (list "$state" event-value)))
 
 (define (register-state! name type initial)
+  (check-api-name-length! 'define-state "State" (symbol->string name))
   (when (hash-has-key? state-registry name)
     (error 'define-state "state already registered: ~a" name))
   (unless (supported-type? type)
@@ -227,7 +251,7 @@
   (define value (decode-value payload))
   (match value
     [(list (? string? name) args ...)
-     (values (string->symbol name) args)]
+     (values (wire-api-name->symbol 'serve "RPC" name) args)]
     [_
      (error 'serve "invalid RPC request payload: ~e" value)]))
 
@@ -262,10 +286,9 @@
   (error-message->payload (exn-message e)))
 
 (define (lookup-state name)
-  (unless (string? name)
-    (raise-argument-error '$state "string?" name))
+  (define key (wire-api-name->symbol '$state "State" name))
   (hash-ref state-registry
-            (string->symbol name)
+            key
             (lambda () (error '$state "unknown state: ~a" name))))
 
 (define (invoke-state-request name args)
