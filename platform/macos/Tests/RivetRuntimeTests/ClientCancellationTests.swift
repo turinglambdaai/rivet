@@ -1,3 +1,4 @@
+import Dispatch
 import Foundation
 import Testing
 @testable import RivetRuntime
@@ -101,11 +102,27 @@ private func makeClientHarness() throws -> ClientHarness {
         try await harness.client.call("normal-after-cancel")
     }
 
-    // If the cancelled call leaked a Request, it would be the first frame and
-    // this assertion would fail before we service the normal request.
-    let request = try readFrame(harness.backendInput)
+    var request = try readFrame(harness.backendInput)
+    var name = try requestName(request)
+    if name != "normal-after-cancel" {
+        // Keep the test failure-safe: if a regression leaks the cancelled
+        // Request, finish it so neither checked continuation remains stranded,
+        // then continue to service the expected normal request.
+        Issue.record("pre-cancelled call leaked Request \(name)")
+        try writeFrame(
+            RivetFrame(
+                type: .error,
+                id: request.id,
+                payload: try encodeRivetValue(.string("leaked cancelled request"))
+            ),
+            to: harness.backendOutput
+        )
+        request = try readFrame(harness.backendInput)
+        name = try requestName(request)
+    }
+
     #expect(request.type == .request)
-    #expect(try requestName(request) == "normal-after-cancel")
+    #expect(name == "normal-after-cancel")
 
     try writeFrame(
         RivetFrame(
