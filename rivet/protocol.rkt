@@ -186,14 +186,15 @@
          (raise-arguments-error 'encode-value
                                 "value nesting exceeds Rivet protocol limit"
                                 "maximum depth" max-value-depth))
+       (define count (length value))
        ;; Each immediate element consumes at least one node. Reject before
        ;; emitting/recursing when even the shallow shape cannot fit the budget.
-       (when (> (length value) remaining-nodes)
+       (when (> count remaining-nodes)
          (raise-arguments-error 'encode-value
                                 "value node count exceeds Rivet protocol limit"
                                 "maximum nodes" max-value-nodes))
        (write-byte tag:list out)
-       (write-u32 (length value) out)
+       (write-u32 count out)
        (for ([item (in-list value)]) (emit item (add1 depth)))]
       [else
        (raise-arguments-error 'encode-value
