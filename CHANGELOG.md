@@ -9,6 +9,7 @@ Rivet 0.2 hardens the native runtime contract and release path while preserving 
 - Native identifier collision detection and language-specific codegen string escaping.
 - Bounded RVT1 frame/value byte size, value nesting, total value-node count, concurrent backend requests, declared/incoming API-name size, and queued backend output.
 - Synchronized request cancellation/completion ownership and Event ID allocation; terminal requests keep their pending slot until their Response/Error is admitted to the bounded output queue.
+- Duplicate Request IDs use first-request-wins semantics while an ID remains pending, preventing a second terminal frame from consuming the original native caller's continuation; IDs become reusable after release.
 - Backend reader/writer supervision propagates output-port failure and stops producers instead of leaving the server blocked behind a dead writer.
 - State data locking is separated from per-State update/Event ordering, so output backpressure cannot block pure Racket `state-ref` calls while concurrent setters still preserve `$state` Event order.
 - Request-local handling for malformed application RPC requests and response-serialization failures, with bounded backend Error diagnostics that cannot consume terminal-response ownership before encoding succeeds.
