@@ -13,6 +13,7 @@ Rivet 0.2 hardens the native runtime contract and release path while preserving 
 - Synchronized request cancellation/completion ownership and Event ID allocation; terminal requests keep their pending slot until their Response/Error is admitted to the bounded output queue.
 - Duplicate Request IDs and illegal inbound frame types that collide with a pending request use first-request-wins semantics, preventing a second terminal frame from consuming the original native caller's continuation; IDs become reusable after release.
 - State commits defer request cancellation only across the commit-to-`$state`-Event admission window, keeping the pending slot occupied so a committed State cannot lose its native notification under output backpressure.
+- Swift request cancellation is ordered atomically with Request submission: pre-submit cancellation suppresses the Request, post-submit Cancel frames cannot overtake the Request, and wrapped request IDs skip still-reserved or pending calls.
 - Backend reader/writer supervision propagates output-port failure and stops producers instead of leaving the server blocked behind a dead writer.
 - State data locking is separated from per-State update/Event ordering, so output backpressure cannot block pure Racket `state-ref` calls while concurrent setters still preserve `$state` Event order.
 - Request-local handling for malformed application RPC requests and response-serialization failures, with bounded backend Error diagnostics that cannot consume terminal-response ownership before encoding succeeds.
