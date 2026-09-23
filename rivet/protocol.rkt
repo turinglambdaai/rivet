@@ -249,9 +249,10 @@
           (for ([item (in-list value)])
             (emit item (add1 depth)))])]
       [else
-       (raise-arguments-error 'encode-value
-                              "value is not supported by protocol v1"
-                              "value" value)]))
+       ;; Never format an arbitrary application object while reporting an
+       ;; unsupported protocol value. A custom writer can perform unbounded
+       ;; work or raise another exception and hide the original codec error.
+       (error 'encode-value "value is not supported by protocol v1")]))
   (emit v 0)
   (get-output-bytes out))
 
