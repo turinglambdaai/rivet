@@ -115,6 +115,14 @@ private struct Reader {
     var remaining: Int { data.count - offset }
 }
 
+private func ensureEncodeCapacity(_ count: Int, output: Data) throws {
+    guard count >= 0,
+          output.count <= rivetMaxFramePayloadSize,
+          count <= rivetMaxFramePayloadSize - output.count else {
+        throw RivetProtocolError.lengthOverflow
+    }
+}
+
 public func encodeRivetValue(_ value: RivetValue) throws -> Data {
     var result = Data()
     var remainingNodes = rivetMaxValueNodes
@@ -133,22 +141,28 @@ private func encode(
 
     switch value {
     case .null:
+        try ensureEncodeCapacity(1, output: output)
         output.append(ValueTag.null.rawValue)
     case .bool(false):
+        try ensureEncodeCapacity(1, output: output)
         output.append(ValueTag.falseValue.rawValue)
     case .bool(true):
+        try ensureEncodeCapacity(1, output: output)
         output.append(ValueTag.trueValue.rawValue)
     case .int64(let value):
+        try ensureEncodeCapacity(9, output: output)
         output.append(ValueTag.int64.rawValue)
         output.appendLE(UInt64(bitPattern: value))
     case .string(let value):
-        let bytes = Data(value.utf8)
-        guard bytes.count <= Int(UInt32.max) else { throw RivetProtocolError.lengthOverflow }
+        let byteCount = value.utf8.count
+        guard byteCount <= Int(UInt32.max) else { throw RivetProtocolError.lengthOverflow }
+        try ensureEncodeCapacity(5 + byteCount, output: output)
         output.append(ValueTag.string.rawValue)
-        output.appendLE(UInt32(bytes.count))
-        output.append(bytes)
+        output.appendLE(UInt32(byteCount))
+        output.append(contentsOf: value.utf8)
     case .bytes(let bytes):
         guard bytes.count <= Int(UInt32.max) else { throw RivetProtocolError.lengthOverflow }
+        try ensureEncodeCapacity(5 + bytes.count, output: output)
         output.append(ValueTag.bytes.rawValue)
         output.appendLE(UInt32(bytes.count))
         output.append(bytes)
@@ -156,6 +170,7 @@ private func encode(
         guard depth < rivetMaxValueDepth else { throw RivetProtocolError.nestingTooDeep }
         guard values.count <= Int(UInt32.max) else { throw RivetProtocolError.lengthOverflow }
         guard values.count <= remainingNodes else { throw RivetProtocolError.lengthOverflow }
+        try ensureEncodeCapacity(5, output: output)
         output.append(ValueTag.list.rawValue)
         output.appendLE(UInt32(values.count))
         for value in values {
@@ -165,6 +180,9 @@ private func encode(
 }
 
 public func decodeRivetValue(_ data: Data) throws -> RivetValue {
+    guard data.count <= rivetMaxFramePayloadSize else {
+        throw RivetProtocolError.lengthOverflow
+    }
     var reader = Reader(data: data)
     var remainingNodes = rivetMaxValueNodes
     let value = try decodeValue(from: &reader, depth: 0, remainingNodes: &remainingNodes)

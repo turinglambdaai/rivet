@@ -161,6 +161,18 @@ private func goldenValue(_ name: String) throws -> RivetValue {
     }
 }
 
+@Test func rejectsOversizedValuePayload() throws {
+    // Data is copy-on-write, so the same 64 MiB+1 object can prove both paths
+    // without constructing a second giant encoded buffer.
+    let oversized = Data(count: rivetMaxFramePayloadSize + 1)
+    #expect(throws: RivetProtocolError.lengthOverflow) {
+        try decodeRivetValue(oversized)
+    }
+    #expect(throws: RivetProtocolError.lengthOverflow) {
+        try encodeRivetValue(.bytes(oversized))
+    }
+}
+
 @Test func rejectsOversizedFrame() throws {
     let oversized = Data([
         0x52, 0x56, 0x54, 0x31,

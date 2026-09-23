@@ -33,15 +33,18 @@ Event handlers execute on native runtime/reader threads. Application UI code mus
 RVT1 v1 applies the same resource limits in Racket, C++, and Swift:
 
 - a single frame payload is at most 64 MiB;
+- a standalone encoded value is at most 64 MiB, so it is always eligible to be used as one frame payload;
 - a recursively encoded value is at most 64 nested `List` levels;
 - one encoded/decoded value contains at most 262,144 total value nodes, including the root value and every nested `List` element.
 
-The node budget prevents a small or merely frame-sized wire payload from expanding into an unbounded number of language-level `Value`/list objects. Decoders validate a declared `List` count against the remaining node budget before reserving or constructing the destination container. Encoders apply the same budget, so an accidental application-side giant `List` is rejected before recursively encoding its elements. Large binary payloads should use `Bytes`, which counts as one value node regardless of byte length and remains governed by the frame-size limit.
+Value encoders enforce the byte budget while constructing output instead of first allocating an oversized encoded payload and failing later at frame write. Standalone decoders reject inputs larger than 64 MiB before parsing. Length-prefixed `String` and `Bytes` fields validate their declared length against the actual remaining input before copying, so a tiny forged payload cannot request a multi-gigabyte field read.
+
+The node budget prevents a small or merely frame-sized wire payload from expanding into an unbounded number of language-level `Value`/list objects. Decoders validate a declared `List` count against the remaining node budget before reserving or constructing the destination container. Encoders apply the same budget, so an accidental application-side giant `List` is rejected before recursively encoding its elements. Large binary payloads should use `Bytes`, which counts as one value node regardless of byte length and remains governed by the 64 MiB value/frame-size limit.
 
 These are defensive resource limits, not application schema limits. Normal `String`, `Bytes`, `List`, `Optional`, RPC, State, and Event usage is unchanged.
 
 ## Failure isolation
 
-Malformed application-level requests, including unknown RPC names and invalid argument shapes, are returned as request-local Error frames. They do not intentionally terminate the embedded Racket server.
+Malformed application-level requests, including unknown RPC names and invalid argument shapes, are returned as request-local Error frames. Application RPC results that cannot be serialized within RVT1 resource limits are also converted to request-local Error frames: a request remains pending until response encoding succeeds, so a serialization failure cannot silently consume terminal-response ownership and leave the native client waiting indefinitely.
 
 Framing failures are different: invalid RVT1 magic/version, truncated transport data, or other transport-level corruption can terminate the connection because frame boundaries can no longer be trusted.

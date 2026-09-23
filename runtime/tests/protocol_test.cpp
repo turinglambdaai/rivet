@@ -200,6 +200,26 @@ int main() {
   }
   assert(rejected_node_encode);
 
+  // A standalone encoded value is itself a frame payload. Reuse one oversized
+  // buffer to prove decode rejects before parsing and encode rejects before
+  // allocating a second giant output buffer.
+  rivet::Bytes oversized_value(rivet::kMaxFramePayloadSize + 1, 0);
+  bool rejected_value_decode = false;
+  try {
+    (void)rivet::decode_value(oversized_value);
+  } catch (std::length_error const&) {
+    rejected_value_decode = true;
+  }
+  assert(rejected_value_decode);
+
+  bool rejected_value_encode = false;
+  try {
+    (void)rivet::encode_value(rivet::Value(std::move(oversized_value)));
+  } catch (std::length_error const&) {
+    rejected_value_encode = true;
+  }
+  assert(rejected_value_encode);
+
   rivet::Bytes too_deep_bytes;
   for (std::size_t i = 0; i <= rivet::kMaxValueDepth; ++i) {
     too_deep_bytes.insert(too_deep_bytes.end(), {0x06, 0x01, 0x00, 0x00, 0x00});

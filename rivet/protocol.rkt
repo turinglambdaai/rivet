@@ -156,30 +156,51 @@
 (define (encode-value v)
   (define out (open-output-bytes))
   (define remaining-nodes max-value-nodes)
+  (define remaining-bytes max-frame-payload-size)
   (define (consume-node!)
     (when (zero? remaining-nodes)
       (raise-arguments-error 'encode-value
                              "value node count exceeds Rivet protocol limit"
                              "maximum nodes" max-value-nodes))
     (set! remaining-nodes (sub1 remaining-nodes)))
+  (define (consume-bytes! count)
+    (when (> count remaining-bytes)
+      (raise-arguments-error 'encode-value
+                             "encoded value exceeds Rivet payload limit"
+                             "maximum bytes" max-frame-payload-size))
+    (set! remaining-bytes (- remaining-bytes count)))
   (define (emit value depth)
     (consume-node!)
     (cond
-      [(void? value) (write-byte tag:null out)]
-      [(eq? value #f) (write-byte tag:false out)]
-      [(eq? value #t) (write-byte tag:true out)]
+      [(void? value)
+       (consume-bytes! 1)
+       (write-byte tag:null out)]
+      [(eq? value #f)
+       (consume-bytes! 1)
+       (write-byte tag:false out)]
+      [(eq? value #t)
+       (consume-bytes! 1)
+       (write-byte tag:true out)]
       [(and (exact-integer? value)
             (<= (- (expt 2 63)) value (sub1 (expt 2 63))))
+       (consume-bytes! 9)
        (write-byte tag:int64 out)
        (write-bytes (integer->integer-bytes value 8 #t #f) out)]
       [(string? value)
+       ;; Measure UTF-8 bytes without first allocating the encoded byte string.
+       ;; Oversized strings therefore fail before materializing a second large
+       ;; representation solely to discover that it cannot fit in one frame.
+       (define len (string-utf-8-length value))
+       (consume-bytes! (+ 5 len))
        (define bs (string->bytes/utf-8 value))
        (write-byte tag:string out)
-       (write-u32 (bytes-length bs) out)
+       (write-u32 len out)
        (write-bytes bs out)]
       [(bytes? value)
+       (define len (bytes-length value))
+       (consume-bytes! (+ 5 len))
        (write-byte tag:bytes out)
-       (write-u32 (bytes-length value) out)
+       (write-u32 len out)
        (write-bytes value out)]
       [(list? value)
        (when (>= depth max-value-depth)
@@ -193,6 +214,7 @@
          (raise-arguments-error 'encode-value
                                 "value node count exceeds Rivet protocol limit"
                                 "maximum nodes" max-value-nodes))
+       (consume-bytes! 5)
        (write-byte tag:list out)
        (write-u32 count out)
        (for ([item (in-list value)]) (emit item (add1 depth)))]
@@ -206,6 +228,11 @@
 (define (decode-value bs)
   (unless (bytes? bs)
     (raise-argument-error 'decode-value "bytes?" bs))
+  (when (> (bytes-length bs) max-frame-payload-size)
+    (raise-arguments-error 'decode-value
+                           "encoded value exceeds Rivet payload limit"
+                           "length" (bytes-length bs)
+                           "maximum" max-frame-payload-size))
   (define in (open-input-bytes bs))
   (define remaining-nodes max-value-nodes)
   (define (consume-node!)
@@ -214,6 +241,16 @@
              "value node count exceeds Rivet protocol limit (~a)"
              max-value-nodes))
     (set! remaining-nodes (sub1 remaining-nodes)))
+  (define (remaining-input-bytes)
+    (- (bytes-length bs) (file-position in)))
+  (define (read-sized-bytes! len kind)
+    ;; Validate against the actual bounded input before asking the port to read
+    ;; `len`, so a forged u32 such as #xffffffff cannot request a huge buffer.
+    (when (> len (remaining-input-bytes))
+      (error 'decode-value "unexpected EOF in ~a" kind))
+    (define b (read-exactly in len))
+    (when (eof-object? b) (error 'decode-value "unexpected EOF in ~a" kind))
+    b)
   (define (read-u32*)
     (define b (read-exactly in 4))
     (when (eof-object? b) (error 'decode-value "unexpected EOF"))
@@ -233,14 +270,10 @@
        (integer-bytes->integer b #t #f)]
       [(#x04)
        (define len (read-u32*))
-       (define b (read-exactly in len))
-       (when (eof-object? b) (error 'decode-value "unexpected EOF in string"))
-       (bytes->string/utf-8 b)]
+       (bytes->string/utf-8 (read-sized-bytes! len "string"))]
       [(#x05)
        (define len (read-u32*))
-       (define b (read-exactly in len))
-       (when (eof-object? b) (error 'decode-value "unexpected EOF in bytes"))
-       b]
+       (read-sized-bytes! len "bytes")]
       [(#x06)
        (when (>= depth max-value-depth)
          (error 'decode-value
@@ -254,8 +287,7 @@
          (error 'decode-value
                 "value node count exceeds Rivet protocol limit (~a)"
                 max-value-nodes))
-       (define position (file-position in))
-       (define remaining (- (bytes-length bs) position))
+       (define remaining (remaining-input-bytes))
        ;; Every encoded list element consumes at least one tag byte.
        (when (> count remaining)
          (error 'decode-value "impossible list length: ~a" count))
