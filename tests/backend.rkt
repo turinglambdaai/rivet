@@ -8,6 +8,9 @@
 (define-event progress : Int64)
 (define-state counter : Int64 10)
 
+(define-rpc (fail-with-large-message : Void)
+  (error 'fail-with-large-message "~a" (make-string 10000 #\x)))
+
 (define-rpc (increment [value : Int64] : Int64)
   (add1 value))
 
@@ -33,6 +36,9 @@
 (check-equal?
  (rpc-schema)
  (list
+  (hasheq 'name "fail-with-large-message"
+          'arguments '()
+          'result "Void")
   (hasheq 'name "increment"
           'arguments (list (hasheq 'name "value" 'type "Int64"))
           'result "Int64")
@@ -179,6 +185,31 @@
 (check-equal? (frame-id after-encoding-error) 9)
 (check-equal? (decode-value (frame-payload after-encoding-error)) 10)
 
+;; An application exception may itself contain a huge diagnostic message. The
+;; server must bound that Error payload before claiming terminal ownership.
+(write-frame
+ (frame message:request
+        10
+        (encode-value (list "fail-with-large-message")))
+ client-out)
+(define large-error (read-frame/timeout client-in))
+(check-equal? (frame-type large-error) message:error)
+(check-equal? (frame-id large-error) 10)
+(define large-error-message (decode-value (frame-payload large-error)))
+(check-true (<= (string-length large-error-message) 4096))
+(check-regexp-match #rx"truncated" large-error-message)
+
+;; The large exception still released the pending slot and kept the server live.
+(write-frame
+ (frame message:request
+        11
+        (encode-value (list "increment" 10)))
+ client-out)
+(define after-large-error (read-frame/timeout client-in))
+(check-equal? (frame-type after-large-error) message:response)
+(check-equal? (frame-id after-large-error) 11)
+(check-equal? (decode-value (frame-payload after-large-error)) 11)
+
 (write-frame (frame message:shutdown 0 #"") client-out)
 (thread-wait server-thread)
 
@@ -229,17 +260,22 @@
 (check-equal? (frame-id after-cancel) 102)
 (check-equal? (decode-value (frame-payload after-cancel)) 2)
 
-;; Unknown RPCs are rejected without killing the server.
+;; Unknown RPC rejection happens before a pending slot exists. Even a very long
+;; RPC name must therefore produce a bounded Error rather than escape the
+;; reader loop while trying to serialize its diagnostic text.
+(define large-unknown-rpc-name (make-string 10000 #\q))
 (write-frame
  (frame message:request
         103
-        (encode-value (list "does-not-exist")))
+        (encode-value (list large-unknown-rpc-name)))
  limited-client-out)
-(define unknown-rpc (read-frame limited-client-in))
+(define unknown-rpc (read-frame/timeout limited-client-in))
 (check-equal? (frame-type unknown-rpc) message:error)
 (check-equal? (frame-id unknown-rpc) 103)
-(check-regexp-match #rx"unknown RPC"
-                    (decode-value (frame-payload unknown-rpc)))
+(define unknown-rpc-message (decode-value (frame-payload unknown-rpc)))
+(check-regexp-match #rx"unknown RPC" unknown-rpc-message)
+(check-regexp-match #rx"truncated" unknown-rpc-message)
+(check-true (<= (string-length unknown-rpc-message) 4096))
 
 (write-frame
  (frame message:request
