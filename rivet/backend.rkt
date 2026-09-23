@@ -303,8 +303,15 @@
                      (encode-value "Rivet request failed"))])
     (encode-value (bounded-error-message message))))
 
-(define (exn->payload e)
-  (error-message->payload (exn-message e)))
+(define (raised->payload raised)
+  ;; Racket permits `(raise value)` for any value, not only the `exn:fail?`
+  ;; hierarchy. Preserve normal exception messages, but never format/echo an
+  ;; arbitrary raised object: a custom writer or huge object could make error
+  ;; reporting itself fail or consume unbounded work.
+  (error-message->payload
+   (if (exn? raised)
+       (exn-message raised)
+       "Rivet request raised a non-exception value")))
 
 (define (lookup-state name)
   (define key (wire-api-name->symbol '$state "State" name))
@@ -475,17 +482,20 @@
   (define (reject-request! id message)
     (send! (frame message:error id (error-message->payload message))))
 
-  (define (request-error! id e)
+  (define (request-error! id raised)
     ;; Build the guaranteed-small Error payload before claiming terminal
     ;; ownership. A claimed request stays pending until the Error is admitted to
-    ;; the bounded output queue.
-    (define payload (exn->payload e))
+    ;; the bounded output queue. Catching arbitrary raised values here is
+    ;; essential because a dead worker must not strand its pending entry.
+    (define payload (raised->payload raised))
     (define request (claim-pending! id))
     (when request
       (send-claimed! id request (frame message:error id payload))))
 
   (define (run-request! id rpc-name args internal-state-request? info)
-    (with-handlers ((exn:fail? (lambda (e) (request-error! id e))))
+    (with-handlers ([(lambda (_) #t)
+                     (lambda (raised)
+                       (request-error! id raised))])
       (define result
         (if internal-state-request?
             (invoke-state-request rpc-name args)
