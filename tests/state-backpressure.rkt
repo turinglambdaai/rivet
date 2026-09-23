@@ -124,8 +124,8 @@
   (for/list ([f (in-list frames)]
              #:when (= (frame-type f) message:response))
     (frame-id f)))
-(check-true (member 3 response-ids))
-(check-true (member 4 response-ids))
+(check-not-false (member 3 response-ids))
+(check-not-false (member 4 response-ids))
 (check-equal? (state-ref state-backpressure-counter) 2)
 
 (write-frame (frame message:shutdown 0 #"") client-out)
