@@ -26,12 +26,15 @@
 (struct rpc-info (name arg-names arg-types result-type procedure) #:transparent)
 (struct event-info (name type) #:transparent)
 (struct state-info (name type cell lock) #:transparent)
-(struct pending-request (custodian terminal-owned) #:mutable)
+(struct pending-request (custodian terminal-owned cancel-deferred cancel-requested) #:mutable)
 
 (define registry (make-hash))
 (define event-registry (make-hash))
 (define state-registry (make-hash))
 (define current-event-emitter (make-parameter #f))
+;; Request workers replace this identity wrapper with a cancellation barrier.
+;; Keeping it private lets state-set! preserve the same behavior outside serve.
+(define current-state-commit-guard (make-parameter (lambda (thunk) (thunk))))
 
 ;; `state-info` is public through struct-out, so keep update-order bookkeeping
 ;; private instead of adding a field that would break constructor/pattern source
@@ -224,18 +227,22 @@
   (define event-payload (encode-state-event-payload event-value))
   (define emitter (current-event-emitter))
   (define update-lock (state-update-lock state))
-  ;; Serialize commits and their Events without holding the small cell lock
-  ;; across transport backpressure. Readers can observe the committed value as
-  ;; soon as set-box! finishes, while another setter still waits behind this
-  ;; update-order lock until the preceding Event has been admitted for output.
+  ;; Waiting for an earlier update-order lock is still safely cancellable: no
+  ;; State side effect has happened yet. Once this setter owns the order lock,
+  ;; a request-local commit guard defers cancellation across the short cell
+  ;; commit plus potentially backpressured Event admission. This guarantees that
+  ;; every State value that becomes visible in Racket has a corresponding
+  ;; reserved Event accepted for native delivery.
   (call-with-semaphore
    update-lock
    (lambda ()
-     (call-with-semaphore
-      (state-info-lock state)
-      (lambda () (set-box! (state-info-cell state) value)))
-     (when emitter
-       (emitter "$state" event-value event-payload))))
+     ((current-state-commit-guard)
+      (lambda ()
+        (call-with-semaphore
+         (state-info-lock state)
+         (lambda () (set-box! (state-info-cell state) value)))
+        (when emitter
+          (emitter "$state" event-value event-payload))))))
   (void))
 
 (define (registered-rpcs)
@@ -428,7 +435,7 @@
          [(hash-has-key? pending id) 'duplicate]
          [(>= (hash-count pending) max-pending-requests) 'full]
          [else
-          (hash-set! pending id (pending-request custodian #f))
+          (hash-set! pending id (pending-request custodian #f #f #f))
           'admitted]))))
 
   (define (claim-pending! id)
@@ -446,6 +453,56 @@
           (set-pending-request-terminal-owned! request #t)
           request]
          [else #f]))))
+
+  (define (cancel-action! id)
+    ;; State commits can briefly defer cancellation after the cell becomes
+    ;; visible and until its reserved Event is accepted by the output queue.
+    ;; Keep the pending slot occupied during that interval so cancellation
+    ;; cannot bypass either correlation ownership or the concurrency limit.
+    (call-with-semaphore
+     pending-lock
+     (lambda ()
+       (define request (hash-ref pending id #f))
+       (cond
+         [(or (not request)
+              (pending-request-terminal-owned request))
+          #f]
+         [(pending-request-cancel-deferred request)
+          (set-pending-request-cancel-requested! request #t)
+          'deferred]
+         [else
+          (set-pending-request-terminal-owned! request #t)
+          request]))))
+
+  (define (begin-state-commit! id)
+    (call-with-semaphore
+     pending-lock
+     (lambda ()
+       (define request (hash-ref pending id #f))
+       (cond
+         [(not request) 'untracked]
+         [(pending-request-terminal-owned request) 'terminal]
+         [else
+          (set-pending-request-cancel-deferred! request #t)
+          request]))))
+
+  (define (end-state-commit! id request)
+    ;; Clear the barrier and atomically convert any deferred Cancel into terminal
+    ;; ownership before another Cancel or normal Response can race in.
+    (call-with-semaphore
+     pending-lock
+     (lambda ()
+       (define current (hash-ref pending id #f))
+       (cond
+         [(not (eq? current request)) #f]
+         [else
+          (set-pending-request-cancel-deferred! request #f)
+          (cond
+            [(and (pending-request-cancel-requested request)
+                  (not (pending-request-terminal-owned request)))
+             (set-pending-request-terminal-owned! request #t)
+             request]
+            [else #f])]))))
 
   (define (release-pending! id request)
     (call-with-semaphore
@@ -470,6 +527,50 @@
       void
       (lambda () (send! response))
       (lambda () (release-pending! id request))))
+
+  (define (finish-deferred-cancel! id request)
+    ;; The State Event has already been admitted. Queue the one terminal
+    ;; cancelled Error, then tear down this request custodian so application
+    ;; code cannot keep running after a cancellation that was deferred solely to
+    ;; preserve State/native consistency.
+    (send-claimed!
+     id
+     request
+     (frame message:error id (error-message->payload "request cancelled")))
+    (custodian-shutdown-all (pending-request-custodian request))
+    ;; `custodian-shutdown-all` normally terminates the current worker because
+    ;; it is managed by this request custodian. Keep a defensive local fallback
+    ;; so the cancelled request cannot resume if that assumption ever changes.
+    (kill-thread (current-thread)))
+
+  (define (with-state-commit-barrier id thunk)
+    (define request (begin-state-commit! id))
+    (cond
+      [(eq? request 'untracked)
+       ;; A child thread may outlive an already completed request. There is no
+       ;; pending cancellation owner left, so preserve ordinary state-set!
+       ;; behavior instead of inventing a new failure mode.
+       (thunk)]
+      [(eq? request 'terminal)
+       ;; Cancellation/completion already owns the terminal outcome. Do not
+       ;; begin a fresh State side effect in the tiny window before this worker
+       ;; is stopped.
+       (error 'state-set! "request is no longer active")]
+      [else
+       (define completed? #f)
+       (define raised-value #f)
+       (with-handlers ([(lambda (_) #t)
+                        (lambda (raised)
+                          (set! raised-value raised)
+                          (void))])
+         (thunk)
+         (set! completed? #t))
+       (define cancelled-request (end-state-commit! id request))
+       (cond
+         [cancelled-request
+          (finish-deferred-cancel! id cancelled-request)]
+         [completed? (void)]
+         [else (raise raised-value)])]))
 
   (define (finish! id type value)
     ;; Encode while the request is still claimable. If encoding fails, the
@@ -577,7 +678,10 @@
             id
             (format "too many pending requests (limit ~a)" max-pending-requests)))
           (else
-           (parameterize ([current-custodian request-custodian])
+           (parameterize ([current-custodian request-custodian]
+                          [current-state-commit-guard
+                           (lambda (thunk)
+                             (with-state-commit-barrier id thunk))])
              (thread
               (lambda ()
                 (run-request! id
@@ -587,12 +691,12 @@
                               info)))))))))
 
   (define (cancel! id)
-    (define request (claim-pending! id))
-    (when request
-      (custodian-shutdown-all (pending-request-custodian request))
+    (define action (cancel-action! id))
+    (when (pending-request? action)
+      (custodian-shutdown-all (pending-request-custodian action))
       (send-claimed!
        id
-       request
+       action
        (frame message:error id (error-message->payload "request cancelled")))))
 
   (define (dispatch! f)
