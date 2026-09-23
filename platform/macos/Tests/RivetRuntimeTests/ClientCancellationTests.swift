@@ -1,7 +1,28 @@
-import Dispatch
 import Foundation
 import Testing
 @testable import RivetRuntime
+
+private actor AsyncGate {
+    private var openState = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        if openState { return }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    func open() {
+        guard !openState else { return }
+        openState = true
+        let pending = waiters
+        waiters.removeAll()
+        for continuation in pending {
+            continuation.resume()
+        }
+    }
+}
 
 private struct ClientHarness {
     let client: RivetClient
@@ -87,16 +108,16 @@ private func makeClientHarness() throws -> ClientHarness {
 
     // Hold the task before it enters RivetClient.call so cancellation is
     // definitely already set when request reservation/submission begins.
-    let ready = DispatchSemaphore(value: 0)
-    let gate = DispatchSemaphore(value: 0)
+    let ready = AsyncGate()
+    let gate = AsyncGate()
     let cancelledTask = Task {
-        ready.signal()
-        gate.wait()
+        await ready.open()
+        await gate.wait()
         return try await harness.client.call("cancelled-before-send")
     }
-    ready.wait()
+    await ready.wait()
     cancelledTask.cancel()
-    gate.signal()
+    await gate.open()
 
     let normalTask = Task {
         try await harness.client.call("normal-after-cancel")
