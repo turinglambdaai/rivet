@@ -68,7 +68,7 @@ The native host should not report the backend as ready until it validates this f
 
 ## Request
 
-Request `id` is allocated by the native client and must be unique among outstanding requests.
+Request `id` is allocated by the native client and must be unique among outstanding requests. The backend produces at most one terminal Response/Error for each outstanding request id. If another Request arrives while the same id is still pending, Rivet discards the duplicate before decoding its payload. A duplicate cannot receive its own Error because that Error would carry the same id and native clients would have no way to distinguish it from the original request's terminal result.
 
 Application RPC payload:
 
