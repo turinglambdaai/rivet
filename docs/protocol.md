@@ -48,7 +48,9 @@ Payloads use tagged values.
 
 A decoder rejects trailing bytes after the top-level value. Strings are UTF-8; invalid UTF-8 is a decoding error.
 
-Racket, C++, and Swift enforce two value-shape resource limits: at most 64 nested `List` levels and at most 262,144 total value nodes per top-level value, including the root. Before allocating a `List`, a decoder verifies that its declared element count can fit in the remaining node budget. Encoders enforce the same node budget. These are codec resource bounds rather than schema restrictions: ordinary application values are unaffected, while adversarial or accidentally huge nested/container payloads cannot drive unbounded recursive parsing or object allocation. Large opaque payloads should use `Bytes` rather than enormous `List` values.
+A standalone encoded value is also bounded to 64 MiB because it must fit in a legal frame payload. Racket, C++, and Swift encoders enforce that limit while constructing the value instead of first building an oversized payload and failing only at frame write. Standalone value decoders reject inputs larger than 64 MiB before parsing. Length-prefixed `String` and `Bytes` decoders validate the declared u32 length against the bytes actually remaining before copying the field.
+
+Racket, C++, and Swift enforce two additional value-shape resource limits: at most 64 nested `List` levels and at most 262,144 total value nodes per top-level value, including the root. Before allocating a `List`, a decoder verifies that its declared element count can fit in the remaining node budget. Encoders enforce the same node budget. These are codec resource bounds rather than schema restrictions: ordinary application values are unaffected, while adversarial or accidentally huge nested/container payloads cannot drive unbounded recursive parsing or object allocation. Large opaque payloads should use `Bytes` rather than enormous `List` values.
 
 ## Hello
 
@@ -169,4 +171,4 @@ Code generation rejects declarations that normalize to the same Swift or C++ ide
 
 Rivet will keep framing changes explicit. If a future release cannot decode the v1 frame/value format, it must increment the protocol version and fail the Hello negotiation instead of guessing.
 
-Resource limits such as maximum frame size, value nesting, and total value-node count are part of the v1 decoder contract and are tested consistently across the Racket, C++, and Swift implementations.
+Resource limits such as maximum frame/value byte size, value nesting, and total value-node count are part of the v1 decoder contract and are tested consistently across the Racket, C++, and Swift implementations.
