@@ -187,9 +187,12 @@
        (write-byte tag:int64 out)
        (write-bytes (integer->integer-bytes value 8 #t #f) out)]
       [(string? value)
-       (define bs (string->bytes/utf-8 value))
-       (define len (bytes-length bs))
+       ;; Measure UTF-8 bytes without first allocating the encoded byte string.
+       ;; Oversized strings therefore fail before materializing a second large
+       ;; representation solely to discover that it cannot fit in one frame.
+       (define len (string-utf-8-length value))
        (consume-bytes! (+ 5 len))
+       (define bs (string->bytes/utf-8 value))
        (write-byte tag:string out)
        (write-u32 len out)
        (write-bytes bs out)]
