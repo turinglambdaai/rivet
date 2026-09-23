@@ -151,6 +151,10 @@ int main() {
         auto const end = record.bytes.begin() + static_cast<std::ptrdiff_t>(prefix_size);
         assert(throws_value_decode(rivet::Bytes(record.bytes.begin(), end)));
       }
+      // Canonical values must consume their entire input.
+      auto appended = record.bytes;
+      appended.push_back(0x00);
+      assert(throws_value_decode(appended));
     } else if (record.kind == "frame") {
       assert(record.name == "request-99");
       MemoryTransport input(record.bytes);
@@ -164,6 +168,12 @@ int main() {
       MemoryTransport output;
       rivet::write_frame(output, *decoded);
       assert(output.bytes() == record.bytes);
+      // Empty input is the stream-level EOF sentinel. Every non-empty strict
+      // prefix of a complete frame must instead fail as truncated transport.
+      for (std::size_t prefix_size = 1; prefix_size < record.bytes.size(); ++prefix_size) {
+        auto const end = record.bytes.begin() + static_cast<std::ptrdiff_t>(prefix_size);
+        assert(throws_frame_decode(rivet::Bytes(record.bytes.begin(), end)));
+      }
     } else if (record.kind == "invalid-value") {
       assert(throws_value_decode(record.bytes));
     } else if (record.kind == "invalid-frame") {

@@ -66,7 +66,13 @@
      (for ([prefix-length (in-range (bytes-length encoded))])
        (check-exn exn:fail?
                   (lambda ()
-                    (decode-value (subbytes encoded 0 prefix-length)))))]
+                    (decode-value (subbytes encoded 0 prefix-length)))))
+     ;; Canonical values consume their entire input. Appending even one byte
+     ;; must not be silently ignored by any protocol implementation.
+     (check-exn exn:fail?
+                (lambda ()
+                  (decode-value (bytes-append encoded #"\x00")))
+                name)]
     [(string=? kind "frame")
      (unless (string=? name "request-99")
        (error 'protocol-golden "unknown frame fixture: ~a" name))
@@ -78,7 +84,15 @@
                    name)
      (define out (open-output-bytes))
      (write-frame decoded out)
-     (check-equal? (get-output-bytes out) encoded name)]
+     (check-equal? (get-output-bytes out) encoded name)
+     ;; Empty input is the stream-level EOF sentinel, but every non-empty strict
+     ;; frame prefix must be rejected as a truncated frame.
+     (for ([prefix-length (in-range 1 (bytes-length encoded))])
+       (check-exn exn:fail?
+                  (lambda ()
+                    (read-frame
+                     (open-input-bytes
+                      (subbytes encoded 0 prefix-length))))))]
     [(string=? kind "invalid-value")
      (check-exn exn:fail? (lambda () (decode-value encoded)) name)]
     [(string=? kind "invalid-frame")

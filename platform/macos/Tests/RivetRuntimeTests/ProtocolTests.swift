@@ -84,6 +84,12 @@ private func goldenValue(_ name: String) throws -> RivetValue {
                     try decodeRivetValue(prefix)
                 }
             }
+            // A canonical value must consume the entire standalone payload.
+            var appended = record.bytes
+            appended.append(0x00)
+            #expect(throws: RivetProtocolError.self) {
+                try decodeRivetValue(appended)
+            }
         case "frame":
             #expect(record.name == "request-99")
             let decoded = try decodeRivetFrame(record.bytes)
@@ -91,6 +97,14 @@ private func goldenValue(_ name: String) throws -> RivetValue {
             #expect(decoded.id == 99)
             #expect(try decodeRivetValue(decoded.payload) == .list([.string("increment"), .int64(41)]))
             #expect(try encodeRivetFrame(decoded) == record.bytes)
+            // Match the stream implementations: empty transport is a clean EOF,
+            // while every non-empty strict prefix of a complete frame is invalid.
+            for prefixCount in 1..<record.bytes.count {
+                let prefix = Data(record.bytes.prefix(prefixCount))
+                #expect(throws: RivetProtocolError.self) {
+                    try decodeRivetFrame(prefix)
+                }
+            }
         case "invalid-value":
             #expect(throws: RivetProtocolError.self) {
                 try decodeRivetValue(record.bytes)
