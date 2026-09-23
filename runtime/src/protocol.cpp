@@ -167,7 +167,25 @@ class Reader {
   std::size_t offset_{};
 };
 
-void encode_into(Bytes& out, Value const& value, std::size_t depth) {
+void consume_encode_node(std::size_t& remaining_nodes) {
+  if (remaining_nodes == 0) {
+    throw std::length_error("Rivet value node count exceeds protocol limit");
+  }
+  --remaining_nodes;
+}
+
+void consume_decode_node(std::size_t& remaining_nodes) {
+  if (remaining_nodes == 0) {
+    throw std::runtime_error("Rivet value node count exceeds protocol limit");
+  }
+  --remaining_nodes;
+}
+
+void encode_into(Bytes& out,
+                 Value const& value,
+                 std::size_t depth,
+                 std::size_t& remaining_nodes) {
+  consume_encode_node(remaining_nodes);
   std::visit(
       [&](auto const& data) {
         using T = std::decay_t<decltype(data)>;
@@ -203,20 +221,26 @@ void encode_into(Bytes& out, Value const& value, std::size_t depth) {
           if (depth >= kMaxValueDepth) {
             throw std::length_error("Rivet value nesting exceeds protocol limit");
           }
-          out.push_back(static_cast<std::uint8_t>(ValueTag::List));
           if (data.size() > UINT32_MAX) {
             throw std::length_error("Rivet list exceeds protocol limit");
           }
+          if (data.size() > remaining_nodes) {
+            throw std::length_error("Rivet value node count exceeds protocol limit");
+          }
+          out.push_back(static_cast<std::uint8_t>(ValueTag::List));
           append_u32(out, static_cast<std::uint32_t>(data.size()));
           for (auto const& item : data) {
-            encode_into(out, item, depth + 1);
+            encode_into(out, item, depth + 1, remaining_nodes);
           }
         }
       },
       value.data);
 }
 
-Value decode_one(Reader& reader, std::size_t depth) {
+Value decode_one(Reader& reader,
+                 std::size_t depth,
+                 std::size_t& remaining_nodes) {
+  consume_decode_node(remaining_nodes);
   auto const tag = static_cast<ValueTag>(reader.byte());
   switch (tag) {
     case ValueTag::Null:
@@ -247,13 +271,18 @@ Value decode_one(Reader& reader, std::size_t depth) {
       }
       Value::List list;
       auto const count = reader.u32();
-      // Every encoded item needs at least one tag byte.
+      // Every declared element consumes at least one value node. Enforce this
+      // before reserving memory so a tiny payload cannot request a huge vector.
+      if (count > remaining_nodes) {
+        throw std::runtime_error("Rivet value node count exceeds protocol limit");
+      }
+      // Every encoded item also needs at least one tag byte.
       if (count > reader.remaining()) {
         throw std::runtime_error("impossible Rivet list length");
       }
       list.reserve(count);
       for (std::uint32_t i = 0; i < count; ++i) {
-        list.push_back(decode_one(reader, depth + 1));
+        list.push_back(decode_one(reader, depth + 1, remaining_nodes));
       }
       return Value(std::move(list));
     }
@@ -314,13 +343,15 @@ std::optional<Frame> read_frame(Transport& transport) {
 
 Bytes encode_value(Value const& value) {
   Bytes result;
-  encode_into(result, value, 0);
+  std::size_t remaining_nodes = kMaxValueNodes;
+  encode_into(result, value, 0, remaining_nodes);
   return result;
 }
 
 Value decode_value(Bytes const& bytes) {
   Reader reader(bytes);
-  auto value = decode_one(reader, 0);
+  std::size_t remaining_nodes = kMaxValueNodes;
+  auto value = decode_one(reader, 0, remaining_nodes);
   if (!reader.empty()) {
     throw std::runtime_error("trailing bytes after Rivet value");
   }

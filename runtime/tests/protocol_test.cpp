@@ -187,6 +187,19 @@ int main() {
   }
   assert(rejected_deep_encode);
 
+  rivet::Value::List max_nodes(rivet::kMaxValueNodes - 1);
+  auto max_node_bytes = rivet::encode_value(rivet::Value(std::move(max_nodes)));
+  assert(!throws_value_decode(max_node_bytes));
+
+  rivet::Value::List too_many_nodes(rivet::kMaxValueNodes);
+  bool rejected_node_encode = false;
+  try {
+    (void)rivet::encode_value(rivet::Value(std::move(too_many_nodes)));
+  } catch (std::length_error const&) {
+    rejected_node_encode = true;
+  }
+  assert(rejected_node_encode);
+
   rivet::Bytes too_deep_bytes;
   for (std::size_t i = 0; i <= rivet::kMaxValueDepth; ++i) {
     too_deep_bytes.insert(too_deep_bytes.end(), {0x06, 0x01, 0x00, 0x00, 0x00});

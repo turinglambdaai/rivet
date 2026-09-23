@@ -13,6 +13,7 @@ namespace rivet {
 inline constexpr std::uint8_t kProtocolVersion = 1;
 inline constexpr std::uint32_t kMaxFramePayloadSize = 64u * 1024u * 1024u;
 inline constexpr std::size_t kMaxValueDepth = 64;
+inline constexpr std::size_t kMaxValueNodes = 1u << 18;
 
 enum class MessageType : std::uint8_t {
   Hello = 1,

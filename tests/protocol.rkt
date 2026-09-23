@@ -96,6 +96,17 @@
 (check-exn #rx"nesting exceeds Rivet protocol limit"
            (lambda () (encode-value too-deep-value)))
 
+;; The root List plus max-value-nodes - 1 children exactly fills the budget.
+(define max-node-value (make-list (sub1 max-value-nodes) (void)))
+(define max-node-encoded (encode-value max-node-value))
+(check-not-exn (lambda () (decode-value max-node-encoded)))
+
+;; The root List itself consumes one node, so max-value-nodes elements exceed
+;; the total value-node budget by one and must fail before element traversal.
+(define too-many-node-value (make-list max-value-nodes (void)))
+(check-exn #rx"node count exceeds Rivet protocol limit"
+           (lambda () (encode-value too-many-node-value)))
+
 (define list-prefix #"\x06\x01\x00\x00\x00")
 (define too-deep-payload
   (bytes-append

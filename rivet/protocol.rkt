@@ -5,6 +5,7 @@
 (provide protocol-version
          max-frame-payload-size
          max-value-depth
+         max-value-nodes
          message:hello
          message:request
          message:response
@@ -35,6 +36,11 @@
 (define protocol-version 1)
 (define max-frame-payload-size (* 64 1024 1024))
 (define max-value-depth 64)
+;; A large flat List can fit in a 64 MiB frame while expanding to far more
+;; memory as language-level objects. Count every decoded/encoded value node,
+;; including the root, so malformed or accidental values cannot amplify
+;; memory without bound. Bulk payloads should use Bytes instead of huge Lists.
+(define max-value-nodes (expt 2 18))
 (define magic #"RVT1")
 
 (define message:hello    1)
@@ -149,7 +155,15 @@
 
 (define (encode-value v)
   (define out (open-output-bytes))
+  (define remaining-nodes max-value-nodes)
+  (define (consume-node!)
+    (when (zero? remaining-nodes)
+      (raise-arguments-error 'encode-value
+                             "value node count exceeds Rivet protocol limit"
+                             "maximum nodes" max-value-nodes))
+    (set! remaining-nodes (sub1 remaining-nodes)))
   (define (emit value depth)
+    (consume-node!)
     (cond
       [(void? value) (write-byte tag:null out)]
       [(eq? value #f) (write-byte tag:false out)]
@@ -172,8 +186,15 @@
          (raise-arguments-error 'encode-value
                                 "value nesting exceeds Rivet protocol limit"
                                 "maximum depth" max-value-depth))
+       (define count (length value))
+       ;; Each immediate element consumes at least one node. Reject before
+       ;; emitting/recursing when even the shallow shape cannot fit the budget.
+       (when (> count remaining-nodes)
+         (raise-arguments-error 'encode-value
+                                "value node count exceeds Rivet protocol limit"
+                                "maximum nodes" max-value-nodes))
        (write-byte tag:list out)
-       (write-u32 (length value) out)
+       (write-u32 count out)
        (for ([item (in-list value)]) (emit item (add1 depth)))]
       [else
        (raise-arguments-error 'encode-value
@@ -186,11 +207,19 @@
   (unless (bytes? bs)
     (raise-argument-error 'decode-value "bytes?" bs))
   (define in (open-input-bytes bs))
+  (define remaining-nodes max-value-nodes)
+  (define (consume-node!)
+    (when (zero? remaining-nodes)
+      (error 'decode-value
+             "value node count exceeds Rivet protocol limit (~a)"
+             max-value-nodes))
+    (set! remaining-nodes (sub1 remaining-nodes)))
   (define (read-u32*)
     (define b (read-exactly in 4))
     (when (eof-object? b) (error 'decode-value "unexpected EOF"))
     (bytes->u32 b))
   (define (read-one depth)
+    (consume-node!)
     (define tag (read-byte in))
     (when (eof-object? tag)
       (error 'decode-value "unexpected EOF"))
@@ -218,6 +247,13 @@
                 "value nesting exceeds Rivet protocol limit (~a)"
                 max-value-depth))
        (define count (read-u32*))
+       ;; Each declared element requires at least one node. Check this before
+       ;; allocating a result List so a tiny payload cannot request a huge
+       ;; language-level container.
+       (when (> count remaining-nodes)
+         (error 'decode-value
+                "value node count exceeds Rivet protocol limit (~a)"
+                max-value-nodes))
        (define position (file-position in))
        (define remaining (- (bytes-length bs) position))
        ;; Every encoded list element consumes at least one tag byte.
