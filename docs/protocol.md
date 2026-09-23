@@ -165,6 +165,8 @@ State values are wire-validated against this complete reserved Event shape befor
 
 `define-rpc` records argument names, argument types, and the result type. `define-event` records the Event name and payload type. `define-state` records the State name, value type, and current value. Rivet validates values at the Racket boundary and generates Swift/C++ wrappers before each native build.
 
+Declared RPC, Event, and State API names are limited to 1024 UTF-8 bytes. Incoming RPC and State lookup names are checked against the same limit before the backend converts them to Racket symbols for registry lookup, so arbitrary wire strings cannot force oversized symbol allocation. The limit is measured in encoded UTF-8 bytes rather than Unicode character count.
+
 Schema types are `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, and `(Optional T)`. State and Event payloads accept the same value types except `Void`. Optional null is encoded with the existing Null/Void tag, so typed schema evolution does not change RVT1 framing.
 
 Generated State accessors use `$state/get` and `$state/set` internally; applications normally call the typed Swift/C++ API rather than constructing those reserved requests directly.

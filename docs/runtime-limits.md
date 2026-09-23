@@ -43,6 +43,8 @@ The node budget prevents a small or merely frame-sized wire payload from expandi
 
 State values are additionally preflighted as their complete reserved `$state` Event before storage. Initial values that cannot be synchronized are rejected by `define-state`. Updates encode the Event before changing the State cell and reuse that payload on success, so a type-correct value that exceeds RVT1 limits cannot leave Racket and native state views inconsistent.
 
+Declared RPC, Event, and State API names are limited to 1024 UTF-8 bytes. Incoming RPC and State lookup names use the same byte limit and are rejected before `string->symbol`, preventing arbitrary wire input from creating oversized registry-lookup symbols. Error messages report only the measured length and configured maximum rather than echoing an oversized name.
+
 These are defensive resource limits, not application schema limits. Normal `String`, `Bytes`, `List`, `Optional`, RPC, State, and Event usage is unchanged.
 
 ## Failure isolation
