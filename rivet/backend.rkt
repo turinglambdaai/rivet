@@ -212,8 +212,35 @@
     [_
      (error 'serve "invalid RPC request payload: ~e" value)]))
 
+;; Error frames are diagnostic terminal messages, not bulk payloads. Keep them
+;; bounded well below the RVT1 64 MiB value limit so an application exception
+;; cannot consume large amounts of memory merely while reporting failure.
+(define max-error-message-chars 4096)
+(define error-truncation-suffix "... [truncated]")
+
+(define (bounded-error-message message)
+  (unless (string? message)
+    (raise-argument-error 'bounded-error-message "string?" message))
+  (if (<= (string-length message) max-error-message-chars)
+      message
+      (string-append
+       (substring message
+                  0
+                  (- max-error-message-chars
+                     (string-length error-truncation-suffix)))
+       error-truncation-suffix)))
+
+(define (error-message->payload message)
+  ;; The fallback is intentionally tiny. It protects terminal-response
+  ;; delivery if future changes make normal diagnostic encoding fail for a
+  ;; reason other than message length.
+  (with-handlers ([exn:fail?
+                   (lambda (_)
+                     (encode-value "Rivet request failed"))])
+    (encode-value (bounded-error-message message))))
+
 (define (exn->payload e)
-  (encode-value (exn-message e)))
+  (error-message->payload (exn-message e)))
 
 (define (lookup-state name)
   (unless (string? name)
@@ -319,11 +346,15 @@
                   (encode-value (list name value)))))
 
   (define (reject-request! id message)
-    (send! (frame message:error id (encode-value message))))
+    (send! (frame message:error id (error-message->payload message))))
 
   (define (request-error! id e)
+    ;; Build a guaranteed-small Error payload before competing with
+    ;; cancellation for terminal ownership. If encoding somehow fails, the
+    ;; request remains pending instead of being consumed without a response.
+    (define payload (exn->payload e))
     (when (take-pending! id)
-      (send! (frame message:error id (exn->payload e)))))
+      (send! (frame message:error id payload))))
 
   (define (run-request! id rpc-name args internal-state-request? info)
     (with-handlers ((exn:fail? (lambda (e) (request-error! id e))))
@@ -400,7 +431,7 @@
       [else
        (send! (frame message:error
                      (frame-id f)
-                     (encode-value
+                     (error-message->payload
                       (format "unsupported message type: ~a"
                               (frame-type f)))))]))
 
