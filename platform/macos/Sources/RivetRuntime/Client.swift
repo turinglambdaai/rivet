@@ -52,6 +52,15 @@ public final class RivetClient: @unchecked Sendable {
     public func call(_ name: String, arguments: [RivetValue] = []) async throws -> RivetValue {
         let id = try reserveRequestID()
         return try await withTaskCancellationHandler {
+            // Do not rely only on cancellation-handler scheduling for tasks
+            // that were already cancelled before entering call(). Releasing
+            // the reservation here guarantees a pre-cancelled call performs no
+            // request encoding or transport write.
+            if Task.isCancelled {
+                releaseRequestReservation(id)
+                throw CancellationError()
+            }
+
             let requestData: Data
             do {
                 var values: [RivetValue] = [.string(name)]
