@@ -296,10 +296,14 @@
        custodians)))
 
   (define (finish! id type value)
-    ;; Cancellation and normal completion race for ownership of the pending
-    ;; entry. Only the winner may emit a terminal frame for this request.
+    ;; Encode while the request is still pending. If encoding fails, the
+    ;; request worker's handler still owns a live pending entry and can convert
+    ;; that failure into a request-scoped Error frame instead of dropping the
+    ;; terminal response. Cancellation may still win while encoding; in that
+    ;; case take-pending! returns #f and the encoded response is discarded.
+    (define payload (encode-value value))
     (when (take-pending! id)
-      (send! (frame type id (encode-value value)))))
+      (send! (frame type id payload))))
 
   (define (allocate-event-id!)
     (call-with-semaphore
