@@ -97,7 +97,10 @@ extern "C" int LLVMFuzzerTestOneInput(std::uint8_t const* data, std::size_t size
     return 0;
   }
 
-  rivet::Bytes input(data, data + size);
+  rivet::Bytes input;
+  if (size != 0) {
+    input.assign(data, data + size);
+  }
   fuzz_value(input);
   fuzz_frame(input);
   return 0;
