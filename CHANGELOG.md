@@ -8,6 +8,7 @@ Rivet 0.2 hardens the native runtime contract and release path while preserving 
 - Typed Event schema validation and generated Swift/C++ Event APIs.
 - Native identifier collision detection and language-specific codegen string escaping.
 - Bounded RVT1 frame/value byte size, value nesting, total value-node count, concurrent backend requests, declared/incoming API-name size, and queued backend output.
+- Racket List encoding applies the value-node budget while discovering list length instead of fully traversing oversized Lists before rejecting them; improper Lists fail explicitly without formatting the entire value.
 - Synchronized request cancellation/completion ownership and Event ID allocation; terminal requests keep their pending slot until their Response/Error is admitted to the bounded output queue.
 - Duplicate Request IDs and illegal inbound frame types that collide with a pending request use first-request-wins semantics, preventing a second terminal frame from consuming the original native caller's continuation; IDs become reusable after release.
 - State commits defer request cancellation only across the commit-to-`$state`-Event admission window, keeping the pending slot occupied so a committed State cannot lose its native notification under output backpressure.
