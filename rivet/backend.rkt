@@ -601,11 +601,18 @@
       [(6) (cancel! (frame-id f))]
       [(7) (set! stopped? #t)]
       [else
-       (send! (frame message:error
-                     (frame-id f)
-                     (error-message->payload
-                      (format "unsupported message type: ~a"
-                              (frame-type f)))))]))
+       ;; An inbound Hello/Response/Error/Event is invalid for the backend, but
+       ;; replying with Error using an id that already belongs to a pending
+       ;; Request would steal that request's native continuation. Preserve the
+       ;; same first-request-wins rule used for duplicate Requests: conflicting
+       ;; illegal frames are ignored, while unowned ids keep the existing
+       ;; request-local diagnostic behavior.
+       (unless (request-id-pending? (frame-id f))
+         (send! (frame message:error
+                       (frame-id f)
+                       (error-message->payload
+                        (format "unsupported message type: ~a"
+                                (frame-type f))))))]))
 
   (define reader
     (parameterize ([current-custodian runtime-custodian])
