@@ -1,6 +1,7 @@
 #lang racket/base
 
 (require rackunit
+         racket/list
          "../rivet/backend.rkt"
          "../rivet/protocol.rkt")
 
