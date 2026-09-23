@@ -109,6 +109,8 @@ Void procedures return the Null/Void value. `$state/get` and `$state/set` return
 
 Errors associated with requests reuse the request id. The v1 error payload is a UTF-8 String containing a human-readable message.
 
+The Racket backend bounds generated Error diagnostics to 4096 Unicode characters. Longer exception or rejection messages are truncated and end with `[truncated]`. For admitted requests, Rivet encodes this bounded Error payload before competing with cancellation for terminal-response ownership, so an Error serialization failure cannot silently consume the request without sending a terminal frame.
+
 Structured error codes and stack metadata can be added as a higher-level value shape without changing the frame format.
 
 ## Cancel
