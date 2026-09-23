@@ -187,6 +187,10 @@ int main() {
   }
   assert(rejected_deep_encode);
 
+  rivet::Value::List max_nodes(rivet::kMaxValueNodes - 1);
+  auto max_node_bytes = rivet::encode_value(rivet::Value(std::move(max_nodes)));
+  assert(!throws_value_decode(max_node_bytes));
+
   rivet::Value::List too_many_nodes(rivet::kMaxValueNodes);
   bool rejected_node_encode = false;
   try {
