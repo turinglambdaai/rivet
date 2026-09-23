@@ -7,7 +7,7 @@ Rivet 0.2 hardens the native runtime contract and release path while preserving 
 - Deterministic embedded Racket lifecycle on macOS, including idempotent stop and restart rejection.
 - Typed Event schema validation and generated Swift/C++ Event APIs.
 - Native identifier collision detection and language-specific codegen string escaping.
-- Bounded RVT1 frame/value byte size, value nesting, total value-node count, and concurrent backend requests.
+- Bounded RVT1 frame/value byte size, value nesting, total value-node count, concurrent backend requests, and declared/incoming API-name size.
 - Synchronized request cancellation/completion ownership and Event ID allocation.
 - Request-local handling for malformed application RPC requests and response-serialization failures, with bounded backend Error diagnostics that cannot consume terminal-response ownership before encoding succeeds.
 - State initial values and updates are preflighted as complete `$state` Events, so serialization failures cannot partially commit backend state without notifying native clients.
