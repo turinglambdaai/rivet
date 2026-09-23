@@ -34,6 +34,8 @@ The queue is intentionally bounded. If the native peer stops reading, RPC worker
 
 The writer and application runtime are supervised separately. Producers wait for either output capacity or writer termination. If the output port fails, blocked producers are released, the internal reader/request runtime is shut down, and `serve` propagates the writer error rather than remaining blocked in `read-frame`. On orderly shutdown Rivet stops all producers first, drains every frame that was already accepted by the output queue, then stops the writer.
 
+State updates use separate data and update-order locks. The State cell is committed under the short data lock and that lock is released before a reserved `$state` Event waits for output capacity. Pure Racket `state-ref` calls can therefore observe the committed value even while the native transport is backpressured. A private per-State update-order lock remains held until the Event is accepted, so subsequent setters cannot overtake the stalled update and `$state` Event order remains consistent with commit order.
+
 The queue limit is a frame-count bound, not a replacement for the RVT1 per-frame 64 MiB limit or the pending-request limit. These limits work together: value/frame limits bound each item, the outgoing queue bounds buffered frames, and the pending table bounds admitted request workers, including requests whose terminal frames are waiting for output capacity.
 
 ## Events
