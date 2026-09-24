@@ -40,6 +40,7 @@ final class RequestCancellationState: @unchecked Sendable {
     private var requestID: UInt64?
     private var cancelled = false
     private var requestSent = false
+    private var cancelSent = false
 
     // Returns true when cancellation happened before the request was
     // registered, allowing the caller to abort without putting anything on the
@@ -53,23 +54,28 @@ final class RequestCancellationState: @unchecked Sendable {
     }
 
     // Marks the Request frame as successfully written. If cancellation was
-    // latched while the write was pending, return the id so Cancel can now be
-    // sent after (never before) its Request.
+    // latched while the write was pending, return the id exactly once so Cancel
+    // can now be sent after (never before) its Request.
     func markRequestSent() -> UInt64? {
         lock.lock()
         defer { lock.unlock() }
         precondition(requestID != nil)
         requestSent = true
-        return cancelled ? requestID : nil
+        guard cancelled, !cancelSent else { return nil }
+        cancelSent = true
+        return requestID
     }
 
     // Cancellation before Request write is only latched. Once the Request has
-    // been written, cancellation returns its id immediately for transmission.
+    // been written, the first cancellation returns its id for transmission;
+    // repeated cancellations are suppressed by the state machine.
     func cancel() -> UInt64? {
         lock.lock()
         defer { lock.unlock() }
         cancelled = true
-        return requestSent ? requestID : nil
+        guard requestSent, !cancelSent else { return nil }
+        cancelSent = true
+        return requestID
     }
 }
 
