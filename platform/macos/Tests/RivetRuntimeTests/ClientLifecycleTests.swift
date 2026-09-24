@@ -30,18 +30,21 @@ import Testing
     #expect(state.register(41))
 }
 
-@Test func cancellationBeforeRequestWriteIsDeferred() {
+@Test func cancellationBeforeRequestWriteIsDeferredAndSentOnce() {
     let state = RequestCancellationState()
 
     #expect(!state.register(42))
     #expect(state.cancel() == nil)
     #expect(state.markRequestSent() == 42)
+    #expect(state.cancel() == nil)
+    #expect(state.markRequestSent() == nil)
 }
 
-@Test func cancellationAfterRequestWriteCanSendImmediately() {
+@Test func cancellationAfterRequestWriteCanSendImmediatelyOnce() {
     let state = RequestCancellationState()
 
     #expect(!state.register(43))
     #expect(state.markRequestSent() == nil)
     #expect(state.cancel() == 43)
+    #expect(state.cancel() == nil)
 }
