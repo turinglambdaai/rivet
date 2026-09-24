@@ -19,6 +19,7 @@
 
 #include "chezscheme.h"
 #include "racketcs.h"
+#include "rivet/detail/request_id_allocator.hpp"
 
 namespace rivet::windows {
 namespace {
@@ -232,10 +233,21 @@ class Backend::Impl {
       throw std::runtime_error("Rivet backend is not running");
     }
 
-    auto const id = next_id_.fetch_add(1, std::memory_order_relaxed);
+    std::uint64_t id = 0;
     {
+      // Selection and insertion share one lock. A wrapped allocator therefore
+      // cannot hand the same still-pending id to two concurrent submitters.
       std::lock_guard pending_lock(pending_mutex_);
-      pending_.emplace(id, std::move(pending));
+      id = request_ids_.allocate(
+          pending_.size(),
+          [this](std::uint64_t candidate) {
+            return pending_.find(candidate) != pending_.end();
+          });
+      auto const [it, inserted] = pending_.emplace(id, std::move(pending));
+      (void)it;
+      if (!inserted) {
+        throw std::logic_error("Rivet request id collision");
+      }
     }
 
     Value::List request;
@@ -519,7 +531,7 @@ class Backend::Impl {
   std::thread reader_thread_;
   std::unordered_map<std::uint64_t, PendingRequest> pending_;
   EventHandler event_handler_;
-  std::atomic<std::uint64_t> next_id_{1};
+  detail::RequestIdAllocator request_ids_;
   std::atomic<bool> running_{false};
   std::atomic<bool> hello_seen_{false};
   bool started_{false};
