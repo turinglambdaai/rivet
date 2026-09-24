@@ -58,4 +58,23 @@ int main() {
     std::unordered_set<std::uint64_t> occupied{41, 42, 44};
     assert(allocate(allocator, occupied) == 43);
   }
+
+  {
+    // Cancellation before Request transmission is latched. Marking Request as
+    // sent claims the single Cancel transmission opportunity.
+    rivet::detail::RequestCancellationGate gate;
+    assert(!gate.request_cancel());
+    assert(gate.mark_request_sent());
+    assert(!gate.request_cancel());
+    assert(!gate.mark_request_sent());
+  }
+
+  {
+    // Once Request is on the wire, the first cancellation can send immediately
+    // and repeated cancellations cannot emit duplicates.
+    rivet::detail::RequestCancellationGate gate;
+    assert(!gate.mark_request_sent());
+    assert(gate.request_cancel());
+    assert(!gate.request_cancel());
+  }
 }
