@@ -41,4 +41,34 @@ class RequestIdAllocator final {
   std::uint64_t next_;
 };
 
+// Tracks one native request's send/cancel ordering. The caller protects this
+// state with the same lock as its pending-request table. A cancellation before
+// Request transmission is latched; exactly one side later claims permission to
+// put Cancel on the wire, and only after Request has been written.
+class RequestCancellationGate final {
+ public:
+  bool request_cancel() noexcept {
+    cancel_requested_ = true;
+    if (request_sent_ && !cancel_sent_) {
+      cancel_sent_ = true;
+      return true;
+    }
+    return false;
+  }
+
+  bool mark_request_sent() noexcept {
+    request_sent_ = true;
+    if (cancel_requested_ && !cancel_sent_) {
+      cancel_sent_ = true;
+      return true;
+    }
+    return false;
+  }
+
+ private:
+  bool request_sent_{false};
+  bool cancel_requested_{false};
+  bool cancel_sent_{false};
+};
+
 }  // namespace rivet::detail
