@@ -68,6 +68,7 @@ struct PipePair {
 struct PendingRequest {
   std::unique_ptr<std::promise<Value>> promise;
   CompletionHandler completion;
+  detail::RequestCancellationGate cancellation;
 };
 
 PipePair create_pipe() {
@@ -207,12 +208,23 @@ class Backend::Impl {
     if (!running()) {
       return;
     }
+
+    bool should_send = false;
     {
       std::lock_guard lock(pending_mutex_);
-      if (pending_.find(request_id) == pending_.end()) {
+      auto it = pending_.find(request_id);
+      if (it == pending_.end()) {
         return;
       }
+      // Before Request transmission, cancellation is only latched. Whichever
+      // side first observes that Request is on the wire claims the single
+      // permission to emit Cancel.
+      should_send = it->second.cancellation.request_cancel();
     }
+    if (!should_send) {
+      return;
+    }
+
     std::lock_guard write_lock(write_mutex_);
     auto* transport = transport_.get();
     if (transport != nullptr) {
@@ -266,6 +278,20 @@ class Backend::Impl {
       write_frame(*transport,
                   Frame{MessageType::Request, id,
                         encode_value(Value(std::move(request)))});
+
+      bool send_deferred_cancel = false;
+      {
+        std::lock_guard pending_lock(pending_mutex_);
+        auto it = pending_.find(id);
+        if (it != pending_.end()) {
+          send_deferred_cancel = it->second.cancellation.mark_request_sent();
+        }
+      }
+      // Keep write_mutex_ while emitting a latched cancellation so no other
+      // frame can interleave between this Request and its deferred Cancel.
+      if (send_deferred_cancel) {
+        write_frame(*transport, Frame{MessageType::Cancel, id, {}});
+      }
     } catch (...) {
       fail_request(id, std::current_exception());
     }
