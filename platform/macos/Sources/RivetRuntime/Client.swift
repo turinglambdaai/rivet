@@ -79,6 +79,42 @@ final class RequestCancellationState: @unchecked Sendable {
     }
 }
 
+struct ClientLifecycleState {
+    private enum Phase {
+        case created
+        case starting
+        case running
+        case stopped
+    }
+
+    private var phase: Phase = .created
+
+    var isRunning: Bool { phase == .running }
+
+    mutating func beginStart() throws {
+        guard phase == .created else { throw ClientError.alreadyStarted }
+        phase = .starting
+    }
+
+    mutating func completeStart() throws {
+        guard phase == .starting else { throw ClientError.stopped }
+        phase = .running
+    }
+
+    mutating func failStart() {
+        if phase == .starting {
+            phase = .stopped
+        }
+    }
+
+    @discardableResult
+    mutating func stop() -> Bool {
+        let wasRunning = phase == .running
+        phase = .stopped
+        return wasRunning
+    }
+}
+
 public final class RivetClient: @unchecked Sendable {
     public typealias EventHandler = @Sendable (_ name: String, _ value: RivetValue) -> Void
 
@@ -89,7 +125,7 @@ public final class RivetClient: @unchecked Sendable {
     private let readerQueue = DispatchQueue(label: "dev.rivet.protocol-reader")
 
     private var requestIDs = RequestIDAllocator()
-    private var running = false
+    private var lifecycle = ClientLifecycleState()
     private var pending: [UInt64: CheckedContinuation<RivetValue, Error>] = [:]
     private var eventHandler: EventHandler?
 
@@ -104,19 +140,33 @@ public final class RivetClient: @unchecked Sendable {
 
     public func start(onEvent: EventHandler? = nil) throws {
         stateLock.lock()
-        guard !running else {
+        do {
+            try lifecycle.beginStart()
             stateLock.unlock()
-            throw ClientError.alreadyStarted
+        } catch {
+            stateLock.unlock()
+            throw error
         }
-        stateLock.unlock()
 
-        let hello = try readFrame()
-        try validateHello(hello)
+        do {
+            let hello = try readFrame()
+            try validateHello(hello)
 
-        stateLock.lock()
-        eventHandler = onEvent
-        running = true
-        stateLock.unlock()
+            stateLock.lock()
+            do {
+                try lifecycle.completeStart()
+                eventHandler = onEvent
+                stateLock.unlock()
+            } catch {
+                stateLock.unlock()
+                throw error
+            }
+        } catch {
+            stateLock.lock()
+            lifecycle.failStart()
+            stateLock.unlock()
+            throw error
+        }
 
         readerQueue.async { [weak self] in
             self?.readLoop()
@@ -173,7 +223,7 @@ public final class RivetClient: @unchecked Sendable {
 
     public func cancel(_ requestID: UInt64) {
         stateLock.lock()
-        let shouldSend = running && pending[requestID] != nil
+        let shouldSend = lifecycle.isRunning && pending[requestID] != nil
         stateLock.unlock()
         guard shouldSend else { return }
 
@@ -188,8 +238,7 @@ public final class RivetClient: @unchecked Sendable {
 
     public func stop() {
         stateLock.lock()
-        let wasRunning = running
-        running = false
+        let wasRunning = lifecycle.stop()
         stateLock.unlock()
 
         if wasRunning {
@@ -203,7 +252,7 @@ public final class RivetClient: @unchecked Sendable {
     ) throws -> UInt64 {
         stateLock.lock()
         defer { stateLock.unlock() }
-        guard running else { throw ClientError.notRunning }
+        guard lifecycle.isRunning else { throw ClientError.notRunning }
 
         // Work on a local copy to avoid overlapping Swift exclusivity accesses
         // while the occupancy closure reads the pending dictionary. The whole
@@ -316,7 +365,7 @@ public final class RivetClient: @unchecked Sendable {
     private var isRunning: Bool {
         stateLock.lock()
         defer { stateLock.unlock() }
-        return running
+        return lifecycle.isRunning
     }
 
     private func takePending(_ id: UInt64) -> CheckedContinuation<RivetValue, Error>? {
@@ -337,7 +386,7 @@ public final class RivetClient: @unchecked Sendable {
 
     private func finishWithError(_ error: Error) {
         stateLock.lock()
-        running = false
+        lifecycle.stop()
         stateLock.unlock()
         failAll(error)
     }
@@ -355,7 +404,7 @@ public enum ClientError: Error, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .alreadyStarted: return "Rivet client has already been started"
+        case .alreadyStarted: return "Rivet client instances cannot be restarted"
         case .notRunning: return "Rivet client is not running"
         case .stopped: return "Rivet client stopped"
         case .unexpectedEOF: return "Rivet transport closed unexpectedly"
