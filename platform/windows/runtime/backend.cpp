@@ -209,23 +209,18 @@ class Backend::Impl {
       return;
     }
 
-    bool should_send = false;
-    {
-      std::lock_guard lock(pending_mutex_);
-      auto it = pending_.find(request_id);
-      if (it == pending_.end()) {
-        return;
-      }
-      // Before Request transmission, cancellation is only latched. Whichever
-      // side first observes that Request is on the wire claims the single
-      // permission to emit Cancel.
-      should_send = it->second.cancellation.request_cancel();
-    }
-    if (!should_send) {
+    // Match submit_request's write -> pending lock order. The pending ownership
+    // check and the Cancel write are one linearized operation: a Response cannot
+    // remove this request between those steps and allow a wrapped allocator to
+    // reuse the same id for a newer request before the stale Cancel is written.
+    std::lock_guard write_lock(write_mutex_);
+    std::lock_guard pending_lock(pending_mutex_);
+    auto it = pending_.find(request_id);
+    if (it == pending_.end() ||
+        !it->second.cancellation.request_cancel()) {
       return;
     }
 
-    std::lock_guard write_lock(write_mutex_);
     auto* transport = transport_.get();
     if (transport != nullptr) {
       write_frame(*transport, Frame{MessageType::Cancel, request_id, {}});
