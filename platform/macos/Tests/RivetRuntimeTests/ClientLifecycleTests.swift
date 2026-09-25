@@ -1,6 +1,28 @@
 import Testing
 @testable import RivetRuntime
 
+private func expectAlreadyStarted(_ operation: () throws -> Void) {
+    do {
+        try operation()
+        Issue.record("expected ClientError.alreadyStarted")
+    } catch ClientError.alreadyStarted {
+        // Expected.
+    } catch {
+        Issue.record("unexpected error: \(error)")
+    }
+}
+
+private func expectStopped(_ operation: () throws -> Void) {
+    do {
+        try operation()
+        Issue.record("expected ClientError.stopped")
+    } catch ClientError.stopped {
+        // Expected.
+    } catch {
+        Issue.record("unexpected error: \(error)")
+    }
+}
+
 @Test func requestIDAllocatorWrapsWithoutZero() {
     var allocator = RequestIDAllocator(nextID: UInt64.max)
     let empty = Set<UInt64>()
@@ -47,4 +69,46 @@ import Testing
     #expect(state.markRequestSent() == nil)
     #expect(state.cancel() == 43)
     #expect(state.cancel() == nil)
+}
+
+@Test func clientLifecycleReservesStartBeforeHandshake() throws {
+    var lifecycle = ClientLifecycleState()
+
+    try lifecycle.beginStart()
+    #expect(!lifecycle.isRunning)
+    expectAlreadyStarted { try lifecycle.beginStart() }
+
+    try lifecycle.completeStart()
+    #expect(lifecycle.isRunning)
+    #expect(lifecycle.stop())
+    #expect(!lifecycle.isRunning)
+    expectAlreadyStarted { try lifecycle.beginStart() }
+}
+
+@Test func clientLifecycleFailedStartCannotRestart() throws {
+    var lifecycle = ClientLifecycleState()
+
+    try lifecycle.beginStart()
+    lifecycle.failStart()
+
+    #expect(!lifecycle.isRunning)
+    expectAlreadyStarted { try lifecycle.beginStart() }
+}
+
+@Test func clientLifecycleStopDuringStartPreventsResurrection() throws {
+    var lifecycle = ClientLifecycleState()
+
+    try lifecycle.beginStart()
+    #expect(!lifecycle.stop())
+
+    expectStopped { try lifecycle.completeStart() }
+    #expect(!lifecycle.isRunning)
+    expectAlreadyStarted { try lifecycle.beginStart() }
+}
+
+@Test func clientLifecycleStopBeforeStartIsTerminal() {
+    var lifecycle = ClientLifecycleState()
+
+    #expect(!lifecycle.stop())
+    expectAlreadyStarted { try lifecycle.beginStart() }
 }
