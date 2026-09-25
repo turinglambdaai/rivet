@@ -80,7 +80,8 @@ private func expectStopped(_ operation: () throws -> Void) {
 
     try lifecycle.completeStart()
     #expect(lifecycle.isRunning)
-    #expect(lifecycle.stop())
+    let wasRunning = lifecycle.stop()
+    #expect(wasRunning)
     #expect(!lifecycle.isRunning)
     expectAlreadyStarted { try lifecycle.beginStart() }
 }
@@ -99,7 +100,8 @@ private func expectStopped(_ operation: () throws -> Void) {
     var lifecycle = ClientLifecycleState()
 
     try lifecycle.beginStart()
-    #expect(!lifecycle.stop())
+    let wasRunning = lifecycle.stop()
+    #expect(!wasRunning)
 
     expectStopped { try lifecycle.completeStart() }
     #expect(!lifecycle.isRunning)
@@ -109,6 +111,7 @@ private func expectStopped(_ operation: () throws -> Void) {
 @Test func clientLifecycleStopBeforeStartIsTerminal() {
     var lifecycle = ClientLifecycleState()
 
-    #expect(!lifecycle.stop())
+    let wasRunning = lifecycle.stop()
+    #expect(!wasRunning)
     expectAlreadyStarted { try lifecycle.beginStart() }
 }
