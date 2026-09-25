@@ -3,6 +3,7 @@
 (require ffi/unsafe/port
          racket/async-channel
          racket/match
+         "private/event-id.rkt"
          "protocol.rkt")
 
 (provide define-rpc
@@ -386,7 +387,7 @@
   (define writer-error (box #f))
   (define reader-error (box #f))
   (define stopped? #f)
-  (define next-event-id 1)
+  (define next-event-id first-event-id)
 
   (define writer
     (parameterize ([current-custodian writer-custodian])
@@ -588,7 +589,7 @@
      event-id-lock
      (lambda ()
        (define id next-event-id)
-       (set! next-event-id (add1 next-event-id))
+       (set! next-event-id (advance-event-id next-event-id))
        id)))
 
   (define (emit! name value [encoded-payload #f])
