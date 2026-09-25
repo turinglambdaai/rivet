@@ -116,6 +116,29 @@ int main() {
       throw std::runtime_error("async increment(99) did not return 100");
     }
 
+    progress("cancelling pending request");
+    auto cancellable = backend.request("wait-for-cancel", {});
+    backend.cancel(cancellable.id);
+    bool cancelled = false;
+    try {
+      (void)cancellable.result.get();
+    } catch (std::exception const& error) {
+      cancelled = std::string(error.what()) == "request cancelled";
+      if (!cancelled) {
+        throw;
+      }
+    }
+    if (!cancelled) {
+      throw std::runtime_error("cancelled request completed successfully");
+    }
+
+    progress("calling increment after cancellation");
+    auto post_cancel = backend.call(
+        "increment", rivet::Value::List{rivet::Value(std::int64_t{1})});
+    if (expect_int(post_cancel.get(), "increment after cancel") != 2) {
+      throw std::runtime_error("increment after cancellation did not return 2");
+    }
+
     progress("reading initial state");
     auto initial = backend.get_state("counter");
     if (expect_int(initial.get(), "get_state") != 10) {

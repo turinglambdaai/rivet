@@ -222,17 +222,38 @@ public final class RivetClient: @unchecked Sendable {
     }
 
     public func cancel(_ requestID: UInt64) {
+        let data: Data
+        do {
+            data = try encodeRivetFrame(RivetFrame(type: .cancel, id: requestID))
+        } catch {
+            return
+        }
+
+        // Linearize the pending-ownership check with the Cancel write. If a
+        // response is waiting while another frame owns writeLock, it may remove
+        // the old pending request before we acquire writeLock. Rechecking under
+        // stateLock here prevents that stale cancellation from crossing an ID
+        // release/reuse boundary and targeting a later request with the same ID.
+        writeLock.lock()
         stateLock.lock()
-        let shouldSend = lifecycle.isRunning && pending[requestID] != nil
-        stateLock.unlock()
-        guard shouldSend else { return }
+        guard lifecycle.isRunning, pending[requestID] != nil else {
+            stateLock.unlock()
+            writeLock.unlock()
+            return
+        }
 
         do {
-            try write(RivetFrame(type: .cancel, id: requestID))
+            try output.write(contentsOf: data)
+            stateLock.unlock()
+            writeLock.unlock()
         } catch {
-            if let continuation = takePending(requestID) {
-                continuation.resume(throwing: error)
-            }
+            // Keep ownership until we have removed this exact pending entry.
+            // A future wrapped allocation cannot reuse the ID before the failed
+            // cancellation has captured its continuation.
+            let continuation = pending.removeValue(forKey: requestID)
+            stateLock.unlock()
+            writeLock.unlock()
+            continuation?.resume(throwing: error)
         }
     }
 
