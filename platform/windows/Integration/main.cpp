@@ -157,8 +157,23 @@ int main() {
       throw std::runtime_error("counter state did not persist as 11");
     }
 
-    progress("stopping backend");
-    backend.stop();
+    progress("stopping backend concurrently with pending work");
+    auto pending_at_stop = backend.request("wait-for-cancel", {});
+    auto stop_one = std::async(std::launch::async, [&backend] { backend.stop(); });
+    auto stop_two = std::async(std::launch::async, [&backend] { backend.stop(); });
+    stop_one.get();
+    stop_two.get();
+
+    bool pending_failed = false;
+    try {
+      (void)pending_at_stop.result.get();
+    } catch (std::exception const&) {
+      pending_failed = true;
+    }
+    if (!pending_failed) {
+      throw std::runtime_error("request pending at shutdown completed successfully");
+    }
+
     progress("backend stopped");
     std::cout << "Rivet embedded Windows round-trip passed\n";
     return 0;
