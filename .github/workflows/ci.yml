@@ -138,7 +138,7 @@ jobs:
           swift test --package-path platform/macos -Xcc "-I${racket_include}"
 
   windows-host:
-    name: Windows CLI package + embedded .NET smoke
+    name: Windows CLI package smoke
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -192,6 +192,27 @@ jobs:
           if (-not (Test-Path 'app\backend.rkt')) {
             throw 'raco rivet clean removed application source'
           }
+
+  windows-dotnet-embedded:
+    name: Windows embedded .NET + SQLite/FFI smoke
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Install Rivet
+        shell: pwsh
+        run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Build embedded .NET runtime bundle with SQLite and blocking FFI
         shell: pwsh
         run: |
@@ -268,6 +289,7 @@ jobs:
             throw 'typed C# client was not generated'
           }
       - name: Run Racket in-process from .NET without runtime PATH mutation
+        timeout-minutes: 3
         shell: pwsh
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'rivet-dotnet-smoke\EmbeddedSmoke'
