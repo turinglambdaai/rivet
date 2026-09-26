@@ -3,6 +3,14 @@ import Foundation
 import RivetEmbedding
 import RivetRuntime
 
+#if arch(arm64)
+private let benchmarkArchitecture = "arm64"
+#elseif arch(x86_64)
+private let benchmarkArchitecture = "x64"
+#else
+private let benchmarkArchitecture = "unknown"
+#endif
+
 private struct BenchmarkMetric {
     let iterations: Int
     let totalMilliseconds: Double
@@ -93,6 +101,8 @@ private func runBenchmark(
     let report: [String: Any] = [
         "schema_version": 1,
         "platform": "macos",
+        "architecture": benchmarkArchitecture,
+        "configuration": "release",
         "startup_ms": startupMilliseconds,
         "warmup_iterations": warmupIterations,
         "rpc": rpc.json,
