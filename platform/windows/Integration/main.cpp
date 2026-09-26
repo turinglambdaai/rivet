@@ -116,6 +116,29 @@ int main() {
       throw std::runtime_error("async increment(99) did not return 100");
     }
 
+    progress("cancelling pending request");
+    auto cancellable = backend.request("wait-for-cancel", {});
+    backend.cancel(cancellable.id);
+    bool cancelled = false;
+    try {
+      (void)cancellable.result.get();
+    } catch (std::exception const& error) {
+      cancelled = std::string(error.what()) == "request cancelled";
+      if (!cancelled) {
+        throw;
+      }
+    }
+    if (!cancelled) {
+      throw std::runtime_error("cancelled request completed successfully");
+    }
+
+    progress("calling increment after cancellation");
+    auto post_cancel = backend.call(
+        "increment", rivet::Value::List{rivet::Value(std::int64_t{1})});
+    if (expect_int(post_cancel.get(), "increment after cancel") != 2) {
+      throw std::runtime_error("increment after cancellation did not return 2");
+    }
+
     progress("reading initial state");
     auto initial = backend.get_state("counter");
     if (expect_int(initial.get(), "get_state") != 10) {
@@ -134,8 +157,23 @@ int main() {
       throw std::runtime_error("counter state did not persist as 11");
     }
 
-    progress("stopping backend");
-    backend.stop();
+    progress("stopping backend concurrently with pending work");
+    auto pending_at_stop = backend.request("wait-for-cancel", {});
+    auto stop_one = std::async(std::launch::async, [&backend] { backend.stop(); });
+    auto stop_two = std::async(std::launch::async, [&backend] { backend.stop(); });
+    stop_one.get();
+    stop_two.get();
+
+    bool pending_failed = false;
+    try {
+      (void)pending_at_stop.result.get();
+    } catch (std::exception const&) {
+      pending_failed = true;
+    }
+    if (!pending_failed) {
+      throw std::runtime_error("request pending at shutdown completed successfully");
+    }
+
     progress("backend stopped");
     std::cout << "Rivet embedded Windows round-trip passed\n";
     return 0;

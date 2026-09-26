@@ -18,6 +18,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Validate release tag provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash .github/scripts/validate-release-tag.sh \
+            "$GITHUB_REF_NAME" \
+            origin/main \
+            HEAD
 
       - name: Set up Racket CS
         uses: Bogdanp/setup-racket@v1.15
@@ -81,6 +93,13 @@ jobs:
             capture { print }
           ' CHANGELOG.md > dist/release-notes.md
           test -s dist/release-notes.md
+
+      - name: Smoke-test source package artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash .github/scripts/smoke-source-package.sh \
+            "dist/rivet-${RIVET_VERSION}.zip"
 
       - name: Upload release package artifact
         uses: actions/upload-artifact@v4

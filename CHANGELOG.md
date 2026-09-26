@@ -5,14 +5,18 @@
 Rivet 0.2 hardens the native runtime contract and release path while preserving the existing WinUI 3 / SwiftUI architecture.
 
 - Deterministic embedded Racket lifecycle on macOS, including idempotent stop and restart rejection.
+- Standalone Swift `RivetClient` instances now use the same one-shot lifecycle: start is reserved before the Hello read, concurrent starts are rejected, and stop/startup races cannot resurrect a stopped client.
 - Typed Event schema validation and generated Swift/C++ Event APIs.
 - Native identifier collision detection and language-specific codegen string escaping.
 - Bounded RVT1 frame/value byte size, value nesting, total value-node count, concurrent backend requests, declared/incoming API-name size, and queued backend output.
 - Racket List encoding applies the value-node budget while discovering list length instead of fully traversing oversized Lists before rejecting them; improper Lists fail explicitly without formatting the entire value.
 - Typed Racket value validation applies the same List nesting and total-node budgets before encoding, avoids `list?`/`andmap` full traversals, and keeps `Any` opaque so validation itself remains bounded.
 - Racket protocol encoding reports unsupported application values without formatting the object itself, so custom writers cannot amplify or replace the original codec failure.
-- Synchronized request cancellation/completion ownership and Event ID allocation; terminal requests keep their pending slot until their Response/Error is admitted to the bounded output queue.
+- Synchronized request cancellation/completion ownership and non-zero UInt64 Event ID allocation; Event IDs wrap from `2^64-1` back to `1`, while terminal requests keep their pending slot until their Response/Error is admitted to the bounded output queue.
 - Duplicate Request IDs and illegal inbound frame types that collide with a pending request use first-request-wins semantics, preventing a second terminal frame from consuming the original native caller's continuation; IDs become reusable after release.
+- Native Windows/macOS request-ID allocators skip zero and still-pending IDs across UInt64 wraparound; cancellation is latched until its Request frame is written so Cancel cannot overtake Request on the wire.
+- Native Cancel writes are linearized with pending-request ownership, so a response cannot release an ID between the final ownership check and the Cancel write and let a stale cancellation cross into a later wrapped request that reuses the same ID.
+- Windows transport shutdown is serialized across concurrent `stop()` calls, blocks new Request/Cancel writes at the Shutdown boundary, and keeps the transport object alive until the native reader thread has exited before destroying its pipe handles.
 - State commits defer request cancellation only across the commit-to-`$state`-Event admission window, keeping the pending slot occupied so a committed State cannot lose its native notification under output backpressure.
 - Backend reader/writer supervision propagates output-port failure and stops producers instead of leaving the server blocked behind a dead writer.
 - State data locking is separated from per-State update/Event ordering, so output backpressure cannot block pure Racket `state-ref` calls while concurrent setters still preserve `$state` Event order.
@@ -22,6 +26,8 @@ Rivet 0.2 hardens the native runtime contract and release path while preserving 
 - State initial values and updates are preflighted as complete `$state` Events, so serialization failures cannot partially commit backend state without notifying native clients.
 - Application version, build, display-name, identifier, and Windows/macOS minimum-version metadata are centralized in `rivet.rktd` with backwards-compatible defaults.
 - Shared RVT1 golden vectors consumed by Racket, C++, and Swift tests.
+- Deterministic 512-value RVT1 property corpora in Racket, C++, and Swift replay the same PRNG sequence, verify canonical round-trips/truncation rejection, and assert a shared encoded-byte fingerprint.
+- An opt-in Clang/libFuzzer harness exercises native RVT1 value/frame decoding under ASan and UBSan; pull requests run a bounded fuzz smoke campaign seeded from the shared golden vectors, with a reproducible per-run seed and self-contained crash/timeout/OOM payloads in CI logs.
 - Strict UTF-8 validation and unknown message-type rejection across protocol implementations.
 - Racket validates frame IDs as unsigned 64-bit values before writing any bytes, matching native UInt64 semantics and preventing local argument errors from leaving partial frames on the transport.
 - Generated Windows RPC/State completion APIs provide non-blocking, cancellable WinUI-friendly calls while preserving the existing `std::future` API.

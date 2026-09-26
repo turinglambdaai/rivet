@@ -19,6 +19,7 @@
 
 #include "chezscheme.h"
 #include "racketcs.h"
+#include "rivet/detail/request_id_allocator.hpp"
 
 namespace rivet::windows {
 namespace {
@@ -67,6 +68,7 @@ struct PipePair {
 struct PendingRequest {
   std::unique_ptr<std::promise<Value>> promise;
   CompletionHandler completion;
+  detail::RequestCancellationGate cancellation;
 };
 
 PipePair create_pipe() {
@@ -138,37 +140,54 @@ class Backend::Impl {
   }
 
   void stop() {
-    std::unique_lock state_lock(state_mutex_);
-    if (!started_) {
-      return;
+    // Serializing the complete stop sequence prevents two callers from joining
+    // or destroying the same native threads/transport concurrently.
+    std::lock_guard stop_lock(stop_mutex_);
+
+    {
+      std::lock_guard state_lock(state_mutex_);
+      if (!started_) {
+        return;
+      }
+      // Writers recheck this flag after acquiring write_mutex_. Once false, no
+      // new Request/Cancel may be written after the Shutdown boundary below.
+      running_.store(false, std::memory_order_release);
     }
 
-    auto* transport = transport_.get();
-    auto const was_running = running_.exchange(false, std::memory_order_acq_rel);
-    state_lock.unlock();
-
-    if (was_running && transport != nullptr) {
-      try {
-        std::lock_guard write_lock(write_mutex_);
+    // Try Shutdown even when a worker already marked running_ false. A native
+    // reader failure does not necessarily mean the Racket server stopped
+    // reading requests, and skipping Shutdown in that state could strand the
+    // Racket thread forever in its request loop.
+    try {
+      std::lock_guard write_lock(write_mutex_);
+      auto* transport = transport_.get();
+      if (transport != nullptr) {
         write_frame(*transport, Frame{MessageType::Shutdown, 0, {}});
-      } catch (...) {
-        // The server may already have exited. Joining below is authoritative.
       }
+    } catch (...) {
+      // The server may already have exited. Joining below is authoritative.
     }
 
     if (racket_thread_.joinable()) {
       racket_thread_.join();
     }
 
-    // Closing the native write end helps wake a failed server that never
-    // reached the Racket loop; the server output end closing wakes the reader.
-    {
-      std::lock_guard lock(state_mutex_);
-      transport_.reset();
-    }
-
+    // The Racket-side output port owns the server write handle and closes it
+    // during serve-fds teardown. That EOF wakes read_frame. Keep the C++
+    // transport object alive until the reader is fully joined so a blocked
+    // read can never race with transport destruction.
     if (reader_thread_.joinable()) {
       reader_thread_.join();
+    }
+
+    // Writers also hold write_mutex_ whenever they dereference transport_. A
+    // request that raced with stop either wrote before Shutdown or observes
+    // running_ == false after it acquires this mutex and never touches the
+    // transport. Destruction therefore cannot overlap a native write either.
+    {
+      std::lock_guard write_lock(write_mutex_);
+      std::lock_guard state_lock(state_mutex_);
+      transport_.reset();
     }
 
     reject_all(stopped_error());
@@ -206,13 +225,22 @@ class Backend::Impl {
     if (!running()) {
       return;
     }
-    {
-      std::lock_guard lock(pending_mutex_);
-      if (pending_.find(request_id) == pending_.end()) {
-        return;
-      }
-    }
+
+    // Match submit_request's write -> pending lock order. Recheck running after
+    // acquiring write_mutex_ so a cancellation that queued behind stop cannot
+    // be serialized after Shutdown. The pending ownership check and Cancel
+    // write then form one linearized operation.
     std::lock_guard write_lock(write_mutex_);
+    if (!running()) {
+      return;
+    }
+    std::lock_guard pending_lock(pending_mutex_);
+    auto it = pending_.find(request_id);
+    if (it == pending_.end() ||
+        !it->second.cancellation.request_cancel()) {
+      return;
+    }
+
     auto* transport = transport_.get();
     if (transport != nullptr) {
       write_frame(*transport, Frame{MessageType::Cancel, request_id, {}});
@@ -232,10 +260,21 @@ class Backend::Impl {
       throw std::runtime_error("Rivet backend is not running");
     }
 
-    auto const id = next_id_.fetch_add(1, std::memory_order_relaxed);
+    std::uint64_t id = 0;
     {
+      // Selection and insertion share one lock. A wrapped allocator therefore
+      // cannot hand the same still-pending id to two concurrent submitters.
       std::lock_guard pending_lock(pending_mutex_);
-      pending_.emplace(id, std::move(pending));
+      id = request_ids_.allocate(
+          pending_.size(),
+          [this](std::uint64_t candidate) {
+            return pending_.find(candidate) != pending_.end();
+          });
+      auto const [it, inserted] = pending_.emplace(id, std::move(pending));
+      (void)it;
+      if (!inserted) {
+        throw std::logic_error("Rivet request id collision");
+      }
     }
 
     Value::List request;
@@ -247,6 +286,12 @@ class Backend::Impl {
 
     try {
       std::lock_guard write_lock(write_mutex_);
+      // A request may have passed the optimistic check above before another
+      // thread began stop(). Rechecking while holding the serialization lock
+      // guarantees it is either entirely before Shutdown or not written at all.
+      if (!running()) {
+        throw std::runtime_error("Rivet backend is not running");
+      }
       auto* transport = transport_.get();
       if (transport == nullptr) {
         throw std::runtime_error("Rivet backend transport is closed");
@@ -254,6 +299,22 @@ class Backend::Impl {
       write_frame(*transport,
                   Frame{MessageType::Request, id,
                         encode_value(Value(std::move(request)))});
+
+      bool send_deferred_cancel = false;
+      {
+        std::lock_guard pending_lock(pending_mutex_);
+        auto it = pending_.find(id);
+        if (it != pending_.end()) {
+          send_deferred_cancel = it->second.cancellation.mark_request_sent();
+        }
+      }
+      // Keep write_mutex_ while emitting a latched cancellation so no other
+      // frame can interleave between this Request and its deferred Cancel. If
+      // stop began after the running check above, it is waiting for this mutex,
+      // so both frames remain ordered before Shutdown.
+      if (send_deferred_cancel) {
+        write_frame(*transport, Frame{MessageType::Cancel, id, {}});
+      }
     } catch (...) {
       fail_request(id, std::current_exception());
     }
@@ -511,6 +572,7 @@ class Backend::Impl {
 
   RacketRuntimeConfig config_;
   mutable std::mutex state_mutex_;
+  std::mutex stop_mutex_;
   std::mutex write_mutex_;
   std::mutex pending_mutex_;
   std::mutex event_mutex_;
@@ -519,7 +581,7 @@ class Backend::Impl {
   std::thread reader_thread_;
   std::unordered_map<std::uint64_t, PendingRequest> pending_;
   EventHandler event_handler_;
-  std::atomic<std::uint64_t> next_id_{1};
+  detail::RequestIdAllocator request_ids_;
   std::atomic<bool> running_{false};
   std::atomic<bool> hello_seen_{false};
   bool started_{false};
