@@ -11,6 +11,8 @@ The integration runner accepts an optional `--benchmark` flag. Benchmark mode re
 - `state_get`: 1,000 sequential `$state/get` round trips;
 - `state_set`: 500 sequential `$state/set` round trips, including the reserved `$state` Event that precedes each successful response.
 
+The report also records `platform`, `architecture`, and `configuration` so results from different execution contexts are not accidentally compared as one series. Integration benchmarks are built in release mode.
+
 Each operation group includes `iterations`, `total_ms`, and `us_per_operation`. Every timed operation still validates its result, so a fast but incorrect run fails instead of producing a number.
 
 Example shape:
@@ -19,6 +21,8 @@ Example shape:
 {
   "schema_version": 1,
   "platform": "macos",
+  "architecture": "arm64",
+  "configuration": "release",
   "startup_ms": 42.5,
   "warmup_iterations": 50,
   "rpc": {
@@ -55,7 +59,7 @@ Do not treat absolute timings from shared GitHub-hosted runners as hard pass/fai
 
 For meaningful regression work:
 
-- compare the same platform and architecture;
+- compare the same platform, architecture, and build configuration;
 - use the same Racket, compiler, and runner image where possible;
 - run several samples and compare distributions or medians rather than one measurement;
 - use a dedicated or self-hosted machine before establishing release thresholds;
