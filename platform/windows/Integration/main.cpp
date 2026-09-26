@@ -3,9 +3,11 @@
 #endif
 #include <windows.h>
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <future>
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -14,6 +16,14 @@
 #include "backend.hpp"
 
 namespace {
+
+using BenchmarkClock = std::chrono::steady_clock;
+
+struct BenchmarkMetric {
+  int iterations{};
+  double total_ms{};
+  double us_per_operation{};
+};
 
 std::filesystem::path executable_path() {
   std::wstring buffer(32768, L'\0');
@@ -56,10 +66,99 @@ void progress(char const* message) {
   std::cerr << "[rivet-integration] " << message << "\n" << std::flush;
 }
 
+double elapsed_ms(BenchmarkClock::time_point begin,
+                  BenchmarkClock::time_point end) {
+  return std::chrono::duration<double, std::milli>(end - begin).count();
+}
+
+template <typename Operation>
+BenchmarkMetric benchmark_operations(int iterations, Operation&& operation) {
+  auto const begin = BenchmarkClock::now();
+  for (int i = 0; i < iterations; ++i) {
+    operation(i);
+  }
+  auto const total_ms = elapsed_ms(begin, BenchmarkClock::now());
+  return BenchmarkMetric{
+      iterations,
+      total_ms,
+      (total_ms * 1000.0) / static_cast<double>(iterations),
+  };
+}
+
+void print_metric_json(char const* name,
+                       BenchmarkMetric const& metric,
+                       bool trailing_comma) {
+  std::cout << "\"" << name << "\":{"iterations":" << metric.iterations
+            << ",\"total_ms\":" << metric.total_ms
+            << ",\"us_per_operation\":" << metric.us_per_operation << "}";
+  if (trailing_comma) {
+    std::cout << ",";
+  }
+}
+
+void run_benchmark(rivet::windows::Backend& backend, double startup_ms) {
+  constexpr int warmup_iterations = 50;
+  constexpr int rpc_iterations = 1000;
+  constexpr int state_get_iterations = 1000;
+  constexpr int state_set_iterations = 500;
+
+  for (int i = 0; i < warmup_iterations; ++i) {
+    auto result = backend.call(
+        "increment", rivet::Value::List{rivet::Value(std::int64_t{41})});
+    if (expect_int(result.get(), "benchmark warmup") != 42) {
+      throw std::runtime_error("benchmark warmup returned an unexpected value");
+    }
+  }
+
+  auto const rpc = benchmark_operations(rpc_iterations, [&](int) {
+    auto result = backend.call(
+        "increment", rivet::Value::List{rivet::Value(std::int64_t{41})});
+    if (expect_int(result.get(), "benchmark RPC") != 42) {
+      throw std::runtime_error("benchmark RPC returned an unexpected value");
+    }
+  });
+
+  auto const state_get = benchmark_operations(state_get_iterations, [&](int) {
+    auto result = backend.get_state("counter");
+    auto const value = expect_int(result.get(), "benchmark state get");
+    if (value != 10) {
+      throw std::runtime_error("benchmark state get returned an unexpected value");
+    }
+  });
+
+  auto const state_set = benchmark_operations(state_set_iterations, [&](int i) {
+    auto const expected = std::int64_t{10 + (i & 1)};
+    auto result = backend.set_state("counter", rivet::Value(expected));
+    if (expect_int(result.get(), "benchmark state set") != expected) {
+      throw std::runtime_error("benchmark state set returned an unexpected value");
+    }
+  });
+
+  std::cout << std::fixed << std::setprecision(3);
+  std::cout << "{\"schema_version\":1,\"platform\":\"windows\","
+            << "\"startup_ms\":" << startup_ms << ","
+            << "\"warmup_iterations\":" << warmup_iterations << ",";
+  print_metric_json("rpc", rpc, true);
+  print_metric_json("state_get", state_get, true);
+  print_metric_json("state_set", state_set, false);
+  std::cout << "}\n";
+}
+
+bool benchmark_mode(int argc, char** argv) {
+  if (argc == 1) {
+    return false;
+  }
+  if (argc == 2 && std::string(argv[1]) == "--benchmark") {
+    return true;
+  }
+  throw std::runtime_error("usage: RivetIntegration [--benchmark]");
+}
+
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
   try {
+    auto const benchmark = benchmark_mode(argc, argv);
     auto const exe = executable_path();
     auto const root = exe.parent_path();
     auto const runtime = root / L"runtime";
@@ -76,8 +175,16 @@ int main() {
 
     progress("starting backend");
     rivet::windows::Backend backend(std::move(config));
+    auto const startup_begin = BenchmarkClock::now();
     backend.start();
+    auto const startup_ms = elapsed_ms(startup_begin, BenchmarkClock::now());
     progress("backend started");
+
+    if (benchmark) {
+      run_benchmark(backend, startup_ms);
+      backend.stop();
+      return 0;
+    }
 
     progress("calling increment");
     auto increment = backend.call(
