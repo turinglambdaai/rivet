@@ -184,6 +184,7 @@ int main(int argc, char** argv) {
     config.module_name = "backend";
     config.entry_symbol = "start";
     config.dll_dir = runtime.wstring();
+    config.max_pending_requests = 1;
 
     progress("starting backend");
     rivet::windows::Backend backend(std::move(config));
@@ -237,6 +238,21 @@ int main(int argc, char** argv) {
 
     progress("cancelling pending request");
     auto cancellable = backend.request("wait-for-cancel", {});
+    bool overload_rejected = false;
+    try {
+      (void)backend.request(
+          "increment", rivet::Value::List{rivet::Value(std::int64_t{1})});
+    } catch (std::runtime_error const& error) {
+      overload_rejected =
+          std::string(error.what()) ==
+          "too many native pending requests (limit 1)";
+      if (!overload_rejected) {
+        throw;
+      }
+    }
+    if (!overload_rejected) {
+      throw std::runtime_error("native pending request limit was not enforced");
+    }
     backend.cancel(cancellable.id);
     bool cancelled = false;
     try {
@@ -276,8 +292,23 @@ int main(int argc, char** argv) {
       throw std::runtime_error("counter state did not persist as 11");
     }
 
-    progress("stopping backend");
-    backend.stop();
+    progress("stopping backend concurrently with pending work");
+    auto pending_at_stop = backend.request("wait-for-cancel", {});
+    auto stop_one = std::async(std::launch::async, [&backend] { backend.stop(); });
+    auto stop_two = std::async(std::launch::async, [&backend] { backend.stop(); });
+    stop_one.get();
+    stop_two.get();
+
+    bool pending_failed = false;
+    try {
+      (void)pending_at_stop.result.get();
+    } catch (std::exception const&) {
+      pending_failed = true;
+    }
+    if (!pending_failed) {
+      throw std::runtime_error("request pending at shutdown completed successfully");
+    }
+
     progress("backend stopped");
     std::cout << "Rivet embedded Windows round-trip passed\n";
     return 0;

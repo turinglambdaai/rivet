@@ -36,13 +36,60 @@ jobs:
         run: python3 runtime/fuzz/seed_corpus.py "$RUNNER_TEMP/rivet-fuzz-corpus"
 
       - name: Fuzz value and frame decoders
+        shell: bash
         env:
           ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-        run: >-
-          build/fuzz/rivet_protocol_fuzz
-          "$RUNNER_TEMP/rivet-fuzz-corpus"
-          -runs=20000
-          -max_len=65536
-          -timeout=5
-          -rss_limit_mb=2048
+        run: |
+          set -euo pipefail
+
+          corpus="$RUNNER_TEMP/rivet-fuzz-corpus"
+          artifacts="$RUNNER_TEMP/rivet-fuzz-artifacts"
+          mkdir -p "$artifacts"
+
+          # Vary coverage between CI runs while keeping every run exactly
+          # reproducible from the GitHub Actions run id printed in the log.
+          seed=$((GITHUB_RUN_ID % 2147483647))
+          if (( seed == 0 )); then seed=1; fi
+          echo "libFuzzer seed: $seed (GitHub run id: $GITHUB_RUN_ID)"
+
+          set +e
+          build/fuzz/rivet_protocol_fuzz \
+            "$corpus" \
+            -runs=20000 \
+            -seed="$seed" \
+            -max_len=65536 \
+            -timeout=5 \
+            -rss_limit_mb=2048 \
+            -print_final_stats=1 \
+            -artifact_prefix="$artifacts/"
+          status=$?
+
+          if (( status != 0 )); then
+            # Diagnostics are deliberately best-effort while errexit remains
+            # disabled. The original libFuzzer/sanitizer status must be the job
+            # status even if inspecting a reproducer encounters another error.
+            echo "::group::libFuzzer failure artifacts"
+            shopt -s nullglob
+            failure_artifacts=("$artifacts"/*)
+            if (( ${#failure_artifacts[@]} == 0 )); then
+              echo "libFuzzer failed without writing a crash/timeout/OOM artifact."
+            else
+              for artifact in "${failure_artifacts[@]}"; do
+                echo "artifact: $artifact"
+                python3 - "$artifact" <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import sys
+
+          data = Path(sys.argv[1]).read_bytes()
+          print(f"sha256: {sha256(data).hexdigest()}")
+          print(f"hex: {data.hex()}")
+          PY
+              done
+            fi
+            echo "::endgroup::"
+            exit "$status"
+          fi
+
+          set -e

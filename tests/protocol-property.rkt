@@ -105,3 +105,36 @@
 
 (check-equal? rng-state corpus-final-state "deterministic corpus PRNG state")
 (check-equal? fingerprint corpus-fingerprint "deterministic corpus fingerprint")
+
+;; Exhaust the complete one-byte discriminant domains. This catches future
+;; accidental widening independently of the fixed invalid golden vectors.
+(for ([raw-tag (in-range 7 256)])
+  (check-exn exn:fail?
+             (lambda () (decode-value (bytes raw-tag)))
+             (format "unknown value tag 0x~x" raw-tag)))
+
+(define (minimal-frame-bytes version type)
+  (bytes-append #"RVT1"
+                (bytes version type)
+                (make-bytes 12 0)))
+
+(for ([raw-type (in-range 256)])
+  (define encoded (minimal-frame-bytes protocol-version raw-type))
+  (if (<= message:hello raw-type message:shutdown)
+      (let ([decoded (read-frame (open-input-bytes encoded))])
+        (check-equal? (frame-type decoded)
+                      raw-type
+                      (format "known message type ~a" raw-type)))
+      (check-exn exn:fail?
+                 (lambda () (read-frame (open-input-bytes encoded)))
+                 (format "unknown message type ~a" raw-type))))
+
+(for ([raw-version (in-range 256)])
+  (define encoded (minimal-frame-bytes raw-version message:request))
+  (if (= raw-version protocol-version)
+      (check-not-exn
+       (lambda () (read-frame (open-input-bytes encoded)))
+       "protocol version 1")
+      (check-exn exn:fail?
+                 (lambda () (read-frame (open-input-bytes encoded)))
+                 (format "unsupported protocol version ~a" raw-version))))
