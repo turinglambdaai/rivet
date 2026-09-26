@@ -5,10 +5,13 @@ Rivet framework releases are tag-driven. The repository package version lives in
 ## Framework release checklist
 
 1. Merge the release changes into `main`.
-2. Confirm the `CI` and `Embedded Roundtrip` workflows are green on `main`.
+2. Confirm the `CI`, `Embedded Roundtrip`, and protocol fuzz workflows are green on `main`.
 3. Confirm `info.rkt` contains the intended semantic version and `CHANGELOG.md` contains the matching `## MAJOR.MINOR.PATCH` section.
-4. Create and push an annotated tag named `vMAJOR.MINOR.PATCH`, for example `v0.2.0`.
-5. The `Release` workflow validates the tag/version/changelog relationship, reruns the Racket test suite and CLI smoke check, builds a source package with `raco pkg create`, writes a SHA-256 checksum, and publishes both files in a GitHub Release.
+4. Create an **annotated** tag named `vMAJOR.MINOR.PATCH`, for example `v0.2.0`, on the intended commit from `main` history, then push that tag.
+5. The `Release` workflow validates tag provenance before publishing: the tag must be an annotated Git tag object, its target must match the checked-out release commit, and that commit must be an ancestor of `main`.
+6. The workflow then validates the tag/version/changelog relationship, reruns the Racket test suite and CLI smoke check, builds a source package with `raco pkg create`, writes a SHA-256 checksum, and publishes both files in a GitHub Release.
+
+The tag-provenance validator is also exercised in normal pull-request CI against accepted and rejected synthetic repositories. A lightweight tag, a tag on a commit outside `main` history, a missing tag/ref, or a tag that does not match the checked-out release commit is rejected before packaging begins.
 
 Do not move or reuse an existing release tag. If a published release is wrong, fix the repository and publish a new patch version.
 
@@ -16,7 +19,9 @@ Do not move or reuse an existing release tag. If a published release is wrong, f
 
 The framework release artifact is the Racket source package (`rivet-MAJOR.MINOR.PATCH.zip`) plus its SHA-256 file. GitHub also exposes its normal source archives for the tag.
 
-The tag-driven framework Release workflow intentionally does not own application-publisher certificates. That keeps Rivet framework releases reproducible without coupling the repository to one developer's Windows or Apple identity.
+The SHA-256 file is an integrity checksum for the artifact produced by that release run. It is **not** currently a claim that independent checkouts will produce byte-identical ZIP files: Racket's package archiver carries source-file modification times into archive metadata. A future byte-reproducible release format should normalize that metadata explicitly and prove the result across independent builds before Rivet documents reproducible artifacts.
+
+The tag-driven framework Release workflow intentionally does not own application-publisher certificates. That keeps framework publication independent of one developer's Windows or Apple signing identity while application signing remains an explicitly trusted publisher step.
 
 ## Shipping an application built with Rivet
 
