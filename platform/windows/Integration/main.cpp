@@ -25,6 +25,16 @@ struct BenchmarkMetric {
   double us_per_operation{};
 };
 
+char const* benchmark_architecture() noexcept {
+#if defined(_M_ARM64) || defined(__aarch64__)
+  return "arm64";
+#elif defined(_M_X64) || defined(__x86_64__)
+  return "x64";
+#else
+  return "unknown";
+#endif
+}
+
 std::filesystem::path executable_path() {
   std::wstring buffer(32768, L'\0');
   auto const length = ::GetModuleFileNameW(
@@ -136,6 +146,8 @@ void run_benchmark(rivet::windows::Backend& backend, double startup_ms) {
 
   std::cout << std::fixed << std::setprecision(3);
   std::cout << "{\"schema_version\":1,\"platform\":\"windows\","
+            << "\"architecture\":\"" << benchmark_architecture() << "\","
+            << "\"configuration\":\"release\","
             << "\"startup_ms\":" << startup_ms << ","
             << "\"warmup_iterations\":" << warmup_iterations << ",";
   print_metric_json("rpc", rpc, true);
