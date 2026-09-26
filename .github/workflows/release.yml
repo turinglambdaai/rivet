@@ -94,6 +94,13 @@ jobs:
           ' CHANGELOG.md > dist/release-notes.md
           test -s dist/release-notes.md
 
+      - name: Smoke-test source package artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash .github/scripts/smoke-source-package.sh \
+            "dist/rivet-${RIVET_VERSION}.zip"
+
       - name: Upload release package artifact
         uses: actions/upload-artifact@v4
         with:
