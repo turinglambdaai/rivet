@@ -73,6 +73,7 @@ int main() {
     config.module_name = "backend";
     config.entry_symbol = "start";
     config.dll_dir = runtime.wstring();
+    config.max_pending_requests = 1;
 
     progress("starting backend");
     rivet::windows::Backend backend(std::move(config));
@@ -118,6 +119,21 @@ int main() {
 
     progress("cancelling pending request");
     auto cancellable = backend.request("wait-for-cancel", {});
+    bool overload_rejected = false;
+    try {
+      (void)backend.request(
+          "increment", rivet::Value::List{rivet::Value(std::int64_t{1})});
+    } catch (std::runtime_error const& error) {
+      overload_rejected =
+          std::string(error.what()) ==
+          "too many native pending requests (limit 1)";
+      if (!overload_rejected) {
+        throw;
+      }
+    }
+    if (!overload_rejected) {
+      throw std::runtime_error("native pending request limit was not enforced");
+    }
     backend.cancel(cancellable.id);
     bool cancelled = false;
     try {

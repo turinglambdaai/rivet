@@ -95,7 +95,12 @@ ptr quoted_symbol(std::string const& name) {
 
 class Backend::Impl {
  public:
-  explicit Impl(RacketRuntimeConfig config) : config_(std::move(config)) {}
+  explicit Impl(RacketRuntimeConfig config) : config_(std::move(config)) {
+    if (config_.max_pending_requests == 0) {
+      throw std::invalid_argument(
+          "Rivet native pending request limit must be positive");
+    }
+  }
 
   ~Impl() {
     try {
@@ -265,6 +270,11 @@ class Backend::Impl {
       // Selection and insertion share one lock. A wrapped allocator therefore
       // cannot hand the same still-pending id to two concurrent submitters.
       std::lock_guard pending_lock(pending_mutex_);
+      if (pending_.size() >= config_.max_pending_requests) {
+        throw std::runtime_error(
+            "too many native pending requests (limit " +
+            std::to_string(config_.max_pending_requests) + ")");
+      }
       id = request_ids_.allocate(
           pending_.size(),
           [this](std::uint64_t candidate) {

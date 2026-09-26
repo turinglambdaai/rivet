@@ -120,6 +120,7 @@ public final class RivetClient: @unchecked Sendable {
 
     private let input: FileHandle
     private let output: FileHandle
+    private let maxPendingRequests: Int
     private let stateLock = NSLock()
     private let writeLock = NSLock()
     private let readerQueue = DispatchQueue(label: "dev.rivet.protocol-reader")
@@ -129,9 +130,15 @@ public final class RivetClient: @unchecked Sendable {
     private var pending: [UInt64: CheckedContinuation<RivetValue, Error>] = [:]
     private var eventHandler: EventHandler?
 
-    public init(input: FileHandle, output: FileHandle) {
+    public init(
+        input: FileHandle,
+        output: FileHandle,
+        maxPendingRequests: Int = 1024
+    ) {
+        precondition(maxPendingRequests > 0, "Rivet native pending request limit must be positive")
         self.input = input
         self.output = output
+        self.maxPendingRequests = maxPendingRequests
     }
 
     deinit {
@@ -274,6 +281,9 @@ public final class RivetClient: @unchecked Sendable {
         stateLock.lock()
         defer { stateLock.unlock() }
         guard lifecycle.isRunning else { throw ClientError.notRunning }
+        guard pending.count < maxPendingRequests else {
+            throw ClientError.tooManyPendingRequests(maxPendingRequests)
+        }
 
         // Work on a local copy to avoid overlapping Swift exclusivity accesses
         // while the occupancy closure reads the pending dictionary. The whole
@@ -422,6 +432,7 @@ public enum ClientError: Error, CustomStringConvertible {
     case duplicateHello
     case unexpectedMessage(RivetMessageType)
     case backend(String)
+    case tooManyPendingRequests(Int)
 
     public var description: String {
         switch self {
@@ -433,6 +444,8 @@ public enum ClientError: Error, CustomStringConvertible {
         case .duplicateHello: return "duplicate Rivet Hello frame"
         case .unexpectedMessage(let type): return "unexpected Rivet message: \(type)"
         case .backend(let message): return message
+        case .tooManyPendingRequests(let limit):
+            return "too many native pending requests (limit \(limit))"
         }
     }
 }

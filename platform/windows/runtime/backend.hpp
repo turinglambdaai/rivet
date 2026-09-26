@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <functional>
@@ -25,6 +26,7 @@ struct RacketRuntimeConfig {
   std::string collects_dir;
   std::string config_dir;
   std::wstring dll_dir;
+  std::size_t max_pending_requests{1024};
 };
 
 struct PendingCall {
