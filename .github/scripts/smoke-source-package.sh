@@ -38,7 +38,7 @@ PLTUSERHOME="$user_home" \
 
 test -f ArchiveSmoke/rivet.rktd
 test -f ArchiveSmoke/app/backend.rkt
-test -f ArchiveSmoke/windows/CMakeLists.txt
+test -f ArchiveSmoke/windows/RivetHost.vcxproj
 test -f ArchiveSmoke/macos-host/Package.swift
 
 printf 'source package smoke test passed: %s\n' "$archive"
