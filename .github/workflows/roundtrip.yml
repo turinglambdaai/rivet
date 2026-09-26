@@ -3,12 +3,6 @@ name: Embedded Roundtrip
 on:
   pull_request:
   workflow_dispatch:
-    inputs:
-      benchmark:
-        description: Run the real embedded integration hosts in benchmark mode
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -93,16 +87,10 @@ jobs:
           echo "RIVET_TEST_RACKET_BOOT=$stage/runtime/racket.boot" >> "$GITHUB_ENV"
       - name: Exercise embedded runtime
         timeout-minutes: 2
-        shell: bash
-        env:
-          RIVET_BENCHMARK: ${{ github.event_name == 'workflow_dispatch' && inputs.benchmark && '1' || '0' }}
-        run: |
-          set -euo pipefail
-          if [[ "$RIVET_BENCHMARK" == "1" ]]; then
-            "$RIVET_ROUNDTRIP_STAGE/RivetIntegration" --benchmark
-          else
-            "$RIVET_ROUNDTRIP_STAGE/RivetIntegration"
-          fi
+        run: "$RIVET_ROUNDTRIP_STAGE/RivetIntegration"
+      - name: Record embedded benchmark (informational)
+        timeout-minutes: 2
+        run: "$RIVET_ROUNDTRIP_STAGE/RivetIntegration" --benchmark
 
   windows-roundtrip:
     name: Windows embedded Racket round trip
@@ -175,13 +163,8 @@ jobs:
       - name: Exercise embedded runtime
         timeout-minutes: 2
         shell: pwsh
-        env:
-          RIVET_BENCHMARK: ${{ github.event_name == 'workflow_dispatch' && inputs.benchmark && '1' || '0' }}
-        run: |
-          $exe = Join-Path $env:RIVET_ROUNDTRIP_STAGE 'RivetIntegration.exe'
-          if ($env:RIVET_BENCHMARK -eq '1') {
-            & $exe --benchmark
-          } else {
-            & $exe
-          }
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        run: '& (Join-Path $env:RIVET_ROUNDTRIP_STAGE "RivetIntegration.exe")'
+      - name: Record embedded benchmark (informational)
+        timeout-minutes: 2
+        shell: pwsh
+        run: '& (Join-Path $env:RIVET_ROUNDTRIP_STAGE "RivetIntegration.exe") --benchmark'
