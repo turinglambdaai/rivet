@@ -98,7 +98,7 @@ BenchmarkMetric benchmark_operations(int iterations, Operation&& operation) {
 void print_metric_json(char const* name,
                        BenchmarkMetric const& metric,
                        bool trailing_comma) {
-  std::cout << "\"" << name << "\":{"iterations":" << metric.iterations
+  std::cout << "\"" << name << "\":{\"iterations\":" << metric.iterations
             << ",\"total_ms\":" << metric.total_ms
             << ",\"us_per_operation\":" << metric.us_per_operation << "}";
   if (trailing_comma) {
