@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: embedded-roundtrip-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   macos-roundtrip:
     name: macOS embedded Racket round trip
@@ -88,6 +92,10 @@ jobs:
       - name: Exercise embedded runtime
         timeout-minutes: 2
         run: "$RIVET_ROUNDTRIP_STAGE/RivetIntegration"
+      - name: Record embedded benchmark (informational)
+        timeout-minutes: 2
+        run: |
+          "$RIVET_ROUNDTRIP_STAGE/RivetIntegration" --benchmark
 
   windows-roundtrip:
     name: Windows embedded Racket round trip
@@ -161,3 +169,7 @@ jobs:
         timeout-minutes: 2
         shell: pwsh
         run: '& (Join-Path $env:RIVET_ROUNDTRIP_STAGE "RivetIntegration.exe")'
+      - name: Record embedded benchmark (informational)
+        timeout-minutes: 2
+        shell: pwsh
+        run: '& (Join-Path $env:RIVET_ROUNDTRIP_STAGE "RivetIntegration.exe") --benchmark'
