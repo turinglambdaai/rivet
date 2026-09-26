@@ -9,9 +9,11 @@ Rivet framework releases are tag-driven. The repository package version lives in
 3. Confirm `info.rkt` contains the intended semantic version and `CHANGELOG.md` contains the matching `## MAJOR.MINOR.PATCH` section.
 4. Create an **annotated** tag named `vMAJOR.MINOR.PATCH`, for example `v0.2.0`, on the intended commit from `main` history, then push that tag.
 5. The `Release` workflow validates tag provenance before publishing: the tag must be an annotated Git tag object, its target must match the checked-out release commit, and that commit must be an ancestor of `main`.
-6. The workflow then validates the tag/version/changelog relationship, reruns the Racket test suite and CLI smoke check, builds a source package with `raco pkg create`, writes a SHA-256 checksum, and publishes both files in a GitHub Release.
+6. The workflow then validates the tag/version/changelog relationship, reruns the Racket test suite and CLI smoke check, builds the source package with `raco pkg create`, installs that **exact ZIP** into an isolated Racket user environment, exercises core modules and project scaffolding, writes a SHA-256 checksum, and only then publishes the release files.
 
 The tag-provenance validator is also exercised in normal pull-request CI against accepted and rejected synthetic repositories. A lightweight tag, a tag on a commit outside `main` history, a missing tag/ref, or a tag that does not match the checked-out release commit is rejected before packaging begins.
+
+The source-package smoke test also runs in normal pull-request CI. It installs the generated ZIP into a fresh `PLTUSERHOME`, loads `rivet/backend` and `rivet/protocol`, runs the installed `raco rivet` command, creates a starter project, and checks that both Windows and macOS scaffold resources are present. This verifies the distributable package itself instead of relying only on tests against the linked repository checkout.
 
 Do not move or reuse an existing release tag. If a published release is wrong, fix the repository and publish a new patch version.
 
