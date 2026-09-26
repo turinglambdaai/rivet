@@ -11,6 +11,7 @@ public struct EmbeddedRacketConfiguration: Sendable {
     public var core: URL
     public var moduleName: String
     public var entryName: String
+    public var maxPendingRequests: Int
 
     public init(
         executable: URL,
@@ -19,8 +20,10 @@ public struct EmbeddedRacketConfiguration: Sendable {
         racketBoot: URL,
         core: URL,
         moduleName: String = "backend",
-        entryName: String = "start"
+        entryName: String = "start",
+        maxPendingRequests: Int = 1024
     ) {
+        precondition(maxPendingRequests > 0, "Rivet native pending request limit must be positive")
         self.executable = executable
         self.petiteBoot = petiteBoot
         self.schemeBoot = schemeBoot
@@ -28,6 +31,7 @@ public struct EmbeddedRacketConfiguration: Sendable {
         self.core = core
         self.moduleName = moduleName
         self.entryName = entryName
+        self.maxPendingRequests = maxPendingRequests
     }
 }
 
@@ -52,7 +56,8 @@ public final class EmbeddedRacketBackend: @unchecked Sendable {
 
     public private(set) lazy var client = RivetClient(
         input: responsePipe.fileHandleForReading,
-        output: requestPipe.fileHandleForWriting
+        output: requestPipe.fileHandleForWriting,
+        maxPendingRequests: configuration.maxPendingRequests
     )
 
     public init(configuration: EmbeddedRacketConfiguration) {

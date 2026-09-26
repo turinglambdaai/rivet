@@ -77,7 +77,7 @@ private func requestName(_ frame: RivetFrame) throws -> String {
     return name
 }
 
-private func makeClientHarness() throws -> ClientHarness {
+private func makeClientHarness(maxPendingRequests: Int = 1024) throws -> ClientHarness {
     let backendToClient = Pipe()
     let clientToBackend = Pipe()
 
@@ -91,7 +91,8 @@ private func makeClientHarness() throws -> ClientHarness {
 
     let client = RivetClient(
         input: backendToClient.fileHandleForReading,
-        output: clientToBackend.fileHandleForWriting
+        output: clientToBackend.fileHandleForWriting,
+        maxPendingRequests: maxPendingRequests
     )
     try client.start()
 
@@ -100,6 +101,51 @@ private func makeClientHarness() throws -> ClientHarness {
         backendInput: clientToBackend.fileHandleForReading,
         backendOutput: backendToClient.fileHandleForWriting
     )
+}
+
+@Test func pendingRequestLimitRejectsBeforeWritingAndReleasesOnCompletion() async throws {
+    let harness = try makeClientHarness(maxPendingRequests: 1)
+    defer { harness.close() }
+
+    let firstTask = Task {
+        try await harness.client.call("first-pending")
+    }
+    let firstRequest = try readFrame(harness.backendInput)
+    #expect(try requestName(firstRequest) == "first-pending")
+
+    do {
+        _ = try await harness.client.call("rejected-over-limit")
+        Issue.record("native pending request limit accepted a second request")
+    } catch ClientError.tooManyPendingRequests(let limit) {
+        #expect(limit == 1)
+    } catch {
+        Issue.record("unexpected pending-limit error: \(error)")
+    }
+
+    try writeFrame(
+        RivetFrame(
+            type: .response,
+            id: firstRequest.id,
+            payload: try encodeRivetValue(.int64(1))
+        ),
+        to: harness.backendOutput
+    )
+    #expect(try await firstTask.value == .int64(1))
+
+    let nextTask = Task {
+        try await harness.client.call("after-release")
+    }
+    let nextRequest = try readFrame(harness.backendInput)
+    #expect(try requestName(nextRequest) == "after-release")
+    try writeFrame(
+        RivetFrame(
+            type: .response,
+            id: nextRequest.id,
+            payload: try encodeRivetValue(.int64(2))
+        ),
+        to: harness.backendOutput
+    )
+    #expect(try await nextTask.value == .int64(2))
 }
 
 @Test func preCancelledCallDoesNotLeakRequest() async throws {
