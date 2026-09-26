@@ -85,6 +85,12 @@ private func fingerprintValue(_ hash: UInt64, _ encoded: Data) -> UInt64 {
     return result
 }
 
+private func minimalFrame(version: UInt8, type: UInt8) -> Data {
+    var result = Data([0x52, 0x56, 0x54, 0x31, version, type])
+    result.append(Data(repeating: 0, count: 12))
+    return result
+}
+
 @Test func deterministicProtocolCorpus() throws {
     var rng = CorpusRNG(state: corpusSeed)
     var fingerprint = fnvOffset
@@ -117,4 +123,47 @@ private func fingerprintValue(_ hash: UInt64, _ encoded: Data) -> UInt64 {
 
     #expect(rng.state == corpusFinalState)
     #expect(fingerprint == corpusFingerprint)
+}
+
+@Test func exhaustiveProtocolDiscriminants() throws {
+    // RVT1 v1 defines value tags 0x00...0x06. Every other byte must be an
+    // unknown tag, independently of the selected invalid golden fixtures.
+    for raw in 7...255 {
+        #expect(throws: RivetProtocolError.self) {
+            try decodeRivetValue(Data([UInt8(raw)]))
+        }
+    }
+
+    // Message type is a one-byte closed enum: 1...7 are valid, all other
+    // values must fail before payload semantics are considered.
+    for raw in 0...255 {
+        let byte = UInt8(raw)
+        let encoded = minimalFrame(version: rivetProtocolVersion, type: byte)
+        if (1...7).contains(raw) {
+            let decoded = try decodeRivetFrame(encoded)
+            #expect(decoded.type.rawValue == byte)
+        } else {
+            #expect(throws: RivetProtocolError.self) {
+                try decodeRivetFrame(encoded)
+            }
+        }
+    }
+
+    // Version 1 is the only RVT1 version accepted today. Exhaust the entire
+    // byte domain so a future parser change cannot silently accept another
+    // version without an explicit protocol decision.
+    for raw in 0...255 {
+        let byte = UInt8(raw)
+        let encoded = minimalFrame(
+            version: byte,
+            type: RivetMessageType.request.rawValue
+        )
+        if byte == rivetProtocolVersion {
+            _ = try decodeRivetFrame(encoded)
+        } else {
+            #expect(throws: RivetProtocolError.self) {
+                try decodeRivetFrame(encoded)
+            }
+        }
+    }
 }

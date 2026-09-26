@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -34,6 +35,33 @@ class CorpusRng {
 
  private:
   std::uint64_t state_;
+};
+
+class MemoryTransport final : public rivet::Transport {
+ public:
+  explicit MemoryTransport(rivet::Bytes bytes) : bytes_(std::move(bytes)) {}
+
+  bool read_exact(std::uint8_t* destination, std::size_t size) override {
+    if (read_offset_ == bytes_.size()) {
+      return false;
+    }
+    if (size > bytes_.size() - read_offset_) {
+      throw std::runtime_error("partial read");
+    }
+    std::memcpy(destination, bytes_.data() + read_offset_, size);
+    read_offset_ += size;
+    return true;
+  }
+
+  void write_all(std::uint8_t const*, std::size_t) override {
+    throw std::runtime_error("unexpected write in decode-only property test");
+  }
+
+  void flush() override {}
+
+ private:
+  rivet::Bytes bytes_;
+  std::size_t read_offset_{};
 };
 
 rivet::Value random_value(CorpusRng& rng, std::size_t depth) {
@@ -98,6 +126,22 @@ bool rejects_value(rivet::Bytes const& bytes) {
   }
 }
 
+bool rejects_frame(rivet::Bytes bytes) {
+  try {
+    MemoryTransport transport(std::move(bytes));
+    (void)rivet::read_frame(transport);
+    return false;
+  } catch (std::exception const&) {
+    return true;
+  }
+}
+
+rivet::Bytes minimal_frame(std::uint8_t version, std::uint8_t type) {
+  rivet::Bytes bytes{'R', 'V', 'T', '1', version, type};
+  bytes.resize(18, 0);
+  return bytes;
+}
+
 std::uint64_t fingerprint_byte(std::uint64_t hash, std::uint8_t byte) {
   hash ^= static_cast<std::uint64_t>(byte);
   hash *= kFnvPrime;
@@ -147,5 +191,42 @@ int main() {
 
   assert(rng.state() == kCorpusFinalState);
   assert(fingerprint == kCorpusFingerprint);
+
+  // Exhaust every invalid one-byte value tag, not just selected fixtures.
+  for (unsigned raw = 7; raw <= 0xff; ++raw) {
+    assert(rejects_value(rivet::Bytes{static_cast<std::uint8_t>(raw)}));
+  }
+
+  // Exhaust the message-type byte domain. Values 1..7 are the complete RVT1
+  // v1 set; every other byte must fail before payload processing.
+  for (unsigned raw = 0; raw <= 0xff; ++raw) {
+    auto const type = static_cast<std::uint8_t>(raw);
+    auto bytes = minimal_frame(rivet::kProtocolVersion, type);
+    if (raw >= static_cast<unsigned>(rivet::MessageType::Hello) &&
+        raw <= static_cast<unsigned>(rivet::MessageType::Shutdown)) {
+      MemoryTransport transport(std::move(bytes));
+      auto frame = rivet::read_frame(transport);
+      assert(frame.has_value());
+      assert(static_cast<std::uint8_t>(frame->type) == type);
+    } else {
+      assert(rejects_frame(std::move(bytes)));
+    }
+  }
+
+  // Protocol version is also a full byte on the wire. Version 1 is accepted;
+  // every other possible byte must be rejected deterministically.
+  for (unsigned raw = 0; raw <= 0xff; ++raw) {
+    auto const version = static_cast<std::uint8_t>(raw);
+    auto bytes = minimal_frame(
+        version,
+        static_cast<std::uint8_t>(rivet::MessageType::Request));
+    if (version == rivet::kProtocolVersion) {
+      MemoryTransport transport(std::move(bytes));
+      assert(rivet::read_frame(transport).has_value());
+    } else {
+      assert(rejects_frame(std::move(bytes)));
+    }
+  }
+
   return 0;
 }
