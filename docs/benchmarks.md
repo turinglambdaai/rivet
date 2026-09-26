@@ -41,16 +41,13 @@ Example shape:
 
 The numbers above illustrate the JSON schema only; they are not Rivet performance claims or release thresholds.
 
-## Run on GitHub Actions
+## CI behavior
 
-The existing `Embedded Roundtrip` workflow supports manual benchmark runs without changing pull-request behavior:
+Every `Embedded Roundtrip` job first runs the existing correctness integration path, then starts a fresh integration process with `--benchmark`. The second step records one JSON report for that runner and revision. Starting a fresh process is important because the embedded Racket runtime is intentionally one-shot within a process and startup is itself one of the measured costs.
 
-1. Open **Actions → Embedded Roundtrip → Run workflow**.
-2. Select the revision to measure.
-3. Enable **Run the real embedded integration hosts in benchmark mode**.
-4. Read the JSON line from each platform's `Exercise embedded runtime` step.
+The benchmark harness is continuously tested: invalid results, startup failures, or a broken benchmark implementation fail the job. **The measured timing values themselves do not have pass/fail thresholds.** Shared GitHub-hosted runner timing variance therefore cannot reject a pull request merely for being slower in one sample.
 
-Normal pull requests leave benchmark mode disabled and continue to run correctness-only round trips.
+The same workflow can also be launched manually from **Actions → Embedded Roundtrip → Run workflow** for an explicit revision. Read the JSON from each platform's `Record embedded benchmark (informational)` step.
 
 ## Comparing results
 
@@ -64,7 +61,7 @@ For meaningful regression work:
 - use a dedicated or self-hosted machine before establishing release thresholds;
 - keep `schema_version` in captured reports so future benchmark changes remain distinguishable.
 
-The manual Actions mode is intended as a convenient baseline and investigation tool. Once enough history exists on stable hardware, selected metrics can be promoted to guarded regression thresholds without redesigning the integration harness.
+The CI reports are intended as a convenient baseline and investigation tool. Once enough history exists on stable hardware, selected metrics can be promoted to guarded regression thresholds without redesigning the integration harness.
 
 ## Scope
 
