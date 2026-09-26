@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: embedded-roundtrip-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   macos-roundtrip:
     name: macOS embedded Racket round trip
