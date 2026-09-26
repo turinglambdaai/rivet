@@ -64,9 +64,11 @@ jobs:
             -print_final_stats=1 \
             -artifact_prefix="$artifacts/"
           status=$?
-          set -e
 
           if (( status != 0 )); then
+            # Diagnostics are deliberately best-effort while errexit remains
+            # disabled. The original libFuzzer/sanitizer status must be the job
+            # status even if inspecting a reproducer encounters another error.
             echo "::group::libFuzzer failure artifacts"
             shopt -s nullglob
             failure_artifacts=("$artifacts"/*)
@@ -89,3 +91,5 @@ jobs:
             echo "::endgroup::"
             exit "$status"
           fi
+
+          set -e
