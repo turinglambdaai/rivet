@@ -18,6 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Test release tag provenance validator
+        shell: bash
+        run: bash .github/scripts/test-release-tag.sh
       - name: Set up Racket CS
         uses: Bogdanp/setup-racket@v1.15
         with:
