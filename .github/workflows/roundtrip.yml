@@ -90,7 +90,8 @@ jobs:
         run: "$RIVET_ROUNDTRIP_STAGE/RivetIntegration"
       - name: Record embedded benchmark (informational)
         timeout-minutes: 2
-        run: "$RIVET_ROUNDTRIP_STAGE/RivetIntegration" --benchmark
+        run: |
+          "$RIVET_ROUNDTRIP_STAGE/RivetIntegration" --benchmark
 
   windows-roundtrip:
     name: Windows embedded Racket round trip
