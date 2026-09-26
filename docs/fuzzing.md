@@ -38,10 +38,11 @@ A short local smoke run:
 ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 \
 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
   build/fuzz/rivet_protocol_fuzz build/fuzz/corpus \
-  -runs=20000 -max_len=65536 -timeout=5 -rss_limit_mb=2048
+  -runs=20000 -seed=12345 -max_len=65536 -timeout=5 -rss_limit_mb=2048 \
+  -print_final_stats=1 -artifact_prefix=build/fuzz/artifacts/
 ```
 
-For a longer campaign, omit `-runs` or replace it with a larger budget. Keep the corpus directory between runs so newly discovered coverage-producing inputs are retained.
+Keep the seed when reproducing a CI failure. libFuzzer's mutation sequence is deterministic for a fixed executable, starting corpus, options, and `-seed`, so the seed printed by the CI job is part of the failure record. For a longer campaign, omit `-runs` or replace it with a larger budget. Keep the corpus directory between runs so newly discovered coverage-producing inputs are retained.
 
 The harness feeds every input to both native decoder surfaces:
 
@@ -52,4 +53,8 @@ Parser exceptions for malformed input are expected. Crashes, sanitizer findings,
 
 ## CI
 
-The `Protocol Fuzz Smoke` workflow builds the harness on Ubuntu with Clang, derives seeds from `tests/protocol-golden.txt`, and executes a bounded 20,000-run smoke campaign on every pull request and `main` push. This is intentionally short enough for normal CI; longer fuzz campaigns can use the same target and corpus without changing production code.
+The `Protocol Fuzz Smoke` workflow builds the harness on Ubuntu with Clang, derives seeds from `tests/protocol-golden.txt`, and executes a bounded 20,000-run smoke campaign on every pull request and `main` push. The libFuzzer seed is derived deterministically from the GitHub Actions run id, so each CI run explores a different mutation sequence while remaining reproducible from its log.
+
+CI writes crash, timeout, and OOM reproducer inputs to a dedicated libFuzzer artifact directory. If fuzzing fails, the job prints each reproducer's SHA-256 and complete hexadecimal payload before returning the original libFuzzer exit status. That makes a failed CI run self-contained: reconstruct the bytes from the logged hex, rebuild the same revision, and rerun the harness with the printed seed and options.
+
+This smoke campaign is intentionally short enough for normal CI; longer fuzz campaigns can use the same target and corpus without changing production code.
