@@ -3,7 +3,9 @@
 (require racket/match
          "build.rkt"
          "clean.rkt"
+         "csharp-codegen.rkt"
          "doctor.rkt"
+         "dotnet-build.rkt"
          "package.rkt"
          "project.rkt"
          "scaffold.rkt"
@@ -25,6 +27,8 @@
     "  raco rivet doctor                  inspect the local native toolchain\n"
     "  raco rivet doctor --json           emit machine-readable toolchain diagnostics\n"
     "  raco rivet clean                   remove generated .rivet/build/dist artifacts\n"
+    "  raco rivet generate-dotnet         generate the typed C# client\n"
+    "  raco rivet build-dotnet            build the embedded Windows runtime for .NET\n"
     "  raco rivet build                   compile backend and native host\n"
     "  raco rivet dev                     build and run the current app\n"
     "  raco rivet package                 create and verify a development distributable\n"
@@ -63,6 +67,12 @@
                 (if (= (length removed) 1) "" "s"))
            (for ([path (in-list removed)])
              (printf "  ~a\n" path))))]
+    [(list "generate-dotnet")
+     (define output (generate-csharp-client! (current-project!)))
+     (say "generated ~a" output)]
+    [(list "build-dotnet")
+     (define output (build-dotnet-runtime! (current-project!)))
+     (say "built .NET embedded runtime ~a" output)]
     [(list "build")
      (define output (build-project! (current-project!)))
      (say "built ~a" output)]

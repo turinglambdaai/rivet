@@ -62,6 +62,62 @@ jobs:
       - name: Test
         run: ctest --test-dir build/native -C Release --output-on-failure
 
+  dotnet-runtime:
+    name: .NET protocol/runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Install Rivet
+        run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
+      - name: Build managed runtime
+        run: dotnet build platform/dotnet/Rivet.Runtime/Rivet.Runtime.csproj -c Release
+      - name: Run managed protocol smoke
+        run: dotnet run --project platform/dotnet/Rivet.Runtime.Smoke/Rivet.Runtime.Smoke.csproj -c Release
+      - name: Compile primitive generated C# client
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          cd "$root"
+          raco rivet new Smoke
+          cd Smoke
+          cat > app/backend.rkt <<'RKT'
+          #lang racket/base
+          (require rivet/backend)
+          (provide start)
+          (define-state counter : Int64 0)
+          (define-rpc (greet [name String] : String)
+            (format "Hello, ~a!" name))
+          (define (start in-fd out-fd)
+            (serve-fds in-fd out-fd))
+          RKT
+          raco rivet generate-dotnet
+          cat > dotnet/GeneratedSmoke.csproj <<EOF
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <TargetFramework>net8.0</TargetFramework>
+              <ImplicitUsings>disable</ImplicitUsings>
+              <Nullable>enable</Nullable>
+              <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+            </PropertyGroup>
+            <ItemGroup>
+              <ProjectReference Include="$GITHUB_WORKSPACE/platform/dotnet/Rivet.Runtime/Rivet.Runtime.csproj" />
+            </ItemGroup>
+          </Project>
+          EOF
+          dotnet build dotnet/GeneratedSmoke.csproj -c Release
+
   swift-runtime:
     name: Swift protocol/runtime
     runs-on: macos-latest
@@ -82,10 +138,14 @@ jobs:
           swift test --package-path platform/macos -Xcc "-I${racket_include}"
 
   windows-host:
-    name: Windows CLI package smoke
+    name: Windows CLI package + embedded .NET smoke
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
       - name: Set up Racket CS
         uses: Bogdanp/setup-racket@v1.15
         with:
@@ -132,6 +192,151 @@ jobs:
           if (-not (Test-Path 'app\backend.rkt')) {
             throw 'raco rivet clean removed application source'
           }
+      - name: Build embedded .NET runtime bundle with SQLite and blocking FFI
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'rivet-dotnet-smoke'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          Set-Location $root
+          raco rivet new EmbeddedSmoke
+          Set-Location (Join-Path $root 'EmbeddedSmoke')
+          @'
+          #lang racket/base
+
+          (require db
+                   ffi/unsafe
+                   (only-in db/private/sqlite3/ffi sqlite3_libversion_number)
+                   rivet/backend)
+
+          (provide start)
+
+          (define-state counter : Int64 0)
+
+          (define kernel32 (ffi-lib "kernel32"))
+          (define win-sleep
+            (get-ffi-obj "Sleep" kernel32 (_fun _uint32 -> _void)))
+          (define win-sleep/blocking
+            (get-ffi-obj "Sleep" kernel32 (_fun #:blocking? #t _uint32 -> _void)))
+
+          (define-rpc (greet [name String] : String)
+            (format "Hello, ~a!" name))
+
+          (define-rpc (scheduler-yield : String)
+            (sleep 0.001)
+            "scheduler-ok")
+
+          (define-rpc (ffi-nonblocking : String)
+            (win-sleep 1)
+            "ffi-nonblocking-ok")
+
+          (define-rpc (sqlite-version : String)
+            (number->string (sqlite3_libversion_number)))
+
+          (define-rpc (ffi-blocking : String)
+            (win-sleep/blocking 1)
+            "ffi-blocking-ok")
+
+          (define-rpc (sqlite-roundtrip [value String] : String)
+            (define conn (sqlite3-connect #:database 'memory))
+            (dynamic-wind
+             void
+             (lambda ()
+               (query-exec conn "CREATE TABLE smoke (value TEXT NOT NULL)")
+               (query-exec conn "INSERT INTO smoke (value) VALUES (?)" value)
+               (query-value conn "SELECT value FROM smoke LIMIT 1"))
+             (lambda ()
+               (disconnect conn))))
+
+          (define (start in-fd out-fd)
+            (serve-fds in-fd out-fd))
+          '@ | Set-Content -Path 'app\backend.rkt'
+          raco rivet build-dotnet
+          $stage = '.rivet\dotnet\windows-x64'
+          if (-not (Test-Path "$stage\rivet_native.dll")) {
+            throw 'rivet_native.dll was not produced'
+          }
+          if (-not (Test-Path "$stage\res\core.zo")) {
+            throw 'compiled Racket backend was not staged'
+          }
+          if (-not (Test-Path "$stage\runtime\racket.boot")) {
+            throw 'Racket boot files were not staged'
+          }
+          if (-not (Test-Path "$stage\runtime\sqlite3.dll")) {
+            throw 'Racket SQLite foreign library was not staged'
+          }
+          if (-not (Test-Path 'dotnet\GeneratedBackend.cs')) {
+            throw 'typed C# client was not generated'
+          }
+      - name: Run Racket in-process from .NET without runtime PATH mutation
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'rivet-dotnet-smoke\EmbeddedSmoke'
+          $dotnet = Join-Path $root 'dotnet'
+          $project = Join-Path $dotnet 'EmbeddedSmoke.csproj'
+          $program = Join-Path $dotnet 'Program.cs'
+          @"
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <OutputType>Exe</OutputType>
+              <TargetFramework>net8.0</TargetFramework>
+              <ImplicitUsings>enable</ImplicitUsings>
+              <Nullable>enable</Nullable>
+            </PropertyGroup>
+            <ItemGroup>
+              <ProjectReference Include="$env:GITHUB_WORKSPACE\platform\dotnet\Rivet.Runtime\Rivet.Runtime.csproj" />
+            </ItemGroup>
+          </Project>
+          "@ | Set-Content -Path $project
+          @'
+          using Rivet.Runtime;
+          using EmbeddedSmoke.RivetGenerated;
+
+          if (args.Length != 1) throw new InvalidOperationException("runtime root missing");
+          await using var client = await EmbeddedRivetClient.StartAsync(new EmbeddedRivetOptions(args[0]));
+          var api = new RivetAPI(client);
+
+          Console.WriteLine("phase:greet:start");
+          var greeting = await api.GreetAsync("Taskly");
+          if (greeting != "Hello, Taskly!") throw new InvalidOperationException($"unexpected greeting: {greeting}");
+          Console.WriteLine("phase:greet:done");
+
+          var before = await api.GetCounterAsync();
+          var after = await api.SetCounterAsync(before + 1);
+          if (after != before + 1) throw new InvalidOperationException("state round-trip failed");
+          Console.WriteLine("phase:state:done");
+
+          Console.WriteLine("phase:scheduler:start");
+          var scheduler = await api.SchedulerYieldAsync();
+          if (scheduler != "scheduler-ok") throw new InvalidOperationException($"unexpected scheduler result: {scheduler}");
+          Console.WriteLine("phase:scheduler:done");
+
+          Console.WriteLine("phase:ffi-nonblocking:start");
+          var ffiNonblocking = await api.FfiNonblockingAsync();
+          if (ffiNonblocking != "ffi-nonblocking-ok") throw new InvalidOperationException($"unexpected FFI result: {ffiNonblocking}");
+          Console.WriteLine("phase:ffi-nonblocking:done");
+
+          Console.WriteLine("phase:sqlite-version:start");
+          var sqliteVersion = await api.SqliteVersionAsync();
+          if (string.IsNullOrWhiteSpace(sqliteVersion)) throw new InvalidOperationException("SQLite version was empty");
+          Console.WriteLine($"phase:sqlite-version:done:{sqliteVersion}");
+
+          Console.WriteLine("phase:ffi-blocking:start");
+          var ffiBlocking = await api.FfiBlockingAsync();
+          if (ffiBlocking != "ffi-blocking-ok") throw new InvalidOperationException($"unexpected blocking FFI result: {ffiBlocking}");
+          Console.WriteLine("phase:ffi-blocking:done");
+
+          Console.WriteLine("phase:sqlite-roundtrip:start");
+          var sqlite = await api.SqliteRoundtripAsync("sqlite-ok");
+          if (sqlite != "sqlite-ok") throw new InvalidOperationException($"unexpected SQLite result: {sqlite}");
+          Console.WriteLine("phase:sqlite-roundtrip:done");
+          Console.WriteLine("Embedded Rivet .NET + FFI + SQLite smoke passed.");
+          '@ | Set-Content -Path $program
+          $stage = (Resolve-Path (Join-Path $root '.rivet\dotnet\windows-x64')).Path
+          # The stage root is added only so NativeLibrary can locate rivet_native.dll.
+          # runtime/ itself is intentionally NOT added to PATH: the native bridge
+          # must resolve bundled SQLite/FFI dependencies without host mutation.
+          $env:PATH = "$stage;$env:PATH"
+          dotnet run --project $project -c Release -- $stage
 
   macos-host:
     name: macOS CLI package smoke
