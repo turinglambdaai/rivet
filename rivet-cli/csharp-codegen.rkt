@@ -25,10 +25,20 @@
     (define get-states (dynamic-require 'rivet/backend 'registered-states))
     (define state-name (dynamic-require 'rivet/backend 'state-info-name))
     (define state-type (dynamic-require 'rivet/backend 'state-info-type))
-    (define get-records (dynamic-require 'rivet/backend 'registered-records))
-    (define record-name (dynamic-require 'rivet/backend 'record-info-name))
-    (define record-field-names (dynamic-require 'rivet/backend 'record-info-field-names))
-    (define record-field-types (dynamic-require 'rivet/backend 'record-info-field-types))
+    (define get-records
+      (dynamic-require 'rivet/backend 'registered-records (lambda () #f)))
+    (define records
+      (if get-records
+          (let ([record-name (dynamic-require 'rivet/backend 'record-info-name)]
+                [record-field-names
+                 (dynamic-require 'rivet/backend 'record-info-field-names)]
+                [record-field-types
+                 (dynamic-require 'rivet/backend 'record-info-field-types)])
+            (for/list ([info (in-list (get-records))])
+              (schema-record (record-name info)
+                             (record-field-names info)
+                             (record-field-types info))))
+          '()))
     (values
      (for/list ([info (in-list (get-rpcs))])
        (schema-rpc (rpc-name info)
@@ -37,10 +47,7 @@
                    (rpc-result-type info)))
      (for/list ([info (in-list (get-states))])
        (schema-state (state-name info) (state-type info)))
-     (for/list ([info (in-list (get-records))])
-       (schema-record (record-name info)
-                      (record-field-names info)
-                      (record-field-types info))))))
+     records)))
 
 (define current-records (make-parameter '()))
 
