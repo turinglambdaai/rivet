@@ -20,8 +20,13 @@ public static class RivetProtocol
 {
     public const byte Version = 1;
     public const int MaxFramePayloadSize = 64 * 1024 * 1024;
+    public const int MaxValueDepth = 64;
+    public const int MaxValueNodes = 1 << 18;
 
     private static ReadOnlySpan<byte> Magic => "RVT1"u8;
+    private static readonly UTF8Encoding StrictUtf8 = new(
+        encoderShouldEmitUTF8Identifier: false,
+        throwOnInvalidBytes: true);
 
     private const byte TagNull = 0x00;
     private const byte TagFalse = 0x01;
@@ -35,14 +40,22 @@ public static class RivetProtocol
     {
         ArgumentNullException.ThrowIfNull(value);
         using var stream = new MemoryStream();
-        WriteValue(stream, value);
+        var remainingNodes = MaxValueNodes;
+        WriteValue(stream, value, depth: 0, ref remainingNodes);
         return stream.ToArray();
     }
 
     public static RivetValue DecodeValue(ReadOnlySpan<byte> bytes)
     {
+        if (bytes.Length > MaxFramePayloadSize)
+        {
+            throw new InvalidDataException(
+                $"Rivet encoded value exceeds {MaxFramePayloadSize} bytes: {bytes.Length}.");
+        }
+
         var offset = 0;
-        var value = ReadValue(bytes, ref offset);
+        var remainingNodes = MaxValueNodes;
+        var value = ReadValue(bytes, ref offset, depth: 0, ref remainingNodes);
         if (offset != bytes.Length)
         {
             throw new InvalidDataException("Trailing bytes after Rivet value.");
@@ -58,6 +71,7 @@ public static class RivetProtocol
     {
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(frame.Payload);
+        ValidateMessageType((byte)frame.Type);
         if (frame.Payload.Length > MaxFramePayloadSize)
         {
             throw new InvalidDataException(
@@ -100,7 +114,7 @@ public static class RivetProtocol
                 $"Unsupported Rivet protocol version {header[4]} (expected {Version}).");
         }
 
-        var type = (RivetMessageType)header[5];
+        var type = ValidateMessageType(header[5]);
         var id = BinaryPrimitives.ReadUInt64LittleEndian(header.AsSpan(6, 8));
         var length = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(14, 4));
         if (length > MaxFramePayloadSize)
@@ -118,21 +132,43 @@ public static class RivetProtocol
         return new RivetFrame(type, id, payload);
     }
 
-    private static void WriteValue(Stream stream, RivetValue value)
+    private static RivetMessageType ValidateMessageType(byte raw) => raw switch
     {
+        (byte)RivetMessageType.Hello => RivetMessageType.Hello,
+        (byte)RivetMessageType.Request => RivetMessageType.Request,
+        (byte)RivetMessageType.Response => RivetMessageType.Response,
+        (byte)RivetMessageType.Error => RivetMessageType.Error,
+        (byte)RivetMessageType.Event => RivetMessageType.Event,
+        (byte)RivetMessageType.Cancel => RivetMessageType.Cancel,
+        (byte)RivetMessageType.Shutdown => RivetMessageType.Shutdown,
+        _ => throw new InvalidDataException($"Unknown Rivet message type: {raw}.")
+    };
+
+    private static void WriteValue(
+        Stream stream,
+        RivetValue value,
+        int depth,
+        ref int remainingNodes)
+    {
+        ConsumeEncodeNode(ref remainingNodes);
+
         switch (value)
         {
             case RivetValue.NullValue:
+                EnsureEncodedSize(stream, 1);
                 stream.WriteByte(TagNull);
                 break;
             case RivetValue.BoolValue { Value: false }:
+                EnsureEncodedSize(stream, 1);
                 stream.WriteByte(TagFalse);
                 break;
             case RivetValue.BoolValue:
+                EnsureEncodedSize(stream, 1);
                 stream.WriteByte(TagTrue);
                 break;
             case RivetValue.Int64Value integer:
             {
+                EnsureEncodedSize(stream, 9);
                 stream.WriteByte(TagInt64);
                 Span<byte> bytes = stackalloc byte[8];
                 BinaryPrimitives.WriteInt64LittleEndian(bytes, integer.Value);
@@ -141,23 +177,68 @@ public static class RivetProtocol
             }
             case RivetValue.StringValue text:
             {
+                if (text.Value is null)
+                {
+                    throw new InvalidDataException("Rivet String value is null.");
+                }
+
+                int byteCount;
+                try
+                {
+                    byteCount = StrictUtf8.GetByteCount(text.Value);
+                }
+                catch (EncoderFallbackException ex)
+                {
+                    throw new InvalidDataException("Rivet String contains invalid Unicode data.", ex);
+                }
+
+                EnsureEncodedSize(stream, 5L + byteCount);
                 stream.WriteByte(TagString);
-                var bytes = Encoding.UTF8.GetBytes(text.Value);
-                WriteLength(stream, bytes.Length);
-                stream.Write(bytes);
+                WriteLength(stream, byteCount);
+                try
+                {
+                    var bytes = StrictUtf8.GetBytes(text.Value);
+                    stream.Write(bytes);
+                }
+                catch (EncoderFallbackException ex)
+                {
+                    throw new InvalidDataException("Rivet String contains invalid Unicode data.", ex);
+                }
                 break;
             }
             case RivetValue.BytesValue blob:
+                if (blob.Value is null)
+                {
+                    throw new InvalidDataException("Rivet Bytes value is null.");
+                }
+                EnsureEncodedSize(stream, 5L + blob.Value.Length);
                 stream.WriteByte(TagBytes);
                 WriteLength(stream, blob.Value.Length);
                 stream.Write(blob.Value);
                 break;
             case RivetValue.ListValue list:
+                if (list.Value is null)
+                {
+                    throw new InvalidDataException("Rivet List value is null.");
+                }
+                if (depth >= MaxValueDepth)
+                {
+                    throw new InvalidDataException("Rivet value nesting exceeds protocol limit.");
+                }
+                if (list.Value.Count > remainingNodes)
+                {
+                    throw new InvalidDataException("Rivet value node count exceeds protocol limit.");
+                }
+                EnsureEncodedSize(stream, 5);
                 stream.WriteByte(TagList);
                 WriteLength(stream, list.Value.Count);
                 foreach (var item in list.Value)
                 {
-                    WriteValue(stream, item);
+                    if (item is null)
+                    {
+                        throw new InvalidDataException("Rivet List contains a null object reference.");
+                    }
+                    WriteValue(stream, item, depth + 1, ref remainingNodes);
                 }
                 break;
             default:
@@ -165,8 +246,13 @@ public static class RivetProtocol
         }
     }
 
-    private static RivetValue ReadValue(ReadOnlySpan<byte> bytes, ref int offset)
+    private static RivetValue ReadValue(
+        ReadOnlySpan<byte> bytes,
+        ref int offset,
+        int depth,
+        ref int remainingNodes)
     {
+        ConsumeDecodeNode(ref remainingNodes);
         EnsureAvailable(bytes, offset, 1);
         var tag = bytes[offset++];
         return tag switch
@@ -177,7 +263,7 @@ public static class RivetProtocol
             TagInt64 => ReadInt64(bytes, ref offset),
             TagString => ReadString(bytes, ref offset),
             TagBytes => ReadBytes(bytes, ref offset),
-            TagList => ReadList(bytes, ref offset),
+            TagList => ReadList(bytes, ref offset, depth, ref remainingNodes),
             _ => throw new InvalidDataException($"Unknown Rivet value tag: {tag}.")
         };
     }
@@ -193,7 +279,14 @@ public static class RivetProtocol
     private static RivetValue ReadString(ReadOnlySpan<byte> bytes, ref int offset)
     {
         var data = ReadSizedBytes(bytes, ref offset);
-        return RivetValue.From(Encoding.UTF8.GetString(data));
+        try
+        {
+            return RivetValue.From(StrictUtf8.GetString(data));
+        }
+        catch (DecoderFallbackException ex)
+        {
+            throw new InvalidDataException("Invalid UTF-8 in Rivet String value.", ex);
+        }
     }
 
     private static RivetValue ReadBytes(ReadOnlySpan<byte> bytes, ref int offset)
@@ -201,9 +294,26 @@ public static class RivetProtocol
         return RivetValue.From(ReadSizedBytes(bytes, ref offset).ToArray());
     }
 
-    private static RivetValue ReadList(ReadOnlySpan<byte> bytes, ref int offset)
+    private static RivetValue ReadList(
+        ReadOnlySpan<byte> bytes,
+        ref int offset,
+        int depth,
+        ref int remainingNodes)
     {
+        if (depth >= MaxValueDepth)
+        {
+            throw new InvalidDataException("Rivet value nesting exceeds protocol limit.");
+        }
+
         var count = ReadLength(bytes, ref offset);
+        // Every declared element consumes at least one value node. Reject the
+        // declaration before allocating the array so a tiny payload cannot
+        // request a huge managed allocation.
+        if (count > remainingNodes)
+        {
+            throw new InvalidDataException("Rivet value node count exceeds protocol limit.");
+        }
+        // Every encoded item needs at least one tag byte.
         if (count > bytes.Length - offset)
         {
             throw new InvalidDataException($"Impossible Rivet list length: {count}.");
@@ -212,7 +322,7 @@ public static class RivetProtocol
         var values = new RivetValue[count];
         for (var i = 0; i < values.Length; i++)
         {
-            values[i] = ReadValue(bytes, ref offset);
+            values[i] = ReadValue(bytes, ref offset, depth + 1, ref remainingNodes);
         }
         return RivetValue.From(values);
     }
@@ -247,6 +357,34 @@ public static class RivetProtocol
         Span<byte> bytes = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(bytes, checked((uint)length));
         stream.Write(bytes);
+    }
+
+    private static void ConsumeEncodeNode(ref int remainingNodes)
+    {
+        if (remainingNodes == 0)
+        {
+            throw new InvalidDataException("Rivet value node count exceeds protocol limit.");
+        }
+        remainingNodes--;
+    }
+
+    private static void ConsumeDecodeNode(ref int remainingNodes)
+    {
+        if (remainingNodes == 0)
+        {
+            throw new InvalidDataException("Rivet value node count exceeds protocol limit.");
+        }
+        remainingNodes--;
+    }
+
+    private static void EnsureEncodedSize(Stream stream, long additional)
+    {
+        if (additional < 0 ||
+            stream.Length > MaxFramePayloadSize ||
+            additional > MaxFramePayloadSize - stream.Length)
+        {
+            throw new InvalidDataException("Rivet encoded value exceeds payload limit.");
+        }
     }
 
     private static void EnsureAvailable(ReadOnlySpan<byte> bytes, int offset, int count)
