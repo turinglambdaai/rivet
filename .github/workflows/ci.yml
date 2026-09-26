@@ -34,7 +34,7 @@ jobs:
         run: raco test tests/
       - name: Check CLI
         run: raco rivet help
-      - name: Check release metadata and source package
+      - name: Check release metadata and source package artifact
         shell: bash
         run: |
           set -euo pipefail
@@ -47,7 +47,12 @@ jobs:
           package_dir="$RUNNER_TEMP/rivet-package"
           mkdir -p "$package_dir"
           raco pkg create --from-dir --source --format zip --dest "$package_dir" "$PWD"
-          find "$package_dir" -maxdepth 1 -type f -name '*.zip' -print -quit | grep -q .
+          archive="$(find "$package_dir" -maxdepth 1 -type f -name '*.zip' -print -quit)"
+          if [[ -z "$archive" ]]; then
+            echo "raco pkg create did not produce a zip archive" >&2
+            exit 1
+          fi
+          bash .github/scripts/smoke-source-package.sh "$archive"
 
   native-protocol:
     name: Native protocol (${{ matrix.os }})
