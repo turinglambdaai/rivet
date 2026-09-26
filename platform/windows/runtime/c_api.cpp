@@ -8,20 +8,26 @@
 #endif
 #include <windows.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <cwchar>
 #include <exception>
+#include <filesystem>
 #include <future>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 struct rivet_backend_handle_t {
   explicit rivet_backend_handle_t(rivet::windows::RacketRuntimeConfig config)
-      : backend(std::move(config)) {}
+      : dll_dir(config.dll_dir), backend(std::move(config)) {}
 
+  std::wstring dll_dir;
+  std::vector<HMODULE> bundled_runtime_modules;
   rivet::windows::Backend backend;
   std::mutex callback_mutex;
   rivet_event_callback callback{};
@@ -39,6 +45,104 @@ struct rivet_call_handle_t {
 };
 
 namespace {
+
+class DllDirectoryRegistration {
+ public:
+  explicit DllDirectoryRegistration(std::filesystem::path const& directory) {
+    cookie_ = ::AddDllDirectory(directory.c_str());
+    if (cookie_ == nullptr) {
+      throw std::runtime_error("AddDllDirectory failed with Win32 error " +
+                               std::to_string(::GetLastError()));
+    }
+  }
+
+  ~DllDirectoryRegistration() {
+    if (cookie_ != nullptr) {
+      (void)::RemoveDllDirectory(cookie_);
+    }
+  }
+
+  DllDirectoryRegistration(DllDirectoryRegistration const&) = delete;
+  DllDirectoryRegistration& operator=(DllDirectoryRegistration const&) = delete;
+
+ private:
+  DLL_DIRECTORY_COOKIE cookie_{nullptr};
+};
+
+void release_bundled_runtime_modules(std::vector<HMODULE>& modules) noexcept {
+  for (auto it = modules.rbegin(); it != modules.rend(); ++it) {
+    if (*it != nullptr) {
+      (void)::FreeLibrary(*it);
+    }
+  }
+  modules.clear();
+}
+
+bool is_dll(std::filesystem::path const& path) {
+  return ::_wcsicmp(path.extension().c_str(), L".dll") == 0;
+}
+
+std::vector<HMODULE> preload_bundled_runtime_dlls(
+    std::wstring const& runtime_directory) {
+  std::vector<HMODULE> modules;
+  if (runtime_directory.empty()) {
+    return modules;
+  }
+
+  auto const runtime = std::filesystem::path(runtime_directory);
+  if (!std::filesystem::is_directory(runtime)) {
+    throw std::runtime_error("Rivet runtime directory does not exist");
+  }
+
+  // `raco ctool --runtime` places runtime-path resources (for example
+  // db/sqlite3's sqlite3.dll) below the bundle's runtime directory. Racket
+  // later opens those DLLs by absolute path. On Windows, dependencies of an
+  // absolute-path LoadLibrary call are still resolved with the process DLL
+  // search rules, so support DLLs staged at runtime/ are otherwise invisible
+  // unless the host application mutates PATH.
+  //
+  // Do not change the host's process-wide default DLL search policy. Instead,
+  // temporarily register runtime/ only for our explicit LoadLibraryEx calls,
+  // preload the ctool-collected nested DLLs with safe search flags, then remove
+  // the registration. The modules stay loaded until Racket shuts down, making
+  // subsequent Racket FFI LoadLibrary calls deterministic and self-contained.
+  DllDirectoryRegistration const runtime_search(runtime);
+
+  std::vector<std::filesystem::path> candidates;
+  for (auto const& entry : std::filesystem::recursive_directory_iterator(runtime)) {
+    if (!entry.is_regular_file() || !is_dll(entry.path())) {
+      continue;
+    }
+    if (entry.path().parent_path() == runtime) {
+      // Top-level DLLs are dependency/search support files staged from the
+      // Racket distribution. Only ctool runtime-path DLLs need preloading.
+      continue;
+    }
+    candidates.push_back(entry.path());
+  }
+  std::sort(candidates.begin(), candidates.end());
+
+  constexpr DWORD kLoadFlags =
+      LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS;
+  modules.reserve(candidates.size());
+  try {
+    for (auto const& path : candidates) {
+      auto const module = ::LoadLibraryExW(path.c_str(), nullptr, kLoadFlags);
+      if (module == nullptr) {
+        throw std::runtime_error(
+            "LoadLibraryExW failed for bundled Racket runtime DLL '" +
+            path.u8string() + "' with Win32 error " +
+            std::to_string(::GetLastError()));
+      }
+      modules.push_back(module);
+    }
+  } catch (...) {
+    release_bundled_runtime_modules(modules);
+    throw;
+  }
+
+  return modules;
+}
 
 void clear_buffer(rivet_buffer* buffer) noexcept {
   if (buffer != nullptr) {
@@ -207,9 +311,18 @@ int RIVET_C_CALL rivet_backend_start(
     if (backend == nullptr) {
       throw std::invalid_argument("rivet_backend_start received a null backend");
     }
+    backend->bundled_runtime_modules =
+        preload_bundled_runtime_dlls(backend->dll_dir);
     backend->backend.start();
     return 0;
   } catch (...) {
+    if (backend != nullptr) {
+      try {
+        backend->backend.stop();
+      } catch (...) {
+      }
+      release_bundled_runtime_modules(backend->bundled_runtime_modules);
+    }
     set_current_error(error_utf8);
     return 1;
   }
@@ -223,6 +336,7 @@ void RIVET_C_CALL rivet_backend_stop(rivet_backend_handle backend) {
     backend->backend.stop();
   } catch (...) {
   }
+  release_bundled_runtime_modules(backend->bundled_runtime_modules);
 }
 
 int RIVET_C_CALL rivet_backend_running(rivet_backend_handle backend) {
@@ -238,6 +352,7 @@ void RIVET_C_CALL rivet_backend_destroy(rivet_backend_handle backend) {
     backend->backend.stop();
   } catch (...) {
   }
+  release_bundled_runtime_modules(backend->bundled_runtime_modules);
   delete backend;
 }
 
