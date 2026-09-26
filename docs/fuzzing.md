@@ -35,6 +35,7 @@ The script writes every valid and invalid value/frame vector as a separate binar
 A short local smoke run:
 
 ```sh
+mkdir -p build/fuzz/artifacts
 ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 \
 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
   build/fuzz/rivet_protocol_fuzz build/fuzz/corpus \
