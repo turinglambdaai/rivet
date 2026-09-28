@@ -61,7 +61,7 @@ If something required is missing, `doctor` prints a **Fix next** section with th
 
 Typical requirements are:
 
-- **Windows:** Racket CS, Visual Studio 2022 or Build Tools with Desktop development with C++, a Windows SDK, and Windows App SDK.
+- **Windows:** Racket CS, Visual Studio 2022 or Build Tools with Desktop development with C++, and a Windows SDK. Rivet restores the Windows App SDK package during the native build.
 - **macOS:** Racket CS plus the Apple developer command-line/Xcode toolchain.
 
 For CI or developer agents, use machine-readable diagnostics:
