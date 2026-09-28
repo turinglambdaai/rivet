@@ -64,6 +64,7 @@ RKT
     "raco rivet verify\n"
     "```\n\n"
     "Full tutorial: https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.md\n"
+    "中文教程: https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.zh-CN.md\n"
     "Rivet website: https://rivet.jrtx.site\n")
    name))
 
