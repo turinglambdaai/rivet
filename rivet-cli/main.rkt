@@ -46,9 +46,13 @@
      (define root (create-project! name))
      (say "created ~a" root)
      (displayln "")
+     (displayln "Next:")
      (displayln (format "  cd ~a" name))
      (displayln "  raco rivet doctor")
-     (displayln "  raco rivet dev")]
+     (displayln "  raco rivet dev")
+     (displayln "")
+     (displayln "The generated README.md points to the backend and native UI files to edit.")
+     (displayln "Guide: https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.md")]
     [(list "doctor")
      (exit (run-doctor))]
     [(list "doctor" "--json")
