@@ -108,8 +108,8 @@
           "Rivet currently builds first-party hosts on Windows and macOS. Use one of those systems for `raco rivet dev`, `build`, and `package`."))
 
   (unless (hash-ref report 'racket-executable)
-    (add! "Install Racket CS"
-          "Install the current Racket CS distribution from https://racket-lang.org/ and make sure `racket` is on PATH."))
+    (add! "Expose Racket CS on PATH"
+          "Add the `bin` directory of the Racket CS installation running Rivet to PATH so `racket` is discoverable from a fresh terminal."))
   (unless (hash-ref report 'raco)
     (add! "Expose raco on PATH"
           "Use the `raco` executable from the same Racket installation that will run Rivet."))
@@ -128,7 +128,7 @@
                (missing-tool? tools 'lib)
                (missing-tool? tools 'dumpbin))
        (add! "Install the Windows C++ toolchain"
-             "Open Visual Studio Installer and install Visual Studio 2022 (or Build Tools 2022) with the `Desktop development with C++` workload, a Windows 10/11 SDK, and the Windows App SDK. Then open a new terminal and rerun `raco rivet doctor`."))]
+             "Open Visual Studio Installer and install Visual Studio 2022 (or Build Tools 2022) with the `Desktop development with C++` workload and a Windows 10/11 SDK. Rivet restores its Windows App SDK package during the build. Then open a new terminal and rerun `raco rivet doctor`."))]
     [(macosx)
      (define tools (hash-ref report 'tools))
      (when (or (missing-tool? tools 'swift)
