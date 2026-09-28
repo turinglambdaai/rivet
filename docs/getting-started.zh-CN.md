@@ -4,10 +4,10 @@
 
 ## 1. 安装 Rivet
 
-请使用你希望 Rivet 最终嵌入的那套 Racket CS 自带的 `raco`，直接从 GitHub 安装：
+请使用你希望 Rivet 最终嵌入的那套 Racket CS 自带的 `raco`，从 Racket Package Catalog 安装：
 
 ```bash
-raco pkg install --auto https://github.com/turinglambdaai/rivet.git
+raco pkg install --auto rivet
 ```
 
 只有在开发 Rivet 框架本身时，才需要使用源码 link 安装：

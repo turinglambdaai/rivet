@@ -8,10 +8,10 @@ Build first-party native desktop apps with [Racket](https://racket-lang.org/). U
 
 ## Quick Start
 
-Install Rivet directly from GitHub with the `raco` from the Racket CS installation you want to embed:
+Install Rivet from the Racket Package Catalog with the `raco` from the Racket CS installation you want to embed:
 
 ```bash
-raco pkg install --auto https://github.com/turinglambdaai/rivet.git
+raco pkg install --auto rivet
 raco rivet new hello
 cd hello
 raco rivet doctor
@@ -20,7 +20,7 @@ raco rivet dev
 
 That is the normal first-run path. `doctor` checks the native toolchain and prints actionable fixes when a required component is missing; `dev` builds and launches the current platform's first-party native host.
 
-For a guided walkthrough, read **[Getting Started with Rivet](docs/getting-started.md)**. If you are developing Rivet itself, use the linked-checkout workflow in that guide instead of installing from GitHub.
+For a guided walkthrough, read **[Getting Started with Rivet](docs/getting-started.md)**. The installed package also includes searchable Scribble documentation. If you are developing Rivet itself, use the linked-checkout workflow in that guide instead of installing from the catalog.
 
 ## Why Rivet?
 

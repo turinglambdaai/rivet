@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added installable, searchable Scribble documentation for the core backend, system services, secure distribution APIs, and CLI workflow.
+- Registered the normal installation path as `raco pkg install --auto rivet` and corrected the package license metadata to the SPDX `MIT` license identifier.
 - Added an RVT1-independent `rivet/distribution` layer with SemVer channel policy, signed update manifests, Ed25519 verification, bounded downloads, SHA-256 artifact verification, staged rollout, install/restart callbacks, and rollback policy.
 - Added `raco rivet release` to compose production packaging, WiX MSI or notarized DMG creation, update metadata, CycloneDX SBOM, third-party notices, and license audit output.
 - Added `rivet/system` APIs for single-instance activation, notification/tray services, autostart, secure storage, atomic settings, structured logging, and provider-neutral crash hooks.

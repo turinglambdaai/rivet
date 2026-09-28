@@ -4,10 +4,10 @@ This guide takes a fresh machine from “Rivet is installed” to a running nati
 
 ## 1. Install Rivet
 
-Install directly from the GitHub repository with the `raco` from the Racket CS installation you want Rivet to embed:
+Install from the Racket Package Catalog with the `raco` from the Racket CS installation you want Rivet to embed:
 
 ```bash
-raco pkg install --auto https://github.com/turinglambdaai/rivet.git
+raco pkg install --auto rivet
 ```
 
 If you are developing Rivet itself, use a linked checkout instead:

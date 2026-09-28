@@ -8,10 +8,10 @@
 
 ## 快速开始
 
-请使用你希望 Rivet 最终嵌入的那套 Racket CS 自带的 `raco`，直接从 GitHub 安装：
+请使用你希望 Rivet 最终嵌入的那套 Racket CS 自带的 `raco`，从 Racket Package Catalog 安装：
 
 ```bash
-raco pkg install --auto https://github.com/turinglambdaai/rivet.git
+raco pkg install --auto rivet
 raco rivet new hello
 cd hello
 raco rivet doctor
@@ -20,7 +20,7 @@ raco rivet dev
 
 这就是普通用户的主路径。`doctor` 会检查原生工具链，并在缺少必要组件时直接给出下一步修复建议；`dev` 会构建并启动当前平台的一等原生宿主。
 
-需要完整引导时直接看 **[Rivet 快速上手教程](docs/getting-started.zh-CN.md)**。只有开发 Rivet 框架本身时，才需要使用教程里的源码 link 安装方式。
+需要完整引导时直接看 **[Rivet 快速上手教程](docs/getting-started.zh-CN.md)**；安装后的包也提供可搜索的 Scribble 文档。只有开发 Rivet 框架本身时，才需要使用教程里的源码 link 安装方式。
 
 ## 为什么选择 Rivet？
 
