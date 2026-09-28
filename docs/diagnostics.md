@@ -23,7 +23,7 @@ This is intentionally more specific than printing only a Racket version. If mult
 
 When a required dependency is missing, human-readable doctor output ends with a `Fix next:` section. The remediation is deliberately conservative: it tells the developer which supported platform toolchain or Racket installation needs attention and what to rerun after the fix.
 
-For example, an incomplete Windows C++ environment points to the Visual Studio 2022 / Build Tools `Desktop development with C++` workload, a Windows SDK, and Windows App SDK. An incomplete macOS environment points to `xcode-select --install` and the Xcode developer-directory selection when needed. If runtime discovery fails, Rivet asks for a complete Racket CS distribution and the same installation's `raco`.
+For example, an incomplete Windows C++ environment points to the Visual Studio 2022 / Build Tools `Desktop development with C++` workload and a Windows SDK; the Windows App SDK is a project package that Rivet restores during the build. An incomplete macOS environment points to `xcode-select --install` and the Xcode developer-directory selection when needed. If runtime discovery fails, Rivet asks for a complete Racket CS distribution and the same installation's `raco`.
 
 Optional release-only tools are not treated as development blockers. Missing Windows `signtool`, macOS notarization tooling, or Gatekeeper assessment support is reported as optional while development packaging remains available.
 
