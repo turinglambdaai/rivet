@@ -36,9 +36,17 @@ cd "$work"
 PLTUSERHOME="$user_home" \
   raco rivet new ArchiveSmoke
 
+test -f ArchiveSmoke/README.md
 test -f ArchiveSmoke/rivet.rktd
 test -f ArchiveSmoke/app/backend.rkt
 test -f ArchiveSmoke/windows/RivetHost.vcxproj
 test -f ArchiveSmoke/macos-host/Package.swift
+
+# The starter should remain self-guiding: installing a release archive and
+# running `new` must leave a developer with the normal diagnosis/run path and a
+# route to the full walkthrough, without requiring the Rivet checkout nearby.
+grep -Fq 'raco rivet doctor' ArchiveSmoke/README.md
+grep -Fq 'raco rivet dev' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.md' ArchiveSmoke/README.md
 
 printf 'source package smoke test passed: %s\n' "$archive"
