@@ -124,7 +124,7 @@ Current scope: Windows targets x64 first. Linux is not a Rivet target today beca
 | Dependency | Purpose |
 |---|---|
 | [Racket CS](https://racket-lang.org/) | application backend and embedded runtime |
-| Visual Studio / Windows App SDK | Windows host build |
+| Visual Studio 2022 / Build Tools + Windows SDK | Windows host build; Windows App SDK is restored as a project package |
 | Xcode command line tools / Swift | macOS host build |
 
 Rivet discovers the exact installed Racket CS runtime, boot files, headers, and native libraries during the build. Run `raco rivet doctor` before your first `dev`; when the environment is incomplete, it prints the next remediation steps instead of only reporting `not found`.
