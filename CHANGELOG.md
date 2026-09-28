@@ -4,6 +4,7 @@
 
 - First-run installation no longer requires cloning and linking a Rivet checkout; the documented user path installs directly from the GitHub package source.
 - Added English and Chinese getting-started guides that take a new project through `doctor`, `dev`, the generated native hosts, packaging, and verification.
+- The project homepage now makes **Get Started / 快速开始** the primary call to action while preserving the existing browser-language and explicit-language-override behavior.
 - `raco rivet doctor` now prints actionable remediation guidance for incomplete Racket, Windows C++, and Apple developer toolchains while keeping `doctor --json` data-only for automation.
 - Newly scaffolded applications include a self-guiding README with the normal edit locations, development loop, packaging commands, and links back to Rivet documentation.
 - `raco rivet new` now prints an explicit `Next:` sequence and points developers to the generated README and getting-started guide.
