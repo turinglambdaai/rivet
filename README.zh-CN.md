@@ -124,7 +124,7 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 | 依赖 | 用途 |
 |---|---|
 | [Racket CS](https://racket-lang.org/) | 应用后端与嵌入 runtime |
-| Visual Studio / Windows App SDK | Windows 原生宿主构建 |
+| Visual Studio 2022 / Build Tools + Windows SDK | Windows 原生宿主构建；Windows App SDK 作为项目依赖在构建时自动恢复 |
 | Xcode Command Line Tools / Swift | macOS 原生宿主构建 |
 
 构建过程中 Rivet 会自动定位当前精确版本的 Racket CS runtime、boot files、headers 与 native libraries。第一次执行 `dev` 之前先运行 `raco rivet doctor`；环境不完整时，它会给出明确的 remediation，而不只是显示 `not found`。
