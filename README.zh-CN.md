@@ -1,10 +1,26 @@
 # Rivet
 
-用 [Racket](https://racket-lang.org/) 构建第一方原生桌面应用。Windows 使用 WinUI 3，macOS 使用 SwiftUI，把应用逻辑放在 Racket 中，最终交付的是真正的原生应用，而不是 WebView 或跨平台控件封装层。
+用 [Racket](https://racket-lang.org/) 构建第一方原生桌面应用。Windows 使用 WinUI 3，macOS 使用 SwiftUI，把应用逻辑放在 Racket 中，最终交付的是真正原生应用，而不是 WebView 或跨平台控件封装层。
 
-[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Release](https://img.shields.io/badge/release-0.2.0-C15F3C)](CHANGELOG.md)
+[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.2.0-C15F3C)
 
 [English](README.md) · **中文**
+
+## 快速开始
+
+请使用你希望 Rivet 最终嵌入的那套 Racket CS 自带的 `raco`，直接从 GitHub 安装：
+
+```bash
+raco pkg install --auto https://github.com/turinglambdaai/rivet.git
+raco rivet new hello
+cd hello
+raco rivet doctor
+raco rivet dev
+```
+
+这就是普通用户的主路径。`doctor` 会检查原生工具链，并在缺少必要组件时直接给出下一步修复建议；`dev` 会构建并启动当前平台的一等原生宿主。
+
+需要完整引导时直接看 **[Rivet 快速上手教程](docs/getting-started.zh-CN.md)**。只有开发 Rivet 框架本身时，才需要使用教程里的源码 link 安装方式。
 
 ## 为什么选择 Rivet？
 
@@ -111,46 +127,22 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 | Visual Studio / Windows App SDK | Windows 原生宿主构建 |
 | Xcode Command Line Tools / Swift | macOS 原生宿主构建 |
 
-构建过程中 Rivet 会自动定位当前精确版本的 Racket CS runtime、boot files、headers 与 native libraries。
+构建过程中 Rivet 会自动定位当前精确版本的 Racket CS runtime、boot files、headers 与 native libraries。第一次执行 `dev` 之前先运行 `raco rivet doctor`；环境不完整时，它会给出明确的 remediation，而不只是显示 `not found`。
 
-## 快速开始
+## 日常开发流程
 
-### 1. 安装 Rivet
-
-从源码 checkout 安装：
-
-```bash
-git clone https://github.com/turinglambdaai/rivet.git
-cd rivet
-raco pkg install --auto --name rivet --link "$(pwd)"
-```
-
-### 2. 创建项目
+创建项目并进入正常的编辑/运行循环：
 
 ```bash
 raco rivet new hello
 cd hello
-```
-
-生成的项目同时包含共享 Racket 后端、Windows 原生宿主和 macOS 原生宿主。
-
-### 3. 检查工具链
-
-```bash
 raco rivet doctor
-```
-
-`doctor` 会检查当前平台工具链以及 Rivet 实际要嵌入的精确 Racket CS runtime。`raco rivet doctor --json` 会把同样的诊断数据提供给 CI 和 Agent。
-
-### 4. 开发运行
-
-```bash
 raco rivet dev
 ```
 
-它会重新编译 Racket 后端、重新生成 native client、构建当前平台的原生宿主，然后直接启动应用。
+生成的项目同时包含共享 Racket 后端、Windows 原生宿主和 macOS 原生宿主。项目自己的 `README.md` 会直接告诉你最常编辑哪些文件。
 
-### 5. 构建与打包
+准备发布时：
 
 ```bash
 raco rivet build
