@@ -155,6 +155,8 @@ raco rivet verify --production
 
 Production mode uses application-owned signing credentials. See [production signing](production-signing.md) before configuring secrets in CI.
 
+For a complete product release, configure a separate Ed25519 update key and run `raco rivet release`. It adds MSI/DMG creation, the signed channel manifest, SBOM, and third-party notices. See [release and updates](release-and-updates.md).
+
 ## 8. The normal Rivet workflow
 
 For day-to-day development, the commands worth remembering are only:
@@ -164,6 +166,7 @@ raco rivet doctor     # when setting up or diagnosing a machine
 raco rivet dev        # normal edit/build/run loop
 raco rivet package    # create a distributable
 raco rivet verify     # audit an existing distributable
+raco rivet release    # create the full signed release set
 ```
 
 Then read the deeper documentation only when you need it:
@@ -175,6 +178,8 @@ Then read the deeper documentation only when you need it:
 - [Embedding model](embedding.md)
 - [Package verification](package-verification.md)
 - [Production signing](production-signing.md)
+- [Release and updates](release-and-updates.md)
+- [System services](system-services.md)
 
 ## Troubleshooting rule of thumb
 

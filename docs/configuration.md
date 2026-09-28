@@ -13,6 +13,10 @@ Example:
   (version . "0.1.0")
   (build . 1)
   (identifier . "dev.rivet.hello")
+  (release-channel . stable)
+  (url-schemes . ("hello"))
+  (file-associations . (#hasheq((extension . ".hello")
+                                (description . "Hello Document"))))
   (macos-min-version . "14.0")
   (windows-min-version . "10.0.19041.0")
   (backend . "app/backend.rkt")
@@ -37,6 +41,14 @@ Example:
 - `identifier` — application/bundle identifier. Legacy projects derive `dev.rivet.<name>`.
 
 These values feed packaging metadata instead of being duplicated in native platform templates.
+
+## Distribution and activation metadata
+
+- `release-channel` — `stable`, `beta`, or `dev`; defaults to `stable`. The value is signed into update manifests and must match the client's selected channel.
+- `url-schemes` — a list of RFC 3986 scheme names. Packaging registers these with the native OS; the native host receives activations.
+- `file-associations` — a list of hashes with an `extension` beginning with `.` and an optional `description`. Packaging emits native document/installer metadata.
+
+These settings describe native registration only. They do not add messages to RVT1 or create a shared UI abstraction.
 
 ## Deployment targets
 

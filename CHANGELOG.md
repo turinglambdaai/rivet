@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added an RVT1-independent `rivet/distribution` layer with SemVer channel policy, signed update manifests, Ed25519 verification, bounded downloads, SHA-256 artifact verification, staged rollout, install/restart callbacks, and rollback policy.
+- Added `raco rivet release` to compose production packaging, WiX MSI or notarized DMG creation, update metadata, CycloneDX SBOM, third-party notices, and license audit output.
+- Added `rivet/system` APIs for single-instance activation, notification/tray services, autostart, secure storage, atomic settings, structured logging, and provider-neutral crash hooks.
+- Added first-party Windows implementations using Win32, Credential Manager, registry login startup, and Shell notifications, plus macOS implementations using AppKit, Keychain, UserNotifications, and ServiceManagement.
+- Added project-level release channels, URL schemes, and file associations; macOS packaging emits the corresponding bundle metadata.
+- Prepared Windows native builds and package naming for ARM64 while preserving the existing x64 path.
+- Added manifest signature/tampering, version/channel, rollout, artifact-integrity, rollback, settings, logging, and system-adapter tests.
+
 ## 0.2.0
 
 Rivet 0.2 hardens the native runtime contract and release path while preserving the existing WinUI 3 / SwiftUI architecture, and completes the first-run developer experience for the first public release.

@@ -68,3 +68,9 @@ Inject the environment variables above through the CI secret store. Do not commi
 For macOS, provision the Developer ID certificate/keychain and `notarytool` profile on the trusted runner before invoking `raco rivet package --production`.
 
 The normal Rivet CI intentionally exercises only development packaging. It verifies that the production credential parser rejects incomplete or ambiguous configuration, while actual certificate-backed signing requires credentials owned by the publisher.
+
+## Update content signing
+
+Online updates use a separate Ed25519 key; Authenticode, Developer ID, notarization, and HTTPS are additional layers rather than substitutes. Set `RIVET_UPDATE_PRIVATE_KEY` to a DER-encoded private key path and `RIVET_UPDATE_KEY_ID` to its public identifier only in the trusted release environment. The public key is embedded by the application, while the private key must never enter the source tree or ordinary pull-request CI.
+
+`raco rivet release` signs the contained application and final installer with the platform identity, then signs the update manifest payload with Ed25519. See [Release and updates](release-and-updates.md) for rotation and rollback policy.

@@ -158,3 +158,11 @@ The host bundles:
 - the native platform executable and resources.
 
 Target machines should not need a user-installed Racket distribution.
+
+## Application services boundary
+
+RVT1 remains limited to typed application RPC, Event, State, Cancel, and lifecycle framing. Updates, installers, single-instance routing, deep links, file activation, notifications, tray/menu-bar UI, login items, secrets, settings, logs, and crash reports live above it.
+
+The Racket-facing modules are `rivet/distribution` and `rivet/system`. Native adapters live beside the existing WinUI and Swift runtime code and use platform-first APIs. This separation prevents distribution policy from changing the embedded runtime contract and keeps UI-thread objects under WinUI/AppKit ownership.
+
+An update crosses explicit trust boundaries: verify signed manifest, select policy-compatible artifact, download with a bound, verify signed size and SHA-256, invoke the platform installer, then either restart or execute the signed rollback policy. See [Release and updates](release-and-updates.md).

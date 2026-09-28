@@ -10,7 +10,8 @@
          "verify.rkt"
          "windows-tools.rkt")
 
-(provide package-project!)
+(provide package-project!
+         sign-windows-production!)
 
 (define (run! who executable . args)
   (unless executable
@@ -54,19 +55,52 @@
                            identifier
                            version
                            build
-                           minimum-version)
+                           minimum-version
+                           url-schemes
+                           file-associations)
+  (define (xml-escape value)
+    (regexp-replace*
+     #px"[&<>\"]" value
+     (lambda (match)
+       (case (string-ref match 0)
+         [(#\&) "&amp;"] [(#\<) "&lt;"] [(#\>) "&gt;"] [else "&quot;"]))))
+  (define url-fragment
+    (if (null? url-schemes)
+        ""
+        (format
+         "  <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>~a</string><key>CFBundleURLSchemes</key><array>~a</array></dict></array>\n"
+         (xml-escape identifier)
+         (apply string-append
+                (for/list ([scheme (in-list url-schemes)])
+                  (format "<string>~a</string>" (xml-escape scheme)))))))
+  (define association-fragment
+    (if (null? file-associations)
+        ""
+        (format
+         "  <key>CFBundleDocumentTypes</key><array>~a</array>\n"
+         (apply string-append
+                (for/list ([association (in-list file-associations)])
+                  (define extension (substring (hash-ref association 'extension) 1))
+                  (define description
+                    (hash-ref association 'description
+                              (lambda () (string-append display-name " Document"))))
+                  (format "<dict><key>CFBundleTypeName</key><string>~a</string><key>CFBundleTypeExtensions</key><array><string>~a</string></array><key>CFBundleTypeRole</key><string>Editor</string></dict>"
+                          (xml-escape description)
+                          (xml-escape extension)))))))
   (call-with-output-file path
     #:exists 'truncate/replace
     (lambda (out)
       (fprintf out
-               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>CFBundleDevelopmentRegion</key><string>en</string>\n  <key>CFBundleExecutable</key><string>~a</string>\n  <key>CFBundleIdentifier</key><string>~a</string>\n  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>\n  <key>CFBundleName</key><string>~a</string>\n  <key>CFBundleDisplayName</key><string>~a</string>\n  <key>CFBundlePackageType</key><string>APPL</string>\n  <key>CFBundleShortVersionString</key><string>~a</string>\n  <key>CFBundleVersion</key><string>~a</string>\n  <key>LSMinimumSystemVersion</key><string>~a</string>\n  <key>NSHighResolutionCapable</key><true/>\n</dict>\n</plist>\n"
+               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>CFBundleDevelopmentRegion</key><string>en</string>\n  <key>CFBundleExecutable</key><string>~a</string>\n  <key>CFBundleIdentifier</key><string>~a</string>\n  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>\n  <key>CFBundleName</key><string>~a</string>\n  <key>CFBundleDisplayName</key><string>~a</string>\n  <key>CFBundlePackageType</key><string>APPL</string>\n  <key>CFBundleShortVersionString</key><string>~a</string>\n  <key>CFBundleVersion</key><string>~a</string>\n  <key>LSMinimumSystemVersion</key><string>~a</string>\n~a~a  <key>NSHighResolutionCapable</key><true/>\n</dict>\n</plist>\n"
                executable
                identifier
                display-name
                display-name
                version
                build
-               minimum-version))))
+               minimum-version
+               url-fragment
+               association-fragment))))
 
 (define (write-entitlements! path)
   (call-with-output-file path
@@ -109,8 +143,12 @@
                   args))
 
 (define (package-windows! project stage name production?)
+  (define architecture
+    (case (system-type 'arch)
+      [(aarch64 arm64) "arm64"]
+      [else "x64"]))
   (define destination
-    (project-path project "dist" (string-append name "-windows-x64")))
+    (project-path project "dist" (string-append name "-windows-" architecture)))
   (make-directory* (path-only destination))
   (copy-tree! stage destination)
   (when production?
@@ -206,7 +244,9 @@
                      identifier
                      version
                      build
-                     (project-macos-min-version project))
+                     (project-macos-min-version project)
+                     (project-url-schemes project)
+                     (project-file-associations project))
 
   (define entitlements
     (project-path project ".rivet" "macos-entitlements.plist"))

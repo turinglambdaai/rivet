@@ -3,9 +3,11 @@
 (require racket/match
          "build.rkt"
          "clean.rkt"
+         "compliance.rkt"
          "doctor.rkt"
          "package.rkt"
          "project.rkt"
+         "release.rkt"
          "scaffold.rkt"
          "verify.rkt")
 
@@ -29,6 +31,9 @@
     "  raco rivet dev                     build and run the current app\n"
     "  raco rivet package                 create and verify a development distributable\n"
     "  raco rivet package --production    create, sign, and verify a production distributable\n"
+    "  raco rivet release                 build signed installer, update manifest, SBOM, and notices\n"
+    "  raco rivet release --development   exercise release flow without platform production signing\n"
+    "  raco rivet compliance              generate SBOM/notices and run the license audit\n"
     "  raco rivet verify                  re-verify the current packaged artifact\n"
     "  raco rivet verify --production     verify production trust/notarization requirements\n"
     "  raco rivet help                    show this help\n")))
@@ -80,6 +85,14 @@
      (define output
        (package-project! (current-project!) #:production? #t))
      (say "production packaged, signed, and verified ~a" output)]
+    [(or (list "release") (list "release" "--development"))
+     (define production? (equal? args '("release")))
+     (define-values (installer manifest sbom notices)
+       (release-project! (current-project!) #:production? production?))
+     (say "release installer: ~a" installer)
+     (say "signed update manifest: ~a" manifest)
+     (say "SBOM: ~a" sbom)
+     (say "third-party notices: ~a" notices)]
     [(list "verify")
      (define output (verify-project-package! (current-project!)))
      (say "verified ~a" output)]
@@ -87,6 +100,11 @@
      (define output
        (verify-project-package! (current-project!) #:production? #t))
      (say "production trust verified ~a" output)]
+    [(list "compliance")
+     (define-values (sbom notices)
+       (generate-compliance-artifacts! (current-project!)))
+     (say "license audit passed; SBOM: ~a" sbom)
+     (say "third-party notices: ~a" notices)]
     [_
      (usage)
      (exit 1)]))

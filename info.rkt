@@ -8,7 +8,9 @@
 
 (define deps
   '("base"
-    "cext-lib"))
+    "cext-lib"
+    "crypto-lib"
+    "net-lib"))
 
 (define build-deps
   '("rackunit-lib"))

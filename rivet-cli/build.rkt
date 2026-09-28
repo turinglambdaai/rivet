@@ -16,6 +16,15 @@
 
 (define-runtime-path rivet-root "..")
 
+(define (windows-platform)
+  (case (system-type 'arch)
+    [(x86_64) "x64"]
+    [(aarch64 arm64) "ARM64"]
+    [else
+     (error 'build-project!
+            "Windows builds support x64 and ARM64 hosts; current architecture is ~a"
+            (system-type 'arch))]))
+
 (define (run! who executable . args)
   (unless executable
     (error who "required executable was not found"))
@@ -83,7 +92,7 @@
         lib-exe
         (string-append "/def:" (path->string def))
         (string-append "/out:" (path->string output))
-        "/machine:x64")
+        (string-append "/machine:" (string-downcase (windows-platform))))
   output)
 
 (define (with-windows-build-environment project runtime import-lib thunk)
@@ -101,10 +110,6 @@
     (thunk)))
 
 (define (build-windows! project runtime stage configuration self-contained?)
-  (unless (eq? (system-type 'arch) 'x86_64)
-    (error 'build-project!
-           "the first Windows milestone supports x64 only; ARM64 support is planned"))
-
   (define host-project (project-path project "windows" "RivetHost.vcxproj"))
   (unless (file-exists? host-project)
     (raise-arguments-error 'build-project!
@@ -135,7 +140,7 @@
            "/restore"
            "/m"
            (string-append "/p:Configuration=" configuration)
-           "/p:Platform=x64"
+           (string-append "/p:Platform=" (windows-platform))
            (string-append "/p:RivetSelfContained="
                           (if self-contained? "true" "false"))
            (string-append "/p:OutDir=" out-dir))))

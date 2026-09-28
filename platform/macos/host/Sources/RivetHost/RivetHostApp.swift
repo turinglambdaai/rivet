@@ -1,10 +1,12 @@
 import SwiftUI
 import RivetEmbedding
 import RivetRuntime
+import RivetSystem
 
 @main
 struct RivetHostApp: App {
     @StateObject private var model = AppModel()
+    private let activationRouter = RivetActivationRouter()
 
     var body: some Scene {
         WindowGroup {
@@ -12,6 +14,11 @@ struct RivetHostApp: App {
                 .environmentObject(model)
                 .frame(minWidth: 520, minHeight: 360)
                 .task { model.start() }
+                // URL schemes and file associations are declared from
+                // rivet.rktd during packaging. Keep activation handling in the
+                // native UI layer; forward only application-level data to the
+                // Racket backend when the app actually needs it.
+                .onOpenURL { url in activationRouter.handle([url]) }
         }
     }
 }
