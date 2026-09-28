@@ -1,6 +1,7 @@
 # Racket
 compiled/
 *.zo
+/rivet/doc/
 
 # Native builds
 build/

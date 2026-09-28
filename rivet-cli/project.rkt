@@ -19,6 +19,9 @@
          project-version
          project-build
          project-identifier
+         project-release-channel
+         project-url-schemes
+         project-file-associations
          project-macos-min-version
          project-windows-min-version)
 
@@ -116,6 +119,28 @@
   (optional 'windows-min-version
             windows-version-string?
             "Windows version with four numeric components, for example 10.0.19041.0")
+  (optional 'release-channel
+            (lambda (v) (memq v '(stable beta dev)))
+            "one of stable, beta, or dev")
+  (optional 'url-schemes
+            (lambda (v)
+              (and (list? v)
+                   (andmap (lambda (item)
+                             (and (string? item)
+                                  (regexp-match? #px"^[A-Za-z][A-Za-z0-9+.-]*$" item)))
+                           v)))
+            "list of RFC 3986 URL scheme strings")
+  (optional 'file-associations
+            (lambda (v)
+              (and (list? v)
+                   (andmap
+                    (lambda (item)
+                      (and (hash? item)
+                           (string? (hash-ref item 'extension #f))
+                           (regexp-match? #px"^\\.[A-Za-z0-9][A-Za-z0-9._-]*$"
+                                          (hash-ref item 'extension))))
+                    v)))
+            "list of hashes containing an extension such as .rivet")
   value)
 
 (define (load-config path)
@@ -184,6 +209,15 @@
   (project-ref project
                'identifier
                (lambda () (default-project-identifier (project-name project)))))
+
+(define (project-release-channel project)
+  (project-ref project 'release-channel (lambda () 'stable)))
+
+(define (project-url-schemes project)
+  (project-ref project 'url-schemes (lambda () '())))
+
+(define (project-file-associations project)
+  (project-ref project 'file-associations (lambda () '())))
 
 (define (project-macos-min-version project)
   (project-ref project

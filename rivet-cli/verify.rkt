@@ -239,7 +239,11 @@
   (define package
     (case (system-type 'os)
       [(windows)
-       (project-path project "dist" (string-append name "-windows-x64"))]
+       (define architecture
+         (case (system-type 'arch)
+           [(aarch64 arm64) "arm64"]
+           [else "x64"]))
+       (project-path project "dist" (string-append name "-windows-" architecture))]
       [(macosx)
        (project-path project "dist" (string-append name ".app"))]
       [else

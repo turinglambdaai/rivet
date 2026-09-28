@@ -24,7 +24,7 @@
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <WindowsTargetPlatformMinVersion>$(RIVET_WINDOWS_MIN_VERSION)</WindowsTargetPlatformMinVersion>
     <UseWinUI>true</UseWinUI>
-    <RuntimeIdentifiers>win10-x64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>win10-x64;win10-arm64</RuntimeIdentifiers>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained Condition="'$(RivetSelfContained)'=='true'">true</WindowsAppSDKSelfContained>
   </PropertyGroup>
@@ -32,6 +32,8 @@
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
     <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64"><Configuration>Debug</Configuration><Platform>ARM64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64"><Configuration>Release</Configuration><Platform>ARM64</Platform></ProjectConfiguration>
   </ItemGroup>
 
   <PropertyGroup Label="Configuration">
@@ -81,6 +83,7 @@
     <ClInclude Include="GeneratedBackend.hpp" />
     <ClInclude Include="$(RIVET_ROOT)\platform\windows\runtime\backend.hpp" />
     <ClInclude Include="$(RIVET_ROOT)\platform\windows\runtime\win32_pipe_transport.hpp" />
+    <ClInclude Include="$(RIVET_ROOT)\platform\windows\system\system_services.hpp" />
     <ClInclude Include="$(RIVET_ROOT)\runtime\include\rivet\protocol.hpp" />
   </ItemGroup>
   <ItemGroup>
@@ -89,6 +92,7 @@
     <ClCompile Include="MainWindow.xaml.cpp"><DependentUpon>MainWindow.xaml</DependentUpon></ClCompile>
     <ClCompile Include="$(RIVET_ROOT)\platform\windows\runtime\backend.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="$(RIVET_ROOT)\platform\windows\runtime\win32_pipe_transport.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
+    <ClCompile Include="$(RIVET_ROOT)\platform\windows\system\system_services.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="$(RIVET_ROOT)\runtime\src\protocol.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader></ClCompile>
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
   </ItemGroup>

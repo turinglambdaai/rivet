@@ -32,8 +32,37 @@ jobs:
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Test
         run: raco test tests/
+      - name: Build Scribble documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          doc_dir="$RUNNER_TEMP/rivet-docs"
+          mkdir -p "$doc_dir"
+          raco scribble ++xref-in setup/xref load-collections-xref \
+            --htmls --dest "$doc_dir" rivet/scribblings/rivet.scrbl
+          test -s "$doc_dir/rivet/index.html"
       - name: Check CLI
         run: raco rivet help
+      - name: Smoke-test SBOM, notices, and license audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          smoke="$RUNNER_TEMP/rivet-compliance-smoke"
+          mkdir -p "$smoke"
+          cd "$smoke"
+          raco rivet new ComplianceSmoke
+          cd ComplianceSmoke
+          raco rivet compliance
+          test -s dist/sbom.cdx.json
+          test -s dist/THIRD_PARTY_NOTICES.txt
+          python3 - <<'PY'
+          import json
+          with open("dist/sbom.cdx.json", encoding="utf-8") as handle:
+              document = json.load(handle)
+          assert document["bomFormat"] == "CycloneDX"
+          assert document["specVersion"] == "1.6"
+          assert all(item.get("licenses") for item in document["components"])
+          PY
       - name: Check release metadata and source package artifact
         shell: bash
         run: |

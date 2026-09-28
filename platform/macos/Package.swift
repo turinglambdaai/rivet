@@ -12,7 +12,8 @@ let package = Package(
     ],
     products: [
         .library(name: "RivetRuntime", targets: ["RivetRuntime"]),
-        .library(name: "RivetEmbedding", targets: ["RivetEmbedding"])
+        .library(name: "RivetEmbedding", targets: ["RivetEmbedding"]),
+        .library(name: "RivetSystem", targets: ["RivetSystem"])
     ],
     targets: [
         .target(
@@ -28,6 +29,16 @@ let package = Package(
             name: "RivetEmbedding",
             dependencies: ["RivetRuntime", "CRivetRacket"],
             path: "Sources/RivetEmbedding"
+        ),
+        .target(
+            name: "RivetSystem",
+            path: "Sources/RivetSystem",
+            linkerSettings: [
+                .linkedFramework("AppKit"),
+                .linkedFramework("Security"),
+                .linkedFramework("ServiceManagement"),
+                .linkedFramework("UserNotifications")
+            ]
         ),
         .testTarget(
             name: "RivetRuntimeTests",

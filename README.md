@@ -8,10 +8,10 @@ Build first-party native desktop apps with [Racket](https://racket-lang.org/). U
 
 ## Quick Start
 
-Install Rivet directly from GitHub with the `raco` from the Racket CS installation you want to embed:
+Install Rivet from the Racket Package Catalog with the `raco` from the Racket CS installation you want to embed:
 
 ```bash
-raco pkg install --auto https://github.com/turinglambdaai/rivet.git
+raco pkg install --auto rivet
 raco rivet new hello
 cd hello
 raco rivet doctor
@@ -20,7 +20,7 @@ raco rivet dev
 
 That is the normal first-run path. `doctor` checks the native toolchain and prints actionable fixes when a required component is missing; `dev` builds and launches the current platform's first-party native host.
 
-For a guided walkthrough, read **[Getting Started with Rivet](docs/getting-started.md)**. If you are developing Rivet itself, use the linked-checkout workflow in that guide instead of installing from GitHub.
+For a guided walkthrough, read **[Getting Started with Rivet](docs/getting-started.md)**. The installed package also includes searchable Scribble documentation. If you are developing Rivet itself, use the linked-checkout workflow in that guide instead of installing from the catalog.
 
 ## Why Rivet?
 
@@ -97,7 +97,7 @@ Racket CS runs on a dedicated runtime thread. Native UI code never manipulates R
 
 The embedding model is inspired by [Noise](https://github.com/Bogdanp/Noise), but Rivet makes the runtime contract, protocol, code generation, and lifecycle cross-platform instead of Swift-first.
 
-See [architecture](docs/architecture.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [project configuration](docs/configuration.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
+See [architecture](docs/architecture.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [project configuration](docs/configuration.md), [system services](docs/system-services.md), [release and updates](docs/release-and-updates.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
 
 ## Platform status
 
@@ -115,6 +115,10 @@ See [architecture](docs/architecture.md), [protocol](docs/protocol.md), [embeddi
 | `raco rivet package` | ✅ native distribution | ✅ `.app` bundle |
 | Package verification | ✅ dependency audit | ✅ signing/rpath/plist audit |
 | Production signing path | ✅ Authenticode | ✅ Developer ID + notarization |
+| Installer | ✅ WiX MSI | ✅ signed/notarized DMG |
+| Signed updater | ✅ Ed25519 + SHA-256 | ✅ Ed25519 + SHA-256 |
+| System services | ✅ Win32 adapter | ✅ AppKit/system-framework adapter |
+| Secure storage | ✅ Credential Manager | ✅ Keychain |
 | CI protocol coverage | ✅ | ✅ |
 
 Current scope: Windows targets x64 first. Linux is not a Rivet target today because Rivet deliberately follows first-party platform UI stacks rather than defining another universal widget API.
@@ -148,11 +152,14 @@ Build and package when you are ready to leave the development loop:
 raco rivet build
 raco rivet package
 raco rivet verify
+raco rivet release
 ```
 
 `build` produces the native host and staged runtime. `package` turns that output into a distributable Windows directory or a macOS `.app` bundle and verifies it before reporting success. `verify` re-audits an existing package.
 
 For publisher-signed output, use `raco rivet package --production` with the platform signing credentials described in [docs/production-signing.md](docs/production-signing.md).
+
+`release` adds the formal installer, independently signed update manifest, SBOM, and third-party notices. See [Release and updates](docs/release-and-updates.md); update signing keys are separate from Authenticode/Developer ID credentials.
 
 ## RPC, Event, State, Cancel
 
@@ -198,6 +205,9 @@ raco rivet build                   Compile backend, generate clients, build nati
 raco rivet dev                     Build and run the current application
 raco rivet package                 Create and verify a development distributable
 raco rivet package --production    Create, sign, and verify a production distributable
+raco rivet release                 Build installer, signed update manifest, SBOM, and notices
+raco rivet release --development   Exercise release flow without platform production signing
+raco rivet compliance              Generate SBOM/notices and run the license audit
 raco rivet verify                  Re-verify the current packaged artifact
 raco rivet verify --production     Verify production trust/notarization requirements
 raco rivet help                    Show CLI help

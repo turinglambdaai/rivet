@@ -8,10 +8,10 @@
 
 ## 快速开始
 
-请使用你希望 Rivet 最终嵌入的那套 Racket CS 自带的 `raco`，直接从 GitHub 安装：
+请使用你希望 Rivet 最终嵌入的那套 Racket CS 自带的 `raco`，从 Racket Package Catalog 安装：
 
 ```bash
-raco pkg install --auto https://github.com/turinglambdaai/rivet.git
+raco pkg install --auto rivet
 raco rivet new hello
 cd hello
 raco rivet doctor
@@ -20,7 +20,7 @@ raco rivet dev
 
 这就是普通用户的主路径。`doctor` 会检查原生工具链，并在缺少必要组件时直接给出下一步修复建议；`dev` 会构建并启动当前平台的一等原生宿主。
 
-需要完整引导时直接看 **[Rivet 快速上手教程](docs/getting-started.zh-CN.md)**。只有开发 Rivet 框架本身时，才需要使用教程里的源码 link 安装方式。
+需要完整引导时直接看 **[Rivet 快速上手教程](docs/getting-started.zh-CN.md)**；安装后的包也提供可搜索的 Scribble 文档。只有开发 Rivet 框架本身时，才需要使用教程里的源码 link 安装方式。
 
 ## 为什么选择 Rivet？
 
@@ -97,7 +97,7 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 
 嵌入模型受到 [Noise](https://github.com/Bogdanp/Noise) 的启发，但 Rivet 把 runtime contract、协议、代码生成和生命周期都做成平台无关的统一核心，而不是以 Swift 为中心。
 
-深入设计见 [架构](docs/architecture.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[项目配置](docs/configuration.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
+深入设计见 [架构](docs/architecture.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[项目配置](docs/configuration.md)、[系统服务](docs/system-services.md)、[发布与更新](docs/release-and-updates.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
 
 ## 平台支持状态
 
@@ -115,6 +115,10 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 | `raco rivet package` | ✅ 原生分发目录 | ✅ `.app` bundle |
 | 发布物验证 | ✅ DLL 依赖闭包 | ✅ 签名/rpath/plist |
 | 生产签名路径 | ✅ Authenticode | ✅ Developer ID + notarization |
+| 正式安装包 | ✅ WiX MSI | ✅ 签名并公证的 DMG |
+| 安全在线更新 | ✅ Ed25519 + SHA-256 | ✅ Ed25519 + SHA-256 |
+| 系统服务 | ✅ Win32 适配层 | ✅ AppKit/系统框架适配层 |
+| 安全存储 | ✅ Credential Manager | ✅ Keychain |
 | CI 协议覆盖 | ✅ | ✅ |
 
 当前优先支持 Windows x64。Linux 不是 Rivet 目前的目标，因为 Rivet 的定位就是绑定各平台第一方 UI，而不是再定义一套统一跨平台控件系统。
@@ -148,11 +152,14 @@ raco rivet dev
 raco rivet build
 raco rivet package
 raco rivet verify
+raco rivet release
 ```
 
 `build` 负责生成 native host 和 staged runtime；`package` 输出可分发的 Windows 目录或 macOS `.app`，并在成功前自动验证发布物；`verify` 可以重新检查已有发布物。
 
 需要正式发行签名时，按 [生产签名文档](docs/production-signing.md) 配置凭据后执行 `raco rivet package --production`。
+
+`release` 会继续生成正式 installer、独立 Ed25519 签名的更新 manifest、SBOM 与第三方许可声明。更新私钥和平台发布证书彼此独立，详见[发布与更新](docs/release-and-updates.md)。
 
 ## RPC、Event、State、Cancel
 
@@ -198,6 +205,9 @@ raco rivet build                   编译 backend、生成 client、构建 nativ
 raco rivet dev                     构建并运行当前应用
 raco rivet package                 创建并验证开发发布物
 raco rivet package --production    创建、签名并验证正式发布物
+raco rivet release                 构建 installer、签名更新 manifest、SBOM 与许可声明
+raco rivet release --development   不做平台正式签名，演练完整 release 流程
+raco rivet compliance              生成 SBOM/许可声明并执行 license audit
 raco rivet verify                  重新验证当前发布物
 raco rivet verify --production     验证生产签名/公证信任状态
 raco rivet help                    显示帮助
