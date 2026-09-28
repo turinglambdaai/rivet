@@ -1,9 +1,17 @@
 # Changelog
 
+## Unreleased
+
 ## 0.2.0
 
-Rivet 0.2 hardens the native runtime contract and release path while preserving the existing WinUI 3 / SwiftUI architecture.
+Rivet 0.2 hardens the native runtime contract and release path while preserving the existing WinUI 3 / SwiftUI architecture, and completes the first-run developer experience for the first public release.
 
+- First-run installation no longer requires cloning and linking a Rivet checkout; the documented user path installs directly from the GitHub package source.
+- Added English and Chinese getting-started guides that take a new project through `doctor`, `dev`, the generated native hosts, packaging, and verification.
+- The project homepage now makes **Get Started / 快速开始** the primary call to action, routes each language to its matching guide, and preserves the existing browser-language and explicit-language-override behavior.
+- `raco rivet doctor` now prints actionable remediation guidance for incomplete Racket, Windows C++, and Apple developer toolchains while keeping `doctor --json` data-only for automation.
+- Newly scaffolded applications include a self-guiding README with the normal edit locations, development loop, packaging commands, and English/Chinese walkthrough links.
+- `raco rivet new` now prints an explicit `Next:` sequence and points developers to the generated README plus both getting-started guides.
 - Deterministic embedded Racket lifecycle on macOS, including idempotent stop and restart rejection.
 - Standalone Swift `RivetClient` instances now use the same one-shot lifecycle: start is reserved before the Hello read, concurrent starts are rejected, and stop/startup races cannot resurrect a stopped client.
 - Typed Event schema validation and generated Swift/C++ Event APIs.

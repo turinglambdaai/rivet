@@ -2,9 +2,25 @@
 
 Build first-party native desktop apps with [Racket](https://racket-lang.org/). Use WinUI 3 on Windows and SwiftUI on macOS, keep your application logic in Racket, and ship a real native app instead of a WebView or a cross-platform widget layer.
 
-[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Release](https://img.shields.io/badge/release-0.2.0-C15F3C)](CHANGELOG.md)
+[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.2.0-C15F3C)
 
 **English** · [中文](README.zh-CN.md)
+
+## Quick Start
+
+Install Rivet directly from GitHub with the `raco` from the Racket CS installation you want to embed:
+
+```bash
+raco pkg install --auto https://github.com/turinglambdaai/rivet.git
+raco rivet new hello
+cd hello
+raco rivet doctor
+raco rivet dev
+```
+
+That is the normal first-run path. `doctor` checks the native toolchain and prints actionable fixes when a required component is missing; `dev` builds and launches the current platform's first-party native host.
+
+For a guided walkthrough, read **[Getting Started with Rivet](docs/getting-started.md)**. If you are developing Rivet itself, use the linked-checkout workflow in that guide instead of installing from GitHub.
 
 ## Why Rivet?
 
@@ -108,49 +124,25 @@ Current scope: Windows targets x64 first. Linux is not a Rivet target today beca
 | Dependency | Purpose |
 |---|---|
 | [Racket CS](https://racket-lang.org/) | application backend and embedded runtime |
-| Visual Studio / Windows App SDK | Windows host build |
+| Visual Studio 2022 / Build Tools + Windows SDK | Windows host build; Windows App SDK is restored as a project package |
 | Xcode command line tools / Swift | macOS host build |
 
-Rivet discovers the exact installed Racket CS runtime, boot files, headers, and native libraries during the build.
+Rivet discovers the exact installed Racket CS runtime, boot files, headers, and native libraries during the build. Run `raco rivet doctor` before your first `dev`; when the environment is incomplete, it prints the next remediation steps instead of only reporting `not found`.
 
-## Quick Start
+## Development workflow
 
-### 1. Install Rivet
-
-From a checkout:
-
-```bash
-git clone https://github.com/turinglambdaai/rivet.git
-cd rivet
-raco pkg install --auto --name rivet --link "$(pwd)"
-```
-
-### 2. Create a project
+Create a project and enter the normal edit/run loop:
 
 ```bash
 raco rivet new hello
 cd hello
-```
-
-The generated project contains a shared Racket backend plus native Windows and macOS hosts.
-
-### 3. Check the toolchain
-
-```bash
 raco rivet doctor
-```
-
-`doctor` checks the current OS toolchain and the exact Racket CS runtime that Rivet will embed. `raco rivet doctor --json` exposes the same data to CI and developer agents.
-
-### 4. Run in development
-
-```bash
 raco rivet dev
 ```
 
-This recompiles the Racket backend, regenerates native clients, builds the native host for the current platform, and launches it.
+The generated project contains a shared Racket backend plus native Windows and macOS hosts. Its own `README.md` points directly to the files you normally edit.
 
-### 5. Build or package
+Build and package when you are ready to leave the development loop:
 
 ```bash
 raco rivet build

@@ -6,6 +6,7 @@
          "windows-tools.rkt")
 
 (provide doctor-report
+         doctor-remediations
          run-doctor)
 
 (define (path-string value)
@@ -94,6 +95,53 @@
         'runtime-error runtime-error
         'tools tools))
 
+(define (missing-tool? tools key)
+  (not (hash-ref tools key #f)))
+
+(define (doctor-remediations report)
+  (define fixes '())
+  (define (add! title detail)
+    (set! fixes (cons (cons title detail) fixes)))
+
+  (unless (hash-ref report 'supported)
+    (add! "Unsupported host platform"
+          "Rivet currently builds first-party hosts on Windows and macOS. Use one of those systems for `raco rivet dev`, `build`, and `package`."))
+
+  (unless (hash-ref report 'racket-executable)
+    (add! "Expose Racket CS on PATH"
+          "Add the `bin` directory of the Racket CS installation running Rivet to PATH so `racket` is discoverable from a fresh terminal."))
+  (unless (hash-ref report 'raco)
+    (add! "Expose raco on PATH"
+          "Use the `raco` executable from the same Racket installation that will run Rivet."))
+  (unless (hash-ref report 'runtime)
+    (add! "Repair the Racket CS runtime"
+          (string-append
+           "Rivet could not discover the complete embedded runtime. Install a full Racket CS distribution and reinstall Rivet with that installation's `raco`."
+           (let ([reason (hash-ref report 'runtime-error #f)])
+             (if reason (format " Discovery error: ~a" reason) "")))))
+
+  (case (string->symbol (hash-ref report 'os))
+    [(windows)
+     (define tools (hash-ref report 'tools))
+     (when (or (missing-tool? tools 'msbuild)
+               (missing-tool? tools 'cl)
+               (missing-tool? tools 'lib)
+               (missing-tool? tools 'dumpbin))
+       (add! "Install the Windows C++ toolchain"
+             "Open Visual Studio Installer and install Visual Studio 2022 (or Build Tools 2022) with the `Desktop development with C++` workload and a Windows 10/11 SDK. Rivet restores its Windows App SDK package during the build. Then open a new terminal and rerun `raco rivet doctor`."))]
+    [(macosx)
+     (define tools (hash-ref report 'tools))
+     (when (or (missing-tool? tools 'swift)
+               (missing-tool? tools 'xcodebuild)
+               (missing-tool? tools 'otool)
+               (missing-tool? tools 'codesign)
+               (missing-tool? tools 'plutil))
+       (add! "Install the Apple developer toolchain"
+             "Run `xcode-select --install`. If `xcodebuild` is still missing, install Xcode and select it with `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`, then rerun `raco rivet doctor`."))]
+    [else (void)])
+
+  (reverse fixes))
+
 (define (display-path label value [optional-note #f])
   (printf "  ~a: ~a~a\n"
           label
@@ -149,6 +197,14 @@
                    "development packaging is still available")]
     [else (void)]))
 
+(define (display-remediations report)
+  (define fixes (doctor-remediations report))
+  (unless (null? fixes)
+    (newline)
+    (displayln "Fix next:")
+    (for ([fix (in-list fixes)] [index (in-naturals 1)])
+      (printf "  ~a. ~a\n     ~a\n" index (car fix) (cdr fix)))))
+
 (define (run-doctor #:json? [json? #f])
   (define report (doctor-report))
   (cond
@@ -167,5 +223,7 @@
      (printf "  UI: ~a\n" (hash-ref report 'ui))
      (newline)
      (printf "rivet: toolchain ~a\n"
-             (if (hash-ref report 'usable) "looks usable" "is incomplete"))])
+             (if (hash-ref report 'usable) "looks usable" "is incomplete"))
+     (unless (hash-ref report 'usable)
+       (display-remediations report))])
   (if (hash-ref report 'usable) 0 1))

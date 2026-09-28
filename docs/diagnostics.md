@@ -19,6 +19,14 @@ It also reports the native build, dependency-audit, and optional production-sign
 
 This is intentionally more specific than printing only a Racket version. If multiple Racket installations are present, the paths shown by `doctor` are the artifacts Rivet will actually use for build/package operations.
 
+### Actionable failures
+
+When a required dependency is missing, human-readable doctor output ends with a `Fix next:` section. The remediation is deliberately conservative: it tells the developer which supported platform toolchain or Racket installation needs attention and what to rerun after the fix.
+
+For example, an incomplete Windows C++ environment points to the Visual Studio 2022 / Build Tools `Desktop development with C++` workload and a Windows SDK; the Windows App SDK is a project package that Rivet restores during the build. An incomplete macOS environment points to `xcode-select --install` and the Xcode developer-directory selection when needed. If runtime discovery fails, Rivet asks for a complete Racket CS distribution and the same installation's `raco`.
+
+Optional release-only tools are not treated as development blockers. Missing Windows `signtool`, macOS notarization tooling, or Gatekeeper assessment support is reported as optional while development packaging remains available.
+
 ## `raco rivet doctor --json`
 
 Use JSON mode from CI, Agents, editor integrations, or bug-report collectors:
@@ -42,7 +50,7 @@ The command writes a single JSON object to standard output and uses the same suc
 
 `runtime` contains the exact runtime artifact paths described above. `tools` contains platform-specific executable paths. Optional production tools such as Windows `signtool` or macOS notarization tools may be absent while normal development packaging remains usable.
 
-JSON mode is data-only; it does not mix the human-readable banner into standard output.
+JSON mode is intentionally data-only: it does not mix the human-readable banner or remediation prose into standard output. Automation should inspect `usable`, `runtime-error`, and `tools` and decide how to present or provision missing dependencies for its own environment.
 
 ## `raco rivet clean`
 

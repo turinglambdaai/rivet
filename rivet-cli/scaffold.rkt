@@ -41,6 +41,33 @@
 RKT
   )
 
+(define (starter-readme name)
+  (format
+   (string-append
+    "# ~a\n\n"
+    "A first-party native desktop app powered by Racket and Rivet.\n\n"
+    "## Start here\n\n"
+    "```bash\n"
+    "raco rivet doctor\n"
+    "raco rivet dev\n"
+    "```\n\n"
+    "`doctor` checks the local Racket/native toolchain and prints actionable fixes when something required is missing. `dev` rebuilds the Racket backend, regenerates the typed native client, builds the current platform host, and launches the app.\n\n"
+    "## Edit the app\n\n"
+    "- Shared Racket logic: `app/backend.rkt`\n"
+    "- Windows UI: `windows/MainWindow.xaml` and `windows/MainWindow.xaml.cpp`\n"
+    "- macOS UI: `macos-host/Sources/RivetHost/ContentView.swift` and `RivetHostApp.swift`\n"
+    "- App identity/deployment targets: `rivet.rktd`\n\n"
+    "## Ship a build\n\n"
+    "```bash\n"
+    "raco rivet build\n"
+    "raco rivet package\n"
+    "raco rivet verify\n"
+    "```\n\n"
+    "Full tutorial: https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.md\n"
+    "中文教程: https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.zh-CN.md\n"
+    "Rivet website: https://rivet.jrtx.site\n")
+   name))
+
 (define (create-project! name [parent (current-directory)])
   (unless (safe-project-name? name)
     (raise-arguments-error 'rivet-new
@@ -51,9 +78,7 @@ RKT
     (raise-arguments-error 'rivet-new "destination already exists" "path" root))
 
   (make-directory* root)
-  (write-text
-   (build-path root "README.md")
-   (format "# ~a\n\nA native desktop app powered by Racket and Rivet.\n\n```bash\nraco rivet doctor\nraco rivet dev\n```\n" name))
+  (write-text (build-path root "README.md") (starter-readme name))
   (write-text
    (build-path root "rivet.rktd")
    (format
