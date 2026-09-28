@@ -40,7 +40,7 @@
                 Rivet
             </div>
             <ul class="nav-menu">
-                <li><a href="https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.md" class="optional" data-en="Get Started" data-zh="快速开始">Get Started</a></li>
+                <li><a href="https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.md" data-href-en="https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.md" data-href-zh="https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.zh-CN.md" class="optional" data-en="Get Started" data-zh="快速开始">Get Started</a></li>
                 <li><a href="#features" class="optional" data-en="Features" data-zh="功能">Features</a></li>
                 <li><a href="#compare" class="optional" data-en="Positioning" data-zh="定位">Positioning</a></li>
                 <li><a href="https://github.com/turinglambdaai/rivet" class="optional">GitHub</a></li>
@@ -77,7 +77,7 @@
             </p>
 
             <div class="hero-buttons animate-on-scroll">
-                <a href="https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.md" class="btn btn-primary" data-en="Get Started" data-zh="快速开始">Get Started</a>
+                <a href="https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.md" data-href-en="https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.md" data-href-zh="https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.zh-CN.md" class="btn btn-primary" data-en="Get Started" data-zh="快速开始">Get Started</a>
                 <a href="https://github.com/turinglambdaai/rivet" class="btn btn-secondary" data-en="View on GitHub" data-zh="在 GitHub 查看">View on GitHub</a>
             </div>
 
@@ -271,7 +271,7 @@ backend.onProgress { pct <span class="kw">in</span>
                 Rivet
             </div>
             <div class="footer-links">
-                <a href="https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.md" data-en="Get Started" data-zh="快速开始">Get Started</a>
+                <a href="https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.md" data-href-en="https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.md" data-href-zh="https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.zh-CN.md" data-en="Get Started" data-zh="快速开始">Get Started</a>
                 <a href="https://github.com/turinglambdaai/rivet">GitHub</a>
                 <a href="https://github.com/turinglambdaai/rivet/blob/main/docs/architecture.md">Architecture</a>
                 <a href="https://github.com/turinglambdaai/rivet/blob/main/LICENSE">MIT License</a>
@@ -318,6 +318,10 @@ backend.onProgress { pct <span class="kw">in</span>
             document.querySelectorAll('[data-en]').forEach(function (el) {
                 var text = el.getAttribute('data-' + lang);
                 if (text !== null) el.textContent = text;
+            });
+            document.querySelectorAll('[data-href-en]').forEach(function (el) {
+                var href = el.getAttribute('data-href-' + lang);
+                if (href !== null) el.setAttribute('href', href);
             });
             document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
             document.documentElement.setAttribute('data-language', lang);
