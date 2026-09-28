@@ -61,7 +61,7 @@ rivet: toolchain looks usable
 
 常见环境要求：
 
-- **Windows：** Racket CS、Visual Studio 2022 或 Build Tools、Desktop development with C++、Windows SDK、Windows App SDK。
+- **Windows：** Racket CS、Visual Studio 2022 或 Build Tools、Desktop development with C++ 和 Windows SDK。Windows App SDK 作为项目依赖由 Rivet 在原生构建时自动恢复。
 - **macOS：** Racket CS 和 Apple/Xcode 开发工具链。
 
 CI 或 Agent 需要结构化结果时：
