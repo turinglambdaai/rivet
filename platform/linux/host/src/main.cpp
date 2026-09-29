@@ -23,11 +23,11 @@ struct AppState {
   GtkLabel* count{nullptr};
   GtkButton* increment{nullptr};
 
-  std::unique_ptr<rivet::linux::Backend> backend;
+  std::unique_ptr<rivet::linux_runtime::Backend> backend;
   std::unique_ptr<rivet_app::API> api;
   std::mutex startup_mutex;
   std::thread startup_thread;
-  std::unique_ptr<rivet::linux::Backend> startup_backend;
+  std::unique_ptr<rivet::linux_runtime::Backend> startup_backend;
   std::string startup_error;
   std::atomic<bool> shutting_down{false};
   std::int64_t count{0};
@@ -100,7 +100,7 @@ int on_backend_finished(gpointer) {
     g_state.startup_thread.join();
   }
 
-  std::unique_ptr<rivet::linux::Backend> backend;
+  std::unique_ptr<rivet::linux_runtime::Backend> backend;
   std::string error;
   {
     std::lock_guard lock(g_state.startup_mutex);
@@ -145,7 +145,7 @@ void start_backend() {
     return;
   }
 
-  rivet::linux::RacketRuntimeConfig config;
+  rivet::linux_runtime::RacketRuntimeConfig config;
   config.executable_path = executable_path().string();
   config.petite_boot = layout->petite_boot.string();
   config.scheme_boot = layout->scheme_boot.string();
@@ -159,7 +159,7 @@ void start_backend() {
   // g_idle_add.
   g_state.startup_thread = std::thread([config = std::move(config)]() mutable {
     auto backend =
-        std::make_unique<rivet::linux::Backend>(std::move(config));
+        std::make_unique<rivet::linux_runtime::Backend>(std::move(config));
     try {
       backend->start();
       {
@@ -241,7 +241,7 @@ void on_shutdown(GApplication*, gpointer) {
     g_state.startup_thread.join();
   }
 
-  std::unique_ptr<rivet::linux::Backend> startup_backend;
+  std::unique_ptr<rivet::linux_runtime::Backend> startup_backend;
   {
     std::lock_guard lock(g_state.startup_mutex);
     startup_backend = std::move(g_state.startup_backend);

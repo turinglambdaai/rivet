@@ -19,7 +19,7 @@ wiring for Linux is follow-up work.
 ```text
 platform/linux/
 ├── runtime/
-│   ├── backend.hpp        # rivet::linux::Backend — same contract as rivet::windows
+│   ├── backend.hpp        # rivet::linux_runtime::Backend — same contract as rivet::windows
 │   └── backend.cpp        # racketcs boot + RVT1-over-socketpair transport
 └── host/
     ├── GeneratedBackend.hpp  # scaffold schema; raco rivet build replaces it
@@ -55,7 +55,7 @@ defined with the Linux packaging target instead of being guessed by the host.
   is the supported manual loop.
 - The checked-in `GeneratedBackend.hpp` matches the scaffold schema so the
   host compiles before the first `build`; the Linux codegen target
-  (emitting `rivet::linux`-bound clients) is follow-up work.
+  (emitting `rivet::linux_runtime`-bound clients) is follow-up work.
 - GTK is a toolkit, not a display protocol: global hotkeys and always-on-top
   overlays are compositor-dependent. Application hosts that need them must
   define an explicit X11/Wayland policy.

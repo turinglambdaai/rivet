@@ -13,7 +13,7 @@
 
 #include "rivet/protocol.hpp"
 
-namespace rivet::linux {
+namespace rivet::linux_runtime {
 
 struct RacketRuntimeConfig {
   std::string executable_path;
@@ -116,4 +116,4 @@ class Backend final {
   std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace rivet::linux
+}  // namespace rivet::linux_runtime

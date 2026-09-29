@@ -36,7 +36,7 @@ int main() {
     auto const root = exe.parent_path();
     auto const runtime = root / "runtime";
 
-    rivet::linux::RacketRuntimeConfig config;
+    rivet::linux_runtime::RacketRuntimeConfig config;
     config.executable_path = exe.string();
     config.petite_boot = (runtime / "petite.boot").string();
     config.scheme_boot = (runtime / "scheme.boot").string();
@@ -47,7 +47,7 @@ int main() {
     config.max_pending_requests = 32;
 
     progress("starting backend");
-    rivet::linux::Backend backend(std::move(config));
+    rivet::linux_runtime::Backend backend(std::move(config));
     backend.start();
     progress("backend started");
 
@@ -62,7 +62,7 @@ int main() {
     auto async_future = async_value->get_future();
     auto const async_id = backend.request_async(
         "increment", rivet::Value::List{rivet::Value(std::int64_t{99})},
-        [async_value](rivet::linux::CallResult result) {
+        [async_value](rivet::linux_runtime::CallResult result) {
           if (result.error) {
             async_value->set_exception(result.error);
             return;
@@ -75,7 +75,7 @@ int main() {
     }
 
     progress("checking pending limit and cancellation");
-    std::vector<rivet::linux::PendingCall> cancellable;
+    std::vector<rivet::linux_runtime::PendingCall> cancellable;
     cancellable.reserve(32);
     for (int i = 0; i < 32; ++i) {
       cancellable.push_back(backend.request("wait-for-cancel", {}));

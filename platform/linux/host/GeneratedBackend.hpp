@@ -35,7 +35,7 @@ struct Result {
 
 class API {
  public:
-  explicit API(rivet::linux::Backend& backend) : backend_(backend) {}
+  explicit API(rivet::linux_runtime::Backend& backend) : backend_(backend) {}
 
   std::future<std::string> greet(std::string name) {
     auto raw = backend_.call("greet", rivet::Value::List{rivet::Value(std::move(name))});
@@ -67,7 +67,7 @@ class API {
       std::function<void(rivet_app::Result<std::int64_t>)> completion) {
     (void)backend_.get_state_async(
         "counter",
-        [completion = std::move(completion)](rivet::linux::CallResult call) mutable {
+        [completion = std::move(completion)](rivet::linux_runtime::CallResult call) mutable {
           completion(unbox_int64(std::move(call)));
         });
   }
@@ -77,13 +77,13 @@ class API {
       std::function<void(rivet_app::Result<std::int64_t>)> completion) {
     (void)backend_.set_state_async(
         "counter", rivet::Value(next),
-        [completion = std::move(completion)](rivet::linux::CallResult call) mutable {
+        [completion = std::move(completion)](rivet::linux_runtime::CallResult call) mutable {
           completion(unbox_int64(std::move(call)));
         });
   }
 
  private:
-  static rivet_app::Result<std::int64_t> unbox_int64(rivet::linux::CallResult call) {
+  static rivet_app::Result<std::int64_t> unbox_int64(rivet::linux_runtime::CallResult call) {
     rivet_app::Result<std::int64_t> result;
     if (!call.succeeded()) {
       try {
@@ -104,7 +104,7 @@ class API {
     return result;
   }
 
-  rivet::linux::Backend& backend_;
+  rivet::linux_runtime::Backend& backend_;
 };
 
 }  // namespace rivet_app

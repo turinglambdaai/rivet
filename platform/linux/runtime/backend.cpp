@@ -20,7 +20,7 @@
 #include "racketcs.h"
 #include "rivet/detail/request_id_allocator.hpp"
 
-namespace rivet::linux {
+namespace rivet::linux_runtime {
 namespace {
 
 class UniqueFd {
@@ -647,4 +647,4 @@ void Backend::set_event_handler(EventHandler handler) {
   impl_->set_event_handler(std::move(handler));
 }
 
-}  // namespace rivet::linux
+}  // namespace rivet::linux_runtime
