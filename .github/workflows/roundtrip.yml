@@ -56,9 +56,13 @@ jobs:
           cp "$scheme_source" "$stage/runtime/scheme.boot"
           cp "$racket_boot_source" "$stage/runtime/racket.boot"
 
-          racket_library="$(find "$racket_lib_dir" -maxdepth 2 -type f \
-            \( -name 'libracketcs.a' -o -name 'libracketcs.so' \) -print -quit)"
-          test -n "$racket_library"
+          shopt -s nullglob
+          racket_libraries=(
+            "$racket_lib_dir"/libracketcs.a
+            "$racket_lib_dir"/libracketcs.so*
+          )
+          test "${#racket_libraries[@]}" -gt 0
+          racket_library="${racket_libraries[0]}"
 
           cmake -S platform/linux/Integration -B "$native_build" \
             -DCMAKE_BUILD_TYPE=Release \
