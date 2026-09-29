@@ -26,10 +26,6 @@ jobs:
           version: '9.3'
       - name: Install Rivet
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
-      - name: Install GTK4 development files
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes libgtk-4-dev
       - name: Build backend and integration runner
         shell: bash
         run: |
@@ -44,36 +40,32 @@ jobs:
             --mods "$stage/res/core.zo" \
             platform/linux/Integration/backend.rkt
 
-          mapfile -t runtime_paths < <(racket -e '
-            (require rivet-cli/runtime)
-            (define r (discover-racket-runtime))
-            (for ([p (list (racket-runtime-include-dir r)
-                           (racket-runtime-lib-dir r)
-                           (racket-runtime-dll-dir r)
-                           (racket-runtime-petite-boot r)
-                           (racket-runtime-scheme-boot r)
-                           (racket-runtime-racket-boot r))])
-              (displayln (if p (path->string p) "")))')
-          racket_include="${runtime_paths[0]}"
-          racket_lib_dir="${runtime_paths[1]}"
-          racket_dll_dir="${runtime_paths[2]}"
-          petite_source="${runtime_paths[3]}"
-          scheme_source="${runtime_paths[4]}"
-          racket_boot_source="${runtime_paths[5]}"
+          racket_include="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
+          racket_lib_dir="$(racket -e '(require setup/dirs) (display (path->string (find-lib-dir)))')"
+          racket_dll_dir="$(racket -e '(require setup/dirs) (define p (find-dll-dir)) (when p (display (path->string p))))')"
+          runtime_roots=("$stage/runtime" "$racket_lib_dir" /usr/lib /usr/share/racket /usr/bin)
+          if [[ -n "$racket_dll_dir" && "$racket_dll_dir" != "$racket_lib_dir" ]]; then
+            runtime_roots+=("$racket_dll_dir")
+          fi
+          petite_source="$(find "${runtime_roots[@]}" -maxdepth 6 -name petite.boot -print -quit)"
+          scheme_source="$(find "${runtime_roots[@]}" -maxdepth 6 -name scheme.boot -print -quit)"
+          racket_boot_source="$(find "${runtime_roots[@]}" -maxdepth 6 -name racket.boot -print -quit)"
+          if [[ -z "$petite_source" || -z "$scheme_source" || -z "$racket_boot_source" ]]; then
+            echo "Racket CS boot files were not found" >&2
+            find "${runtime_roots[@]}" -maxdepth 6 \
+              \( -name '*.boot' -o -name '*racketcs*' \) -print >&2
+            exit 1
+          fi
           cp "$petite_source" "$stage/runtime/petite.boot"
           cp "$scheme_source" "$stage/runtime/scheme.boot"
           cp "$racket_boot_source" "$stage/runtime/racket.boot"
 
-          library_roots=("$stage/runtime" "$racket_lib_dir")
-          if [[ -n "$racket_dll_dir" && "$racket_dll_dir" != "$racket_lib_dir" ]]; then
-            library_roots+=("$racket_dll_dir")
-          fi
-          racket_library="$(find "${library_roots[@]}" -maxdepth 4 \
+          racket_library="$(find "${runtime_roots[@]}" -maxdepth 6 \
             \( -name 'libracketcs*.a' -o -name 'libracketcs*.so*' \) \
             -print -quit)"
           if [[ -z "$racket_library" ]]; then
             echo "No embeddable Racket CS library found" >&2
-            find "${library_roots[@]}" -maxdepth 4 -name '*racketcs*' -print >&2
+            find "${runtime_roots[@]}" -maxdepth 6 -name '*racketcs*' -print >&2
             exit 1
           fi
 
@@ -86,19 +78,24 @@ jobs:
           cp "$native_build/RivetIntegration" "$stage/RivetIntegration"
           chmod +x "$stage/RivetIntegration"
 
-          export RIVET_ROOT="$GITHUB_WORKSPACE"
-          export RIVET_RACKET_INCLUDE="$racket_include"
-          export RIVET_RACKET_LIB_DIR="$(dirname "$racket_library")"
-          export RIVET_RACKET_LIBRARY="$racket_library"
+          echo "RIVET_LINUX_ROUNDTRIP_STAGE=$stage" >> "$GITHUB_ENV"
+          echo "RIVET_ROOT=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          echo "RIVET_RACKET_INCLUDE=$racket_include" >> "$GITHUB_ENV"
+          echo "RIVET_RACKET_LIB_DIR=$(dirname "$racket_library")" >> "$GITHUB_ENV"
+          echo "RIVET_RACKET_LIBRARY=$racket_library" >> "$GITHUB_ENV"
+      - name: Exercise embedded runtime
+        timeout-minutes: 2
+        run: "$RIVET_LINUX_ROUNDTRIP_STAGE/RivetIntegration"
+      - name: Install GTK4 development files
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libgtk-4-dev
+      - name: Compile GTK4 host scaffold
+        run: |
           cmake -S platform/linux/host \
             -B "$RUNNER_TEMP/rivet-linux-gtk-host" \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build "$RUNNER_TEMP/rivet-linux-gtk-host" --config Release
-
-          echo "RIVET_LINUX_ROUNDTRIP_STAGE=$stage" >> "$GITHUB_ENV"
-      - name: Exercise embedded runtime
-        timeout-minutes: 2
-        run: "$RIVET_LINUX_ROUNDTRIP_STAGE/RivetIntegration"
 
   macos-roundtrip:
     name: macOS embedded Racket round trip
