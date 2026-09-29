@@ -13,12 +13,8 @@ if(NOT DEFINED ENV{RIVET_ROOT})
 endif()
 set(RIVET_ROOT "$ENV{RIVET_ROOT}")
 
-# RIVET_RACKET_LIB_DIR points at the staged directory containing
-# libracketcs for the exact Racket CS installation being embedded, while
-# RIVET_RACKET_INCLUDE points at that installation's public embedding headers.
-if(NOT DEFINED ENV{RIVET_RACKET_LIB_DIR})
-  message(FATAL_ERROR "RIVET_RACKET_LIB_DIR is not set. Point it at the directory containing libracketcs for your Racket CS installation.")
-endif()
+# RIVET_RACKET_LIBRARY is the exact embeddable Racket CS library. The lib-dir
+# fallback supports installations that expose an unversioned linker name.
 if(NOT DEFINED ENV{RIVET_RACKET_INCLUDE})
   message(FATAL_ERROR "RIVET_RACKET_INCLUDE is not set. Point it at the Racket include directory.")
 endif()
@@ -26,12 +22,18 @@ endif()
 find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
 pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
-find_library(RACKETCS_LIBRARY
-  NAMES racketcs
-  PATHS "$ENV{RIVET_RACKET_LIB_DIR}"
-  NO_DEFAULT_PATH
-  REQUIRED
-)
+if(DEFINED ENV{RIVET_RACKET_LIBRARY})
+  set(RACKETCS_LIBRARY "$ENV{RIVET_RACKET_LIBRARY}")
+elseif(DEFINED ENV{RIVET_RACKET_LIB_DIR})
+  find_library(RACKETCS_LIBRARY
+    NAMES racketcs
+    PATHS "$ENV{RIVET_RACKET_LIB_DIR}"
+    NO_DEFAULT_PATH
+    REQUIRED
+  )
+else()
+  message(FATAL_ERROR "Set RIVET_RACKET_LIBRARY to libracketcs, or RIVET_RACKET_LIB_DIR to its directory.")
+endif()
 
 add_executable(RivetHost
   src/main.cpp

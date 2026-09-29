@@ -44,26 +44,36 @@ jobs:
             --mods "$stage/res/core.zo" \
             platform/linux/Integration/backend.rkt
 
-          racket_include="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
-          racket_lib_dir="$(racket -e '(require setup/dirs) (display (path->string (find-lib-dir)))')"
-          petite_source="$(find "$racket_lib_dir" -name petite.boot -print -quit)"
-          scheme_source="$(find "$racket_lib_dir" -name scheme.boot -print -quit)"
-          racket_boot_source="$(find "$racket_lib_dir" -name racket.boot -print -quit)"
-          if [[ -z "$petite_source" || -z "$scheme_source" || -z "$racket_boot_source" ]]; then
-            echo "Racket CS boot files were not found under $racket_lib_dir" >&2
-            find "$racket_lib_dir" -maxdepth 4 -name '*.boot' -print >&2
-            exit 1
-          fi
+          mapfile -t runtime_paths < <(racket -e '
+            (require rivet-cli/runtime)
+            (define r (discover-racket-runtime))
+            (for ([p (list (racket-runtime-include-dir r)
+                           (racket-runtime-lib-dir r)
+                           (racket-runtime-dll-dir r)
+                           (racket-runtime-petite-boot r)
+                           (racket-runtime-scheme-boot r)
+                           (racket-runtime-racket-boot r))])
+              (displayln (if p (path->string p) "")))')
+          racket_include="${runtime_paths[0]}"
+          racket_lib_dir="${runtime_paths[1]}"
+          racket_dll_dir="${runtime_paths[2]}"
+          petite_source="${runtime_paths[3]}"
+          scheme_source="${runtime_paths[4]}"
+          racket_boot_source="${runtime_paths[5]}"
           cp "$petite_source" "$stage/runtime/petite.boot"
           cp "$scheme_source" "$stage/runtime/scheme.boot"
           cp "$racket_boot_source" "$stage/runtime/racket.boot"
 
-          racket_library="$(find "$racket_lib_dir" -maxdepth 4 \
-            \( -name 'libracketcs.a' -o -name 'libracketcs.so*' \) \
+          library_roots=("$stage/runtime" "$racket_lib_dir")
+          if [[ -n "$racket_dll_dir" && "$racket_dll_dir" != "$racket_lib_dir" ]]; then
+            library_roots+=("$racket_dll_dir")
+          fi
+          racket_library="$(find "${library_roots[@]}" -maxdepth 4 \
+            \( -name 'libracketcs*.a' -o -name 'libracketcs*.so*' \) \
             -print -quit)"
           if [[ -z "$racket_library" ]]; then
-            echo "No embeddable Racket CS library found under $racket_lib_dir" >&2
-            find "$racket_lib_dir" -maxdepth 4 -name '*racketcs*' -print >&2
+            echo "No embeddable Racket CS library found" >&2
+            find "${library_roots[@]}" -maxdepth 4 -name '*racketcs*' -print >&2
             exit 1
           fi
 
@@ -79,6 +89,7 @@ jobs:
           export RIVET_ROOT="$GITHUB_WORKSPACE"
           export RIVET_RACKET_INCLUDE="$racket_include"
           export RIVET_RACKET_LIB_DIR="$(dirname "$racket_library")"
+          export RIVET_RACKET_LIBRARY="$racket_library"
           cmake -S platform/linux/host \
             -B "$RUNNER_TEMP/rivet-linux-gtk-host" \
             -DCMAKE_BUILD_TYPE=Release

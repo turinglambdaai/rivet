@@ -36,6 +36,7 @@ pkg-config, GTK 4, and a graphical session (or Xvfb) to run.
 export RIVET_ROOT="$PWD"
 export RIVET_RACKET_INCLUDE="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
 export RIVET_RACKET_LIB_DIR="$(racket -e '(require setup/dirs) (display (path->string (find-lib-dir)))')"
+export RIVET_RACKET_LIBRARY="$(find "$RIVET_RACKET_LIB_DIR" \( -name 'libracketcs*.a' -o -name 'libracketcs*.so*' \) -print -quit)"
 cmake -S platform/linux/host -B /tmp/rivet-linux-build
 cmake --build /tmp/rivet-linux-build
 ```
