@@ -42,7 +42,7 @@ jobs:
 
           racket_include="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
           racket_lib_dir="$(racket -e '(require setup/dirs) (display (path->string (find-lib-dir)))')"
-          racket_dll_dir="$(racket -e '(require setup/dirs) (define p (find-dll-dir)) (when p (display (path->string p))))')"
+          racket_dll_dir="$(racket -e '(require setup/dirs) (define p (find-dll-dir)) (when p (display (path->string p)))')"
           runtime_roots=("$stage/runtime" "$racket_lib_dir" /usr/lib /usr/share/racket /usr/bin)
           if [[ -n "$racket_dll_dir" && "$racket_dll_dir" != "$racket_lib_dir" ]]; then
             runtime_roots+=("$racket_dll_dir")
