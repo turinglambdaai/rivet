@@ -2,14 +2,17 @@
 
 The third first-party host: a GTK4 window over one embedded Racket CS
 backend, speaking RVT1 through the shared `runtime/` codec. The embedding
-contract mirrors `platform/windows/runtime` — same racketcs C API entry
-points, same threading rules — with a connected `socketpair` standing in
-for the Win32 named pipe pair.
+contract mirrors `platform/windows/runtime` — the same public Racket CS C API
+and the same threading rules — with a connected `socketpair` standing in for
+the Win32 named pipe pair. The Racket input and output ports receive distinct
+descriptors for that socket so their ownership and shutdown behavior are
+unambiguous.
 
-Status: **proposed** (see the platform/linux issue). The host and runtime
-bridge compile as a smoke and the backend path is exercised end-to-end by
-the Fulcrum application; `raco rivet build` / `doctor` / `package` wiring
-for Linux is a follow-up and is deliberately not part of this change.
+Status: **proposed** (see the platform/linux issue). CI compiles the runtime
+bridge against Racket's public embedding headers and exercises startup,
+concurrent RPCs, State access, cancellation, overload, and shutdown against a
+real embedded Racket CS instance. `raco rivet build` / `doctor` / `package`
+wiring for Linux is follow-up work.
 
 ## Layout
 
@@ -31,17 +34,16 @@ pkg-config, GTK 4, and a graphical session (or Xvfb) to run.
 
 ```bash
 export RIVET_ROOT="$PWD"
+export RIVET_RACKET_INCLUDE="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
 export RIVET_RACKET_LIB_DIR="$(dirname "$(find "$(dirname "$(command -v racket)")/.." -name libracketcs.a | head -1)")"
 cmake -S platform/linux/host -B /tmp/rivet-linux-build
 cmake --build /tmp/rivet-linux-build
 ```
 
-The executable must sit beside a staged runtime to actually start: put
-`runtime/*.boot` and `res/core.zo` (produced by `raco ctool --mods`, the
-same artifacts every platform host consumes) next to `RivetHost`, or under
-`<prefix>/lib/<app>/{runtime,res}` with the binary in `<prefix>/bin`.
-`raco rivet build` staging for Linux is follow-up work; until then,
-applications like Fulcrum demonstrate the full staging flow.
+The executable must sit beside a staged runtime to start: put `runtime/*.boot`
+and `res/core.zo` (produced by `raco ctool --mods`, the same artifacts every
+platform host consumes) next to `RivetHost`. A packaged prefix layout will be
+defined with the Linux packaging target instead of being guessed by the host.
 
 ## Honest gaps
 
@@ -50,7 +52,6 @@ applications like Fulcrum demonstrate the full staging flow.
 - The checked-in `GeneratedBackend.hpp` matches the scaffold schema so the
   host compiles before the first `build`; the Linux codegen target
   (emitting `rivet::linux`-bound clients) is follow-up work.
-- GTK is a toolkit, not a display protocol: global hotkeys and
-  always-on-top overlays are compositor-dependent. Application hosts that
-  need them (launchers) implement X11 grabs themselves and say so on
-  Wayland — see Fulcrum's Linux host for the reference pattern.
+- GTK is a toolkit, not a display protocol: global hotkeys and always-on-top
+  overlays are compositor-dependent. Application hosts that need them must
+  define an explicit X11/Wayland policy.

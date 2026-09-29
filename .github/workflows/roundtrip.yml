@@ -12,6 +12,65 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  linux-roundtrip:
+    name: Linux embedded Racket round trip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Install Rivet
+        run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
+      - name: Build backend and integration runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/rivet-linux-roundtrip"
+          native_build="$RUNNER_TEMP/rivet-linux-native-integration"
+          mkdir -p "$stage/res" "$stage/runtime"
+
+          raco ctool \
+            --runtime "$stage/runtime" \
+            --runtime-access runtime \
+            --mods "$stage/res/core.zo" \
+            platform/linux/Integration/backend.rkt
+
+          racket_prefix="$(dirname "$(dirname "$(command -v racket)")")"
+          petite_source="$(find "$racket_prefix" -name petite.boot -type f | head -n 1)"
+          scheme_source="$(find "$racket_prefix" -name scheme.boot -type f | head -n 1)"
+          racket_boot_source="$(find "$racket_prefix" -name racket.boot -type f | head -n 1)"
+          test -n "$petite_source"
+          test -n "$scheme_source"
+          test -n "$racket_boot_source"
+          cp "$petite_source" "$stage/runtime/petite.boot"
+          cp "$scheme_source" "$stage/runtime/scheme.boot"
+          cp "$racket_boot_source" "$stage/runtime/racket.boot"
+
+          racket_include="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
+          racket_lib_dir="$(racket -e '(require setup/dirs) (display (path->string (find-lib-dir)))')"
+          racket_library="$(find "$racket_lib_dir" -maxdepth 2 -type f \
+            \( -name 'libracketcs.a' -o -name 'libracketcs.so' \) | head -n 1)"
+          test -n "$racket_library"
+
+          cmake -S platform/linux/Integration -B "$native_build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DRIVET_ROOT="$GITHUB_WORKSPACE" \
+            -DRIVET_RACKET_INCLUDE="$racket_include" \
+            -DRIVET_RACKET_LIBRARY="$racket_library"
+          cmake --build "$native_build" --config Release
+          cp "$native_build/RivetIntegration" "$stage/RivetIntegration"
+          chmod +x "$stage/RivetIntegration"
+
+          echo "RIVET_LINUX_ROUNDTRIP_STAGE=$stage" >> "$GITHUB_ENV"
+      - name: Exercise embedded runtime
+        timeout-minutes: 2
+        run: "$RIVET_LINUX_ROUNDTRIP_STAGE/RivetIntegration"
+
   macos-roundtrip:
     name: macOS embedded Racket round trip
     runs-on: macos-latest

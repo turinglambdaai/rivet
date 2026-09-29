@@ -4,8 +4,11 @@
 // completion back to the main loop before touching widgets.
 #include <gtk/gtk.h>
 
+#include <atomic>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
@@ -15,12 +18,18 @@
 namespace {
 
 struct AppState {
+  GtkWindow* window{nullptr};
   GtkLabel* status{nullptr};
   GtkLabel* count{nullptr};
   GtkButton* increment{nullptr};
 
   std::unique_ptr<rivet::linux::Backend> backend;
   std::unique_ptr<rivet_app::API> api;
+  std::mutex startup_mutex;
+  std::thread startup_thread;
+  std::unique_ptr<rivet::linux::Backend> startup_backend;
+  std::string startup_error;
+  std::atomic<bool> shutting_down{false};
   std::int64_t count{0};
 
   void set_status(std::string const& text) {
@@ -36,34 +45,27 @@ struct AppState {
 AppState g_state;
 
 std::filesystem::path executable_path() {
-  return std::filesystem::readlink("/proc/self/exe");
+  return std::filesystem::read_symlink("/proc/self/exe");
 }
 
-// Packaged apps keep Racket data under <prefix>/lib/fulcrum; `raco rivet
-// dev` runs the staged executable directly, where runtime/res live next to
-// the executable. Pick the first complete layout so both paths use exactly
-// the same host binary.
+// The manual staging loop keeps runtime/res beside the executable. Linux
+// package layout discovery will be added with the CLI packaging target.
 struct RuntimeLayout {
   std::filesystem::path petite_boot;
   std::filesystem::path scheme_boot;
   std::filesystem::path racket_boot;
   std::filesystem::path core;
-  std::filesystem::path root;
 };
 
 std::optional<RuntimeLayout> discover_runtime_layout() {
   std::filesystem::path const exe = executable_path();
-  std::filesystem::path const roots[] = {
-      exe.parent_path(),
-      exe.parent_path() / ".." / "lib" / "fulcrum",
-  };
+  std::filesystem::path const roots[] = {exe.parent_path()};
   for (auto const& root : roots) {
     RuntimeLayout layout{
         root / "runtime" / "petite.boot",
         root / "runtime" / "scheme.boot",
         root / "runtime" / "racket.boot",
         root / "res" / "core.zo",
-        root,
     };
     if (std::filesystem::exists(layout.petite_boot) &&
         std::filesystem::exists(layout.scheme_boot) &&
@@ -73,13 +75,6 @@ std::optional<RuntimeLayout> discover_runtime_layout() {
     }
   }
   return std::nullopt;
-}
-
-// g_idle_add needs a C function pointer; completion results travel as
-// heap-allocated payloads and free themselves on arrival.
-template <typename T>
-int deliver_to_main_loop(void (*apply)(T*), void* raw) {
-  return G_SOURCE_REMOVE;
 }
 
 struct IntResult {
@@ -100,14 +95,37 @@ int on_count_delivered(gpointer user_data) {
   return G_SOURCE_REMOVE;
 }
 
-int on_backend_ready(gpointer user_data) {
-  // Ownership of the started backend and its generated API move to the app
-  // lifetime here, on the main loop thread.
-  auto* parts = static_cast<std::pair<rivet::linux::Backend*,
-                                      rivet_app::API*>*>(user_data);
-  g_state.backend.reset(parts->first);
-  g_state.api.reset(parts->second);
-  delete parts;
+int on_backend_finished(gpointer) {
+  if (g_state.startup_thread.joinable()) {
+    g_state.startup_thread.join();
+  }
+
+  std::unique_ptr<rivet::linux::Backend> backend;
+  std::string error;
+  {
+    std::lock_guard lock(g_state.startup_mutex);
+    backend = std::move(g_state.startup_backend);
+    error = std::move(g_state.startup_error);
+  }
+
+  if (g_state.shutting_down.load(std::memory_order_acquire)) {
+    if (backend != nullptr) {
+      backend->stop();
+    }
+    return G_SOURCE_REMOVE;
+  }
+
+  if (!error.empty()) {
+    g_state.set_status("Backend error: " + error);
+    return G_SOURCE_REMOVE;
+  }
+  if (backend == nullptr) {
+    g_state.set_status("Backend error: startup completed without a backend");
+    return G_SOURCE_REMOVE;
+  }
+
+  g_state.backend = std::move(backend);
+  g_state.api = std::make_unique<rivet_app::API>(*g_state.backend);
 
   g_state.set_status("Embedded Racket CS is ready");
   gtk_widget_set_sensitive(GTK_WIDGET(g_state.increment), TRUE);
@@ -115,12 +133,6 @@ int on_backend_ready(gpointer user_data) {
     auto* delivered = new IntResult{result.ok, result.value, result.error};
     g_idle_add(on_count_delivered, delivered);
   });
-  return G_SOURCE_REMOVE;
-}
-
-int on_backend_failed(gpointer user_data) {
-  std::unique_ptr<std::string> message(static_cast<std::string*>(user_data));
-  g_state.set_status("Backend error: " + *message);
   return G_SOURCE_REMOVE;
 }
 
@@ -139,28 +151,27 @@ void start_backend() {
   config.scheme_boot = layout->scheme_boot.string();
   config.racket_boot = layout->racket_boot.string();
   config.backend_bundle = layout->core.string();
-  config.dll_dir = (layout->root / "runtime").string();
   config.module_name = rivet_app::kModuleName;
   config.entry_symbol = rivet_app::kEntryName;
 
   // Booting the embedded runtime blocks on file I/O; only startup runs off
   // the main loop. Everything after completion dispatches back through
   // g_idle_add.
-  std::thread([config = std::move(config)]() mutable {
+  g_state.startup_thread = std::thread([config = std::move(config)]() mutable {
     auto backend =
         std::make_unique<rivet::linux::Backend>(std::move(config));
     try {
       backend->start();
-      // Build the API view first (needs the object), then release ownership
-      // into the pair that on_backend_ready adopts.
-      auto* parts = new std::pair<rivet::linux::Backend*, rivet_app::API*>(
-          backend.get(), new rivet_app::API(*backend));
-      backend.release();
-      g_idle_add(on_backend_ready, parts);
+      {
+        std::lock_guard lock(g_state.startup_mutex);
+        g_state.startup_backend = std::move(backend);
+      }
     } catch (std::exception const& e) {
-      g_idle_add(on_backend_failed, new std::string(e.what()));
+      std::lock_guard lock(g_state.startup_mutex);
+      g_state.startup_error = e.what();
     }
-  }).detach();
+    g_idle_add(on_backend_finished, nullptr);
+  });
 }
 
 void on_increment_clicked(GtkButton*, gpointer) {
@@ -179,6 +190,11 @@ void on_increment_clicked(GtkButton*, gpointer) {
 }
 
 void on_activate(GtkApplication* app, gpointer) {
+  if (g_state.window != nullptr) {
+    gtk_window_present(g_state.window);
+    return;
+  }
+
   auto* window = gtk_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(window), "Rivet — Racket + GTK4");
   gtk_window_set_default_size(GTK_WINDOW(window), 460, 320);
@@ -211,6 +227,7 @@ void on_activate(GtkApplication* app, gpointer) {
   g_state.status = GTK_LABEL(status);
   g_state.count = GTK_LABEL(count);
   g_state.increment = GTK_BUTTON(increment);
+  g_state.window = GTK_WINDOW(window);
   g_signal_connect(increment, "clicked", G_CALLBACK(on_increment_clicked),
                    nullptr);
 
@@ -219,6 +236,19 @@ void on_activate(GtkApplication* app, gpointer) {
 }
 
 void on_shutdown(GApplication*, gpointer) {
+  g_state.shutting_down.store(true, std::memory_order_release);
+  if (g_state.startup_thread.joinable()) {
+    g_state.startup_thread.join();
+  }
+
+  std::unique_ptr<rivet::linux::Backend> startup_backend;
+  {
+    std::lock_guard lock(g_state.startup_mutex);
+    startup_backend = std::move(g_state.startup_backend);
+  }
+  if (startup_backend != nullptr) {
+    startup_backend->stop();
+  }
   if (g_state.backend != nullptr) {
     g_state.backend->stop();
   }

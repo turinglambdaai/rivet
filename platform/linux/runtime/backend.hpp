@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "rivet/protocol.hpp"
 
@@ -22,10 +23,14 @@ struct RacketRuntimeConfig {
   std::string backend_bundle;
   std::string collects_dir;
   std::string config_dir;
-  std::string dll_dir;
   std::string module_name{"backend"};
   std::string entry_symbol{"start"};
   std::size_t max_pending_requests{1024};
+};
+
+struct PendingCall {
+  std::uint64_t id{};
+  std::future<Value> result;
 };
 
 struct CallResult {
@@ -41,13 +46,16 @@ using EventHandler = std::function<void(std::string const&, Value const&)>;
 // Owns one embedded Racket CS instance and its RVT1 transport.
 //
 // Threading contract (mirrors rivet::windows::Backend):
-//   * start()/stop()/call()/request_async()/cancel() may be used by the UI layer.
+//   * start()/stop()/request()/request_async()/cancel() may be used by the UI
+//     layer.
 //   * Racket CS is booted and entered on a dedicated worker thread.
-//   * one reader thread resolves native futures and receives normal RPC
-//     completions.
-//   * completion/event handlers are not UI-thread-affine: normal replies run
-//     on the reader thread. GTK callers must dispatch to the main loop via
-//     g_idle_add before touching widgets.
+//   * one reader thread resolves native futures and receives RPC completions.
+//   * completion handlers are not UI-thread-affine: normal replies run them on
+//     the reader thread, while immediate submission/shutdown failures can run
+//     them on the initiating/shutdown thread. Always dispatch before touching
+//     GTK objects.
+//   * event handlers run on the reader thread and require the same UI dispatch.
+//   * completion/event handler exceptions are isolated from the transport loop.
 //   * no Racket value crosses either native thread boundary.
 class Backend final {
  public:
@@ -61,6 +69,7 @@ class Backend final {
   void stop();
   bool running() const noexcept;
 
+  PendingCall request(std::string rpc_name, Value::List arguments = {});
   std::future<Value> call(std::string rpc_name, Value::List arguments = {});
 
   // Non-blocking request API. The returned id can be passed to cancel().
@@ -103,7 +112,7 @@ class Backend final {
   void set_event_handler(EventHandler handler);
 
  private:
-  struct Impl;
+  class Impl;
   std::unique_ptr<Impl> impl_;
 };
 

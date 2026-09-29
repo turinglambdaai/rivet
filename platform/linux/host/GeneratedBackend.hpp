@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <future>
 #include <stdexcept>
 #include <string>
