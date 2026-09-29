@@ -20,7 +20,7 @@ namespace {
 struct AppState {
   GtkWindow* window{nullptr};
   GtkLabel* status{nullptr};
-  GtkLabel* count{nullptr};
+  GtkLabel* count_label{nullptr};
   GtkButton* increment{nullptr};
 
   std::unique_ptr<rivet::linux_runtime::Backend> backend;
@@ -30,15 +30,16 @@ struct AppState {
   std::unique_ptr<rivet::linux_runtime::Backend> startup_backend;
   std::string startup_error;
   std::atomic<bool> shutting_down{false};
-  std::int64_t count{0};
+  std::int64_t count_value{0};
 
   void set_status(std::string const& text) {
     gtk_label_set_text(status, text.c_str());
   }
 
   void set_count(std::int64_t value) {
-    count = value;
-    gtk_label_set_text(count, ("Count: " + std::to_string(value)).c_str());
+    count_value = value;
+    gtk_label_set_text(count_label,
+                       ("Count: " + std::to_string(value)).c_str());
   }
 };
 
@@ -179,7 +180,7 @@ void on_increment_clicked(GtkButton*, gpointer) {
     return;
   }
   gtk_widget_set_sensitive(GTK_WIDGET(g_state.increment), FALSE);
-  auto const next = g_state.count + 1;
+  auto const next = g_state.count_value + 1;
   g_state.api->set_counter_async(next,
                                  [](rivet_app::Result<std::int64_t> result) {
                                    auto* delivered =
@@ -225,7 +226,7 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_window_set_child(GTK_WINDOW(window), root);
 
   g_state.status = GTK_LABEL(status);
-  g_state.count = GTK_LABEL(count);
+  g_state.count_label = GTK_LABEL(count);
   g_state.increment = GTK_BUTTON(increment);
   g_state.window = GTK_WINDOW(window);
   g_signal_connect(increment, "clicked", G_CALLBACK(on_increment_clicked),
