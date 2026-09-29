@@ -1,0 +1,650 @@
+#include "backend.hpp"
+
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <atomic>
+#include <cerrno>
+#include <cstring>
+#include <exception>
+#include <memory>
+#include <mutex>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <unordered_map>
+#include <utility>
+
+#include "chezscheme.h"
+#include "racketcs.h"
+#include "rivet/detail/request_id_allocator.hpp"
+
+namespace rivet::linux_runtime {
+namespace {
+
+class UniqueFd {
+ public:
+  UniqueFd() = default;
+  explicit UniqueFd(int fd) : fd_(fd) {}
+  ~UniqueFd() { reset(); }
+
+  UniqueFd(UniqueFd const&) = delete;
+  UniqueFd& operator=(UniqueFd const&) = delete;
+
+  UniqueFd(UniqueFd&& other) noexcept : fd_(other.release()) {}
+  UniqueFd& operator=(UniqueFd&& other) noexcept {
+    if (this != &other) {
+      reset(other.release());
+    }
+    return *this;
+  }
+
+  int get() const noexcept { return fd_; }
+
+  int release() noexcept {
+    auto const result = fd_;
+    fd_ = -1;
+    return result;
+  }
+
+  void reset(int fd = -1) noexcept {
+    if (fd_ >= 0) {
+      (void)::close(fd_);
+    }
+    fd_ = fd;
+  }
+
+ private:
+  int fd_{-1};
+};
+
+struct SocketEndpoints {
+  UniqueFd native;
+  UniqueFd server_read;
+  UniqueFd server_write;
+};
+
+SocketEndpoints create_socket_endpoints() {
+  int fds[2]{-1, -1};
+  if (::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, fds) != 0) {
+    throw std::runtime_error("socketpair failed: " +
+                             std::string(std::strerror(errno)));
+  }
+
+  UniqueFd native(fds[0]);
+  UniqueFd server_read(fds[1]);
+  UniqueFd server_write(::dup(server_read.get()));
+  if (server_write.get() < 0) {
+    throw std::runtime_error("dup failed: " +
+                             std::string(std::strerror(errno)));
+  }
+  if (::fcntl(server_write.get(), F_SETFD, FD_CLOEXEC) != 0) {
+    throw std::runtime_error("fcntl(FD_CLOEXEC) failed: " +
+                             std::string(std::strerror(errno)));
+  }
+  return SocketEndpoints{std::move(native), std::move(server_read),
+                         std::move(server_write)};
+}
+
+class FdTransport final : public rivet::Transport {
+ public:
+  explicit FdTransport(UniqueFd fd) : fd_(std::move(fd)) {}
+
+  bool read_exact(std::uint8_t* destination, std::size_t size) override {
+    std::size_t done = 0;
+    while (done < size) {
+      auto const count = ::read(fd_.get(), destination + done, size - done);
+      if (count == 0) {
+        if (done == 0) {
+          return false;
+        }
+        throw std::runtime_error("unexpected EOF in RVT1 frame");
+      }
+      if (count < 0) {
+        if (errno == EINTR) {
+          continue;
+        }
+        throw std::runtime_error("RVT1 transport read failed: " +
+                                 std::string(std::strerror(errno)));
+      }
+      done += static_cast<std::size_t>(count);
+    }
+    return true;
+  }
+
+  void write_all(std::uint8_t const* source, std::size_t size) override {
+    std::size_t done = 0;
+    while (done < size) {
+      auto const count =
+          ::send(fd_.get(), source + done, size - done, MSG_NOSIGNAL);
+      if (count == 0) {
+        throw std::runtime_error("RVT1 transport write made no progress");
+      }
+      if (count < 0) {
+        if (errno == EINTR) {
+          continue;
+        }
+        throw std::runtime_error("RVT1 transport write failed: " +
+                                 std::string(std::strerror(errno)));
+      }
+      done += static_cast<std::size_t>(count);
+    }
+  }
+
+  void flush() override {}
+
+ private:
+  UniqueFd fd_;
+};
+
+struct PendingRequest {
+  std::unique_ptr<std::promise<Value>> promise;
+  CompletionHandler completion;
+  detail::RequestCancellationGate cancellation;
+};
+
+std::exception_ptr stopped_error() {
+  return std::make_exception_ptr(std::runtime_error("Rivet backend stopped"));
+}
+
+ptr quoted_symbol(std::string const& name) {
+  auto const quote = Sstring_to_symbol("quote");
+  auto const module = Sstring_to_symbol(name.c_str());
+  return Scons(quote, Scons(module, Snil));
+}
+
+}  // namespace
+
+class Backend::Impl {
+ public:
+  explicit Impl(RacketRuntimeConfig config) : config_(std::move(config)) {
+    if (config_.max_pending_requests == 0) {
+      throw std::invalid_argument(
+          "Rivet native pending request limit must be positive");
+    }
+  }
+
+  ~Impl() {
+    try {
+      stop();
+    } catch (...) {
+      // Destructors cannot surface shutdown failures.
+    }
+  }
+
+  void start() {
+    std::unique_lock state_lock(state_mutex_);
+    if (started_) {
+      throw std::logic_error("Rivet backend instances cannot be restarted");
+    }
+    started_ = true;
+
+    auto endpoints = create_socket_endpoints();
+    auto server_read = std::move(endpoints.server_read);
+    auto server_write = std::move(endpoints.server_write);
+    transport_ = std::make_unique<FdTransport>(std::move(endpoints.native));
+
+    ready_ = std::make_shared<std::promise<void>>();
+    ready_future_ = ready_->get_future();
+    running_.store(true, std::memory_order_release);
+
+    reader_thread_ = std::thread([this] { reader_main(); });
+    racket_thread_ = std::thread(
+        [this, server_read = std::move(server_read),
+         server_write = std::move(server_write)]() mutable {
+          racket_main(std::move(server_read), std::move(server_write));
+        });
+
+    state_lock.unlock();
+
+    // The first valid frame from Racket is Hello. Waiting for it makes start
+    // fail synchronously when boot files, core.zo, or the entry point are bad.
+    ready_future_.get();
+  }
+
+  void stop() {
+    std::lock_guard stop_lock(stop_mutex_);
+
+    {
+      std::lock_guard state_lock(state_mutex_);
+      if (!started_) {
+        return;
+      }
+      running_.store(false, std::memory_order_release);
+    }
+
+    try {
+      std::lock_guard write_lock(write_mutex_);
+      auto* transport = transport_.get();
+      if (transport != nullptr) {
+        write_frame(*transport, Frame{MessageType::Shutdown, 0, {}});
+      }
+    } catch (...) {
+      // The server may already have exited. Joining below is authoritative.
+    }
+
+    if (racket_thread_.joinable()) {
+      racket_thread_.join();
+    }
+    if (reader_thread_.joinable()) {
+      reader_thread_.join();
+    }
+
+    {
+      std::lock_guard write_lock(write_mutex_);
+      std::lock_guard state_lock(state_mutex_);
+      transport_.reset();
+    }
+
+    reject_all(stopped_error());
+  }
+
+  bool running() const noexcept {
+    return running_.load(std::memory_order_acquire);
+  }
+
+  PendingCall request(std::string rpc_name, Value::List arguments) {
+    auto promise = std::make_unique<std::promise<Value>>();
+    auto future = promise->get_future();
+    auto const id = submit_request(
+        std::move(rpc_name), std::move(arguments),
+        PendingRequest{std::move(promise), CompletionHandler{}, {}});
+    return PendingCall{id, std::move(future)};
+  }
+
+  std::future<Value> call(std::string rpc_name, Value::List arguments) {
+    return request(std::move(rpc_name), std::move(arguments)).result;
+  }
+
+  std::uint64_t request_async(std::string rpc_name,
+                              Value::List arguments,
+                              CompletionHandler completion) {
+    if (!completion) {
+      throw std::invalid_argument("Rivet async completion handler is empty");
+    }
+    return submit_request(
+        std::move(rpc_name), std::move(arguments),
+        PendingRequest{nullptr, std::move(completion), {}});
+  }
+
+  void cancel(std::uint64_t request_id) {
+    if (!running()) {
+      return;
+    }
+
+    std::lock_guard write_lock(write_mutex_);
+    if (!running()) {
+      return;
+    }
+    std::lock_guard pending_lock(pending_mutex_);
+    auto it = pending_.find(request_id);
+    if (it == pending_.end() ||
+        !it->second.cancellation.request_cancel()) {
+      return;
+    }
+
+    auto* transport = transport_.get();
+    if (transport != nullptr) {
+      write_frame(*transport, Frame{MessageType::Cancel, request_id, {}});
+    }
+  }
+
+  void set_event_handler(EventHandler handler) {
+    std::lock_guard lock(event_mutex_);
+    event_handler_ = std::move(handler);
+  }
+
+ private:
+  std::uint64_t submit_request(std::string rpc_name,
+                               Value::List arguments,
+                               PendingRequest pending) {
+    if (!running()) {
+      throw std::runtime_error("Rivet backend is not running");
+    }
+
+    std::uint64_t id = 0;
+    {
+      std::lock_guard pending_lock(pending_mutex_);
+      if (pending_.size() >= config_.max_pending_requests) {
+        throw std::runtime_error(
+            "too many native pending requests (limit " +
+            std::to_string(config_.max_pending_requests) + ")");
+      }
+      id = request_ids_.allocate(
+          pending_.size(),
+          [this](std::uint64_t candidate) {
+            return pending_.find(candidate) != pending_.end();
+          });
+      auto const [it, inserted] = pending_.emplace(id, std::move(pending));
+      (void)it;
+      if (!inserted) {
+        throw std::logic_error("Rivet request id collision");
+      }
+    }
+
+    Value::List request;
+    request.reserve(arguments.size() + 1);
+    request.emplace_back(std::move(rpc_name));
+    for (auto& argument : arguments) {
+      request.emplace_back(std::move(argument));
+    }
+
+    try {
+      std::lock_guard write_lock(write_mutex_);
+      if (!running()) {
+        throw std::runtime_error("Rivet backend is not running");
+      }
+      auto* transport = transport_.get();
+      if (transport == nullptr) {
+        throw std::runtime_error("Rivet backend transport is closed");
+      }
+      write_frame(*transport,
+                  Frame{MessageType::Request, id,
+                        encode_value(Value(std::move(request)))});
+
+      bool send_deferred_cancel = false;
+      {
+        std::lock_guard pending_lock(pending_mutex_);
+        auto it = pending_.find(id);
+        if (it != pending_.end()) {
+          send_deferred_cancel = it->second.cancellation.mark_request_sent();
+        }
+      }
+      if (send_deferred_cancel) {
+        write_frame(*transport, Frame{MessageType::Cancel, id, {}});
+      }
+    } catch (...) {
+      fail_request(id, std::current_exception());
+    }
+
+    return id;
+  }
+
+  void racket_main(UniqueFd server_read, UniqueFd server_write) noexcept {
+    try {
+      racket_boot_arguments_t boot{};
+      boot.boot1_path = config_.petite_boot.c_str();
+      boot.boot2_path = config_.scheme_boot.c_str();
+      boot.boot3_path = config_.racket_boot.c_str();
+      boot.exec_file = config_.executable_path.c_str();
+      if (!config_.collects_dir.empty()) {
+        boot.collects_dir = config_.collects_dir.c_str();
+      }
+      if (!config_.config_dir.empty()) {
+        boot.config_dir = config_.config_dir.c_str();
+      }
+
+      racket_boot(&boot);
+      racket_embedded_load_file(config_.backend_bundle.c_str(), 1);
+
+      auto const module = quoted_symbol(config_.module_name);
+      auto const entry = Sstring_to_symbol(config_.entry_symbol.c_str());
+      auto const results = racket_dynamic_require(module, entry);
+      auto const procedure = Scar(results);
+      auto const args =
+          Scons(Sfixnum(server_read.get()),
+                Scons(Sfixnum(server_write.get()), Snil));
+
+      // The ports created by serve-fds own distinct descriptors referring to
+      // the same full-duplex socket. They close them during server teardown.
+      (void)server_read.release();
+      (void)server_write.release();
+      (void)racket_apply(procedure, args);
+      Sscheme_deinit();
+    } catch (...) {
+      // Owned descriptors are closed on native startup failures. Once they are
+      // transferred, serve-fds owns their lifetime.
+    }
+
+    running_.store(false, std::memory_order_release);
+  }
+
+  void reader_main() noexcept {
+    try {
+      for (;;) {
+        FdTransport* transport = nullptr;
+        {
+          std::lock_guard lock(state_mutex_);
+          transport = transport_.get();
+        }
+        if (transport == nullptr) {
+          break;
+        }
+
+        auto frame = read_frame(*transport);
+        if (!frame.has_value()) {
+          break;
+        }
+
+        switch (frame->type) {
+          case MessageType::Hello:
+            accept_hello(*frame);
+            break;
+          case MessageType::Response:
+            resolve_request(frame->id, decode_value(frame->payload));
+            break;
+          case MessageType::Error: {
+            auto error_value = decode_value(frame->payload);
+            std::string message{"Rivet backend error"};
+            if (auto* text = std::get_if<std::string>(&error_value.data)) {
+              message = *text;
+            }
+            fail_request(
+                frame->id,
+                std::make_exception_ptr(std::runtime_error(std::move(message))));
+            break;
+          }
+          case MessageType::Event:
+            deliver_event(decode_value(frame->payload));
+            break;
+          default:
+            throw std::runtime_error("unexpected Rivet message from backend");
+        }
+      }
+
+      if (!hello_seen_.load(std::memory_order_acquire)) {
+        set_ready_exception(stopped_error());
+      }
+    } catch (...) {
+      set_ready_exception(std::current_exception());
+      reject_all(std::current_exception());
+    }
+
+    running_.store(false, std::memory_order_release);
+    reject_all(stopped_error());
+  }
+
+  void accept_hello(Frame const& frame) {
+    auto hello = decode_value(frame.payload);
+    auto const* list = std::get_if<Value::List>(&hello.data);
+    if (list == nullptr || list->size() != 2) {
+      throw std::runtime_error("invalid Rivet Hello payload");
+    }
+
+    auto const* name = std::get_if<std::string>(&(*list)[0].data);
+    auto const* version = std::get_if<std::int64_t>(&(*list)[1].data);
+    if (name == nullptr || *name != "rivet" || version == nullptr ||
+        *version != kProtocolVersion) {
+      throw std::runtime_error("Rivet protocol handshake mismatch");
+    }
+
+    bool expected = false;
+    if (!hello_seen_.compare_exchange_strong(expected, true,
+                                             std::memory_order_acq_rel)) {
+      throw std::runtime_error("duplicate Rivet Hello frame");
+    }
+    ready_->set_value();
+  }
+
+  void deliver_event(Value value) noexcept {
+    try {
+      auto const* list = std::get_if<Value::List>(&value.data);
+      if (list == nullptr || list->size() != 2) {
+        return;
+      }
+      auto const* name = std::get_if<std::string>(&(*list)[0].data);
+      if (name == nullptr) {
+        return;
+      }
+
+      EventHandler handler;
+      {
+        std::lock_guard lock(event_mutex_);
+        handler = event_handler_;
+      }
+      if (handler) {
+        try {
+          handler(*name, (*list)[1]);
+        } catch (...) {
+          // Application event handlers are isolated from the transport loop.
+        }
+      }
+    } catch (...) {
+      // Malformed events are ignored; request/response transport stays alive.
+    }
+  }
+
+  void set_ready_exception(std::exception_ptr error) noexcept {
+    bool expected = false;
+    if (hello_seen_.compare_exchange_strong(expected, true,
+                                            std::memory_order_acq_rel)) {
+      try {
+        ready_->set_exception(error);
+      } catch (...) {
+      }
+    }
+  }
+
+  std::optional<PendingRequest> take_request(std::uint64_t id) {
+    std::lock_guard lock(pending_mutex_);
+    auto it = pending_.find(id);
+    if (it == pending_.end()) {
+      return std::nullopt;
+    }
+    auto pending = std::move(it->second);
+    pending_.erase(it);
+    return pending;
+  }
+
+  void resolve_request(std::uint64_t id, Value value) noexcept {
+    auto pending = take_request(id);
+    if (!pending.has_value()) {
+      return;
+    }
+
+    if (pending->promise != nullptr) {
+      try {
+        pending->promise->set_value(std::move(value));
+      } catch (...) {
+      }
+      return;
+    }
+
+    if (pending->completion) {
+      try {
+        pending->completion(CallResult{std::move(value), nullptr});
+      } catch (...) {
+        // Application completions are isolated from the transport loop.
+      }
+    }
+  }
+
+  void fail_request(std::uint64_t id, std::exception_ptr error) noexcept {
+    auto pending = take_request(id);
+    if (!pending.has_value()) {
+      return;
+    }
+
+    if (pending->promise != nullptr) {
+      try {
+        pending->promise->set_exception(error);
+      } catch (...) {
+      }
+      return;
+    }
+
+    if (pending->completion) {
+      try {
+        pending->completion(CallResult{std::nullopt, error});
+      } catch (...) {
+        // Application completions are isolated from the transport loop.
+      }
+    }
+  }
+
+  void reject_all(std::exception_ptr error) noexcept {
+    std::unordered_map<std::uint64_t, PendingRequest> pending;
+    {
+      std::lock_guard lock(pending_mutex_);
+      pending.swap(pending_);
+    }
+    for (auto& [id, request] : pending) {
+      (void)id;
+      if (request.promise != nullptr) {
+        try {
+          request.promise->set_exception(error);
+        } catch (...) {
+        }
+      } else if (request.completion) {
+        try {
+          request.completion(CallResult{std::nullopt, error});
+        } catch (...) {
+          // Application completions must not interrupt shutdown.
+        }
+      }
+    }
+  }
+
+  RacketRuntimeConfig config_;
+  mutable std::mutex state_mutex_;
+  std::mutex stop_mutex_;
+  std::mutex write_mutex_;
+  std::mutex pending_mutex_;
+  std::mutex event_mutex_;
+  std::unique_ptr<FdTransport> transport_;
+  std::thread racket_thread_;
+  std::thread reader_thread_;
+  std::unordered_map<std::uint64_t, PendingRequest> pending_;
+  EventHandler event_handler_;
+  detail::RequestIdAllocator request_ids_;
+  std::atomic<bool> running_{false};
+  std::atomic<bool> hello_seen_{false};
+  bool started_{false};
+  std::shared_ptr<std::promise<void>> ready_;
+  std::future<void> ready_future_;
+};
+
+Backend::Backend(RacketRuntimeConfig config)
+    : impl_(std::make_unique<Impl>(std::move(config))) {}
+
+Backend::~Backend() = default;
+
+void Backend::start() { impl_->start(); }
+void Backend::stop() { impl_->stop(); }
+bool Backend::running() const noexcept { return impl_->running(); }
+
+PendingCall Backend::request(std::string rpc_name, Value::List arguments) {
+  return impl_->request(std::move(rpc_name), std::move(arguments));
+}
+
+std::future<Value> Backend::call(std::string rpc_name, Value::List arguments) {
+  return impl_->call(std::move(rpc_name), std::move(arguments));
+}
+
+std::uint64_t Backend::request_async(std::string rpc_name,
+                                     Value::List arguments,
+                                     CompletionHandler completion) {
+  return impl_->request_async(
+      std::move(rpc_name), std::move(arguments), std::move(completion));
+}
+
+void Backend::cancel(std::uint64_t request_id) {
+  impl_->cancel(request_id);
+}
+
+void Backend::set_event_handler(EventHandler handler) {
+  impl_->set_event_handler(std::move(handler));
+}
+
+}  // namespace rivet::linux_runtime
