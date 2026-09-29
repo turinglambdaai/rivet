@@ -2,7 +2,7 @@
 
 用 [Racket](https://racket-lang.org/) 构建第一方原生桌面应用。Windows 使用 WinUI 3，macOS 使用 SwiftUI，把应用逻辑放在 Racket 中，最终交付的是真正原生应用，而不是 WebView 或跨平台控件封装层。
 
-[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.2.0-C15F3C)
+[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.3.0-C15F3C)
 
 [English](README.md) · **中文**
 
@@ -121,7 +121,7 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 | 安全存储 | ✅ Credential Manager | ✅ Keychain |
 | CI 协议覆盖 | ✅ | ✅ |
 
-当前优先支持 Windows x64。Linux 不是 Rivet 目前的目标，因为 Rivet 的定位就是绑定各平台第一方 UI，而不是再定义一套统一跨平台控件系统。
+当前生产支持范围是 Windows 和 macOS，其中 Windows 优先支持 x64。实验性的 GTK4/Linux 宿主已经验证同一套嵌入式 Racket 运行时契约，但尚未接入 `raco rivet` 的代码生成、打包和发布工具链。
 
 ## 环境要求
 
@@ -264,11 +264,11 @@ ctest --test-dir runtime/build
 swift test --package-path platform/macos
 ```
 
-CI 会在 Windows、macOS、Linux 上验证协议实现；在 Windows/macOS 上执行真实 embedded Racket round-trip，并对新生成项目运行 build、package、verify、clean smoke。
+CI 会在 Windows、macOS、Linux 上验证协议实现和真实 embedded Racket round-trip，并在两个生产支持平台上对新生成项目运行 build、package、verify、clean smoke。
 
 ## 诚实的局限
 
-- **当前没有 Linux host** —— Rivet 的目标是 Windows/macOS 第一方 UI，而不是统一跨平台控件。
+- **Linux 仍为实验性支持** —— GTK4 宿主和嵌入式运行时路径已经存在，但 `raco rivet` 代码生成、打包、发布工具链以及不同 compositor 的行为尚未完成。
 - **Windows 先支持 x64** —— runtime 打包链稳定后再扩展其他架构。
 - **没有统一声明式跨平台 UI DSL** —— UI 代码仍然直接写 SwiftUI/AppKit 或 WinUI 3/C++/WinRT。
 - **正式发布凭据仍属于应用自身** —— Rivet 已自动化 Authenticode、Developer ID、notarization 流程，但证书、PFX 密码、Apple notary profile 会由应用/CI 环境注入，不由 Rivet 保存。

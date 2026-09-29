@@ -8,7 +8,7 @@ the Win32 named pipe pair. The Racket input and output ports receive distinct
 descriptors for that socket so their ownership and shutdown behavior are
 unambiguous.
 
-Status: **proposed** (see the platform/linux issue). CI compiles the runtime
+Status: **experimental**. CI compiles the runtime
 bridge against Racket's public embedding headers and exercises startup,
 concurrent RPCs, State access, cancellation, overload, and shutdown against a
 real embedded Racket CS instance. `raco rivet build` / `doctor` / `package`
