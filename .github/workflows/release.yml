@@ -49,19 +49,24 @@ jobs:
           fi
           tag_version="${GITHUB_REF_NAME#v}"
           package_version="$(sed -n 's/^(define version "\([^"]*\)")/\1/p' info.rkt)"
-          if [[ -z "$package_version" ]]; then
-            echo "could not read version from info.rkt" >&2
+          release_version="$(sed -n 's/^(define release-version "\([^"]*\)")/\1/p' info.rkt)"
+          if [[ -z "$package_version" || -z "$release_version" ]]; then
+            echo "could not read version metadata from info.rkt" >&2
             exit 1
           fi
-          if [[ "$tag_version" != "$package_version" ]]; then
-            echo "tag version $tag_version does not match info.rkt $package_version" >&2
+          if ! racket -e '(require version/utils) (exit (if (valid-version? (vector-ref (current-command-line-arguments) 0)) 0 1))' "$package_version"; then
+            echo "info.rkt version $package_version is not a valid Racket package version" >&2
             exit 1
           fi
-          if ! grep -Fxq "## $package_version" CHANGELOG.md; then
-            echo "CHANGELOG.md has no ## $package_version section" >&2
+          if [[ "$tag_version" != "$release_version" ]]; then
+            echo "tag version $tag_version does not match info.rkt release-version $release_version" >&2
             exit 1
           fi
-          echo "RIVET_VERSION=$package_version" >> "$GITHUB_ENV"
+          if ! grep -Fxq "## $release_version" CHANGELOG.md; then
+            echo "CHANGELOG.md has no ## $release_version section" >&2
+            exit 1
+          fi
+          echo "RIVET_VERSION=$release_version" >> "$GITHUB_ENV"
 
       - name: Install and test Rivet
         shell: bash

@@ -23,6 +23,14 @@
 ;; signature scheme.
 (use-all-factories!)
 
+;; libgcrypt advertises Ed25519 on some Linux distributions but older
+;; combinations fail at signing time with "Invalid object". Rivet release
+;; manifests use providers whose Ed25519 implementation is exercised by the
+;; upstream crypto library on our desktop targets. This also makes an
+;; unsupported host fail while importing the key, before a release is built.
+(define ed25519-factories
+  (list libcrypto-factory sodium-factory decaf-factory))
+
 (define (bytes->base64-string value)
   (bytes->string/utf-8 (base64-encode value #"")))
 
@@ -51,7 +59,7 @@
   (define raw (file->bytes path))
   (or (for/or ([format (in-list formats)])
         (with-handlers ([exn:fail? (lambda (_) #f)])
-          (datum->pk-key raw format)))
+          (datum->pk-key raw format ed25519-factories)))
       (raise-arguments-error who
                              "could not decode Ed25519 key"
                              "path" path
@@ -83,10 +91,18 @@
    #t))
 
 (define (ed25519-sign private-key message)
-  (ensure-ed25519 'ed25519-sign private-key #t)
-  (pk-sign private-key message))
+  (define checked (ensure-ed25519 'ed25519-sign private-key #t))
+  (define safe-key
+    (datum->pk-key (pk-key->datum checked 'rkt-private)
+                   'rkt-private
+                   ed25519-factories))
+  (pk-sign safe-key message))
 
 (define (ed25519-verify public-key message signature)
-  (ensure-ed25519 'ed25519-verify public-key #f)
+  (define checked (ensure-ed25519 'ed25519-verify public-key #f))
+  (define safe-key
+    (datum->pk-key (pk-key->datum checked 'rkt-public)
+                   'rkt-public
+                   ed25519-factories))
   (and (= (bytes-length signature) 64)
-       (pk-verify public-key message signature)))
+       (pk-verify safe-key message signature)))

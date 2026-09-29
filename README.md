@@ -2,7 +2,7 @@
 
 Build first-party native desktop apps with [Racket](https://racket-lang.org/). Use WinUI 3 on Windows and SwiftUI on macOS, keep your application logic in Racket, and ship a real native app instead of a WebView or a cross-platform widget layer.
 
-[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.2.0-C15F3C)
+[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.3.0-C15F3C)
 
 **English** · [中文](README.zh-CN.md)
 
@@ -121,7 +121,7 @@ See [architecture](docs/architecture.md), [protocol](docs/protocol.md), [embeddi
 | Secure storage | ✅ Credential Manager | ✅ Keychain |
 | CI protocol coverage | ✅ | ✅ |
 
-Current scope: Windows targets x64 first. Linux is not a Rivet target today because Rivet deliberately follows first-party platform UI stacks rather than defining another universal widget API.
+Current production scope is Windows and macOS, with Windows targeting x64 first. An experimental GTK4/Linux host now exercises the same embedded Racket runtime contract, but it is not yet integrated into `raco rivet` code generation, packaging, or release tooling.
 
 ## Requirements
 
@@ -264,11 +264,11 @@ ctest --test-dir runtime/build
 swift test --package-path platform/macos
 ```
 
-CI runs the protocol implementation across Windows, macOS, and Linux, exercises real embedded Racket round trips on Windows/macOS, and smoke-builds, packages, verifies, and cleans generated native applications on both supported desktop platforms.
+CI runs the protocol implementation across Windows, macOS, and Linux, exercises real embedded Racket round trips on all three platforms, and smoke-builds, packages, verifies, and cleans generated native applications on the two production-supported desktop platforms.
 
 ## Honest gaps
 
-- **No Linux host** — Rivet is intentionally about first-party Windows and macOS UI stacks.
+- **Linux is experimental** — the GTK4 host and embedded-runtime path exist, but `raco rivet` code generation, packaging, release tooling, and compositor-specific behavior are not complete.
 - **Windows starts with x64** — additional architectures can be added after the runtime packaging path is stable.
 - **No cross-platform declarative UI DSL** — native UI code remains SwiftUI/AppKit or WinUI 3/C++/WinRT.
 - **Publisher credentials remain application-specific** — Rivet automates Authenticode and Developer ID/notarization flows, but certificates, PFX passwords, and Apple notary profiles are intentionally supplied by the application/CI environment rather than stored by Rivet.

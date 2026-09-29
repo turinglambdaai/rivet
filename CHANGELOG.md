@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - Added installable, searchable Scribble documentation for the core backend, system services, secure distribution APIs, and CLI workflow.
 - Registered the normal installation path as `raco pkg install --auto rivet` and corrected the package license metadata to the SPDX `MIT` license identifier.
@@ -11,6 +11,7 @@
 - Added project-level release channels, URL schemes, and file associations; macOS packaging emits the corresponding bundle metadata.
 - Prepared Windows native builds and package naming for ARM64 while preserving the existing x64 path.
 - Added manifest signature/tampering, version/channel, rollout, artifact-integrity, rollback, settings, logging, and system-adapter tests.
+- Added an experimental GTK4/Linux embedded-host slice with real Racket CS round-trip coverage; CLI code generation, packaging, and compositor policy remain follow-up work.
 
 ## 0.2.0
 
