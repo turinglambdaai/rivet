@@ -26,6 +26,10 @@ jobs:
           version: '9.3'
       - name: Install Rivet
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
+      - name: Install GTK4 development files
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libgtk-4-dev
       - name: Build backend and integration runner
         shell: bash
         run: |
@@ -40,10 +44,11 @@ jobs:
             --mods "$stage/res/core.zo" \
             platform/linux/Integration/backend.rkt
 
-          racket_prefix="$(dirname "$(dirname "$(command -v racket)")")"
-          petite_source="$(find "$racket_prefix" -name petite.boot -type f | head -n 1)"
-          scheme_source="$(find "$racket_prefix" -name scheme.boot -type f | head -n 1)"
-          racket_boot_source="$(find "$racket_prefix" -name racket.boot -type f | head -n 1)"
+          racket_include="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
+          racket_lib_dir="$(racket -e '(require setup/dirs) (display (path->string (find-lib-dir)))')"
+          petite_source="$(find "$racket_lib_dir" -name petite.boot -type f -print -quit)"
+          scheme_source="$(find "$racket_lib_dir" -name scheme.boot -type f -print -quit)"
+          racket_boot_source="$(find "$racket_lib_dir" -name racket.boot -type f -print -quit)"
           test -n "$petite_source"
           test -n "$scheme_source"
           test -n "$racket_boot_source"
@@ -51,10 +56,8 @@ jobs:
           cp "$scheme_source" "$stage/runtime/scheme.boot"
           cp "$racket_boot_source" "$stage/runtime/racket.boot"
 
-          racket_include="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
-          racket_lib_dir="$(racket -e '(require setup/dirs) (display (path->string (find-lib-dir)))')"
           racket_library="$(find "$racket_lib_dir" -maxdepth 2 -type f \
-            \( -name 'libracketcs.a' -o -name 'libracketcs.so' \) | head -n 1)"
+            \( -name 'libracketcs.a' -o -name 'libracketcs.so' \) -print -quit)"
           test -n "$racket_library"
 
           cmake -S platform/linux/Integration -B "$native_build" \
@@ -65,6 +68,14 @@ jobs:
           cmake --build "$native_build" --config Release
           cp "$native_build/RivetIntegration" "$stage/RivetIntegration"
           chmod +x "$stage/RivetIntegration"
+
+          export RIVET_ROOT="$GITHUB_WORKSPACE"
+          export RIVET_RACKET_INCLUDE="$racket_include"
+          export RIVET_RACKET_LIB_DIR="$(dirname "$racket_library")"
+          cmake -S platform/linux/host \
+            -B "$RUNNER_TEMP/rivet-linux-gtk-host" \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build "$RUNNER_TEMP/rivet-linux-gtk-host" --config Release
 
           echo "RIVET_LINUX_ROUNDTRIP_STAGE=$stage" >> "$GITHUB_ENV"
       - name: Exercise embedded runtime
