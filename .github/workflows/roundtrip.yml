@@ -26,12 +26,40 @@ jobs:
           version: '9.3'
       - name: Install Rivet
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
+      - name: Cache embeddable Racket CS
+        id: cache-racket-embed
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/racket-embed
+          key: racket-embed-9.3-${{ runner.os }}-${{ runner.arch }}-v1
+      - name: Build embeddable Racket CS
+        if: steps.cache-racket-embed.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/racket-minimal-9.3-src-builtpkgs.tgz"
+          source_root="$RUNNER_TEMP/racket-9.3"
+          build_root="$RUNNER_TEMP/racket-embed-build"
+          embed_prefix="$RUNNER_TEMP/racket-embed"
+
+          curl --fail --location --retry 3 \
+            --output "$archive" \
+            https://download.racket-lang.org/releases/9.3/installers/racket-minimal-9.3-src-builtpkgs.tgz
+          echo "3a01324d559a15e3f1f58b0c57a92bb344dce534e72e564e0d8b75e3b9c65295  $archive" |
+            sha256sum --check
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          mkdir -p "$build_root"
+          cd "$build_root"
+          "$source_root/src/configure" --prefix="$embed_prefix"
+          make -j2
+          make install
       - name: Build backend and integration runner
         shell: bash
         run: |
           set -euo pipefail
           stage="$RUNNER_TEMP/rivet-linux-roundtrip"
           native_build="$RUNNER_TEMP/rivet-linux-native-integration"
+          embed_prefix="$RUNNER_TEMP/racket-embed"
           mkdir -p "$stage/res" "$stage/runtime"
 
           raco ctool \
@@ -41,12 +69,7 @@ jobs:
             platform/linux/Integration/backend.rkt
 
           racket_include="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
-          racket_lib_dir="$(racket -e '(require setup/dirs) (display (path->string (find-lib-dir)))')"
-          racket_dll_dir="$(racket -e '(require setup/dirs) (define p (find-dll-dir)) (when p (display (path->string p)))')"
-          runtime_roots=("$stage/runtime" "$racket_lib_dir" /usr/lib /usr/share/racket /usr/bin)
-          if [[ -n "$racket_dll_dir" && "$racket_dll_dir" != "$racket_lib_dir" ]]; then
-            runtime_roots+=("$racket_dll_dir")
-          fi
+          runtime_roots=("$embed_prefix")
           petite_source="$(find "${runtime_roots[@]}" -maxdepth 6 -name petite.boot -print -quit)"
           scheme_source="$(find "${runtime_roots[@]}" -maxdepth 6 -name scheme.boot -print -quit)"
           racket_boot_source="$(find "${runtime_roots[@]}" -maxdepth 6 -name racket.boot -print -quit)"
@@ -61,7 +84,7 @@ jobs:
           cp "$racket_boot_source" "$stage/runtime/racket.boot"
 
           racket_library="$(find "${runtime_roots[@]}" -maxdepth 6 \
-            \( -name 'libracketcs*.a' -o -name 'libracketcs*.so*' \) \
+            -name 'libracketcs*.a' \
             -print -quit)"
           if [[ -z "$racket_library" ]]; then
             echo "No embeddable Racket CS library found" >&2

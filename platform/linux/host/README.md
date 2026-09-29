@@ -29,14 +29,17 @@ platform/linux/
 
 ## Building by hand
 
-Requirements: Racket CS (the installation being embedded), CMake ≥ 3.24,
-pkg-config, GTK 4, and a graphical session (or Xvfb) to run.
+Requirements: an embeddable Racket CS build, CMake ≥ 3.24, pkg-config, GTK 4,
+and a graphical session (or Xvfb) to run. The standard prebuilt Linux Racket
+installer does not ship `libracketcs` or the three boot files; build and install
+Racket CS from a source distribution as described by Racket's embedding guide.
+The CI workflow uses the official minimal "source + built libraries" archive so
+the build remains reasonably small.
 
 ```bash
 export RIVET_ROOT="$PWD"
-export RIVET_RACKET_INCLUDE="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
-export RIVET_RACKET_LIB_DIR="$(racket -e '(require setup/dirs) (display (path->string (find-lib-dir)))')"
-export RIVET_RACKET_LIBRARY="$(find "$RIVET_RACKET_LIB_DIR" \( -name 'libracketcs*.a' -o -name 'libracketcs*.so*' \) -print -quit)"
+export RIVET_RACKET_INCLUDE=/path/to/racket/include
+export RIVET_RACKET_LIBRARY=/path/to/racket/lib/libracketcs.a
 cmake -S platform/linux/host -B /tmp/rivet-linux-build
 cmake --build /tmp/rivet-linux-build
 ```
