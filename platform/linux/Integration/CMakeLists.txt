@@ -11,7 +11,10 @@ if(NOT DEFINED RIVET_RACKET_LIBRARY)
   message(FATAL_ERROR "RIVET_RACKET_LIBRARY is required")
 endif()
 
+find_package(Curses REQUIRED)
 find_package(Threads REQUIRED)
+find_package(ZLIB REQUIRED)
+find_library(LZ4_LIBRARY NAMES lz4 REQUIRED)
 
 add_executable(RivetIntegration
   main.cpp
@@ -28,6 +31,9 @@ target_include_directories(RivetIntegration PRIVATE
 target_compile_options(RivetIntegration PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(RivetIntegration PRIVATE
   ${RIVET_RACKET_LIBRARY}
+  ZLIB::ZLIB
+  ${LZ4_LIBRARY}
+  ${CURSES_LIBRARIES}
   Threads::Threads
   ${CMAKE_DL_LIBS}
   m

@@ -249,7 +249,7 @@ class Backend::Impl {
     auto future = promise->get_future();
     auto const id = submit_request(
         std::move(rpc_name), std::move(arguments),
-        PendingRequest{std::move(promise), CompletionHandler{}});
+        PendingRequest{std::move(promise), CompletionHandler{}, {}});
     return PendingCall{id, std::move(future)};
   }
 
@@ -265,7 +265,7 @@ class Backend::Impl {
     }
     return submit_request(
         std::move(rpc_name), std::move(arguments),
-        PendingRequest{nullptr, std::move(completion)});
+        PendingRequest{nullptr, std::move(completion), {}});
   }
 
   void cancel(std::uint64_t request_id) {

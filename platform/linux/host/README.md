@@ -30,8 +30,9 @@ platform/linux/
 ## Building by hand
 
 Requirements: an embeddable Racket CS build, CMake ≥ 3.24, pkg-config, GTK 4,
-and a graphical session (or Xvfb) to run. The standard prebuilt Linux Racket
-installer does not ship `libracketcs` or the three boot files; build and install
+zlib, LZ4, curses, and a graphical session (or Xvfb) to run. The standard
+prebuilt Linux Racket installer does not ship `libracketcs` or the three boot
+files; build and install
 Racket CS from a source distribution as described by Racket's embedding guide.
 The CI workflow uses the official minimal "source + built libraries" archive so
 the build remains reasonably small.

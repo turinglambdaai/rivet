@@ -20,7 +20,10 @@ if(NOT DEFINED ENV{RIVET_RACKET_INCLUDE})
 endif()
 
 find_package(PkgConfig REQUIRED)
+find_package(Curses REQUIRED)
 find_package(Threads REQUIRED)
+find_package(ZLIB REQUIRED)
+find_library(LZ4_LIBRARY NAMES lz4 REQUIRED)
 pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
 if(DEFINED ENV{RIVET_RACKET_LIBRARY})
   set(RACKETCS_LIBRARY "$ENV{RIVET_RACKET_LIBRARY}")
@@ -50,9 +53,12 @@ target_include_directories(RivetHost PRIVATE
 
 target_link_libraries(RivetHost PRIVATE
   PkgConfig::GTK4
+  ${RACKETCS_LIBRARY}
+  ZLIB::ZLIB
+  ${LZ4_LIBRARY}
+  ${CURSES_LIBRARIES}
   Threads::Threads
   ${CMAKE_DL_LIBS}
-  ${RACKETCS_LIBRARY}
 )
 
 target_compile_options(RivetHost PRIVATE -Wall -Wextra -Wpedantic)
