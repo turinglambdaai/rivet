@@ -1,6 +1,6 @@
 # Getting Started with Rivet
 
-This guide takes a fresh machine from “Rivet is installed” to a running native application and a distributable build. The starter project is intentionally small: a Racket backend plus first-party WinUI 3 and SwiftUI hosts.
+This guide takes a fresh machine from “Rivet is installed” to a running native application and a distributable build. The starter project is intentionally small: a Racket backend plus native WinUI 3, SwiftUI, and GTK4 hosts.
 
 ## 1. Install Rivet
 
@@ -38,7 +38,8 @@ hello-rivet/
 ├── rivet.rktd              # app identity, backend entry point, deployment targets
 ├── app/backend.rkt         # shared Racket application logic
 ├── windows/                # WinUI 3 application
-└── macos-host/             # SwiftUI application
+├── macos-host/             # SwiftUI application
+└── linux/                  # GTK4 application
 ```
 
 You own the native UI source. Rivet owns the embedded-runtime bridge, RVT1 protocol, client generation, build orchestration, packaging, and verification.
@@ -63,6 +64,7 @@ Typical requirements are:
 
 - **Windows:** Racket CS, Visual Studio 2022 or Build Tools with Desktop development with C++, and a Windows SDK. Rivet restores the Windows App SDK package during the native build.
 - **macOS:** Racket CS plus the Apple developer command-line/Xcode toolchain.
+- **Linux:** CMake, pkg-config, a C++20 toolchain, GTK4 development files, zlib, LZ4, curses, and an embeddable static `libracketcs.a`. Set `RIVET_RACKET_LIBRARY` and `RIVET_RACKET_BOOT_DIR` when those artifacts are outside the active Racket installation.
 
 For CI or developer agents, use machine-readable diagnostics:
 
@@ -131,6 +133,10 @@ macos-host/Sources/RivetHost/RivetHostApp.swift
 ```
 
 `ContentView.swift` is ordinary SwiftUI. The starter `AppModel` owns the embedded backend and demonstrates asynchronous access to generated State methods.
+
+### Linux
+
+Start with `linux/src/main.cpp`. It is an ordinary GTK4 application and uses the same generated, completion-driven C++ API as the Windows host, bound to Rivet's Linux embedded runtime.
 
 Rivet intentionally does **not** introduce a cross-platform UI DSL. Use the first-party UI framework normally and keep reusable application/domain logic in Racket.
 

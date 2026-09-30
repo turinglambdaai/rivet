@@ -13,13 +13,13 @@ The central design rule is that **Racket is the shared application/runtime layer
                   Rivet protocol (RVT1)
                             │
                   native runtime client
-                    ┌───────┴───────┐
-                    │               │
-                C++/WinRT         Swift
-                    │               │
-                 WinUI 3       SwiftUI/AppKit
-                    │               │
-                 Windows           macOS
+                ┌────────┬────────┐
+                │        │        │
+            C++/WinRT  Swift     C++
+                │        │        │
+             WinUI 3  SwiftUI   GTK4
+                │        │        │
+             Windows   macOS    Linux
 ```
 
 ## Why not a direct Noise port?
@@ -85,6 +85,10 @@ MainActor / SwiftUI
 
 The Swift implementation is intentionally not the framework's specification. `docs/protocol.md` and the Racket modules are the specification.
 
+### Linux
+
+The GTK4 host follows the Windows C++ contract but uses a Unix `socketpair` for the in-process RVT1 transport. Racket CS is linked statically, while the UI remains an ordinary GTK4 application. Backend completions are returned to GLib's main loop before widgets are touched.
+
 ## Runtime ownership
 
 Rivet treats a Racket runtime as process-scoped infrastructure:
@@ -101,7 +105,7 @@ A `Backend` object cannot be restarted after shutdown in v0. This is intentional
 
 ## Transport
 
-Windows and macOS both use two in-process pipes with the same logical direction:
+Windows and macOS use two in-process pipes; Linux uses a connected `socketpair`. All three preserve the same logical direction:
 
 ```text
 Native request writer ─────────► Racket request reader
@@ -137,7 +141,7 @@ Typed generated clients are layered on top of this codec. The current schema sup
 
 Rivet deliberately does **not** provide a fake common widget toolkit in its first layer.
 
-Windows applications should be able to use everything WinUI 3 exposes. macOS applications should be able to use everything SwiftUI/AppKit exposes. A future Racket declarative UI layer may map a useful common subset to each renderer, but it is deliberately outside the 0.1 runtime contract and must not prevent platform-native escape hatches.
+Windows applications should be able to use everything WinUI 3 exposes. macOS applications should be able to use everything SwiftUI/AppKit exposes. Linux applications should be able to use GTK4 directly and make an explicit X11/Wayland policy when compositor behavior matters. A future Racket declarative UI layer may map a useful common subset to each renderer, but it is deliberately outside the runtime contract and must not prevent platform-native escape hatches.
 
 This differs from:
 

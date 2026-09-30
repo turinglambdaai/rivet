@@ -69,6 +69,24 @@
  (for/or ([fix (in-list mac-fixes)])
    (regexp-match? #rx"Apple developer toolchain" (car fix))))
 
+(define incomplete-linux
+  (hash 'os "unix"
+        'supported #t
+        'usable #f
+        'racket-executable "/usr/bin/racket"
+        'raco "/usr/bin/raco"
+        'runtime (hash)
+        'runtime-error #f
+        'tools (hash 'cmake #f
+                     'pkg-config #f
+                     'c++ #f
+                     'ldd #f
+                     'gtk4 #f)))
+(define linux-fixes (doctor-remediations incomplete-linux))
+(check-true
+ (for/or ([fix (in-list linux-fixes)])
+   (regexp-match? #rx"Linux native toolchain" (car fix))))
+
 ;; `doctor --json` is intended for CI and agents. Keep the report inside the
 ;; Racket JSON data model and verify it survives a complete encode/decode pass.
 (define encoded

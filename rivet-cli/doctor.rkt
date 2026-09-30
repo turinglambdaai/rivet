@@ -2,6 +2,8 @@
 
 (require json
          racket/path
+         racket/port
+         racket/system
          "runtime.rkt"
          "windows-tools.rkt")
 
@@ -25,6 +27,7 @@
         'racket-boot (path-string (racket-runtime-racket-boot runtime))
         'racketcs-dll (path-string (racket-runtime-racketcs-dll runtime))
         'racketcs-def (path-string (racket-runtime-racketcs-def runtime))
+        'racketcs-static (path-string (racket-runtime-racketcs-static runtime))
         'racket-framework (path-string (racket-runtime-racket-framework runtime))))
 
 (define (windows-tools-report tools)
@@ -42,6 +45,22 @@
         'plutil (executable-string "plutil")
         'xcrun (executable-string "xcrun")
         'spctl (executable-string "spctl")))
+
+(define (command-success? executable . args)
+  (and executable
+       (parameterize ([current-output-port (open-output-nowhere)]
+                      [current-error-port (open-output-nowhere)])
+         (apply system* executable args))))
+
+(define (linux-tools-report)
+  (define pkg-config (find-executable-path "pkg-config"))
+  (hash 'cmake (executable-string "cmake")
+        'pkg-config (path-string pkg-config)
+        'c++ (or (executable-string "c++")
+                 (executable-string "g++")
+                 (executable-string "clang++"))
+        'ldd (executable-string "ldd")
+        'gtk4 (command-success? pkg-config "--exists" "gtk4")))
 
 (define (doctor-report)
   (define os (system-type 'os))
@@ -79,6 +98,16 @@
                     (hash-ref report 'otool)
                     (hash-ref report 'codesign)
                     (hash-ref report 'plutil)))]
+      [(unix)
+       (define report (linux-tools-report))
+       (values #t
+               "GTK4"
+               report
+               (and (hash-ref report 'cmake)
+                    (hash-ref report 'pkg-config)
+                    (hash-ref report 'c++)
+                    (hash-ref report 'ldd)
+                    (hash-ref report 'gtk4)))]
       [else
        (values #f "unsupported" (hash) #f)]))
 
@@ -138,6 +167,15 @@
                (missing-tool? tools 'plutil))
        (add! "Install the Apple developer toolchain"
              "Run `xcode-select --install`. If `xcodebuild` is still missing, install Xcode and select it with `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`, then rerun `raco rivet doctor`."))]
+    [(unix)
+     (define tools (hash-ref report 'tools))
+     (when (or (missing-tool? tools 'cmake)
+               (missing-tool? tools 'pkg-config)
+               (missing-tool? tools 'c++)
+               (missing-tool? tools 'ldd)
+               (not (hash-ref tools 'gtk4 #f)))
+       (add! "Install the Linux native toolchain"
+             "Install CMake, pkg-config, a C++20 compiler, GTK4 development files, zlib, LZ4, and curses. On Debian/Ubuntu: sudo apt install build-essential cmake pkg-config libgtk-4-dev zlib1g-dev liblz4-dev libncurses-dev."))]
     [else (void)])
 
   (reverse fixes))
@@ -166,6 +204,8 @@
         (display-path "Racket CS DEF" (hash-ref runtime 'racketcs-def))]
        [(macosx)
         (display-path "Racket.framework" (hash-ref runtime 'racket-framework))]
+       [(unix)
+        (display-path "Racket CS static library" (hash-ref runtime 'racketcs-static))]
        [else (void)])]
     [else
      (printf "  Racket runtime: error — ~a\n"
@@ -195,6 +235,13 @@
      (display-path "Gatekeeper assessment (spctl)"
                    (hash-ref tools 'spctl)
                    "development packaging is still available")]
+    [(unix)
+     (display-path "CMake" (hash-ref tools 'cmake))
+     (display-path "pkg-config" (hash-ref tools 'pkg-config))
+     (display-path "C++ compiler" (hash-ref tools 'c++))
+     (display-path "dependency audit (ldd)" (hash-ref tools 'ldd))
+     (printf "  GTK4 development package: ~a\n"
+             (if (hash-ref tools 'gtk4 #f) "found" "not found"))]
     [else (void)]))
 
 (define (display-remediations report)

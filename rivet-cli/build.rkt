@@ -361,6 +361,49 @@
   (file-or-directory-permissions staged-executable #o755)
   staged-executable)
 
+(define (with-linux-build-environment runtime thunk)
+  (define library (racket-runtime-racketcs-static runtime))
+  (unless library
+    (error 'build-project!
+           "the Linux build requires an embeddable static libracketcs; set RIVET_RACKET_LIBRARY to libracketcs.a"))
+  (define env (environment-variables-copy (current-environment-variables)))
+  (define (set-path! key path)
+    (environment-variables-set! env key (path->bytes path)))
+  (set-path! #"RIVET_ROOT" (simplify-path rivet-root #t))
+  (set-path! #"RIVET_RACKET_INCLUDE" (racket-runtime-include-dir runtime))
+  (set-path! #"RIVET_RACKET_LIBRARY" library)
+  (parameterize ([current-environment-variables env])
+    (thunk)))
+
+(define (build-linux! project runtime stage configuration)
+  (define cmake (find-executable-path "cmake"))
+  (unless cmake
+    (error 'build-project! "cmake was not found; install the Linux native toolchain"))
+  (define host-dir (project-path project "linux"))
+  (unless (directory-exists? host-dir)
+    (raise-arguments-error 'build-project!
+                           "Linux host directory is missing; add the current Rivet Linux host template"
+                           "directory" host-dir))
+  (define build-dir (project-path project ".rivet" "build" "linux"))
+  (fresh-directory! build-dir)
+  (with-linux-build-environment
+   runtime
+   (lambda ()
+     (run! 'build-project!
+           cmake
+           "-S" (path->string host-dir)
+           "-B" (path->string build-dir)
+           (string-append "-DCMAKE_BUILD_TYPE=" configuration))
+     (run! 'build-project!
+           cmake
+           "--build" (path->string build-dir)
+           "--config" configuration)))
+  (define built (build-path build-dir "RivetHost"))
+  (define staged-executable (build-path stage "RivetHost"))
+  (copy-required! 'build-project! built staged-executable)
+  (file-or-directory-permissions staged-executable #o755)
+  staged-executable)
+
 (define (build-project! project
                         #:configuration [configuration "Debug"]
                         #:self-contained? [self-contained? #f])
@@ -376,9 +419,11 @@
      (build-windows! project runtime stage configuration self-contained?)]
     [(macosx)
      (build-macos! project runtime stage configuration)]
+    [(unix)
+     (build-linux! project runtime stage configuration)]
     [else
      (error 'build-project!
-            "Rivet native hosts currently target Windows and macOS")]))
+            "Rivet native hosts currently target Windows, macOS, and Linux")]))
 
 (define (dev-project! project)
   ;; Development should start the generated app on a clean machine, not fail
@@ -388,7 +433,7 @@
                     #:configuration "Debug"
                     #:self-contained? #t))
   (case (system-type 'os)
-    [(windows macosx)
+    [(windows macosx unix)
      (parameterize ([current-directory (path-only executable)])
        (run! 'dev-project! executable))]
     [else

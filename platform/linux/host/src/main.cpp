@@ -49,8 +49,7 @@ std::filesystem::path executable_path() {
   return std::filesystem::read_symlink("/proc/self/exe");
 }
 
-// The manual staging loop keeps runtime/res beside the executable. Linux
-// package layout discovery will be added with the CLI packaging target.
+// Rivet keeps runtime/res beside the executable in development and packages.
 struct RuntimeLayout {
   std::filesystem::path petite_boot;
   std::filesystem::path scheme_boot;
@@ -96,6 +95,19 @@ int on_count_delivered(gpointer user_data) {
   return G_SOURCE_REMOVE;
 }
 
+void deliver_count_result(rivet_app::Result<std::int64_t> result) {
+  auto* delivered = new IntResult;
+  try {
+    delivered->value = result.get();
+    delivered->ok = true;
+  } catch (std::exception const& error) {
+    delivered->error = error.what();
+  } catch (...) {
+    delivered->error = "unknown backend failure";
+  }
+  g_idle_add(on_count_delivered, delivered);
+}
+
 int on_backend_finished(gpointer) {
   if (g_state.startup_thread.joinable()) {
     g_state.startup_thread.join();
@@ -130,10 +142,7 @@ int on_backend_finished(gpointer) {
 
   g_state.set_status("Embedded Racket CS is ready");
   gtk_widget_set_sensitive(GTK_WIDGET(g_state.increment), TRUE);
-  g_state.api->get_counter_async([](rivet_app::Result<std::int64_t> result) {
-    auto* delivered = new IntResult{result.ok, result.value, result.error};
-    g_idle_add(on_count_delivered, delivered);
-  });
+  (void)g_state.api->get_counter_async(deliver_count_result);
   return G_SOURCE_REMOVE;
 }
 
@@ -181,13 +190,7 @@ void on_increment_clicked(GtkButton*, gpointer) {
   }
   gtk_widget_set_sensitive(GTK_WIDGET(g_state.increment), FALSE);
   auto const next = g_state.count_value + 1;
-  g_state.api->set_counter_async(next,
-                                 [](rivet_app::Result<std::int64_t> result) {
-                                   auto* delivered =
-                                       new IntResult{result.ok, result.value,
-                                                     result.error};
-                                   g_idle_add(on_count_delivered, delivered);
-                                 });
+  (void)g_state.api->set_counter_async(next, deliver_count_result);
 }
 
 void on_activate(GtkApplication* app, gpointer) {

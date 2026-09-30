@@ -6,8 +6,10 @@
 #pragma once
 
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <future>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -21,15 +23,14 @@ inline constexpr char kEntryName[] = "start";
 
 template <typename T>
 struct Result {
-  bool ok{false};
-  T value{};
-  std::string error;
+  std::optional<T> value;
+  std::exception_ptr error;
 
-  T get() const {
-    if (!ok) {
-      throw std::runtime_error(error);
-    }
-    return value;
+  bool succeeded() const noexcept { return value.has_value() && !error; }
+  T const& get() const {
+    if (error) std::rethrow_exception(error);
+    if (!value) throw std::runtime_error("Rivet async result has no value");
+    return *value;
   }
 };
 
@@ -86,21 +87,16 @@ class API {
   static rivet_app::Result<std::int64_t> unbox_int64(rivet::linux_runtime::CallResult call) {
     rivet_app::Result<std::int64_t> result;
     if (!call.succeeded()) {
-      try {
-        if (call.error) std::rethrow_exception(call.error);
-      } catch (std::exception const& e) {
-        result.error = e.what();
-        return result;
-      }
-      result.error = "unknown backend failure";
+      result.error = call.error ? call.error :
+          std::make_exception_ptr(std::runtime_error("unknown backend failure"));
       return result;
     }
     if (auto number = std::get_if<std::int64_t>(&call.value->data)) {
-      result.ok = true;
       result.value = *number;
       return result;
     }
-    result.error = "Rivet result type mismatch: Int64";
+    result.error = std::make_exception_ptr(
+        std::runtime_error("Rivet result type mismatch: Int64"));
     return result;
   }
 

@@ -13,7 +13,7 @@ Rivet framework releases are tag-driven. The repository package version lives in
 
 The tag-provenance validator is also exercised in normal pull-request CI against accepted and rejected synthetic repositories. A lightweight tag, a tag on a commit outside `main` history, a missing tag/ref, or a tag that does not match the checked-out release commit is rejected before packaging begins.
 
-The source-package smoke test also runs in normal pull-request CI. It installs the generated ZIP into a fresh `PLTUSERHOME`, loads `rivet/backend` and `rivet/protocol`, runs the installed `raco rivet` command, creates a starter project, and checks that both Windows and macOS scaffold resources are present. This verifies the distributable package itself instead of relying only on tests against the linked repository checkout.
+The source-package smoke test also runs in normal pull-request CI. It installs the generated ZIP into a fresh `PLTUSERHOME`, loads the public Rivet modules, runs the installed `raco rivet` command, creates a starter project, and checks that the Windows, macOS, and Linux scaffold resources are present. This verifies the distributable package itself instead of relying only on tests against the linked repository checkout.
 
 Do not move or reuse an existing release tag. If a published release is wrong, fix the repository and publish a new patch version.
 

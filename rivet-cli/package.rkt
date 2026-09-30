@@ -165,6 +165,21 @@
     (sign-windows-production! (build-path destination "RivetHost.exe") settings))
   destination)
 
+(define (linux-architecture)
+  (case (system-type 'arch)
+    [(aarch64 arm64) "arm64"]
+    [(x86_64) "x64"]
+    [else (format "~a" (system-type 'arch))]))
+
+(define (package-linux! project stage name)
+  (define destination
+    (project-path project "dist"
+                  (string-append name "-linux-" (linux-architecture))))
+  (make-directory* (path-only destination))
+  (copy-tree! stage destination)
+  (file-or-directory-permissions (build-path destination "RivetHost") #o755)
+  destination)
+
 (define (sign-macos! codesign identity entitlements racket-framework app production?)
   (define common
     (append
@@ -294,6 +309,9 @@
   app)
 
 (define (package-project! project #:production? [production? #f])
+  (when (and production? (eq? (system-type 'os) 'unix))
+    (error 'package-project!
+           "production signing is not defined for Linux yet; create a verified development package and apply the target distribution's signing policy"))
   (define executable
     (build-project! project
                     #:configuration "Release"
@@ -305,9 +323,10 @@
     (case (system-type 'os)
       [(windows) (package-windows! project stage name production?)]
       [(macosx) (package-macos! project stage name production?)]
+      [(unix) (package-linux! project stage name)]
       [else
        (error 'package-project!
-              "Rivet packages currently target Windows and macOS")]))
+              "Rivet packages currently target Windows, macOS, and Linux")]))
 
   ;; `package` should never report success for an artifact that still depends
   ;; on the developer machine. Production mode additionally verifies the

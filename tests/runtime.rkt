@@ -3,6 +3,7 @@
 (require racket/file
          racket/path
          rackunit
+         "../rivet-cli/runtime.rkt"
          (submod "../rivet-cli/runtime.rkt" test-support))
 
 (define temp-root (make-temporary-file "rivet-runtime-~a" 'directory))
@@ -69,7 +70,18 @@
     (define framework-dirs (framework-boot-directories framework))
     (check-not-false
      (member (simplify-path framework-boot #t) framework-dirs equal?))
-    (check-not-false (find-complete-boot-files framework-dirs)))
+    (check-not-false (find-complete-boot-files framework-dirs))
+
+    ;; Explicit embedding overrides must fail loudly instead of silently
+    ;; falling back to a different installation.
+    (define env (environment-variables-copy (current-environment-variables)))
+    (environment-variables-set!
+     env
+     #"RIVET_RACKET_INCLUDE"
+     (path->bytes (build-path temp-root "missing-include")))
+    (parameterize ([current-environment-variables env])
+      (check-exn #rx"configured runtime directory does not exist"
+                 discover-racket-runtime)))
   (lambda ()
     (when (directory-exists? temp-root)
       (delete-directory/files temp-root))))

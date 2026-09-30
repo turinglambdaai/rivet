@@ -40,8 +40,14 @@ The development package may use ad-hoc signing, but its runtime layout must alre
 
 In production verification mode, Rivet additionally runs `xcrun stapler validate` to require a stapled notarization ticket and asks Gatekeeper to assess the application with `spctl --assess --type execute`.
 
+## Linux
+
+The Linux verifier checks the application directory, executable bit, compiled Racket backend, all three boot files, and configured application resources. It then runs `ldd` on the GTK4 host and rejects every unresolved shared-library dependency. Racket CS itself is linked statically; GTK4 and the normal Linux system libraries remain native distribution dependencies.
+
+Linux production signing is intentionally not claimed yet. `package --production` and `verify --production` fail explicitly until Rivet has a distro-aware installer and signing policy rather than pretending that one generic signature covers Debian, Fedora, Arch, Flatpak, and other delivery channels.
+
 ## CI
 
-The Windows and macOS package-smoke jobs run `raco rivet package` and then run `raco rivet verify` again. They intentionally override the scaffold deployment targets with non-default values so the real platform builds exercise the configuration propagation path rather than only the fallback defaults.
+The Windows, macOS, and Linux package-smoke jobs run `raco rivet package` and then run `raco rivet verify` again. They exercise real generated applications and packaged resources; Windows and macOS additionally override deployment targets so those platform metadata paths are covered rather than only their defaults.
 
 Normal pull-request CI does not contain publisher certificates or Apple notarization credentials, so it intentionally exercises development packaging. Production credential parsing is covered by platform-independent Racket tests; certificate-backed production signing belongs in a trusted publisher release environment.

@@ -41,6 +41,8 @@ test -f ArchiveSmoke/rivet.rktd
 test -f ArchiveSmoke/app/backend.rkt
 test -f ArchiveSmoke/windows/RivetHost.vcxproj
 test -f ArchiveSmoke/macos-host/Package.swift
+test -f ArchiveSmoke/linux/CMakeLists.txt
+test -f ArchiveSmoke/linux/src/main.cpp
 grep -Fq '(resources . ())' ArchiveSmoke/rivet.rktd
 grep -Fq 'RIVET_WINDOWS_ICON_RC' ArchiveSmoke/windows/RivetHost.vcxproj
 

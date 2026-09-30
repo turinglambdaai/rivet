@@ -10,7 +10,8 @@
 @author{turinglambdaai}
 
 Rivet is a native desktop application foundation that keeps application logic
-in Racket while using WinUI 3 on Windows and SwiftUI/AppKit on macOS. It embeds
+in Racket while using WinUI 3 on Windows, SwiftUI/AppKit on macOS, and GTK4 on
+Linux. It embeds
 Racket CS in the native process and generates typed native clients from Racket
 RPC, event, and state declarations. Rivet is not a WebView wrapper and does not
 introduce a cross-platform widget DSL.

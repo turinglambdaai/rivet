@@ -1,6 +1,6 @@
 # Rivet 快速上手
 
-这份教程的目标很明确：从一台刚装好开发环境的电脑开始，尽快跑起第一个 Rivet 原生应用，并最终得到可以分发的构建结果。脚手架保持最小化：共享的 Racket 后端 + Windows 的 WinUI 3 宿主 + macOS 的 SwiftUI 宿主。
+这份教程的目标很明确：从一台刚装好开发环境的电脑开始，尽快跑起第一个 Rivet 原生应用，并最终得到可以分发的构建结果。脚手架保持最小化：共享的 Racket 后端 + Windows 的 WinUI 3 宿主 + macOS 的 SwiftUI 宿主 + Linux 的 GTK4 宿主。
 
 ## 1. 安装 Rivet
 
@@ -36,9 +36,10 @@ cd hello-rivet
 ```text
 hello-rivet/
 ├── rivet.rktd              # 应用标识、后端入口、最低系统版本
-├── app/backend.rkt         # 两个平台共享的 Racket 业务逻辑
+├── app/backend.rkt         # 三个平台共享的 Racket 业务逻辑
 ├── windows/                # WinUI 3 应用
-└── macos-host/             # SwiftUI 应用
+├── macos-host/             # SwiftUI 应用
+└── linux/                  # GTK4 应用
 ```
 
 原生 UI 源码属于你的应用；Rivet 负责嵌入式 runtime bridge、RVT1 协议、native client 生成、构建编排、打包和验证。
@@ -63,6 +64,7 @@ rivet: toolchain looks usable
 
 - **Windows：** Racket CS、Visual Studio 2022 或 Build Tools、Desktop development with C++ 和 Windows SDK。Windows App SDK 作为项目依赖由 Rivet 在原生构建时自动恢复。
 - **macOS：** Racket CS 和 Apple/Xcode 开发工具链。
+- **Linux：** CMake、pkg-config、C++20 工具链、GTK4 开发包、zlib、LZ4、curses，以及可嵌入的静态 `libracketcs.a`。如果静态库和 boot files 不在当前 Racket 安装目录中，设置 `RIVET_RACKET_LIBRARY` 与 `RIVET_RACKET_BOOT_DIR`。
 
 CI 或 Agent 需要结构化结果时：
 
@@ -137,6 +139,10 @@ macos-host/Sources/RivetHost/RivetHostApp.swift
 ```
 
 `ContentView.swift` 是正常 SwiftUI。脚手架中的 `AppModel` 负责 Embedded backend，并演示异步访问生成的 State API。
+
+### Linux
+
+先看 `linux/src/main.cpp`。它是普通 GTK4 应用，使用与 Windows 相同风格的 completion-driven C++ 类型化 API，但绑定到 Rivet 的 Linux 嵌入运行时。
 
 Rivet **不会**再定义一套跨平台 UI DSL。WinUI 3 和 SwiftUI 按各自平台的正常方式开发，真正需要共享的业务逻辑放在 Racket 中。
 

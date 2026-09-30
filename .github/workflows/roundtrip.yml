@@ -112,6 +112,7 @@ jobs:
           echo "RIVET_RACKET_INCLUDE=$racket_include" >> "$GITHUB_ENV"
           echo "RIVET_RACKET_LIB_DIR=$(dirname "$racket_library")" >> "$GITHUB_ENV"
           echo "RIVET_RACKET_LIBRARY=$racket_library" >> "$GITHUB_ENV"
+          echo "RIVET_RACKET_BOOT_DIR=$stage/runtime" >> "$GITHUB_ENV"
       - name: Exercise embedded runtime
         timeout-minutes: 2
         run: "$RIVET_LINUX_ROUNDTRIP_STAGE/RivetIntegration"
@@ -119,12 +120,34 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes libgtk-4-dev
-      - name: Compile GTK4 host scaffold
+      - name: Build, package, and verify a generated GTK4 app
+        shell: bash
         run: |
-          cmake -S platform/linux/host \
-            -B "$RUNNER_TEMP/rivet-linux-gtk-host" \
-            -DCMAKE_BUILD_TYPE=Release
-          cmake --build "$RUNNER_TEMP/rivet-linux-gtk-host" --config Release
+          set -euo pipefail
+          root="$(mktemp -d)"
+          cd "$root"
+          raco rivet doctor
+          raco rivet new Smoke
+          cd Smoke
+          mkdir -p assets/nested
+          printf %s packaged-resource > assets/nested/product.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("rivet.rktd")
+          original = path.read_text(encoding="utf-8")
+          updated = original.replace('(resources . ())', '(resources . ("assets"))')
+          if updated == original:
+              raise SystemExit("failed to configure Linux smoke resource")
+          path.write_text(updated, encoding="utf-8")
+          PY
+          raco rivet build
+          test -x .rivet/stage/RivetHost
+          test "$(cat .rivet/stage/app/assets/nested/product.txt)" = packaged-resource
+          grep -Fq 'rivet::linux_runtime::Backend' linux/GeneratedBackend.hpp
+          raco rivet package
+          raco rivet verify
+          test -x dist/Smoke-linux-x64/RivetHost
+          test "$(cat dist/Smoke-linux-x64/app/assets/nested/product.txt)" = packaged-resource
 
   macos-roundtrip:
     name: macOS embedded Racket round trip
