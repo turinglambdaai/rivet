@@ -1,0 +1,251 @@
+name: Desktop Architectures
+
+# Clean-runner build/package/verify evidence for every advertised desktop
+# architecture beyond the primary x64/Apple-Silicon entries in ci.yml:
+# Windows ARM64, macOS Intel, and Linux AArch64.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: architectures-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-arm64:
+    name: Windows ARM64 CLI package smoke
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Racket CS 9.3 (arm64, checksum-pinned)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Join-Path $env:RUNNER_TEMP 'racket-9.3-arm64-win32-cs.exe'
+          Invoke-WebRequest `
+            -Uri 'https://download.racket-lang.org/installers/9.3/racket-9.3-arm64-win32-cs.exe' `
+            -OutFile $installer
+          $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne 'fcccd112afd3c8fecfdaf56d2a2fc3213fe006d8e4eac525ceaee56f10628a01') {
+            throw "Racket 9.3 arm64 installer checksum mismatch: $hash"
+          }
+          # NSIS silent install; /D must be last and unquoted. On Windows the
+          # Racket executables (racket.exe, raco.exe) live in the install root,
+          # not a bin/ directory.
+          Start-Process -FilePath $installer -ArgumentList '/S','/D=C:\Racket' -Wait -NoNewWindow
+          if (-not (Test-Path 'C:\Racket\racket.exe')) {
+            throw 'Racket arm64 silent install did not produce C:\Racket\racket.exe'
+          }
+          Add-Content $env:GITHUB_PATH 'C:\Racket'
+      - name: Install Rivet
+        shell: pwsh
+        run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
+      - name: Check toolchain and JSON diagnostics
+        shell: pwsh
+        run: |
+          raco rivet doctor
+          $json = raco rivet doctor --json
+          if ($LASTEXITCODE -ne 0) { throw 'raco rivet doctor --json failed' }
+          $report = $json | ConvertFrom-Json
+          if (-not $report.usable) { throw 'doctor JSON did not report a usable Windows ARM64 toolchain' }
+          if (-not $report.runtime.'petite-boot') { throw 'doctor JSON omitted the selected petite.boot' }
+          if (-not $report.runtime.'racketcs-dll') { throw 'doctor JSON omitted the selected Racket CS DLL' }
+      - name: Compile full schema matrix, package, verify, and clean WinUI app
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'rivet-smoke'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          Set-Location $root
+          raco rivet new Smoke
+          Set-Location (Join-Path $root 'Smoke')
+          Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'tests\fixtures\schema-matrix-backend.rkt') 'app\backend.rkt' -Force
+          New-Item -ItemType Directory -Force -Path 'assets\nested' | Out-Null
+          Set-Content -Path 'assets\nested\product.txt' -Value 'packaged-resource' -NoNewline
+          $config = Get-Content 'rivet.rktd' -Raw
+          $updated = $config.Replace('(resources . ())', '(resources . ("assets"))').Replace('(windows-min-version . "10.0.19041.0")', '(windows-min-version . "10.0.19045.0")')
+          if ($updated -eq $config) { throw 'failed to customize windows-min-version smoke value' }
+          Set-Content -Path 'rivet.rktd' -Value $updated -NoNewline
+          raco rivet build
+          raco rivet package
+          raco rivet verify
+          if (-not (Test-Path 'dist\Smoke-windows-ARM64\RivetHost.exe')) {
+            throw 'packaged WinUI ARM64 executable was not produced'
+          }
+          if ((Get-Content 'dist\Smoke-windows-ARM64\app\assets\nested\product.txt' -Raw) -ne 'packaged-resource') {
+            throw 'configured application resource was not preserved in the Windows ARM64 package'
+          }
+          raco rivet clean
+          foreach ($path in @('.rivet', 'build', 'dist')) {
+            if (Test-Path $path) { throw "raco rivet clean left generated path: $path" }
+          }
+          if (-not (Test-Path 'app\backend.rkt')) {
+            throw 'raco rivet clean removed application source'
+          }
+
+  macos-intel:
+    name: macOS Intel CLI package smoke
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Install Rivet
+        run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
+      - name: Check toolchain and JSON diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          raco rivet doctor
+          report="$RUNNER_TEMP/rivet-doctor.json"
+          raco rivet doctor --json > "$report"
+          python3 - "$report" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as f:
+              report = json.load(f)
+          assert report["usable"] is True
+          assert report["runtime"]["petite-boot"]
+          assert report["runtime"]["racket-framework"]
+          assert report["tools"]["plutil"]
+          PY
+      - name: Compile full schema matrix, package, verify, and clean SwiftUI app
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          cd "$root"
+          raco rivet new Smoke
+          cd Smoke
+          cp "$GITHUB_WORKSPACE/tests/fixtures/schema-matrix-backend.rkt" app/backend.rkt
+          mkdir -p assets/nested
+          printf %s packaged-resource > assets/nested/product.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("rivet.rktd")
+          original = path.read_text(encoding="utf-8")
+          updated = original.replace('(resources . ())', '(resources . ("assets"))').replace('(macos-min-version . "14.0")', '(macos-min-version . "14.1")')
+          if updated == original:
+              raise SystemExit("failed to customize macos-min-version smoke value")
+          path.write_text(updated, encoding="utf-8")
+          PY
+          raco rivet build
+          raco rivet package
+          raco rivet verify
+          test -x dist/Smoke.app/Contents/MacOS/Smoke
+          test "$(uname -m)" = x86_64
+          test "$(file dist/Smoke.app/Contents/MacOS/Smoke | grep -c x86_64)" -gt 0
+          test "$(cat dist/Smoke.app/Contents/Resources/app/assets/nested/product.txt)" = packaged-resource
+          codesign --verify --deep --strict dist/Smoke.app
+          test "$(plutil -extract LSMinimumSystemVersion raw -o - dist/Smoke.app/Contents/Info.plist)" = "14.1"
+          raco rivet clean
+          test ! -e .rivet
+          test ! -e build
+          test ! -e dist
+          test -f app/backend.rkt
+
+  linux-arm64:
+    name: Linux ARM64 CLI package smoke
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache embeddable Racket CS
+        id: cache-racket-embed
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/racket-embed
+          key: racket-embed-9.3-${{ runner.os }}-${{ runner.arch }}-v1
+      - name: Build full Racket CS 9.3 from pinned source
+        if: steps.cache-racket-embed.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/racket-minimal-9.3-src-builtpkgs.tgz"
+          source_root="$RUNNER_TEMP/racket-9.3"
+          build_root="$RUNNER_TEMP/racket-embed-build"
+          embed_prefix="$RUNNER_TEMP/racket-embed"
+
+          curl --fail --location --retry 3 \
+            --output "$archive" \
+            https://download.racket-lang.org/releases/9.3/installers/racket-minimal-9.3-src-builtpkgs.tgz
+          echo "3a01324d559a15e3f1f58b0c57a92bb344dce534e72e564e0d8b75e3b9c65295  $archive" |
+            sha256sum --check
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          mkdir -p "$build_root"
+          cd "$build_root"
+          "$source_root/src/configure" --prefix="$embed_prefix"
+          make -j2
+          make install
+      - name: Install Rivet
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "$RUNNER_TEMP/racket-embed/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/racket-embed/bin:$PATH"
+          raco pkg install --auto --no-docs --name rivet --link "$PWD"
+      - name: Install GTK4 development files
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libgtk-4-dev
+      - name: Compile full schema matrix, package, and verify a GTK4 app
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$RUNNER_TEMP/racket-embed/bin:$PATH"
+          embed_prefix="$RUNNER_TEMP/racket-embed"
+
+          # Unix-style source installs place the embed headers under
+          # include/racket (includepltdir), not include/ directly. Locate the
+          # directory that actually holds chezscheme.h.
+          racket_include="$(dirname "$(find "$embed_prefix" -name chezscheme.h -print -quit)")"
+          if [[ -z "$racket_include" || "$racket_include" = "." ]]; then
+            echo "chezscheme.h was not found under $embed_prefix" >&2
+            exit 1
+          fi
+          petite_source="$(find "$embed_prefix" -name petite.boot -print -quit)"
+          scheme_source="$(find "$embed_prefix" -name scheme.boot -print -quit)"
+          racket_boot_source="$(find "$embed_prefix" -name racket.boot -print -quit)"
+          racket_library="$(find "$embed_prefix" -name 'libracketcs*.a' -print -quit)"
+          for artifact in "$petite_source" "$scheme_source" "$racket_boot_source" "$racket_library"; do
+            if [[ -z "$artifact" ]]; then
+              echo "Racket CS embedded artifact was not found under $embed_prefix" >&2
+              exit 1
+            fi
+          done
+
+          export RIVET_ROOT="$GITHUB_WORKSPACE"
+          export RIVET_RACKET_INCLUDE="$racket_include"
+          export RIVET_RACKET_LIB_DIR="$(dirname "$racket_library")"
+          export RIVET_RACKET_LIBRARY="$racket_library"
+          export RIVET_RACKET_BOOT_DIR="$(dirname "$petite_source")"
+
+          raco rivet doctor
+          root="$(mktemp -d)"
+          cd "$root"
+          raco rivet new Smoke
+          cd Smoke
+          cp "$GITHUB_WORKSPACE/tests/fixtures/schema-matrix-backend.rkt" app/backend.rkt
+          mkdir -p assets/nested
+          printf %s packaged-resource > assets/nested/product.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("rivet.rktd")
+          original = path.read_text(encoding="utf-8")
+          updated = original.replace('(resources . ())', '(resources . ("assets"))')
+          if updated == original:
+              raise SystemExit("failed to configure Linux ARM64 smoke resource")
+          path.write_text(updated, encoding="utf-8")
+          PY
+          raco rivet build
+          test -x .rivet/stage/RivetHost
+          raco rivet package
+          raco rivet verify
+          test -x dist/Smoke-linux-arm64/RivetHost
+          test "$(cat dist/Smoke-linux-arm64/app/assets/nested/product.txt)" = packaged-resource
+          file dist/Smoke-linux-arm64/RivetHost | grep -q aarch64

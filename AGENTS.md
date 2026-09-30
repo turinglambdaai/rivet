@@ -36,7 +36,8 @@ exercised by `tests/protocol-golden.txt` across Racket, C++, Swift, and Kotlin.
 - `platform/linux/`: GTK4 host and embedded runtime
 - `platform/android/`: Kotlin protocol and coroutine runtime foundation
 - `tests/`: Racket behavior and CLI regression tests
-- `.github/workflows/`: clean-platform and embedded-runtime gates
+- `.github/workflows/`: clean-platform and embedded-runtime gates, plus the
+  desktop-architecture matrix (Windows ARM64, macOS Intel, Linux ARM64)
 
 ## Required validation
 
