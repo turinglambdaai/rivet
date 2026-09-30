@@ -135,7 +135,9 @@ Rivet v1 begins with a small value model:
 - Bytes
 - List
 
-Typed generated clients are layered on top of this codec. The current schema supports `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `List`, and `Optional`. Optional values reuse the Null/Void wire tag, so these schema types do not require framing changes. Records and enums remain future schema extensions.
+Typed generated clients are layered on top of this codec. The current schema supports `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `List`, `Optional`, named Records, and named Enums. Optional values reuse the Null/Void wire tag; Records reuse List with a declared field order; Enums reuse String with a closed declared case set. They generate native Swift, C++, and Kotlin types without changing RVT1 framing.
+
+Schema evolution is checked above the codec. `raco rivet schema --output` writes a versioned language-neutral API baseline; `raco rivet schema check` rejects removed or changed declarations and RVT1 version changes while allowing additive declarations. Record field order is compatibility-significant because it is wire order. Existing Enum case sets and order are also significant because an older generated client cannot decode a new case safely.
 
 ## UI strategy
 

@@ -13,11 +13,16 @@
   ([owner : Person]
    [tags : (List String)]))
 
+(define-enum Status (active inactive))
+
 (define-rpc (echo-person [person : Person] : Person)
   person)
 
 (define-rpc (wrap-person [person : Person] : Envelope)
   (Envelope person (list "taskly" "record")))
+
+(define-rpc (echo-status [status : Status] : Status)
+  status)
 
 (define-state selected : Person (Person "Ada" 37 (void)))
 
@@ -26,6 +31,9 @@
 (check-equal? (record-ref ada "age") 37)
 (check-true (void? (record-ref ada 'nickname)))
 (check-exn exn:fail? (lambda () (record-ref ada 'missing)))
+(check-equal? (enum-case (Status 'active)) 'active)
+(check-equal? (enum-case (Status "inactive")) 'inactive)
+(check-exn #rx"unknown Rivet Enum case" (lambda () (Status 'missing)))
 
 (check-equal?
  (record-schema)
@@ -39,6 +47,10 @@
           (list (hasheq 'name "name" 'type "String")
                 (hasheq 'name "age" 'type "Int64")
                 (hasheq 'name "nickname" 'type "(Optional String)")))))
+
+(check-equal?
+ (enum-schema)
+ (list (hasheq 'name "Status" 'cases '("active" "inactive"))))
 
 (define-values (server-in client-out) (make-pipe))
 (define-values (client-in server-out) (make-pipe))
@@ -112,6 +124,20 @@
 (define type-error (read-frame client-in))
 (check-equal? (frame-type type-error) message:error)
 (check-true (string? (decode-value (frame-payload type-error))))
+
+;; Enum stays RVT1-compatible by using its stable case string on the wire.
+(write-frame
+ (frame message:request 7 (encode-value (list "echo-status" "active")))
+ client-out)
+(define enum-response (read-frame client-in))
+(check-equal? (frame-type enum-response) message:response)
+(check-equal? (decode-value (frame-payload enum-response)) "active")
+
+(write-frame
+ (frame message:request 8 (encode-value (list "echo-status" "missing")))
+ client-out)
+(define enum-error (read-frame client-in))
+(check-equal? (frame-type enum-error) message:error)
 
 (write-frame (frame message:shutdown 0 #"") client-out)
 (thread-wait server-thread)

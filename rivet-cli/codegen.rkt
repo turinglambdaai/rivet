@@ -1,18 +1,27 @@
 #lang racket/base
 
-(require racket/file
+(require json
+         racket/file
          racket/list
          racket/match
          racket/path
          racket/string
          "project.rkt")
 
-(provide generate-clients!)
+(provide generate-clients!
+         schema-snapshot
+         write-schema-snapshot!
+         check-schema-compatibility!)
 
 (struct schema-rpc (name arg-names arg-types result-type) #:transparent)
 (struct schema-event (name type) #:transparent)
 (struct schema-state (name type) #:transparent)
 (struct schema-record (name field-names field-types) #:transparent)
+(struct schema-enum (name cases) #:transparent)
+
+(define schema-snapshot-format "rivet-schema")
+(define schema-snapshot-version 1)
+(define scalar-types '(String Int64 Bool Bytes Void Any))
 
 (define (load-schema backend)
   (define ns (make-base-namespace))
@@ -33,6 +42,9 @@
     (define record-name (dynamic-require 'rivet/backend 'record-info-name))
     (define record-field-names (dynamic-require 'rivet/backend 'record-info-field-names))
     (define record-field-types (dynamic-require 'rivet/backend 'record-info-field-types))
+    (define get-enums (dynamic-require 'rivet/backend 'registered-enums))
+    (define enum-name (dynamic-require 'rivet/backend 'enum-info-name))
+    (define enum-cases (dynamic-require 'rivet/backend 'enum-info-cases))
     (values
      (for/list ([info (in-list (get-rpcs))])
        (schema-rpc (rpc-name info)
@@ -46,7 +58,221 @@
      (for/list ([info (in-list (get-records))])
        (schema-record (record-name info)
                       (record-field-names info)
-                      (record-field-types info))))))
+                      (record-field-types info)))
+     (for/list ([info (in-list (get-enums))])
+       (schema-enum (enum-name info) (enum-cases info))))))
+
+(define (schema-name value)
+  (if (symbol? value) (symbol->string value) value))
+
+(define (type->snapshot type)
+  (match type
+    [(? symbol?)
+     (hash 'kind (if (member type scalar-types) "scalar" "record")
+           'name (symbol->string type))]
+    [(list 'List element)
+     (hash 'kind "list" 'element (type->snapshot element))]
+    [(list 'Optional element)
+     (hash 'kind "optional" 'element (type->snapshot element))]
+    [_
+     (error 'schema-snapshot "unsupported schema type: ~e" type)]))
+
+(define (sort-schema entries name-of)
+  (sort entries string<? #:key (lambda (entry) (schema-name (name-of entry)))))
+
+(define (schema-snapshot project)
+  (define backend (project-path project (project-ref project 'backend)))
+  (define-values (rpcs events states records enums) (load-schema backend))
+  (hash
+   'format schema-snapshot-format
+   'format-version schema-snapshot-version
+   'rvt-protocol (project-ref project 'protocol)
+   'records
+   (for/list ([record (in-list (sort-schema records schema-record-name))])
+     (hash
+      'name (schema-name (schema-record-name record))
+      ;; Record field order is wire-significant and must not be sorted.
+      'fields
+      (for/list ([name (in-list (schema-record-field-names record))]
+                 [type (in-list (schema-record-field-types record))])
+        (hash 'name (schema-name name) 'type (type->snapshot type)))))
+   'enums
+   (for/list ([enum (in-list (sort-schema enums schema-enum-name))])
+     (hash 'name (schema-name (schema-enum-name enum))
+           'cases (map schema-name (schema-enum-cases enum))))
+   'rpcs
+   (for/list ([rpc (in-list (sort-schema rpcs schema-rpc-name))])
+     (hash
+      'name (schema-name (schema-rpc-name rpc))
+      'arguments
+      (for/list ([name (in-list (schema-rpc-arg-names rpc))]
+                 [type (in-list (schema-rpc-arg-types rpc))])
+        (hash 'name (schema-name name) 'type (type->snapshot type)))
+      'result (type->snapshot (schema-rpc-result-type rpc))))
+   'events
+   (for/list ([event (in-list (sort-schema events schema-event-name))])
+     (hash 'name (schema-name (schema-event-name event))
+           'type (type->snapshot (schema-event-type event))))
+   'states
+   (for/list ([state (in-list (sort-schema states schema-state-name))])
+     (hash 'name (schema-name (schema-state-name state))
+           'type (type->snapshot (schema-state-type state))))))
+
+(define (write-schema-snapshot! project output-path)
+  (define destination (path->complete-path output-path))
+  (make-parent-directory* destination)
+  (call-with-output-file destination #:exists 'truncate/replace
+    (lambda (out)
+      (write-json (schema-snapshot project) out #:indent 2)
+      (newline out)))
+  destination)
+
+(define (snapshot-section snapshot key)
+  ;; `enums` was added additively to snapshot format v1. Baselines written by
+  ;; earlier v1 implementations omit it and therefore mean an empty enum set.
+  (define value (hash-ref snapshot key (if (eq? key 'enums) '() #f)))
+  (unless (list? value)
+    (error 'check-schema-compatibility! "schema snapshot field ~a must be an array" key))
+  value)
+
+(define (validate-snapshot! snapshot label)
+  (unless (hash? snapshot)
+    (error 'check-schema-compatibility! "~a schema snapshot must be a JSON object" label))
+  (unless (equal? (hash-ref snapshot 'format #f) schema-snapshot-format)
+    (error 'check-schema-compatibility!
+           "~a schema snapshot has unsupported format ~e"
+           label
+           (hash-ref snapshot 'format #f)))
+  (unless (equal? (hash-ref snapshot 'format-version #f) schema-snapshot-version)
+    (error 'check-schema-compatibility!
+           "~a schema snapshot has unsupported format version ~e"
+           label
+           (hash-ref snapshot 'format-version #f)))
+  (unless (hash-has-key? snapshot 'rvt-protocol)
+    (error 'check-schema-compatibility! "~a schema snapshot has no rvt-protocol" label))
+  (for ([section (in-list '(records enums rpcs events states))])
+    (for ([entry (in-list (snapshot-section snapshot section))])
+      (unless (and (hash? entry) (string? (hash-ref entry 'name #f)))
+        (error 'check-schema-compatibility!
+               "~a schema snapshot contains an invalid ~a entry"
+               label
+               section)))))
+
+(define (index-section entries section label)
+  (for/fold ([result (hash)]) ([entry (in-list entries)])
+    (define name (hash-ref entry 'name))
+    (when (hash-has-key? result name)
+      (error 'check-schema-compatibility!
+             "~a schema snapshot contains duplicate ~a name ~a"
+             label section name))
+    (hash-set result name entry)))
+
+(define (change section name kind message [before #f] [after #f])
+  (define base (hash 'section (symbol->string section)
+                     'name name
+                     'change kind
+                     'message message))
+  (define with-before (if before (hash-set base 'before before) base))
+  (if after (hash-set with-before 'after after) with-before))
+
+;; JSON readers are free to choose a different hash key comparator from the
+;; immutable hashes used to construct the live snapshot. Compare JSON values
+;; structurally so a snapshot remains portable across Racket implementations.
+(define (json-equivalent? left right)
+  (cond
+    [(and (hash? left) (hash? right))
+     (and (= (hash-count left) (hash-count right))
+          (for/and ([(key value) (in-hash left)])
+            (and (hash-has-key? right key)
+                 (json-equivalent? value (hash-ref right key)))))]
+    [(and (list? left) (list? right))
+     (and (= (length left) (length right))
+          (for/and ([left-value (in-list left)]
+                    [right-value (in-list right)])
+            (json-equivalent? left-value right-value)))]
+    [else (equal? left right)]))
+
+(define (compare-section baseline current section changed-message)
+  (define before (index-section (snapshot-section baseline section) section "baseline"))
+  (define after (index-section (snapshot-section current section) section "current"))
+  (define names (sort (remove-duplicates (append (hash-keys before) (hash-keys after))) string<?))
+  (define label
+    (hash-ref (hash 'records "record" 'enums "enum" 'rpcs "RPC"
+                    'events "event" 'states "state")
+              section))
+  (for/fold ([breakages '()] [additions '()]) ([name (in-list names)])
+    (cond
+      [(not (hash-has-key? after name))
+       (values
+        (cons (change section name "removed"
+                      (format "~a ~a was removed" label name)
+                      (hash-ref before name))
+              breakages)
+        additions)]
+      [(not (hash-has-key? before name))
+       (values breakages
+               (cons (change section name "added"
+                             (format "~a ~a was added" label name)
+                             #f
+                             (hash-ref after name))
+                     additions))]
+      [(not (json-equivalent? (hash-ref before name) (hash-ref after name)))
+       (values
+        (cons (change section name "changed"
+                      (format "~a ~a: ~a" label name changed-message)
+                      (hash-ref before name)
+                      (hash-ref after name))
+              breakages)
+        additions)]
+      [else (values breakages additions)])))
+
+(define (compare-schema-snapshots baseline current)
+  (validate-snapshot! baseline "baseline")
+  (validate-snapshot! current "current")
+  (define protocol-breakages
+    (if (equal? (hash-ref baseline 'rvt-protocol)
+                (hash-ref current 'rvt-protocol))
+        '()
+        (list
+         (change 'protocol "RVT1" "changed"
+                 "the RVT protocol version changed"
+                 (hash-ref baseline 'rvt-protocol)
+                 (hash-ref current 'rvt-protocol)))))
+  (define-values (record-breakages record-additions)
+    (compare-section baseline current 'records
+                     "record fields, order, or types changed"))
+  (define-values (rpc-breakages rpc-additions)
+    (compare-section baseline current 'rpcs
+                     "RPC arguments, order, or result type changed"))
+  (define-values (enum-breakages enum-additions)
+    (compare-section baseline current 'enums "enum cases or order changed"))
+  (define-values (event-breakages event-additions)
+    (compare-section baseline current 'events "event type changed"))
+  (define-values (state-breakages state-additions)
+    (compare-section baseline current 'states "state type changed"))
+  (define breakages
+    (append protocol-breakages
+            (reverse record-breakages)
+            (reverse enum-breakages)
+            (reverse rpc-breakages)
+            (reverse event-breakages)
+            (reverse state-breakages)))
+  (define additions
+    (append (reverse record-additions)
+            (reverse enum-additions)
+            (reverse rpc-additions)
+            (reverse event-additions)
+            (reverse state-additions)))
+  (hash 'compatible (null? breakages)
+        'format schema-snapshot-format
+        'format-version schema-snapshot-version
+        'breaking-changes breakages
+        'compatible-additions additions))
+
+(define (check-schema-compatibility! project baseline-path)
+  (define baseline
+    (call-with-input-file baseline-path read-json))
+  (compare-schema-snapshots baseline (schema-snapshot project)))
 
 (define swift-keywords
   '("class" "struct" "enum" "protocol" "extension" "func" "let" "var"
@@ -69,8 +295,18 @@
         raw))
   (if (member result keywords) (string-append "rivet_" result) result))
 
+;; Hard keywords only: soft/contextual keywords such as `value`, `get`, and
+;; `suspend` remain valid identifiers everywhere the generator emits them, and
+;; keeping the raw name preserves parity with the Swift/C++ clients.
+(define kotlin-keywords
+  '("as" "break" "class" "continue" "do" "else" "false" "for" "fun" "if"
+    "in" "interface" "is" "null" "object" "package" "return" "super"
+    "this" "throw" "true" "try" "typealias" "typeof" "val" "var" "when"
+    "while" "init"))
+
 (define (swift-id value) (identifier value swift-keywords))
 (define (cpp-id value) (identifier value cpp-keywords))
+(define (kotlin-id value) (identifier value kotlin-keywords))
 
 (define (upper-first value)
   (if (zero? (string-length value))
@@ -117,6 +353,29 @@
         [else (string ch)])))
    "\""))
 
+(define (kotlin-string-literal value)
+  (string-append
+   "\""
+   (apply
+    string-append
+    (for/list ([ch (in-string value)])
+      (define code (char->integer ch))
+      (cond
+        [(char=? ch #\\) "\\\\"]
+        [(char=? ch #\") "\\\""]
+        [(char=? ch #\newline) "\\n"]
+        [(char=? ch #\return) "\\r"]
+        [(char=? ch #\tab) "\\t"]
+        [(char=? ch #\$) "\\$"]
+        [(or (< code 32) (= code 127))
+         (format "\\u~a" (string-upcase (pad-hex-4 code)))]
+        [else (string ch)])))
+   "\""))
+
+(define (pad-hex-4 n)
+  (define raw (number->string n 16))
+  (string-append (make-string (max 0 (- 4 (string-length raw))) #\0) raw))
+
 (define (check-unique-native-names! language entries)
   (define seen (make-hash))
   (for ([entry (in-list entries)])
@@ -136,7 +395,7 @@
 (define (cpp-event-type-name event)
   (string-append (upper-first (cpp-id (schema-event-name event))) "Event"))
 
-(define (validate-native-identifiers! rpcs events states)
+(define (validate-native-identifiers! rpcs events states records enums)
   (for ([info (in-list rpcs)])
     (define rpc-label (format "RPC ~a" (schema-rpc-name info)))
     (check-unique-native-names!
@@ -146,7 +405,73 @@
     (check-unique-native-names!
      "C++ arguments"
      (for/list ([name (in-list (schema-rpc-arg-names info))])
-       (cons (cpp-id name) (format "~a argument ~a" rpc-label name)))))
+       (cons (cpp-id name) (format "~a argument ~a" rpc-label name))))
+    (check-unique-native-names!
+     "Kotlin arguments"
+     (for/list ([name (in-list (schema-rpc-arg-names info))])
+       (cons (kotlin-id name) (format "~a argument ~a" rpc-label name)))))
+
+  (check-unique-native-names!
+   "Swift schema types"
+   (append
+    (for/list ([record (in-list records)])
+      (cons (record-native-name (schema-record-name record) swift-id)
+            (format "Record ~a" (schema-record-name record))))
+    (for/list ([enum (in-list enums)])
+      (cons (record-native-name (schema-enum-name enum) swift-id)
+            (format "Enum ~a" (schema-enum-name enum))))))
+  (check-unique-native-names!
+   "C++ schema types"
+   (append
+    (for/list ([record (in-list records)])
+      (cons (record-native-name (schema-record-name record) cpp-id)
+            (format "Record ~a" (schema-record-name record))))
+    (for/list ([enum (in-list enums)])
+      (cons (record-native-name (schema-enum-name enum) cpp-id)
+            (format "Enum ~a" (schema-enum-name enum))))))
+  (check-unique-native-names!
+   "Kotlin schema types"
+   (append
+    ;; A schema type named after a runtime/generated identifier would shadow it
+    ;; inside the single generated file.
+    (for/list ([reserved (in-list '("RivetValue" "RivetClient" "RivetAPI"
+                                    "RivetEvent" "RivetGeneratedException"
+                                    "RivetGeneratedConfig"))])
+      (cons reserved "Kotlin reserved generated name"))
+    (for/list ([record (in-list records)])
+      (cons (record-native-name (schema-record-name record) kotlin-id)
+            (format "Record ~a" (schema-record-name record))))
+    (for/list ([enum (in-list enums)])
+      (cons (record-native-name (schema-enum-name enum) kotlin-id)
+            (format "Enum ~a" (schema-enum-name enum))))))
+
+  (for ([record (in-list records)])
+    (check-unique-native-names!
+     "Swift Record fields"
+     (for/list ([field (in-list (schema-record-field-names record))])
+       (cons (swift-id field) (format "Record ~a field ~a" (schema-record-name record) field))))
+    (check-unique-native-names!
+     "C++ Record fields"
+     (for/list ([field (in-list (schema-record-field-names record))])
+       (cons (cpp-id field) (format "Record ~a field ~a" (schema-record-name record) field))))
+    (check-unique-native-names!
+     "Kotlin Record fields"
+     (for/list ([field (in-list (schema-record-field-names record))])
+       (cons (kotlin-id field) (format "Record ~a field ~a" (schema-record-name record) field)))))
+
+  (for ([enum (in-list enums)])
+    (check-unique-native-names!
+     "Swift Enum cases"
+     (for/list ([case (in-list (schema-enum-cases enum))])
+       (cons (swift-id case) (format "Enum ~a case ~a" (schema-enum-name enum) case))))
+    (check-unique-native-names!
+     "C++ Enum cases"
+     (for/list ([case (in-list (schema-enum-cases enum))])
+       (cons (cpp-id case) (format "Enum ~a case ~a" (schema-enum-name enum) case))))
+    (check-unique-native-names!
+     "Kotlin Enum cases"
+     (for/list ([case (in-list (schema-enum-cases enum))])
+       (cons (kotlin-id case) (format "Enum ~a case ~a" (schema-enum-name enum) case)))))
 
   (check-unique-native-names!
    "Swift API"
@@ -161,6 +486,31 @@
                    (format "State getter ~a" (schema-state-name state)))
              (cons (string-append "set" suffix)
                    (format "State setter ~a" (schema-state-name state))))))))
+
+  ;; Kotlin mirrors the Swift member surface: RPC methods plus get/set accessors
+  ;; with an UpperFirst state suffix. RivetAPI also owns a `client` property.
+  (check-unique-native-names!
+   "Kotlin API"
+   (append
+    (list (cons "client" "RivetAPI constructor property"))
+    (for/list ([info (in-list rpcs)])
+      (cons (kotlin-id (schema-rpc-name info))
+            (format "RPC ~a" (schema-rpc-name info))))
+    (append*
+     (for/list ([state (in-list states)])
+       (define suffix (upper-first (kotlin-id (schema-state-name state))))
+       (list (cons (string-append "get" suffix)
+                   (format "State getter ~a" (schema-state-name state)))
+             (cons (string-append "set" suffix)
+                   (format "State setter ~a" (schema-state-name state))))))))
+
+  ;; Event payloads become nested data classes named with UpperFirst, so two
+  ;; events differing only in case would collapse onto one class.
+  (check-unique-native-names!
+   "Kotlin Event"
+   (for/list ([event (in-list events)])
+     (cons (upper-first (kotlin-id (schema-event-name event)))
+           (format "Event ~a" (schema-event-name event)))))
 
   ;; C++ emits both the historical future API and a non-blocking completion API.
   ;; Check all generated names together so an RPC named foo_async cannot collide
@@ -199,11 +549,17 @@
            (format "Event ~a" (schema-event-name event))))))
 
 (define current-records (make-parameter '()))
+(define current-enums (make-parameter '()))
 
 (define (schema-record-for type)
   (and (symbol? type)
        (findf (lambda (record) (eq? (schema-record-name record) type))
               (current-records))))
+
+(define (schema-enum-for type)
+  (and (symbol? type)
+       (findf (lambda (enum) (eq? (schema-enum-name enum) type))
+              (current-enums))))
 
 (define (record-native-name type id-proc)
   (upper-first (id-proc type)))
@@ -238,7 +594,7 @@
   (for ([type (in-list types)]) (visit type))
   (reverse result))
 
-(define (all-types rpcs events states records)
+(define (all-types rpcs events states records enums)
   (define raw
     (append
      (append*
@@ -255,7 +611,9 @@
         (nested-types (schema-state-type state))))
      (append*
       (for/list ([record (in-list records)])
-        (nested-types (schema-record-name record))))))
+        (nested-types (schema-record-name record))))
+     (for/list ([enum (in-list enums)])
+       (schema-enum-name enum))))
   (order-types (remove-duplicates raw equal?)))
 
 (define (order-records records)
@@ -277,7 +635,7 @@
     [(list 'List inner) (format "[~a]" (swift-type inner))]
     [(list 'Optional inner) (format "~a?" (swift-type inner))]
     [_
-     (if (schema-record-for type)
+     (if (or (schema-record-for type) (schema-enum-for type))
          (record-native-name type swift-id)
          (error 'generate-clients! "unsupported Swift type: ~e" type))]))
 
@@ -292,9 +650,24 @@
     [(list 'List inner) (format "std::vector<~a>" (cpp-type inner))]
     [(list 'Optional inner) (format "std::optional<~a>" (cpp-type inner))]
     [_
-     (if (schema-record-for type)
+     (if (or (schema-record-for type) (schema-enum-for type))
          (record-native-name type cpp-id)
          (error 'generate-clients! "unsupported C++ type: ~e" type))]))
+
+(define (kotlin-type type)
+  (match type
+    ['String "String"]
+    ['Int64 "Long"]
+    ['Bool "Boolean"]
+    ['Bytes "ByteArray"]
+    ['Void "Unit"]
+    ['Any "RivetValue"]
+    [(list 'List inner) (format "List<~a>" (kotlin-type inner))]
+    [(list 'Optional inner) (format "~a?" (kotlin-type inner))]
+    [_
+     (if (or (schema-record-for type) (schema-enum-for type))
+         (record-native-name type kotlin-id)
+         (error 'generate-clients! "unsupported Kotlin type: ~e" type))]))
 
 (define (swift-record-definition record)
   (define name (record-native-name (schema-record-name record) swift-id))
@@ -327,9 +700,27 @@
             (format "  ~a ~a;\n" (cpp-type type) field)))
    "};\n\n"))
 
+(define (swift-enum-definition enum)
+  (define name (record-native-name (schema-enum-name enum) swift-id))
+  (string-append
+   (format "public enum ~a: String, Sendable {\n" name)
+   (apply string-append
+          (for/list ([case (in-list (schema-enum-cases enum))])
+            (format "    case ~a = ~a\n"
+                    (swift-id case)
+                    (swift-string-literal (symbol->string case)))))
+   "}\n\n"))
+
+(define (cpp-enum-definition enum)
+  (define name (record-native-name (schema-enum-name enum) cpp-id))
+  (format "enum class ~a { ~a };\n\n"
+          name
+          (string-join (map cpp-id (schema-enum-cases enum)) ", ")))
+
 (define (swift-encoder type)
   (define key (type-key type))
   (define record (schema-record-for type))
+  (define enum (schema-enum-for type))
   (cond
     [record
      (define fields (map swift-id (schema-record-field-names record)))
@@ -341,6 +732,9 @@
         ", "))
      (format "private func encode_~a(_ v: ~a) -> RivetValue { .list([~a]) }\n"
              key (swift-type type) encoded)]
+    [enum
+     (format "private func encode_~a(_ v: ~a) -> RivetValue { .string(v.rawValue) }\n"
+             key (swift-type type))]
     [else
      (match type
        ['String (format "private func encode_~a(_ v: String) -> RivetValue { .string(v) }\n" key)]
@@ -360,6 +754,7 @@
   (define key (type-key type))
   (define expected (swift-string-literal (format "~s" type)))
   (define record (schema-record-for type))
+  (define enum (schema-enum-for type))
   (cond
     [record
      (define fields (map swift-id (schema-record-field-names record)))
@@ -373,6 +768,9 @@
         ", "))
      (format "private func decode_~a(_ v: RivetValue) throws -> ~a { guard case .list(let xs) = v, xs.count == ~a else { throw RivetGeneratedError.typeMismatch(~a) }; return ~a(~a) }\n"
              key (swift-type type) (length fields) expected (swift-type type) decoded)]
+    [enum
+     (format "private func decode_~a(_ v: RivetValue) throws -> ~a { guard case .string(let x) = v, let result = ~a(rawValue: x) else { throw RivetGeneratedError.typeMismatch(~a) }; return result }\n"
+             key (swift-type type) (swift-type type) expected)]
     [else
      (match type
        ['String (format "private func decode_~a(_ v: RivetValue) throws -> String { guard case .string(let x) = v else { throw RivetGeneratedError.typeMismatch(~a) }; return x }\n" key expected)]
@@ -437,14 +835,15 @@
                   (type-key (schema-event-type event)))))
        "        default: throw RivetGeneratedError.unknownEvent(name)\n        }\n    }\n}\n\n")))
 
-(define (generate-swift rpcs events states records module-name entry-name)
-  (define types (all-types rpcs events states records))
+(define (generate-swift rpcs events states records enums module-name entry-name)
+  (define types (all-types rpcs events states records enums))
   (string-append
    "// Generated by Rivet. Do not edit by hand.\nimport Foundation\nimport RivetRuntime\n\n"
    "public enum RivetGeneratedError: Error { case typeMismatch(String); case unknownEvent(String) }\n"
    (format "public enum RivetGeneratedConfig { public static let moduleName = ~a; public static let entryName = ~a }\n\n"
            (swift-string-literal module-name)
            (swift-string-literal entry-name))
+   (apply string-append (map swift-enum-definition enums))
    (apply string-append (map swift-record-definition (order-records records)))
    (apply string-append (map swift-encoder types))
    "\n"
@@ -460,6 +859,7 @@
 (define (cpp-encoder type)
   (define key (type-key type))
   (define record (schema-record-for type))
+  (define enum (schema-enum-for type))
   (cond
     [record
      (define fields (map cpp-id (schema-record-field-names record)))
@@ -470,6 +870,16 @@
                 (format " r.push_back(encode_~a(v.~a));" (type-key field-type) field))))
      (format "inline rivet::Value encode_~a(~a const& v) { rivet::Value::List r; r.reserve(~a);~a return rivet::Value(std::move(r)); }\n"
              key (cpp-type type) (length fields) pushes)]
+    [enum
+     (define cases
+       (apply string-append
+              (for/list ([case (in-list (schema-enum-cases enum))])
+                (format " case ~a::~a: return rivet::Value(std::string(~a));"
+                        (cpp-type type)
+                        (cpp-id case)
+                        (cpp-string-literal (symbol->string case))))))
+     (format "inline rivet::Value encode_~a(~a v) { switch (v) {~a } throw std::runtime_error(\"invalid Rivet enum value\"); }\n"
+             key (cpp-type type) cases)]
     [else
      (match type
        ['String (format "inline rivet::Value encode_~a(std::string const& v) { return rivet::Value(v); }\n" key)]
@@ -491,6 +901,7 @@
     (cpp-string-literal
      (string-append "Rivet result type mismatch: " (format "~s" type))))
   (define record (schema-record-for type))
+  (define enum (schema-enum-for type))
   (cond
     [record
      (define types (schema-record-field-types record))
@@ -501,6 +912,16 @@
         ", "))
      (format "inline ~a decode_~a(rivet::Value const& v) { auto p = std::get_if<rivet::Value::List>(&v.data); if (!p || p->size() != ~a) throw std::runtime_error(~a); return ~a{~a}; }\n"
              (cpp-type type) key (length types) error-text (cpp-type type) decoded)]
+    [enum
+     (define cases
+       (apply string-append
+              (for/list ([case (in-list (schema-enum-cases enum))])
+                (format " if (*p == ~a) return ~a::~a;"
+                        (cpp-string-literal (symbol->string case))
+                        (cpp-type type)
+                        (cpp-id case)))))
+     (format "inline ~a decode_~a(rivet::Value const& v) { auto p = std::get_if<std::string>(&v.data); if (p) {~a } throw std::runtime_error(~a); }\n"
+             (cpp-type type) key cases error-text)]
     [else
      (match type
        ['String (format "inline std::string decode_~a(rivet::Value const& v) { if (auto p = std::get_if<std::string>(&v.data)) return *p; throw std::runtime_error(~a); }\n" key error-text)]
@@ -611,13 +1032,14 @@
                   (type-key (schema-event-type event)))))
        "  throw std::runtime_error(\"unknown Rivet event: \" + name);\n}\n\n")))
 
-(define (generate-cpp rpcs events states records module-name entry-name backend-namespace)
-  (define types (all-types rpcs events states records))
+(define (generate-cpp rpcs events states records enums module-name entry-name backend-namespace)
+  (define types (all-types rpcs events states records enums))
   (string-append
    "// Generated by Rivet. Do not edit by hand.\n#pragma once\n\n#include <cstdint>\n#include <exception>\n#include <functional>\n#include <future>\n#include <optional>\n#include <stdexcept>\n#include <string>\n#include <utility>\n#include <variant>\n#include <vector>\n\n#include \"backend.hpp\"\n\nnamespace rivet_app {\n"
    (format "inline constexpr char kModuleName[] = ~a;\ninline constexpr char kEntryName[] = ~a;\n\n"
            (cpp-string-literal module-name)
            (cpp-string-literal entry-name))
+   (apply string-append (map cpp-enum-definition enums))
    (apply string-append (map cpp-record-definition (order-records records)))
    "template <typename T>\nstruct Result {\n  std::optional<T> value;\n  std::exception_ptr error;\n  bool succeeded() const noexcept { return value.has_value() && !error; }\n  T const& get() const { if (error) std::rethrow_exception(error); if (!value) throw std::runtime_error(\"Rivet async result has no value\"); return *value; }\n};\n\ntemplate <>\nstruct Result<void> {\n  std::exception_ptr error;\n  bool succeeded() const noexcept { return !error; }\n  void get() const { if (error) std::rethrow_exception(error); }\n};\n\n"
    "namespace detail {\n"
@@ -638,6 +1060,185 @@
    (format "\n private:\n  ~a::Backend& backend_;\n};\n\n}  // namespace rivet_app\n"
            backend-namespace)))
 
+(define (kotlin-enum-definition enum)
+  (define name (record-native-name (schema-enum-name enum) kotlin-id))
+  (string-append
+   (format "enum class ~a(val wireName: String) {\n" name)
+   (apply string-append
+          (for/list ([case (in-list (schema-enum-cases enum))])
+            (format "    ~a(~a),\n"
+                    (kotlin-id case)
+                    (kotlin-string-literal (symbol->string case)))))
+   "    ;\n\n"
+   (format "    companion object {\n        fun fromWireName(name: String): ~a =\n            entries.firstOrNull { it.wireName == name }\n                ?: throw RivetGeneratedException(\"Rivet result type mismatch: ~a\")\n    }\n}\n\n"
+           name name)))
+
+(define (kotlin-record-definition record)
+  (define name (record-native-name (schema-record-name record) kotlin-id))
+  (define fields (map kotlin-id (schema-record-field-names record)))
+  (define types (schema-record-field-types record))
+  (format "data class ~a(\n~a)\n\n"
+          name
+          (string-join
+           (for/list ([field (in-list fields)] [type (in-list types)])
+             (format "    val ~a: ~a," field (kotlin-type type)))
+           "\n")))
+
+(define (kotlin-encoder type)
+  (define key (type-key type))
+  (define record (schema-record-for type))
+  (define enum (schema-enum-for type))
+  (cond
+    [record
+     (define fields (map kotlin-id (schema-record-field-names record)))
+     (define types (schema-record-field-types record))
+     (define encoded
+       (string-join
+        (for/list ([field (in-list fields)] [field-type (in-list types)])
+          (format "encode_~a(v.~a)" (type-key field-type) field))
+        ", "))
+     (format "private fun encode_~a(v: ~a): RivetValue =\n    RivetValue.ListValue(listOf(~a))\n"
+             key (kotlin-type type) encoded)]
+    [enum
+     (format "private fun encode_~a(v: ~a): RivetValue =\n    RivetValue.StringValue(v.wireName)\n"
+             key (kotlin-type type))]
+    [else
+     (match type
+       ['String (format "private fun encode_~a(v: String): RivetValue =\n    RivetValue.StringValue(v)\n" key)]
+       ['Int64 (format "private fun encode_~a(v: Long): RivetValue =\n    RivetValue.Int64(v)\n" key)]
+       ['Bool (format "private fun encode_~a(v: Boolean): RivetValue =\n    RivetValue.Bool(v)\n" key)]
+       ['Bytes (format "private fun encode_~a(v: ByteArray): RivetValue =\n    RivetValue.Bytes(v)\n" key)]
+       ['Void (format "private fun encode_~a(v: Unit): RivetValue =\n    RivetValue.Null\n" key)]
+       ['Any (format "private fun encode_~a(v: RivetValue): RivetValue = v\n" key)]
+       [(list 'List inner)
+        (format "private fun encode_~a(v: ~a): RivetValue =\n    RivetValue.ListValue(v.map { encode_~a(it) })\n"
+                key (kotlin-type type) (type-key inner))]
+       [(list 'Optional inner)
+        (format "private fun encode_~a(v: ~a): RivetValue =\n    v?.let { encode_~a(it) } ?: RivetValue.Null\n"
+                key (kotlin-type type) (type-key inner))])]))
+
+(define (kotlin-decoder type)
+  (define key (type-key type))
+  (define mismatch
+    (kotlin-string-literal
+     (string-append "Rivet result type mismatch: " (format "~s" type))))
+  (define record (schema-record-for type))
+  (define enum (schema-enum-for type))
+  (cond
+    [record
+     (define name (kotlin-type type))
+     (define fields (map kotlin-id (schema-record-field-names record)))
+     (define types (schema-record-field-types record))
+     (format
+      "private fun decode_~a(v: RivetValue): ~a {\n    val xs = v as? RivetValue.ListValue ?: throw RivetGeneratedException(~a)\n    if (xs.values.size != ~a) throw RivetGeneratedException(~a)\n    return ~a(\n~a    )\n}\n"
+      key name mismatch (length types) mismatch name
+      (apply
+       string-append
+       (for/list ([field (in-list fields)]
+                  [field-type (in-list types)]
+                  [index (in-naturals)])
+         (format "        ~a = decode_~a(xs.values[~a]),\n"
+                 field (type-key field-type) index))))]
+    [enum
+     (format "private fun decode_~a(v: RivetValue): ~a {\n    val raw = v as? RivetValue.StringValue ?: throw RivetGeneratedException(~a)\n    return ~a.fromWireName(raw.value)\n}\n"
+             key (kotlin-type type) mismatch (kotlin-type type))]
+    [else
+     (match type
+       ['String (format "private fun decode_~a(v: RivetValue): String =\n    (v as? RivetValue.StringValue)?.value ?: throw RivetGeneratedException(~a)\n" key mismatch)]
+       ['Int64 (format "private fun decode_~a(v: RivetValue): Long =\n    (v as? RivetValue.Int64)?.value ?: throw RivetGeneratedException(~a)\n" key mismatch)]
+       ['Bool (format "private fun decode_~a(v: RivetValue): Boolean =\n    (v as? RivetValue.Bool)?.value ?: throw RivetGeneratedException(~a)\n" key mismatch)]
+       ['Bytes (format "private fun decode_~a(v: RivetValue): ByteArray =\n    (v as? RivetValue.Bytes)?.toByteArray() ?: throw RivetGeneratedException(~a)\n" key mismatch)]
+       ['Void (format "private fun decode_~a(v: RivetValue) {\n    if (v != RivetValue.Null) throw RivetGeneratedException(~a)\n}\n" key mismatch)]
+       ['Any (format "private fun decode_~a(v: RivetValue): RivetValue = v\n" key)]
+       [(list 'List inner)
+        (format "private fun decode_~a(v: RivetValue): ~a =\n    (v as? RivetValue.ListValue)?.values?.map { decode_~a(it) } ?: throw RivetGeneratedException(~a)\n"
+                key (kotlin-type type) (type-key inner) mismatch)]
+       [(list 'Optional inner)
+        (format "private fun decode_~a(v: RivetValue): ~a {\n    if (v == RivetValue.Null) return null\n    return decode_~a(v)\n}\n"
+                key (kotlin-type type) (type-key inner))])]))
+
+(define (kotlin-rpc-method info)
+  (define names (map kotlin-id (schema-rpc-arg-names info)))
+  (define types (schema-rpc-arg-types info))
+  (define result (schema-rpc-result-type info))
+  (define params
+    (string-join
+     (for/list ([name (in-list names)] [type (in-list types)])
+       (format "~a: ~a" name (kotlin-type type)))
+     ", "))
+  (define call
+    (if (null? names)
+        (format "client.call(~a)" (kotlin-string-literal (symbol->string (schema-rpc-name info))))
+        (format "client.call(~a, listOf(~a))"
+                (kotlin-string-literal (symbol->string (schema-rpc-name info)))
+                (string-join
+                 (for/list ([name (in-list names)] [type (in-list types)])
+                   (format "encode_~a(~a)" (type-key type) name))
+                 ", "))))
+  (format
+   "    suspend fun ~a(~a): ~a {\n        val result = ~a\n        return decode_~a(result)\n    }\n"
+   (kotlin-id (schema-rpc-name info)) params (kotlin-type result)
+   call (type-key result)))
+
+(define (kotlin-state-methods state)
+  (define raw-name (symbol->string (schema-state-name state)))
+  (define suffix (upper-first (kotlin-id raw-name)))
+  (define type (schema-state-type state))
+  (format
+   "    suspend fun get~a(): ~a {\n        val result = client.getState(~a)\n        return decode_~a(result)\n    }\n\n    suspend fun set~a(value: ~a): ~a {\n        val result = client.setState(~a, encode_~a(value))\n        return decode_~a(result)\n    }\n"
+   suffix (kotlin-type type) (kotlin-string-literal raw-name) (type-key type)
+   suffix (kotlin-type type) (kotlin-type type)
+   (kotlin-string-literal raw-name) (type-key type) (type-key type)))
+
+(define (generate-kotlin-events events)
+  (if (null? events)
+      ""
+      (string-append
+       "sealed interface RivetEvent {\n"
+       (apply
+        string-append
+        (for/list ([event (in-list events)])
+          (format "    data class ~a(val value: ~a) : RivetEvent\n"
+                  (upper-first (kotlin-id (schema-event-name event)))
+                  (kotlin-type (schema-event-type event)))))
+       "\n    companion object {\n        fun decode(name: String, value: RivetValue): RivetEvent = when (name) {\n"
+       (apply
+        string-append
+        (for/list ([event (in-list events)])
+          (format "            ~a -> ~a(decode_~a(value))\n"
+                  (kotlin-string-literal (symbol->string (schema-event-name event)))
+                  (upper-first (kotlin-id (schema-event-name event)))
+                  (type-key (schema-event-type event)))))
+       "            else -> throw RivetGeneratedException(\"unknown Rivet event: \" + name)\n        }\n    }\n}\n\n")))
+
+(define (generate-kotlin rpcs events states records enums module-name entry-name)
+  (define types (all-types rpcs events states records enums))
+  (string-append
+   "// Generated by Rivet. Do not edit by hand.\npackage dev.rivet.generated\n\n"
+   "import dev.rivet.runtime.RivetClient\nimport dev.rivet.runtime.RivetValue\n"
+   ;; State accessors are package-level extension functions in the Kotlin
+   ;; runtime, so generated callers must import them explicitly.
+   (if (null? states)
+       ""
+       "import dev.rivet.runtime.getState\nimport dev.rivet.runtime.setState\n")
+   "\n"
+   "class RivetGeneratedException(message: String) : IllegalArgumentException(message)\n\n"
+   (format "object RivetGeneratedConfig {\n    const val moduleName = ~a\n    const val entryName = ~a\n}\n\n"
+           (kotlin-string-literal module-name)
+           (kotlin-string-literal entry-name))
+   (apply string-append (map kotlin-enum-definition enums))
+   (apply string-append (map kotlin-record-definition (order-records records)))
+   (apply string-append (map kotlin-encoder types))
+   "\n"
+   (apply string-append (map kotlin-decoder types))
+   "\n"
+   (generate-kotlin-events events)
+   "class RivetAPI(val client: RivetClient) {\n"
+   (apply string-append (map kotlin-rpc-method rpcs))
+   (if (null? states) "" "\n    // Shared state\n")
+   (apply string-append (map kotlin-state-methods states))
+   "}\n"))
+
 (define (write-generated! path content)
   (make-parent-directory* path)
   (call-with-output-file path #:exists 'truncate/replace
@@ -645,27 +1246,35 @@
 
 (define (generate-clients! project)
   (define backend (project-path project (project-ref project 'backend)))
-  (define-values (rpcs events states records) (load-schema backend))
+  (define-values (rpcs events states records enums) (load-schema backend))
   (define module-name (project-ref project 'module))
   (define entry-name (project-ref project 'entry))
   (unless (and (string? module-name) (string? entry-name))
     (error 'generate-clients! "project module and entry settings must be strings"))
-  (when (and (null? rpcs) (null? events) (null? states) (null? records))
-    (error 'generate-clients! "the backend declares no RPCs, Events, or shared states"))
-  (validate-native-identifiers! rpcs events states)
-  (parameterize ([current-records records])
+  (when (and (null? rpcs) (null? events) (null? states) (null? records) (null? enums))
+    (error 'generate-clients! "the backend declares no RPCs, Events, shared states, Records, or Enums"))
+  (validate-native-identifiers! rpcs events states records enums)
+  (parameterize ([current-records records]
+                 [current-enums enums])
     (write-generated!
      (project-path project "macos-host" "Sources" "RivetHost" "GeneratedBackend.swift")
-     (generate-swift rpcs events states records module-name entry-name))
+     (generate-swift rpcs events states records enums module-name entry-name))
     (write-generated!
      (project-path project "windows" "GeneratedBackend.hpp")
-     (generate-cpp rpcs events states records module-name entry-name "rivet::windows"))
+     (generate-cpp rpcs events states records enums module-name entry-name "rivet::windows"))
     (define linux-host (project-path project "linux"))
     (when (directory-exists? linux-host)
       (write-generated!
        (build-path linux-host "GeneratedBackend.hpp")
-       (generate-cpp rpcs events states records module-name entry-name
-                     "rivet::linux_runtime"))))
+       (generate-cpp rpcs events states records enums module-name entry-name
+                     "rivet::linux_runtime")))
+    ;; Android consumes the typed client from the shared generated tree until
+    ;; generated Compose projects exist; the package layout keeps the file
+    ;; drop-in for Gradle source sets.
+    (write-generated!
+     (project-path project ".rivet" "generated" "kotlin" "dev" "rivet"
+                   "generated" "GeneratedBackend.kt")
+     (generate-kotlin rpcs events states records enums module-name entry-name)))
   ;; Preserve the historical first two result positions for callers that
-  ;; inspect codegen output programmatically; Events and Records are appended.
-  (list rpcs states events records))
+  ;; inspect codegen output programmatically; Events, Records, and Enums follow.
+  (list rpcs states events records enums))

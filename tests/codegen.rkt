@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require rackunit
+(require json
+         rackunit
          racket/file
          racket/list
          racket/path
@@ -96,6 +97,11 @@ RKT
     (define linux-cpp
       (file->string
        (build-path project-root "linux" "GeneratedBackend.hpp")))
+    (define kotlin
+      (file->string
+       (build-path project-root
+                   ".rivet" "generated" "kotlin" "dev" "rivet" "generated"
+                   "GeneratedBackend.kt")))
 
     (check-true (regexp-match? #rx"public struct User: Sendable" swift))
     (check-true (regexp-match? #rx"public let display_name: String" swift))
@@ -131,6 +137,206 @@ RKT
     (check-true
      (regexp-match? #rx"rivet::linux_runtime::CallResult raw" linux-cpp))
     (check-false (regexp-match? #rx"rivet::windows" linux-cpp))
+
+    ;; The typed Kotlin client targets the coroutine runtime. State accessors
+    ;; are package-level extension functions, so the imports are load-bearing.
+    (check-true (regexp-match? #rx"package dev.rivet.generated" kotlin))
+    (check-true
+     (regexp-match? #rx"import dev\\.rivet\\.runtime\\.RivetClient" kotlin))
+    (check-true
+     (regexp-match? #rx"import dev\\.rivet\\.runtime\\.getState" kotlin))
+    (check-true
+     (regexp-match? #rx"import dev\\.rivet\\.runtime\\.setState" kotlin))
+    (check-true (regexp-match? #rx"data class User\\(" kotlin))
+    (check-true (regexp-match? #rx"val display_name: String," kotlin))
+    (check-true (regexp-match? #rx"val nickname: String\\?," kotlin))
+    (check-true
+     (regexp-match? #rx"suspend fun greet\\(name: String\\): String" kotlin))
+    (check-true
+     (regexp-match? #rx"suspend fun echo_user\\(user: User\\): User" kotlin))
+    (check-true
+     (regexp-match? #rx"suspend fun getCounter\\(\\): Long" kotlin))
+    (check-true
+     (regexp-match? #rx"suspend fun setCounter\\(value: Long\\): Long" kotlin))
+    (check-true
+     (regexp-match? #rx"client\\.getState\\(\"counter\"\\)" kotlin))
+    (check-true
+     (regexp-match? #rx"client\\.setState\\(\"counter\", encode_Int64\\(value\\)\\)" kotlin))
+    (check-true
+     (regexp-match? #rx"class RivetAPI\\(val client: RivetClient\\)" kotlin))
+    (check-true (regexp-match? #rx"sealed interface RivetEvent" kotlin))
+    (check-true
+     (regexp-match? #rx"data class Progress\\(val value: Long\\) : RivetEvent" kotlin))
+    (check-true
+     (regexp-match? #rx"\"progress\" -> Progress\\(decode_Int64\\(value\\)\\)" kotlin))
+
+    ;; A versioned snapshot is suitable for source control and CI. Additions are
+    ;; compatible, while changing a published signature is reported and fails.
+    (define baseline-path (build-path project-root "schema-baseline.json"))
+    (check-equal? (write-schema-snapshot! project baseline-path) baseline-path)
+    (define baseline
+      (call-with-input-file baseline-path read-json))
+    (check-equal? (hash-ref baseline 'format) "rivet-schema")
+    (check-equal? (hash-ref baseline 'format-version) 1)
+    (check-equal? (hash-ref baseline 'rvt-protocol) 1)
+    (check-equal? (length (hash-ref baseline 'records)) 1)
+    (check-equal?
+     (map (lambda (entry) (hash-ref entry 'name)) (hash-ref baseline 'rpcs))
+     '("echo-user" "greet" "increment"))
+    ;; Enum support extends snapshot format v1 additively. A baseline written
+    ;; by the pre-Enum v1 tool omitted the key and means an empty enum set.
+    (define pre-enum-baseline-path
+      (build-path project-root "pre-enum-schema-baseline.json"))
+    (call-with-output-file pre-enum-baseline-path #:exists 'truncate/replace
+      (lambda (out) (write-json (hash-remove baseline 'enums) out)))
+    (check-true
+     (hash-ref (check-schema-compatibility! project pre-enum-baseline-path)
+               'compatible))
+
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-event progress : Int64)
+(define-record User
+  ([id : Int64]
+   [display-name : String]
+   [nickname : (Optional String)]))
+(define-state counter : Int64 0)
+(define-rpc (greet [name String] : String) name)
+(define-rpc (increment [value Int64] : Int64) (add1 value))
+(define-rpc (echo-user [user : User] : User) user)
+(define-rpc (health : Bool) #t)
+(define (start in-fd out-fd) (serve-fds in-fd out-fd))
+RKT
+     )
+    (define compatible-report
+      (check-schema-compatibility! project baseline-path))
+    (check-true (hash-ref compatible-report 'compatible))
+    (check-equal? (length (hash-ref compatible-report 'compatible-additions)) 1)
+    (check-equal? (hash-ref (first (hash-ref compatible-report 'compatible-additions))
+                            'name)
+                  "health")
+
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-event progress : Int64)
+(define-record User
+  ([id : Int64]
+   [display-name : String]
+   [nickname : (Optional String)]))
+(define-state counter : Int64 0)
+(define-rpc (greet [name String] : Bytes) #"")
+(define-rpc (increment [value Int64] : Int64) (add1 value))
+(define-rpc (echo-user [user : User] : User) user)
+(define (start in-fd out-fd) (serve-fds in-fd out-fd))
+RKT
+     )
+    (define breaking-report
+      (check-schema-compatibility! project baseline-path))
+    (check-false (hash-ref breaking-report 'compatible))
+    (check-equal? (length (hash-ref breaking-report 'breaking-changes)) 1)
+    (check-equal? (hash-ref (first (hash-ref breaking-report 'breaking-changes))
+                            'name)
+                  "greet")
+
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-event progress : Int64)
+(define-record User
+  ([display-name : String]
+   [id : Int64]
+   [nickname : (Optional String)]))
+(define-state counter : Int64 0)
+(define-rpc (greet [name String] : String) name)
+(define-rpc (increment [value Int64] : Int64) (add1 value))
+(define-rpc (echo-user [user : User] : User) user)
+(define (start in-fd out-fd) (serve-fds in-fd out-fd))
+RKT
+     )
+    (define reordered-record-report
+      (check-schema-compatibility! project baseline-path))
+    (check-false (hash-ref reordered-record-report 'compatible))
+    (check-equal? (length (hash-ref reordered-record-report 'breaking-changes)) 1)
+    (check-equal? (hash-ref (first (hash-ref reordered-record-report 'breaking-changes))
+                            'name)
+                  "User")
+
+    ;; Named Enums use stable String wire values and native Swift/C++ enums.
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-enum Role (admin member))
+(define-rpc (echo-role [role : Role] : Role) role)
+(define (start in-fd out-fd) (serve-fds in-fd out-fd))
+RKT
+     )
+    (define enum-schema-result (generate-clients! project))
+    (check-equal? (length enum-schema-result) 5)
+    (check-equal? (length (fifth enum-schema-result)) 1)
+    (define enum-swift
+      (file->string
+       (build-path project-root
+                   "macos-host" "Sources" "RivetHost" "GeneratedBackend.swift")))
+    (define enum-cpp
+      (file->string (build-path project-root "windows" "GeneratedBackend.hpp")))
+    (check-regexp-match #rx"public enum Role: String, Sendable" enum-swift)
+    (check-regexp-match #rx"case admin = \"admin\"" enum-swift)
+    (check-regexp-match #rx"func echo_role\\(role: Role\\) async throws -> Role" enum-swift)
+    (check-regexp-match #rx"enum class Role \\{ admin, member \\};" enum-cpp)
+    (check-regexp-match #rx"std::future<Role> echo_role\\(Role role\\)" enum-cpp)
+    (define enum-kotlin
+      (file->string
+       (build-path project-root
+                   ".rivet" "generated" "kotlin" "dev" "rivet" "generated"
+                   "GeneratedBackend.kt")))
+    (check-regexp-match #rx"enum class Role\\(val wireName: String\\)" enum-kotlin)
+    (check-regexp-match #rx"admin\\(\"admin\"\\)," enum-kotlin)
+    (check-regexp-match #rx"suspend fun echo_role\\(role: Role\\): Role" enum-kotlin)
+    (check-regexp-match #rx"Role\\.fromWireName" enum-kotlin)
+
+    (define enum-baseline-path (build-path project-root "enum-schema.json"))
+    (write-schema-snapshot! project enum-baseline-path)
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-enum Role (admin member guest))
+(define-rpc (echo-role [role : Role] : Role) role)
+(define (start in-fd out-fd) (serve-fds in-fd out-fd))
+RKT
+     )
+    (define changed-enum-report
+      (check-schema-compatibility! project enum-baseline-path))
+    (check-false (hash-ref changed-enum-report 'compatible))
+    (check-equal? (hash-ref (first (hash-ref changed-enum-report 'breaking-changes))
+                            'name)
+                  "Role")
 
     ;; Distinct Racket identifiers can normalize to the same native API name.
     ;; Codegen must reject these cases instead of emitting uncompilable Swift/C++.
@@ -201,6 +407,47 @@ RKT
 
 (define-event foo-bar : Int64)
 (define-event foo_bar : Int64)
+
+(define (start in-fd out-fd)
+  (serve-fds in-fd out-fd))
+RKT
+     )
+    (check-exn #rx"native API name collision"
+               (lambda () (generate-clients! project)))
+
+    ;; Enum cases must also remain distinct after native normalization.
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-enum Mode (foo-bar foo_bar))
+(define-rpc (mode : Mode) (Mode 'foo-bar))
+
+(define (start in-fd out-fd)
+  (serve-fds in-fd out-fd))
+RKT
+     )
+    (check-exn #rx"native API name collision"
+               (lambda () (generate-clients! project)))
+
+    ;; Kotlin event payloads become nested data classes with UpperFirst names,
+    ;; so events differing only in case would collapse onto one class.
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-event foo : Int64)
+(define-event Foo : Int64)
+
+(define-rpc (health : Bool) #t)
 
 (define (start in-fd out-fd)
   (serve-fds in-fd out-fd))

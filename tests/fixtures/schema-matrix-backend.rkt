@@ -66,5 +66,23 @@
              : (Optional (List Int64)))
   value)
 
+;; Named schema types remain RVT1-compatible while producing native structs
+;; and enums in every generated desktop client.
+(define-enum AccessLevel (viewer editor owner))
+
+(define-record MatrixUser
+  ([id : Int64]
+   [name : String]
+   [access : AccessLevel]))
+
+(define-state current-user : MatrixUser
+  (MatrixUser 1 "Rivet" (AccessLevel 'owner)))
+
+(define-rpc (roundtrip-access [value : AccessLevel] : AccessLevel)
+  value)
+
+(define-rpc (roundtrip-user [value : MatrixUser] : MatrixUser)
+  value)
+
 (define (start in-fd out-fd)
   (serve-fds in-fd out-fd))

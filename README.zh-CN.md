@@ -23,7 +23,7 @@ raco rivet dev
 
 这就是普通用户的主路径。`doctor` 会检查原生工具链，并在缺少必要组件时直接给出下一步修复建议；`dev` 会构建并启动当前平台的一等原生宿主。
 
-每个新项目都会生成 `AGENTS.md`；`inspect --json` 则提供带版本号的机器可读项目地图，包括项目身份、Racket 后端与各端原生 UI 编辑入口、目标成熟度、生成目录和安全生命周期命令。详见 [Agent-native 开发](docs/agent-native.md)。
+每个新项目都会生成 `AGENTS.md` 和初始 `rivet-schema.json` 兼容性基线；`inspect --json` 则提供带版本号的机器可读项目地图，包括项目身份、Racket 后端与各端原生 UI 编辑入口、schema 检查、目标成熟度、生成目录和安全生命周期命令。详见 [Agent-native 开发](docs/agent-native.md)。
 
 需要完整引导时直接看 **[Rivet 快速上手教程](docs/getting-started.zh-CN.md)**；安装后的包也提供可搜索的 Scribble 文档。只有开发 Rivet 框架本身时，才需要使用教程里的源码 link 安装方式。
 
@@ -36,9 +36,10 @@ Rivet 补上的是这一层：
 - **第一方原生 UI** —— Windows 使用 WinUI 3，macOS 使用 SwiftUI/AppKit，Linux 使用 GTK4
 - **Racket 负责应用逻辑** —— 宏、模式匹配、并发、数据处理、业务逻辑都留在 Racket
 - **一套后端契约** —— typed RPC、Event、共享 State、取消与生命周期统一走 RVT1
-- **自动生成原生客户端** —— Racket 侧的声明在构建时生成 Swift/C++ 类型化 API
+- **自动生成原生客户端** —— Racket 侧的声明在构建时生成 Swift/C++/Kotlin 类型化 API
 - **进程内嵌 Racket CS** —— 不需要额外启动后端进程，Racket runtime 直接嵌入应用
 - **精确 runtime 匹配** —— 构建时使用当前安装的精确 Racket CS 版本，不会静默退回相邻版本
+- **明确的生态扩展路径** —— 新项目的 Agent 指南和 `inspect --json` 会说明何时选择 Racket 包、原生宿主 API、FFI、外部 CLI 或隔离 sidecar，并列出每种选择必须完成的安全与发布检查
 
 Rivet 刻意不做 WebView 框架，也不做统一跨平台控件层。Windows 应用仍然是 Windows 应用，macOS 应用仍然是 macOS 应用。
 
@@ -66,7 +67,7 @@ Rivet 刻意不做 WebView 框架，也不做统一跨平台控件层。Windows 
   (serve-fds in-fd out-fd))
 ```
 
-`raco rivet build` 会读取 RPC 与 State schema，并生成类型化原生客户端。Swift 侧得到 `increment(value:)`、`getCounter()`、`setCounter(_:)` 等方法；C++ 侧得到对应的原生接口。
+`raco rivet build` 会读取 RPC、Event、State、Record 与 Enum schema，并生成类型化原生客户端。Swift 侧得到 `increment(value:)`、`getCounter()`、`setCounter(_:)` 等方法；C++ 侧得到对应的原生接口；Kotlin 侧在 `.rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt` 得到 `increment(value)` 等 suspend 方法。
 
 ### 横向对比
 
@@ -98,7 +99,7 @@ Rivet 刻意不做 WebView 框架，也不做统一跨平台控件层。Windows 
              Windows   macOS    Linux
 ```
 
-Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Racket/Chez 对象，Racket 指针也不会跨普通 native 线程传递。原生侧只看到 RVT1 帧和生成后的 Swift/C++ 值。
+Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Racket/Chez 对象，Racket 指针也不会跨普通 native 线程传递。原生侧只看到 RVT1 帧和生成后的 Swift/C++/Kotlin 值。
 
 嵌入模型受到 [Noise](https://github.com/Bogdanp/Noise) 的启发，但 Rivet 把 runtime contract、协议、代码生成和生命周期都做成平台无关的统一核心，而不是以 Swift 为中心。
 
@@ -138,12 +139,12 @@ Windows 和 macOS 仍是生产发布目标。Linux 处于开发者预览：日�
 |---|---|---|
 | Kotlin RVT1 codec | ✅ 共享 golden vectors | ✅ 可移植 Kotlin 核心 |
 | 协程 runtime 客户端 | ✅ Request/Event/State/Cancel | ✅ 可移植 Kotlin 核心 |
-| 类型化客户端生成 | 计划中 | 计划采用 companion client |
+| 类型化客户端生成 | ✅ 从共享 schema 生成并在 CI 编译 | 计划采用 companion client |
 | 原生 UI 宿主 | 计划采用 Jetpack Compose | 计划采用 Compose for Wear OS |
 | Embedded Racket CS / JNI | 尚未完成 | 默认 companion 模式 |
 | `raco rivet new/build/package` 应用链 | 尚未完成 | 尚未完成 |
 
-仓库内的 Gradle wrapper 固定了版本并校验下载摘要。Android 目前具备经过测试的协议与协程客户端基础；JNI runtime 宿主、Compose 脚手架、代码生成、打包签名和设备/模拟器 round-trip 完成后，才能进入开发者预览。详见 [Android 架构](docs/android.md)。
+仓库内的 Gradle wrapper 固定了版本并校验下载摘要。Android 目前具备经过测试的协议、协程客户端与类型化客户端生成基础；JNI runtime 宿主、Compose 脚手架、打包签名和设备/模拟器 round-trip 完成后，才能进入开发者预览。详见 [Android 架构](docs/android.md)。
 
 ## 环境要求
 
@@ -192,7 +193,7 @@ raco rivet release
   (format "user-~a" id))
 ```
 
-参数与返回值都会在 Racket 边界做类型校验。目前支持 `String`、`Int64`、`Bool`、`Bytes`、`Void`、`Any`、`(List T)` 和 `(Optional T)`。
+参数与返回值都会在 Racket 边界做类型校验。目前支持 `String`、`Int64`、`Bool`、`Bytes`、`Void`、`Any`、`(List T)`、`(Optional T)`、通过 `define-record` 声明的具名 Record，以及通过 `define-enum` 声明的封闭取值。Record 会生成 Swift struct、C++ struct 与 Kotlin data class；Enum 会生成 Swift raw-value enum、C++ `enum class` 与 Kotlin `enum class`。
 
 ### Event
 
@@ -216,12 +217,29 @@ native client 可以通过生成的类型化 getter/setter 读取和更新 State
 
 长时间 RPC 使用 RVT1 request id。native client 可以取消尚未完成的请求，Racket server 会关闭对应 request custodian 并返回取消错误，而不会终止整个 backend。
 
+### Schema 兼容性
+
+每个新项目都包含带版本、语言无关的公开 backend JSON 基线。把它提交到版本库，并在 CI 中执行兼容性门禁：
+
+```bash
+raco rivet schema --output rivet-schema.json
+raco rivet schema check rivet-schema.json --json
+```
+
+新增 RPC、Event、State、Record 和 Enum 类型属于兼容扩展。删除接口、修改 RPC 签名或值类型、修改 RVT1 协议版本、修改 Record 字段/顺序，或修改已有 Enum 的 case/顺序，都会被报告为破坏性变化并返回失败状态。只有在版本策略明确允许破坏兼容时，才应重新生成基线。
+
 ## CLI
 
 ```text
 raco rivet new <name>              创建新的 Rivet 应用
 raco rivet doctor                  检查 Racket 与 native 工具链
 raco rivet doctor --json           输出机器可读诊断
+raco rivet inspect                 显示项目编辑点与验证路径
+raco rivet inspect --json          输出 Agent 可读的项目契约
+raco rivet schema --json           输出当前带版本的 API schema
+raco rivet schema --output <file>  写入 schema 兼容性基线
+raco rivet schema check <file>     拒绝相对基线的破坏性变化
+raco rivet schema check <file> --json  输出机器可读的兼容性报告
 raco rivet clean                   删除 .rivet/build/dist 生成物
 raco rivet build                   编译 backend、生成 client、构建 native host
 raco rivet dev                     构建并运行当前应用
@@ -295,10 +313,10 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
 
 ## 诚实的局限
 
-- **Linux 是开发者预览** —— 日常 CLI 全链路已完成，但生产签名、发行版原生安装包、系统服务和 compositor 行为还未完成。
+- **Linux 是开发者预览** —— 日常 CLI 全链路和 Ed25519 签名 tarball 已完成，但发行版原生安装包/信任集成、系统服务和 compositor 行为还未完成。
 - **Apple 移动端仍是基础阶段** —— 可移植 Swift 与类型安全 WatchConnectivity 层已经存在，但 iOS/iPadOS/watchOS 项目生成、runtime 打包、签名和商店交付还未完成。
-- **Android 仍处于基础阶段** —— Kotlin RVT1 codec、协程 runtime 客户端与固定版本的 Gradle 构建已经过测试，但 Jetpack Compose、JNI、portable Racket CS 打包、客户端生成、签名和设备交付尚未完成。
-- **Windows 先支持 x64** —— runtime 打包链稳定后再扩展其他架构。
+- **Android 仍处于基础阶段** —— Kotlin RVT1 codec、协程 runtime 客户端、类型化客户端生成与固定版本的 Gradle 构建已经过测试，但 Jetpack Compose、JNI、portable Racket CS 打包、签名和设备交付尚未完成。
+- **架构覆盖还不是完整发布矩阵** —— Windows 已有 x64 和 ARM64 构建路径，但所有对外支持的桌面架构尚未全部取得干净 runner 上的构建、打包和发布证据。
 - **没有统一声明式跨平台 UI DSL** —— UI 代码仍然直接写 SwiftUI/AppKit 或 WinUI 3/C++/WinRT。
 - **正式发布凭据仍属于应用自身** —— Rivet 已自动化 Authenticode、Developer ID、notarization 流程，但证书、PFX 密码、Apple notary profile 会由应用/CI 环境注入，不由 Rivet 保存。
 - **Public API 仍处于 pre-1.0** —— 协议有版本控制，但高层 API 仍可能继续调整。
@@ -310,7 +328,14 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
 - [x] **Phase 3** —— Typed RPC、Event、State、Cancel、Swift/C++ codegen
 - [x] **Phase 4** —— `new` / `doctor` / `build` / `dev` / `package`
 - [x] **Phase 5** —— 发布物验证、生产签名/公证入口与 tag-driven release engineering
-- [ ] **Phase 6** —— 更多架构、更丰富 schema/codegen 类型与长期协议兼容工具
+- [ ] **Phase 6 —— Schema 演进与桌面架构加固**
+  - [x] 具名 Record schema、Swift/C++ 代码生成与边界校验
+  - [x] 带版本的 schema 快照与机器可读的破坏性变更门禁
+  - [x] Windows x64/ARM64 构建选择
+  - [x] 具名 Enum schema、Swift/C++ 代码生成与兼容性检查
+  - [x] Kotlin 类型客户端生成
+  - [ ] 覆盖每个受支持桌面架构的干净 runner 构建/打包/发布矩阵
+- [ ] **Phase 7 —— 一等移动应用交付** —— 生成 iOS/iPadOS/watchOS 与 Android/Wear OS 项目、runtime/companion 选择、签名、打包和真机验证
 
 ## 许可证
 

@@ -51,11 +51,43 @@ The public libraries are deliberately split into three layers:
 Requiring @racketmodname[rivet] does not eagerly load the system or
 distribution layers.
 
+@section[#:tag "capability-sourcing"]{Finding and Integrating Missing Capabilities}
+
+Rivet applications are not limited to modules implemented inside this
+repository. Start with Racket's standard libraries and Package Catalog, then
+choose the narrowest maintainable integration boundary:
+
+@itemlist[
+ @item{Use a maintained Racket package for portable application logic. Inspect
+       installed packages with @exec{raco pkg show}, package metadata with
+       @exec{raco pkg catalog-show --modules} and local documentation with
+       @exec{raco docs}.}
+ @item{Keep UI, lifecycle, accessibility, device, and operating-system services
+       in the WinUI, SwiftUI/AppKit, or GTK native host.}
+ @item{Use @tt{ffi/unsafe} behind a small checked Racket module when
+       a stable C ABI requires frequent in-process calls. Explicitly own
+       pointers, callbacks, threads, ABI checks, and native-library packaging.}
+ @item{Use @racket[subprocess] or @racket[system*] for coarse-grained tools.
+       Pass an executable and argument vector instead of constructing a shell
+       command; add timeouts, bounded and concurrently drained output,
+       cancellation, exit checks, version probes, packaging, and license
+       verification.}
+ @item{Reserve a sidecar for persistent or streaming runtimes, unstable ABIs,
+       or required crash isolation. Own authentication, version negotiation,
+       resource limits, lifecycle, recovery, distribution, and offline
+       behavior.}]
+
+Generated projects repeat this decision order in @filepath{AGENTS.md}, and
+@exec{raco rivet inspect --json} exposes it as structured
+@tt{capability-sourcing} data. Every external capability must also pass license,
+Racket CS, platform/architecture, deterministic installation, failure-path,
+packaged dependency-closure, and clean-machine checks.
+
 @section{Application Backend}
 
 @defmodule[rivet]
 
-@subsection{RPCs, Events, and State}
+@subsection{RPCs, Events, State, Records, and Enums}
 
 @defstruct*[rivet-type ([name symbol?])]{Represents a public schema type descriptor.}
 
@@ -74,12 +106,42 @@ distribution layers.
 Represents a registered shared state value. Applications normally create one
 with @racket[define-state] instead of calling the constructor directly.}
 
+@defstruct*[record-info
+            ([name symbol?]
+             [field-names list?]
+             [field-types list?])]{
+Represents the ordered schema of a named Record. Applications normally create
+one with @racket[define-record] instead of calling the constructor directly.}
+
+@defstruct*[enum-info ([name symbol?] [cases list?])]{
+Represents the ordered cases of a named Enum. Applications normally create one
+with @racket[define-enum] instead of calling the constructor directly.}
+
 @defform[(define-rpc (name [arg : type] ... : result-type) body ...)]{
 Defines a Racket procedure named @racket[name] and registers it as an RPC for
-generated Swift and C++ clients. Supported schema types are @racket[String],
+generated Swift, C++, and Kotlin clients. Supported schema types are @racket[String],
 @racket[Int64], @racket[Bool], @racket[Bytes], @racket[Void], @racket[Any],
-@racket[(List type)], and @racket[(Optional type)]. The result is validated
-before it is placed on the wire.}
+@racket[(List type)], @racket[(Optional type)], and names introduced by
+@racket[define-record] or @racket[define-enum]. The result is validated before
+it is placed on the wire.}
+
+@defform[(define-record name ([field : field-type] ...))]{
+Defines a constructor named @racket[name] and registers an ordered, typed
+Record schema. Records generate Swift and C++ structs plus Kotlin data classes
+and use an RVT1 List in field declaration order.}
+
+@defproc[(record-ref [value any/c] [field (or/c symbol? string?)]) any/c]{
+Returns a named field from a value constructed by @racket[define-record].}
+
+@defform[(define-enum name (case ...))]{
+Defines a constructor named @racket[name] and registers a closed, ordered set
+of cases. The constructor accepts a case symbol or string. Generated Swift uses
+a raw-value enum; generated C++ uses @tt{enum class}; generated Kotlin uses an
+@tt{enum class} with the wire name; RVT1 carries the stable case name as a
+String.}
+
+@defproc[(enum-case [value any/c]) symbol?]{
+Returns the case symbol from a value constructed by @racket[define-enum].}
 
 @defform[(define-event name : type)]{
 Registers an event and defines @racket[name] as a one-argument procedure that
@@ -131,6 +193,8 @@ Adapts native file descriptors to binary ports and calls @racket[serve].}
 @defproc[(rpc-schema) list?]{Returns the registered RPC schema used by code generation.}
 @defproc[(event-schema) list?]{Returns the registered event schema.}
 @defproc[(state-schema) list?]{Returns the registered state schema.}
+@defproc[(record-schema) list?]{Returns the registered Record schema.}
+@defproc[(enum-schema) list?]{Returns the registered Enum schema.}
 
 @section{System Services}
 
@@ -335,6 +399,11 @@ exception is re-raised.}
 raco rivet new <name>       create a native starter project
 raco rivet inspect --json   emit the agent-readable project contract
 raco rivet doctor           inspect the native toolchain
+raco rivet schema --json    emit the current versioned API schema
+raco rivet schema --output rivet-schema.json
+                             write a compatibility baseline
+raco rivet schema check rivet-schema.json --json
+                             reject breaking API changes
 raco rivet dev              build and run the current application
 raco rivet build            compile backend and native host
 raco rivet package          create and verify a distributable
