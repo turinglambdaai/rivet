@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require rackunit
+(require json
+         rackunit
          racket/file
          racket/list
          racket/path
@@ -131,6 +132,105 @@ RKT
     (check-true
      (regexp-match? #rx"rivet::linux_runtime::CallResult raw" linux-cpp))
     (check-false (regexp-match? #rx"rivet::windows" linux-cpp))
+
+    ;; A versioned snapshot is suitable for source control and CI. Additions are
+    ;; compatible, while changing a published signature is reported and fails.
+    (define baseline-path (build-path project-root "schema-baseline.json"))
+    (check-equal? (write-schema-snapshot! project baseline-path) baseline-path)
+    (define baseline
+      (call-with-input-file baseline-path read-json))
+    (check-equal? (hash-ref baseline 'format) "rivet-schema")
+    (check-equal? (hash-ref baseline 'format-version) 1)
+    (check-equal? (hash-ref baseline 'rvt-protocol) 1)
+    (check-equal? (length (hash-ref baseline 'records)) 1)
+    (check-equal?
+     (map (lambda (entry) (hash-ref entry 'name)) (hash-ref baseline 'rpcs))
+     '("echo-user" "greet" "increment"))
+
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-event progress : Int64)
+(define-record User
+  ([id : Int64]
+   [display-name : String]
+   [nickname : (Optional String)]))
+(define-state counter : Int64 0)
+(define-rpc (greet [name String] : String) name)
+(define-rpc (increment [value Int64] : Int64) (add1 value))
+(define-rpc (echo-user [user : User] : User) user)
+(define-rpc (health : Bool) #t)
+(define (start in-fd out-fd) (serve-fds in-fd out-fd))
+RKT
+     )
+    (define compatible-report
+      (check-schema-compatibility! project baseline-path))
+    (check-true (hash-ref compatible-report 'compatible))
+    (check-equal? (length (hash-ref compatible-report 'compatible-additions)) 1)
+    (check-equal? (hash-ref (first (hash-ref compatible-report 'compatible-additions))
+                            'name)
+                  "health")
+
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-event progress : Int64)
+(define-record User
+  ([id : Int64]
+   [display-name : String]
+   [nickname : (Optional String)]))
+(define-state counter : Int64 0)
+(define-rpc (greet [name String] : Bytes) #"")
+(define-rpc (increment [value Int64] : Int64) (add1 value))
+(define-rpc (echo-user [user : User] : User) user)
+(define (start in-fd out-fd) (serve-fds in-fd out-fd))
+RKT
+     )
+    (define breaking-report
+      (check-schema-compatibility! project baseline-path))
+    (check-false (hash-ref breaking-report 'compatible))
+    (check-equal? (length (hash-ref breaking-report 'breaking-changes)) 1)
+    (check-equal? (hash-ref (first (hash-ref breaking-report 'breaking-changes))
+                            'name)
+                  "greet")
+
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-event progress : Int64)
+(define-record User
+  ([display-name : String]
+   [id : Int64]
+   [nickname : (Optional String)]))
+(define-state counter : Int64 0)
+(define-rpc (greet [name String] : String) name)
+(define-rpc (increment [value Int64] : Int64) (add1 value))
+(define-rpc (echo-user [user : User] : User) user)
+(define (start in-fd out-fd) (serve-fds in-fd out-fd))
+RKT
+     )
+    (define reordered-record-report
+      (check-schema-compatibility! project baseline-path))
+    (check-false (hash-ref reordered-record-report 'compatible))
+    (check-equal? (length (hash-ref reordered-record-report 'breaking-changes)) 1)
+    (check-equal? (hash-ref (first (hash-ref reordered-record-report 'breaking-changes))
+                            'name)
+                  "User")
 
     ;; Distinct Racket identifiers can normalize to the same native API name.
     ;; Codegen must reject these cases instead of emitting uncompilable Swift/C++.

@@ -116,6 +116,15 @@ raco rivet dev
 
 构建阶段 Rivet 会读取后端 schema，并重新生成 Swift/C++ 类型化 API。你不需要自己拼 RVT1 帧，也不需要把 Racket/Chez 对象跨 UI 线程传递。
 
+生成的项目已经包含 `rivet-schema.json`。把这份兼容性基线提交到版本库，并让 CI 检查它；只有 API 变化是明确、有意的，才刷新基线：
+
+```bash
+raco rivet schema --output rivet-schema.json
+raco rivet schema check rivet-schema.json --json
+```
+
+第二条命令允许新增声明，但删除或修改 RPC、Event、State、Record 契约时会失败。
+
 ## 6. UI 应该从哪里改
 
 ### Windows

@@ -23,7 +23,7 @@ raco rivet dev
 
 这就是普通用户的主路径。`doctor` 会检查原生工具链，并在缺少必要组件时直接给出下一步修复建议；`dev` 会构建并启动当前平台的一等原生宿主。
 
-每个新项目都会生成 `AGENTS.md`；`inspect --json` 则提供带版本号的机器可读项目地图，包括项目身份、Racket 后端与各端原生 UI 编辑入口、目标成熟度、生成目录和安全生命周期命令。详见 [Agent-native 开发](docs/agent-native.md)。
+每个新项目都会生成 `AGENTS.md` 和初始 `rivet-schema.json` 兼容性基线；`inspect --json` 则提供带版本号的机器可读项目地图，包括项目身份、Racket 后端与各端原生 UI 编辑入口、schema 检查、目标成熟度、生成目录和安全生命周期命令。详见 [Agent-native 开发](docs/agent-native.md)。
 
 需要完整引导时直接看 **[Rivet 快速上手教程](docs/getting-started.zh-CN.md)**；安装后的包也提供可搜索的 Scribble 文档。只有开发 Rivet 框架本身时，才需要使用教程里的源码 link 安装方式。
 
@@ -67,7 +67,7 @@ Rivet 刻意不做 WebView 框架，也不做统一跨平台控件层。Windows 
   (serve-fds in-fd out-fd))
 ```
 
-`raco rivet build` 会读取 RPC 与 State schema，并生成类型化原生客户端。Swift 侧得到 `increment(value:)`、`getCounter()`、`setCounter(_:)` 等方法；C++ 侧得到对应的原生接口。
+`raco rivet build` 会读取 RPC、Event、State 与 Record schema，并生成类型化原生客户端。Swift 侧得到 `increment(value:)`、`getCounter()`、`setCounter(_:)` 等方法；C++ 侧得到对应的原生接口。
 
 ### 横向对比
 
@@ -193,7 +193,7 @@ raco rivet release
   (format "user-~a" id))
 ```
 
-参数与返回值都会在 Racket 边界做类型校验。目前支持 `String`、`Int64`、`Bool`、`Bytes`、`Void`、`Any`、`(List T)` 和 `(Optional T)`。
+参数与返回值都会在 Racket 边界做类型校验。目前支持 `String`、`Int64`、`Bool`、`Bytes`、`Void`、`Any`、`(List T)`、`(Optional T)`，以及通过 `define-record` 声明的具名 Record。Record 会生成原生 Swift struct 和 C++ struct，并在传输中保留字段声明顺序。
 
 ### Event
 
@@ -217,12 +217,29 @@ native client 可以通过生成的类型化 getter/setter 读取和更新 State
 
 长时间 RPC 使用 RVT1 request id。native client 可以取消尚未完成的请求，Racket server 会关闭对应 request custodian 并返回取消错误，而不会终止整个 backend。
 
+### Schema 兼容性
+
+每个新项目都包含带版本、语言无关的公开 backend JSON 基线。把它提交到版本库，并在 CI 中执行兼容性门禁：
+
+```bash
+raco rivet schema --output rivet-schema.json
+raco rivet schema check rivet-schema.json --json
+```
+
+新增 RPC、Event、State 和 Record 属于兼容扩展。删除接口、修改 RPC 签名或值类型、修改 RVT1 协议版本、修改 Record 字段或字段顺序都会被报告为破坏性变化，并返回失败状态。只有在版本策略明确允许破坏兼容时，才应重新生成基线。
+
 ## CLI
 
 ```text
 raco rivet new <name>              创建新的 Rivet 应用
 raco rivet doctor                  检查 Racket 与 native 工具链
 raco rivet doctor --json           输出机器可读诊断
+raco rivet inspect                 显示项目编辑点与验证路径
+raco rivet inspect --json          输出 Agent 可读的项目契约
+raco rivet schema --json           输出当前带版本的 API schema
+raco rivet schema --output <file>  写入 schema 兼容性基线
+raco rivet schema check <file>     拒绝相对基线的破坏性变化
+raco rivet schema check <file> --json  输出机器可读的兼容性报告
 raco rivet clean                   删除 .rivet/build/dist 生成物
 raco rivet build                   编译 backend、生成 client、构建 native host
 raco rivet dev                     构建并运行当前应用
@@ -296,10 +313,10 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
 
 ## 诚实的局限
 
-- **Linux 是开发者预览** —— 日常 CLI 全链路已完成，但生产签名、发行版原生安装包、系统服务和 compositor 行为还未完成。
+- **Linux 是开发者预览** —— 日常 CLI 全链路和 Ed25519 签名 tarball 已完成，但发行版原生安装包/信任集成、系统服务和 compositor 行为还未完成。
 - **Apple 移动端仍是基础阶段** —— 可移植 Swift 与类型安全 WatchConnectivity 层已经存在，但 iOS/iPadOS/watchOS 项目生成、runtime 打包、签名和商店交付还未完成。
 - **Android 仍处于基础阶段** —— Kotlin RVT1 codec、协程 runtime 客户端与固定版本的 Gradle 构建已经过测试，但 Jetpack Compose、JNI、portable Racket CS 打包、客户端生成、签名和设备交付尚未完成。
-- **Windows 先支持 x64** —— runtime 打包链稳定后再扩展其他架构。
+- **架构覆盖还不是完整发布矩阵** —— Windows 已有 x64 和 ARM64 构建路径，但所有对外支持的桌面架构尚未全部取得干净 runner 上的构建、打包和发布证据。
 - **没有统一声明式跨平台 UI DSL** —— UI 代码仍然直接写 SwiftUI/AppKit 或 WinUI 3/C++/WinRT。
 - **正式发布凭据仍属于应用自身** —— Rivet 已自动化 Authenticode、Developer ID、notarization 流程，但证书、PFX 密码、Apple notary profile 会由应用/CI 环境注入，不由 Rivet 保存。
 - **Public API 仍处于 pre-1.0** —— 协议有版本控制，但高层 API 仍可能继续调整。
@@ -311,7 +328,13 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
 - [x] **Phase 3** —— Typed RPC、Event、State、Cancel、Swift/C++ codegen
 - [x] **Phase 4** —— `new` / `doctor` / `build` / `dev` / `package`
 - [x] **Phase 5** —— 发布物验证、生产签名/公证入口与 tag-driven release engineering
-- [ ] **Phase 6** —— 更多架构、更丰富 schema/codegen 类型与长期协议兼容工具
+- [ ] **Phase 6 —— Schema 演进与桌面架构加固**
+  - [x] 具名 Record schema、Swift/C++ 代码生成与边界校验
+  - [x] 带版本的 schema 快照与机器可读的破坏性变更门禁
+  - [x] Windows x64/ARM64 构建选择
+  - [ ] Enum schema 与 Kotlin 类型客户端生成
+  - [ ] 覆盖每个受支持桌面架构的干净 runner 构建/打包/发布矩阵
+- [ ] **Phase 7 —— 一等移动应用交付** —— 生成 iOS/iPadOS/watchOS 与 Android/Wear OS 项目、runtime/companion 选择、签名、打包和真机验证
 
 ## 许可证
 

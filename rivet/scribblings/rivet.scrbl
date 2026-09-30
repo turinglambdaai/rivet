@@ -87,7 +87,7 @@ packaged dependency-closure, and clean-machine checks.
 
 @defmodule[rivet]
 
-@subsection{RPCs, Events, and State}
+@subsection{RPCs, Events, State, and Records}
 
 @defstruct*[rivet-type ([name symbol?])]{Represents a public schema type descriptor.}
 
@@ -106,12 +106,28 @@ packaged dependency-closure, and clean-machine checks.
 Represents a registered shared state value. Applications normally create one
 with @racket[define-state] instead of calling the constructor directly.}
 
+@defstruct*[record-info
+            ([name symbol?]
+             [field-names list?]
+             [field-types list?])]{
+Represents the ordered schema of a named Record. Applications normally create
+one with @racket[define-record] instead of calling the constructor directly.}
+
 @defform[(define-rpc (name [arg : type] ... : result-type) body ...)]{
 Defines a Racket procedure named @racket[name] and registers it as an RPC for
 generated Swift and C++ clients. Supported schema types are @racket[String],
 @racket[Int64], @racket[Bool], @racket[Bytes], @racket[Void], @racket[Any],
-@racket[(List type)], and @racket[(Optional type)]. The result is validated
-before it is placed on the wire.}
+@racket[(List type)], @racket[(Optional type)], and names introduced by
+@racket[define-record]. The result is validated before it is placed on the
+wire.}
+
+@defform[(define-record name ([field : field-type] ...))]{
+Defines a constructor named @racket[name] and registers an ordered, typed
+Record schema. Records generate Swift and C++ structs and use an RVT1 List in
+field declaration order.}
+
+@defproc[(record-ref [value any/c] [field (or/c symbol? string?)]) any/c]{
+Returns a named field from a value constructed by @racket[define-record].}
 
 @defform[(define-event name : type)]{
 Registers an event and defines @racket[name] as a one-argument procedure that
@@ -163,6 +179,7 @@ Adapts native file descriptors to binary ports and calls @racket[serve].}
 @defproc[(rpc-schema) list?]{Returns the registered RPC schema used by code generation.}
 @defproc[(event-schema) list?]{Returns the registered event schema.}
 @defproc[(state-schema) list?]{Returns the registered state schema.}
+@defproc[(record-schema) list?]{Returns the registered Record schema.}
 
 @section{System Services}
 
@@ -367,6 +384,11 @@ exception is re-raised.}
 raco rivet new <name>       create a native starter project
 raco rivet inspect --json   emit the agent-readable project contract
 raco rivet doctor           inspect the native toolchain
+raco rivet schema --json    emit the current versioned API schema
+raco rivet schema --output rivet-schema.json
+                             write a compatibility baseline
+raco rivet schema check rivet-schema.json --json
+                             reject breaking API changes
 raco rivet dev              build and run the current application
 raco rivet build            compile backend and native host
 raco rivet package          create and verify a distributable

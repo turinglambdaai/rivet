@@ -3,6 +3,7 @@
 (require racket/file
          racket/path
          racket/runtime-path
+         "codegen.rkt"
          "project.rkt")
 
 (provide create-project!)
@@ -47,6 +48,7 @@ RKT
     "## Start here\n\n"
     "```bash\n"
     "raco rivet inspect --json\n"
+    "raco rivet schema --json\n"
     "raco rivet doctor\n"
     "raco rivet dev\n"
     "```\n\n"
@@ -57,7 +59,8 @@ RKT
     "- macOS UI: `macos-host/Sources/RivetHost/ContentView.swift` and `RivetHostApp.swift`\n"
     "- Linux UI: `linux/src/main.cpp` (GTK4)\n"
     "- Packaged application resources and icons: configure `resources`, `windows-icon`, and `macos-icon` in `rivet.rktd`\n"
-    "- App identity/deployment targets: `rivet.rktd`\n\n"
+    "- App identity/deployment targets: `rivet.rktd`\n"
+    "- Versioned public API baseline: `rivet-schema.json`\n\n"
     "## When Racket does not already have the capability\n\n"
     "Run `raco rivet inspect --json` and read `capability-sourcing`. Prefer a built-in or maintained Racket package; keep platform-owned features in the native host; use a small safe FFI wrapper for a stable C ABI; use an argv-based subprocess for coarse-grained tools; reserve a sidecar for persistent or crash-isolated runtimes. The generated `AGENTS.md` contains the safety and packaging checks.\n\n"
     "## Ship a build\n\n"
@@ -137,6 +140,7 @@ Source you may edit:
 - `macos-host/`
 - `linux/`
 - `rivet.rktd`
+- `rivet-schema.json` when an API compatibility break is intentional
 - declared application resources
 
 Generated output you should not hand-edit:
@@ -149,6 +153,21 @@ Use `raco rivet clean` to remove only those generated paths.
 
 ## Verification loop
 
+This project includes a source-controlled `rivet-schema.json` API baseline.
+Refresh it only after deliberately changing the public backend schema:
+
+```bash
+raco rivet schema --output rivet-schema.json
+```
+
+Before accepting later API changes, run the compatibility gate. Adding a new
+RPC, Event, State, or Record is compatible; removing one or changing a type,
+argument order, result, or Record field/order is breaking:
+
+```bash
+raco rivet schema check rivet-schema.json --json
+```
+
 ```bash
 raco rivet build
 raco rivet dev
@@ -156,9 +175,11 @@ raco rivet package
 raco rivet verify
 ```
 
-After changing RPC, Event, or State declarations, rebuild before editing code
-that consumes generated native APIs. Preserve the first `rivet: error:` line
-and nearby compiler output when diagnosing a failure.
+After changing RPC, Event, State, or Record declarations, run the compatibility
+gate and rebuild before editing code that consumes generated native APIs.
+Update the baseline only when a breaking change is intentional and governed by
+the application's release policy. Preserve the first `rivet: error:` line and
+nearby compiler output when diagnosing a failure.
 AGENTS
   )
 
@@ -205,4 +226,8 @@ AGENTS
   (unless (directory-exists? linux-template)
     (error 'rivet-new "Linux host template is missing: ~a" linux-template))
   (copy-directory/files linux-template (build-path root "linux"))
+  ;; A fresh project starts with a usable compatibility gate. Builds never
+  ;; rewrite this source-controlled baseline; applications update it only when
+  ;; an API change is deliberate.
+  (write-schema-snapshot! (load-project root) (build-path root "rivet-schema.json"))
   root)

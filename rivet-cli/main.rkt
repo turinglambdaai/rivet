@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require racket/match
+(require json
+         racket/match
          "build.rkt"
          "clean.rkt"
          "codegen.rkt"
@@ -30,6 +31,10 @@
     "  raco rivet doctor --json           emit machine-readable toolchain diagnostics\n"
     "  raco rivet inspect                 show the current project's edit and verification map\n"
     "  raco rivet inspect --json          emit the agent-readable project contract\n"
+    "  raco rivet schema --json           emit the current versioned API schema\n"
+    "  raco rivet schema --output <file>  write a schema compatibility baseline\n"
+    "  raco rivet schema check <file>     reject breaking changes from a baseline\n"
+    "  raco rivet schema check <file> --json  emit a machine-readable compatibility report\n"
     "  raco rivet clean                   remove generated .rivet/build/dist artifacts\n"
     "  raco rivet build                   compile backend and native host\n"
     "  raco rivet dev                     build and run the current app\n"
@@ -71,6 +76,34 @@
      (exit (run-inspect (current-project!)))]
     [(list "inspect" "--json")
      (exit (run-inspect (current-project!) #:json? #t))]
+    [(list "schema" "--json")
+     (write-json (schema-snapshot (current-project!)))
+     (newline)]
+    [(list "schema" "--output" output)
+     (define destination
+       (write-schema-snapshot! (current-project!) output))
+     (say "wrote schema baseline ~a" destination)]
+    [(or (list "schema" "check" baseline)
+         (list "schema" "check" baseline "--json"))
+     (define report
+       (check-schema-compatibility! (current-project!) baseline))
+     (define json? (equal? args (list "schema" "check" baseline "--json")))
+     (if json?
+         (begin (write-json report) (newline))
+         (begin
+           (if (hash-ref report 'compatible)
+               (say "schema is backward compatible with ~a" baseline)
+               (begin
+                 (say "schema has ~a breaking change~a compared with ~a"
+                      (length (hash-ref report 'breaking-changes))
+                      (if (= (length (hash-ref report 'breaking-changes)) 1) "" "s")
+                      baseline)
+                 (for ([item (in-list (hash-ref report 'breaking-changes))])
+                   (printf "  - ~a\n" (hash-ref item 'message)))))
+           (unless (null? (hash-ref report 'compatible-additions))
+             (say "compatible additions: ~a"
+                  (length (hash-ref report 'compatible-additions))))))
+     (unless (hash-ref report 'compatible) (exit 1))]
     [(list "clean")
      (define removed (clean-project! (current-project!)))
      (if (null? removed)

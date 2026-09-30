@@ -133,6 +133,10 @@
               (project-ref project 'module)
               'entry
               (project-ref project 'entry))
+        'schema
+        (hash 'baseline (source-report project "rivet-schema.json" 'file)
+              'format "rivet-schema"
+              'format-version 1)
         'capability-sourcing
         capability-sourcing
         'edit-points
@@ -147,7 +151,8 @@
               'linux-ui
               (list (source-report project "linux/src/main.cpp" 'file))
               'configuration
-              (list (source-report project "rivet.rktd" 'file)))
+              (list (source-report project "rivet.rktd" 'file)
+                    (source-report project "rivet-schema.json" 'file)))
         'targets
         (list (target "windows" "production-target" "WinUI 3 / C++/WinRT" "windows")
               (target "macos" "production-target" "SwiftUI / AppKit" "macos-host")
@@ -163,6 +168,13 @@
         'commands
         (list (action "inspect" "raco rivet inspect --json" #f)
               (action "diagnose" "raco rivet doctor --json" #f)
+              (action "inspect-schema" "raco rivet schema --json" #f)
+              (action "save-schema-baseline"
+                      "raco rivet schema --output rivet-schema.json"
+                      #t)
+              (action "check-schema-compatibility"
+                      "raco rivet schema check rivet-schema.json --json"
+                      #f)
               (action "build" "raco rivet build" #t)
               (action "run" "raco rivet dev" #t)
               (action "package" "raco rivet package" #t)
