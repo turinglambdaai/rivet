@@ -46,6 +46,7 @@ PLTUSERHOME="$user_home" \
   raco rivet new ArchiveSmoke
 
 test -f ArchiveSmoke/README.md
+test -f ArchiveSmoke/AGENTS.md
 test -f ArchiveSmoke/rivet.rktd
 test -f ArchiveSmoke/app/backend.rkt
 test -f ArchiveSmoke/windows/RivetHost.vcxproj
@@ -59,8 +60,22 @@ grep -Fq 'RIVET_WINDOWS_ICON_RC' ArchiveSmoke/windows/RivetHost.vcxproj
 # running `new` must leave a developer with the normal diagnosis/run path and a
 # route to both walkthroughs, without requiring the Rivet checkout nearby.
 grep -Fq 'raco rivet doctor' ArchiveSmoke/README.md
+grep -Fq 'raco rivet inspect --json' ArchiveSmoke/AGENTS.md
 grep -Fq 'raco rivet dev' ArchiveSmoke/README.md
 grep -Fq 'docs/getting-started.md' ArchiveSmoke/README.md
 grep -Fq 'docs/getting-started.zh-CN.md' ArchiveSmoke/README.md
+
+cd ArchiveSmoke
+PLTUSERHOME="$user_home" \
+  raco rivet inspect --json > inspect.json
+python3 - <<'PY'
+import json
+with open("inspect.json", encoding="utf-8") as handle:
+    report = json.load(handle)
+assert report["contract-version"] == 1
+assert report["project"]["name"] == "ArchiveSmoke"
+assert report["backend"]["source"]["exists"] is True
+assert report["edit-points"]["windows-ui"][0]["exists"] is True
+PY
 
 printf 'source package smoke test passed: %s\n' "$archive"

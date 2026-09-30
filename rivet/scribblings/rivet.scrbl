@@ -27,6 +27,7 @@ Create and run a starter application:
 
 @commandline{raco rivet new hello}
 @commandline{cd hello}
+@commandline{raco rivet inspect --json}
 @commandline{raco rivet doctor}
 @commandline{raco rivet dev}
 
@@ -332,6 +333,7 @@ exception is re-raised.}
 
 @verbatim{
 raco rivet new <name>       create a native starter project
+raco rivet inspect --json   emit the agent-readable project contract
 raco rivet doctor           inspect the native toolchain
 raco rivet dev              build and run the current application
 raco rivet build            compile backend and native host
