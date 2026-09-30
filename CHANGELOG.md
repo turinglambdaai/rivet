@@ -4,6 +4,7 @@
 
 - Add validated application resource declarations, stable Racket-side resource lookup, Windows `.ico` compilation, and macOS `.icns` bundle metadata. Resources now participate in build, package, and verification instead of relying on platform-specific copy scripts.
 - Promote Linux from a manually built GTK4 experiment to a developer preview: new projects include the Linux host, code generation emits a `rivet::linux_runtime` client, and `doctor`, `build`, `dev`, `package`, and `verify` support a statically embedded Racket CS runtime with real end-to-end CI.
+- Make the portable Swift runtime available to iOS/iPadOS 16 and watchOS 9, and add a bounded, versioned `RivetDevice` request/response layer with a WatchConnectivity adapter for type-safe phone/watch companion communication.
 
 ## 0.3.0
 
