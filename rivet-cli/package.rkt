@@ -56,6 +56,7 @@
                            version
                            build
                            minimum-version
+                           icon-name
                            url-schemes
                            file-associations)
   (define (xml-escape value)
@@ -87,18 +88,24 @@
                   (format "<dict><key>CFBundleTypeName</key><string>~a</string><key>CFBundleTypeExtensions</key><array><string>~a</string></array><key>CFBundleTypeRole</key><string>Editor</string></dict>"
                           (xml-escape description)
                           (xml-escape extension)))))))
+  (define icon-fragment
+    (if icon-name
+        (format "  <key>CFBundleIconFile</key><string>~a</string>\n"
+                (xml-escape icon-name))
+        ""))
   (call-with-output-file path
     #:exists 'truncate/replace
     (lambda (out)
       (fprintf out
-               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>CFBundleDevelopmentRegion</key><string>en</string>\n  <key>CFBundleExecutable</key><string>~a</string>\n  <key>CFBundleIdentifier</key><string>~a</string>\n  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>\n  <key>CFBundleName</key><string>~a</string>\n  <key>CFBundleDisplayName</key><string>~a</string>\n  <key>CFBundlePackageType</key><string>APPL</string>\n  <key>CFBundleShortVersionString</key><string>~a</string>\n  <key>CFBundleVersion</key><string>~a</string>\n  <key>LSMinimumSystemVersion</key><string>~a</string>\n~a~a  <key>NSHighResolutionCapable</key><true/>\n</dict>\n</plist>\n"
-               executable
-               identifier
-               display-name
-               display-name
-               version
-               build
-               minimum-version
+               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>CFBundleDevelopmentRegion</key><string>en</string>\n  <key>CFBundleExecutable</key><string>~a</string>\n  <key>CFBundleIdentifier</key><string>~a</string>\n  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>\n  <key>CFBundleName</key><string>~a</string>\n  <key>CFBundleDisplayName</key><string>~a</string>\n  <key>CFBundlePackageType</key><string>APPL</string>\n  <key>CFBundleShortVersionString</key><string>~a</string>\n  <key>CFBundleVersion</key><string>~a</string>\n  <key>LSMinimumSystemVersion</key><string>~a</string>\n~a~a~a  <key>NSHighResolutionCapable</key><true/>\n</dict>\n</plist>\n"
+               (xml-escape executable)
+               (xml-escape identifier)
+               (xml-escape display-name)
+               (xml-escape display-name)
+               (xml-escape version)
+               (xml-escape (format "~a" build))
+               (xml-escape minimum-version)
+               icon-fragment
                url-fragment
                association-fragment))))
 
@@ -233,6 +240,17 @@
   ;; Contents/MacOS makes codesign classify them as nested executable code.
   (copy-tree! (build-path stage "res") (build-path resources "res"))
   (copy-tree! (build-path stage "runtime") (build-path resources "runtime"))
+  (define staged-app-resources (build-path stage "app"))
+  (when (directory-exists? staged-app-resources)
+    (copy-tree! staged-app-resources (build-path resources "app")))
+
+  (define configured-icon
+    (required-project-icon project (project-macos-icon project) 'macos))
+  (define packaged-icon-name (and configured-icon "AppIcon.icns"))
+  (when configured-icon
+    (copy-file configured-icon
+               (build-path resources packaged-icon-name)
+               #t))
 
   (define racket-framework (build-path frameworks "Racket.framework"))
   (copy-macos-bundle! (build-path stage "Frameworks" "Racket.framework")
@@ -245,6 +263,7 @@
                      version
                      build
                      (project-macos-min-version project)
+                     packaged-icon-name
                      (project-url-schemes project)
                      (project-file-associations project))
 
@@ -295,3 +314,6 @@
   ;; platform trust/notarization result.
   (verify-package! project packaged #:production? production?)
   packaged)
+
+(module+ test-support
+  (provide write-macos-info!))

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add validated application resource declarations, stable Racket-side resource lookup, Windows `.ico` compilation, and macOS `.icns` bundle metadata. Resources now participate in build, package, and verification instead of relying on platform-specific copy scripts.
+
 ## 0.3.0
 
 - Added installable, searchable Scribble documentation for the core backend, system services, secure distribution APIs, and CLI workflow.

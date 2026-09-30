@@ -26,7 +26,7 @@ PLTUSERHOME="$user_home" \
   raco pkg install --auto --no-docs --name rivet "$archive"
 
 PLTUSERHOME="$user_home" \
-  racket -e '(require rivet/backend rivet/protocol)'
+  racket -e '(require rivet/backend rivet/protocol rivet/resources)'
 PLTUSERHOME="$user_home" \
   raco rivet help >/dev/null
 
@@ -41,6 +41,8 @@ test -f ArchiveSmoke/rivet.rktd
 test -f ArchiveSmoke/app/backend.rkt
 test -f ArchiveSmoke/windows/RivetHost.vcxproj
 test -f ArchiveSmoke/macos-host/Package.swift
+grep -Fq '(resources . ())' ArchiveSmoke/rivet.rktd
+grep -Fq 'RIVET_WINDOWS_ICON_RC' ArchiveSmoke/windows/RivetHost.vcxproj
 
 # The starter should remain self-guiding: installing a release archive and
 # running `new` must leave a developer with the normal diagnosis/run path and a

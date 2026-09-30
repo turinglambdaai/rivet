@@ -140,6 +140,8 @@ macos-host/Sources/RivetHost/RivetHostApp.swift
 
 Rivet **不会**再定义一套跨平台 UI DSL。WinUI 3 和 SwiftUI 按各自平台的正常方式开发，真正需要共享的业务逻辑放在 Racket 中。
 
+图片、模板、本地化文件等应用数据可以统一声明在 `rivet.rktd` 中，并由 Racket 通过 `resource-path` 读取。Rivet 会在开发和打包布局之间保持相同的相对路径，详见[项目配置](configuration.md#application-resources-and-icons)。
+
 ## 7. 构建、打包、验证
 
 开发完成后：

@@ -25,6 +25,27 @@
                            "directory" path
                            "purpose" label)))
 
+(define (verify-configured-resources! who project packaged-root)
+  (for ([configured-path (in-list (project-resources project))])
+    (define relative (string->path configured-path))
+    (define source (project-path project relative))
+    (define destination (build-path packaged-root "app" relative))
+    (cond
+      [(file-exists? source)
+       (required-file! who destination "configured application resource")]
+      [(directory-exists? source)
+       (required-directory! who destination "configured application resource directory")
+       (for ([source-file (in-list (find-files file-exists? source))])
+         (required-file!
+          who
+          (build-path destination (find-relative-path source source-file))
+          "configured application resource file"))]
+      [else
+       (raise-arguments-error who
+                              "configured application resource disappeared before verification"
+                              "resource" configured-path
+                              "source" source)])))
+
 (define (capture-command! who executable . args)
   (unless executable
     (error who "required verification executable was not found"))
@@ -75,7 +96,7 @@
              (or (file-exists? (build-path root "System32" dll))
                  (file-exists? (build-path root "SysWOW64" dll)))))))
 
-(define (verify-windows-package! package production?)
+(define (verify-windows-package! project package production?)
   (define who 'verify-package!)
   (required-directory! who package "Windows portable package")
   (define executable (build-path package "RivetHost.exe"))
@@ -83,6 +104,7 @@
   (required-file! who (build-path package "res" "core.zo") "compiled Racket backend")
   (for ([name (in-list '("petite.boot" "scheme.boot" "racket.boot"))])
     (required-file! who (build-path package "runtime" name) "embedded Racket boot file"))
+  (verify-configured-resources! who project package)
 
   (define root-files
     (for/list ([entry (in-list (directory-list package))]
@@ -150,6 +172,7 @@
   (required-file! who (build-path resources "res" "core.zo") "compiled Racket backend")
   (for ([name (in-list '("petite.boot" "scheme.boot" "racket.boot"))])
     (required-file! who (build-path resources "runtime" name) "embedded Racket boot file"))
+  (verify-configured-resources! who project resources)
   (required-directory! who racket-framework "embedded Racket.framework")
   (required-file! who racket-binary "embedded Racket.framework executable")
 
@@ -213,6 +236,23 @@
      "packaged" packaged-minimum-version
      "Info.plist" info))
 
+  (when (project-macos-icon project)
+    (required-file! who (build-path resources "AppIcon.icns") "configured macOS application icon")
+    (define packaged-icon
+      (string-trim
+       (capture-command! who
+                         plutil
+                         "-extract" "CFBundleIconFile" "raw"
+                         "-o" "-"
+                         (path->string info))))
+    (unless (string=? packaged-icon "AppIcon.icns")
+      (raise-arguments-error
+       who
+       "macOS package icon metadata does not match the packaged icon"
+       "configured" (project-macos-icon project)
+       "packaged" packaged-icon
+       "Info.plist" info)))
+
   (when production?
     (define xcrun (find-executable-path "xcrun"))
     (define spctl (find-executable-path "spctl"))
@@ -228,7 +268,7 @@
 
 (define (verify-package! project package #:production? [production? #f])
   (case (system-type 'os)
-    [(windows) (verify-windows-package! package production?)]
+    [(windows) (verify-windows-package! project package production?)]
     [(macosx) (verify-macos-package! project package production?)]
     [else
      (error 'verify-package!
