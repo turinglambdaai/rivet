@@ -97,7 +97,7 @@ Racket CS runs on a dedicated runtime thread. Native UI code never manipulates R
 
 The embedding model is inspired by [Noise](https://github.com/Bogdanp/Noise), but Rivet makes the runtime contract, protocol, code generation, and lifecycle cross-platform instead of Swift-first.
 
-See [architecture](docs/architecture.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [typed device communication](docs/device-communication.md), [project configuration](docs/configuration.md), [system services](docs/system-services.md), [release and updates](docs/release-and-updates.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
+See [architecture](docs/architecture.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [typed device communication](docs/device-communication.md), [Android architecture](docs/android.md), [project configuration](docs/configuration.md), [system services](docs/system-services.md), [release and updates](docs/release-and-updates.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
 
 ## Platform status
 
@@ -126,6 +126,18 @@ Windows and macOS remain the production release targets. Linux is now a develope
 | `raco rivet new/build/package` app flow | not yet | not yet |
 
 The mobile targets are foundations, not a claim of finished app delivery. The phone/tablet embedded runtime and native SwiftUI scaffolds come next; watchOS deliberately starts as a typed companion to the phone-hosted backend.
+
+### Android foundation
+
+| Capability | Android phone / tablet | Wear OS |
+|---|---|---|
+| Kotlin RVT1 codec | ✅ shared golden vectors | ✅ portable Kotlin core |
+| Typed generated client | planned | planned companion client |
+| Native UI host | planned Jetpack Compose | planned Compose for Wear OS |
+| Embedded Racket CS / JNI | not yet | companion mode by default |
+| `raco rivet new/build/package` app flow | not yet | not yet |
+
+The checked-in Gradle wrapper is version-pinned and checksum-verified. Android currently has a tested protocol foundation; JNI runtime hosting, Compose scaffolds, code generation, packaging, signing, and device/emulator round trips remain before developer-preview status. See [Android architecture](docs/android.md).
 
 ## Requirements
 
@@ -254,9 +266,10 @@ rivet/
 │   ├── windows/
 │   │   ├── runtime/          # Racket CS bridge + native client
 │   │   └── host/             # WinUI 3 scaffold
-│   └── macos/
+│   ├── macos/
 │       ├── Sources/          # Swift protocol/client + C embedding bridge
 │       └── host/             # SwiftUI scaffold
+│   └── android/              # Kotlin RVT1 codec and Gradle build
 ├── tests/
 └── docs/
 ```
@@ -269,15 +282,16 @@ cmake -S runtime -B runtime/build
 cmake --build runtime/build
 ctest --test-dir runtime/build
 swift test --package-path platform/macos
+platform/android/gradlew -p platform/android test
 ```
 
-CI runs the protocol implementation across Windows, macOS, and Linux, exercises real embedded Racket round trips on all three platforms, and smoke-builds, packages, and verifies generated native applications on all three desktop platforms.
+CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exercises real embedded Racket round trips on all three desktop platforms; cross-compiles the portable Swift layers for iOS/watchOS; and smoke-builds, packages, and verifies generated desktop applications.
 
 ## Honest gaps
 
 - **Linux is a developer preview** — the complete daily CLI path works, but production signing, distro-native installers, system services, and compositor-specific behavior are not complete.
 - **Apple mobile delivery is foundational** — the portable Swift and typed WatchConnectivity layers exist, but iOS/iPadOS/watchOS project generation, runtime packaging, signing, and store delivery are not complete.
-- **Android is not implemented yet** — Jetpack Compose, JNI, portable Racket CS packaging, and Gradle integration remain separate product work.
+- **Android remains foundational** — its Kotlin RVT1 codec and pinned Gradle build are tested, but Jetpack Compose, JNI, portable Racket CS packaging, generated clients, signing, and device delivery are not complete.
 - **Windows starts with x64** — additional architectures can be added after the runtime packaging path is stable.
 - **No cross-platform declarative UI DSL** — native UI code remains SwiftUI/AppKit or WinUI 3/C++/WinRT.
 - **Publisher credentials remain application-specific** — Rivet automates Authenticode and Developer ID/notarization flows, but certificates, PFX passwords, and Apple notary profiles are intentionally supplied by the application/CI environment rather than stored by Rivet.

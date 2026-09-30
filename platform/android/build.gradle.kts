@@ -1,0 +1,31 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+plugins {
+    kotlin("jvm") version "2.4.20"
+}
+
+group = "dev.rivet"
+version = "0.1.0-SNAPSHOT"
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+dependencies {
+    testImplementation(kotlin("test"))
+}
+
+tasks.processTestResources {
+    from("../../tests/protocol-golden.txt")
+}
+
+tasks.test {
+    useJUnitPlatform()
+}

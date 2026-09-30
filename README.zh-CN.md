@@ -97,7 +97,7 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 
 嵌入模型受到 [Noise](https://github.com/Bogdanp/Noise) 的启发，但 Rivet 把 runtime contract、协议、代码生成和生命周期都做成平台无关的统一核心，而不是以 Swift 为中心。
 
-深入设计见 [架构](docs/architecture.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[类型安全设备通信](docs/device-communication.md)、[项目配置](docs/configuration.md)、[系统服务](docs/system-services.md)、[发布与更新](docs/release-and-updates.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
+深入设计见 [架构](docs/architecture.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[类型安全设备通信](docs/device-communication.md)、[Android 架构](docs/android.md)、[项目配置](docs/configuration.md)、[系统服务](docs/system-services.md)、[发布与更新](docs/release-and-updates.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
 
 ## 平台支持状态
 
@@ -126,6 +126,18 @@ Windows 和 macOS 仍是生产发布目标。Linux 已进入开发者预览：�
 | `raco rivet new/build/package` 应用链 | 尚未完成 | 尚未完成 |
 
 这些是移动端基础能力，不代表完整应用交付已经完成。下一阶段是手机/平板 embedded runtime 和原生 SwiftUI 脚手架；watchOS 则有意从连接手机后端的类型安全 companion 模式开始。
+
+### Android 基础
+
+| 能力 | Android 手机 / 平板 | Wear OS |
+|---|---|---|
+| Kotlin RVT1 codec | ✅ 共享 golden vectors | ✅ 可移植 Kotlin 核心 |
+| 类型化客户端生成 | 计划中 | 计划采用 companion client |
+| 原生 UI 宿主 | 计划采用 Jetpack Compose | 计划采用 Compose for Wear OS |
+| Embedded Racket CS / JNI | 尚未完成 | 默认 companion 模式 |
+| `raco rivet new/build/package` 应用链 | 尚未完成 | 尚未完成 |
+
+仓库内的 Gradle wrapper 固定了版本并校验下载摘要。Android 目前具备经过测试的协议基础；JNI runtime 宿主、Compose 脚手架、代码生成、打包签名和设备/模拟器 round-trip 完成后，才能进入开发者预览。详见 [Android 架构](docs/android.md)。
 
 ## 环境要求
 
@@ -254,9 +266,10 @@ rivet/
 │   ├── windows/
 │   │   ├── runtime/          # Racket CS bridge + native client
 │   │   └── host/             # WinUI 3 模板
-│   └── macos/
+│   ├── macos/
 │       ├── Sources/          # Swift protocol/client + C embedding bridge
 │       └── host/             # SwiftUI 模板
+│   └── android/              # Kotlin RVT1 codec 与 Gradle 构建
 ├── tests/
 └── docs/
 ```
@@ -269,15 +282,16 @@ cmake -S runtime -B runtime/build
 cmake --build runtime/build
 ctest --test-dir runtime/build
 swift test --package-path platform/macos
+platform/android/gradlew -p platform/android test
 ```
 
-CI 会在 Windows、macOS、Linux 上验证协议实现和真实 embedded Racket round-trip，并在三个桌面平台上对新生成项目运行 build、package、verify smoke。
+CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平台执行真实 embedded Racket round-trip，为 iOS/watchOS 交叉编译可移植 Swift 层，并对新生成的桌面应用运行 build、package、verify smoke。
 
 ## 诚实的局限
 
 - **Linux 是开发者预览** —— 日常 CLI 全链路已完成，但生产签名、发行版原生安装包、系统服务和 compositor 行为还未完成。
 - **Apple 移动端仍是基础阶段** —— 可移植 Swift 与类型安全 WatchConnectivity 层已经存在，但 iOS/iPadOS/watchOS 项目生成、runtime 打包、签名和商店交付还未完成。
-- **Android 尚未实现** —— Jetpack Compose、JNI、portable Racket CS 打包和 Gradle 集成仍是独立产品工作。
+- **Android 仍处于基础阶段** —— Kotlin RVT1 codec 与固定版本的 Gradle 构建已经过测试，但 Jetpack Compose、JNI、portable Racket CS 打包、客户端生成、签名和设备交付尚未完成。
 - **Windows 先支持 x64** —— runtime 打包链稳定后再扩展其他架构。
 - **没有统一声明式跨平台 UI DSL** —— UI 代码仍然直接写 SwiftUI/AppKit 或 WinUI 3/C++/WinRT。
 - **正式发布凭据仍属于应用自身** —— Rivet 已自动化 Authenticode、Developer ID、notarization 流程，但证书、PFX 密码、Apple notary profile 会由应用/CI 环境注入，不由 Rivet 保存。
