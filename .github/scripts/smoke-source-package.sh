@@ -65,6 +65,7 @@ grep -Fq 'raco rivet dev' ArchiveSmoke/README.md
 grep -Fq 'docs/getting-started.md' ArchiveSmoke/README.md
 grep -Fq 'docs/getting-started.zh-CN.md' ArchiveSmoke/README.md
 
+cd ArchiveSmoke
 PLTUSERHOME="$user_home" \
   raco rivet inspect --json > inspect.json
 python3 - <<'PY'
