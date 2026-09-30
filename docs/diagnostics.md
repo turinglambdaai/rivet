@@ -14,6 +14,7 @@ The runtime section includes:
 - the exact `petite.boot`, `scheme.boot`, and `racket.boot` files;
 - on Windows, the selected Racket CS DLL and `.def` file;
 - on macOS, the selected `Racket.framework`.
+- on Linux, the selected static `libracketcs.a`.
 
 It also reports the native build, dependency-audit, and optional production-signing tools used on the current platform.
 
@@ -23,7 +24,9 @@ This is intentionally more specific than printing only a Racket version. If mult
 
 When a required dependency is missing, human-readable doctor output ends with a `Fix next:` section. The remediation is deliberately conservative: it tells the developer which supported platform toolchain or Racket installation needs attention and what to rerun after the fix.
 
-For example, an incomplete Windows C++ environment points to the Visual Studio 2022 / Build Tools `Desktop development with C++` workload and a Windows SDK; the Windows App SDK is a project package that Rivet restores during the build. An incomplete macOS environment points to `xcode-select --install` and the Xcode developer-directory selection when needed. If runtime discovery fails, Rivet asks for a complete Racket CS distribution and the same installation's `raco`.
+For example, an incomplete Windows C++ environment points to the Visual Studio 2022 / Build Tools `Desktop development with C++` workload and a Windows SDK; the Windows App SDK is a project package that Rivet restores during the build. An incomplete macOS environment points to `xcode-select --install` and the Xcode developer-directory selection when needed. Linux diagnostics check CMake, pkg-config, C++20, GTK4, `ldd`, and the embeddable static Racket CS library. If runtime discovery fails, Rivet asks for a complete Racket CS distribution and the same installation's `raco`.
+
+Linux source builds may keep embedding artifacts outside the Racket installation used to run `raco`. In that case set `RIVET_RACKET_LIBRARY` to the exact `libracketcs.a`, `RIVET_RACKET_BOOT_DIR` to the directory containing the three boot files, and optionally `RIVET_RACKET_INCLUDE` / `RIVET_RACKET_LIB_DIR` when those also come from the custom prefix. `doctor` reports the resolved files before any build begins.
 
 Optional release-only tools are not treated as development blockers. Missing Windows `signtool`, macOS notarization tooling, or Gatekeeper assessment support is reported as optional while development packaging remains available.
 

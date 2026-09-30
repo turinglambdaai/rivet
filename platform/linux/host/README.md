@@ -8,11 +8,10 @@ the Win32 named pipe pair. The Racket input and output ports receive distinct
 descriptors for that socket so their ownership and shutdown behavior are
 unambiguous.
 
-Status: **experimental**. CI compiles the runtime
-bridge against Racket's public embedding headers and exercises startup,
-concurrent RPCs, State access, cancellation, overload, and shutdown against a
-real embedded Racket CS instance. `raco rivet build` / `doctor` / `package`
-wiring for Linux is follow-up work.
+Status: **developer preview**. CI compiles the runtime bridge against Racket's
+public embedding headers and exercises startup, concurrent RPCs, State access,
+cancellation, overload, shutdown, project scaffolding, CLI build, packaging,
+and verification against a real embedded Racket CS instance.
 
 ## Layout
 
@@ -47,16 +46,14 @@ cmake --build /tmp/rivet-linux-build
 
 The executable must sit beside a staged runtime to start: put `runtime/*.boot`
 and `res/core.zo` (produced by `raco ctool --mods`, the same artifacts every
-platform host consumes) next to `RivetHost`. A packaged prefix layout will be
-defined with the Linux packaging target instead of being guessed by the host.
+platform host consumes) next to `RivetHost`. `raco rivet build`, `dev`, and
+`package` create this layout automatically.
 
 ## Honest gaps
 
-- No `raco rivet build`/`doctor`/`package` Linux path yet; the CMake above
-  is the supported manual loop.
-- The checked-in `GeneratedBackend.hpp` matches the scaffold schema so the
-  host compiles before the first `build`; the Linux codegen target
-  (emitting `rivet::linux_runtime`-bound clients) is follow-up work.
+- Production signing and distro-native installers are not defined yet; Linux
+  packaging currently produces a verified self-contained application directory
+  whose GTK/system-library dependencies are audited with `ldd`.
 - GTK is a toolkit, not a display protocol: global hotkeys and always-on-top
   overlays are compositor-dependent. Application hosts that need them must
   define an explicit X11/Wayland policy.

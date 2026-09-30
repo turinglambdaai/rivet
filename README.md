@@ -1,6 +1,6 @@
 # Rivet
 
-Build first-party native desktop apps with [Racket](https://racket-lang.org/). Use WinUI 3 on Windows and SwiftUI on macOS, keep your application logic in Racket, and ship a real native app instead of a WebView or a cross-platform widget layer.
+Build first-party native desktop apps with [Racket](https://racket-lang.org/). Use WinUI 3 on Windows, SwiftUI on macOS, and GTK4 on Linux; keep your application logic in Racket and ship a real native app instead of a WebView or a cross-platform widget layer.
 
 [![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.3.0-C15F3C)
 
@@ -28,7 +28,7 @@ Racket is an excellent language for application logic, but there is no direct pa
 
 Rivet fills that gap:
 
-- **First-party native UI** — WinUI 3 on Windows, SwiftUI/AppKit on macOS
+- **First-party native UI** — WinUI 3 on Windows, SwiftUI/AppKit on macOS, GTK4 on Linux
 - **Racket for application logic** — macros, pattern matching, concurrency, data processing, domain logic
 - **One backend contract** — typed RPC, events, shared state, cancellation, and lifecycle over the same RVT1 protocol
 - **Generated native clients** — Racket declarations become typed Swift and C++ APIs at build time
@@ -84,13 +84,13 @@ The three projects serve different trade-offs rather than replacing one another.
              RPC / Event / State / Cancel
                            │
                     RVT1 protocol
-                   ┌───────┴───────┐
-                   │               │
-              C++ / C++/WinRT    Swift
-                   │               │
-                 WinUI 3        SwiftUI
-                   │               │
-                Windows          macOS
+                ┌────────┬────────┐
+                │        │        │
+           C++/WinRT   Swift     C++
+                │        │        │
+             WinUI 3  SwiftUI   GTK4
+                │        │        │
+             Windows   macOS    Linux
 ```
 
 Racket CS runs on a dedicated runtime thread. Native UI code never manipulates Racket/Chez values directly, and Racket pointers never cross ordinary native thread boundaries. The native side only sees framed RVT1 messages and generated Swift/C++ values.
@@ -101,27 +101,19 @@ See [architecture](docs/architecture.md), [protocol](docs/protocol.md), [embeddi
 
 ## Platform status
 
-| Capability | Windows | macOS |
-|---|---|---|
-| Native host | ✅ WinUI 3 + C++/WinRT | ✅ SwiftUI + Swift |
-| Embedded Racket CS | ✅ | ✅ |
-| RVT1 request / response / error | ✅ | ✅ |
-| Events | ✅ | ✅ |
-| Shared State | ✅ | ✅ |
-| Cancellation | ✅ | ✅ |
-| Typed generated client | ✅ C++ | ✅ Swift |
-| `raco rivet build` | ✅ | ✅ |
-| `raco rivet dev` | ✅ | ✅ |
-| `raco rivet package` | ✅ native distribution | ✅ `.app` bundle |
-| Package verification | ✅ dependency audit | ✅ signing/rpath/plist audit |
-| Production signing path | ✅ Authenticode | ✅ Developer ID + notarization |
-| Installer | ✅ WiX MSI | ✅ signed/notarized DMG |
-| Signed updater | ✅ Ed25519 + SHA-256 | ✅ Ed25519 + SHA-256 |
-| System services | ✅ Win32 adapter | ✅ AppKit/system-framework adapter |
-| Secure storage | ✅ Credential Manager | ✅ Keychain |
-| CI protocol coverage | ✅ | ✅ |
+| Capability | Windows | macOS | Linux |
+|---|---|---|---|
+| Native host | ✅ WinUI 3 + C++/WinRT | ✅ SwiftUI + Swift | 🧪 GTK4 + C++ |
+| Embedded Racket CS | ✅ | ✅ | ✅ static runtime |
+| RVT1 / Events / State / Cancel | ✅ | ✅ | ✅ |
+| Typed generated client | ✅ C++ | ✅ Swift | ✅ C++ |
+| `new` / `doctor` / `build` / `dev` | ✅ | ✅ | ✅ |
+| `package` / `verify` | ✅ dependency audit | ✅ signing/rpath/plist audit | 🧪 directory + `ldd` audit |
+| Production signing / installer | ✅ Authenticode + MSI | ✅ Developer ID + DMG | — distro-specific work remains |
+| System services / secure storage | ✅ | ✅ | — |
+| Real embedded-runtime CI | ✅ | ✅ | ✅ |
 
-Current production scope is Windows and macOS, with Windows targeting x64 first. An experimental GTK4/Linux host now exercises the same embedded Racket runtime contract, but it is not yet integrated into `raco rivet` code generation, packaging, or release tooling.
+Windows and macOS remain the production release targets. Linux is now a developer preview with the complete daily CLI path and real embedded-runtime CI; distro-native installers, signing policy, system-service adapters, and explicit X11/Wayland policy remain before production status.
 
 ## Requirements
 
@@ -144,7 +136,7 @@ raco rivet doctor
 raco rivet dev
 ```
 
-The generated project contains a shared Racket backend plus native Windows and macOS hosts. Its own `README.md` points directly to the files you normally edit.
+The generated project contains a shared Racket backend plus native Windows, macOS, and Linux hosts. Its own `README.md` points directly to the files you normally edit.
 
 Build and package when you are ready to leave the development loop:
 
@@ -155,7 +147,7 @@ raco rivet verify
 raco rivet release
 ```
 
-`build` produces the native host and staged runtime. `package` turns that output into a distributable Windows directory or a macOS `.app` bundle and verifies it before reporting success. `verify` re-audits an existing package.
+`build` produces the native host and staged runtime. `package` turns that output into a distributable Windows/Linux directory or a macOS `.app` bundle and verifies it before reporting success. `verify` re-audits an existing package.
 
 For publisher-signed output, use `raco rivet package --production` with the platform signing credentials described in [docs/production-signing.md](docs/production-signing.md).
 
@@ -226,10 +218,13 @@ hello/
 │   ├── App.xaml
 │   ├── MainWindow.xaml
 │   └── RivetHost.vcxproj
-└── macos-host/
+├── macos-host/
     ├── Package.swift
     └── Sources/
         └── RivetHost/
+└── linux/
+    ├── CMakeLists.txt
+    └── src/main.cpp
 ```
 
 You own the native UI source. Rivet owns the runtime bridge, protocol, code generation, and build orchestration.
@@ -264,11 +259,11 @@ ctest --test-dir runtime/build
 swift test --package-path platform/macos
 ```
 
-CI runs the protocol implementation across Windows, macOS, and Linux, exercises real embedded Racket round trips on all three platforms, and smoke-builds, packages, verifies, and cleans generated native applications on the two production-supported desktop platforms.
+CI runs the protocol implementation across Windows, macOS, and Linux, exercises real embedded Racket round trips on all three platforms, and smoke-builds, packages, and verifies generated native applications on all three desktop platforms.
 
 ## Honest gaps
 
-- **Linux is experimental** — the GTK4 host and embedded-runtime path exist, but `raco rivet` code generation, packaging, release tooling, and compositor-specific behavior are not complete.
+- **Linux is a developer preview** — the complete daily CLI path works, but production signing, distro-native installers, system services, and compositor-specific behavior are not complete.
 - **Windows starts with x64** — additional architectures can be added after the runtime packaging path is stable.
 - **No cross-platform declarative UI DSL** — native UI code remains SwiftUI/AppKit or WinUI 3/C++/WinRT.
 - **Publisher credentials remain application-specific** — Rivet automates Authenticode and Developer ID/notarization flows, but certificates, PFX passwords, and Apple notary profiles are intentionally supplied by the application/CI environment rather than stored by Rivet.

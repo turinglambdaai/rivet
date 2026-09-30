@@ -68,7 +68,7 @@ Packaged resources live under `app/` inside the platform resource root. Racket c
   (call-with-input-file (resource-path "config" "defaults.rktd") read))
 ```
 
-During `raco rivet dev`, the root is `.rivet/stage/app`. Windows packages keep it beside the executable as `app/`; macOS packages keep it at `Contents/Resources/app`. Native UI code can use those same platform-native locations. Set `RIVET_RESOURCE_ROOT` or parameterize `current-resource-root` only for tests and specialized hosts.
+During `raco rivet dev`, the root is `.rivet/stage/app`. Windows and Linux packages keep it beside the executable as `app/`; macOS packages keep it at `Contents/Resources/app`. Native UI code can use those same platform-native locations. Set `RIVET_RESOURCE_ROOT` or parameterize `current-resource-root` only for tests and specialized hosts.
 
 Projects created before this feature remain valid because all three settings are optional. To embed a Windows icon in an older generated host, add Rivet's conditional `RIVET_WINDOWS_ICON_RC` `ResourceCompile` item from the current host template or regenerate the host project while preserving application UI sources.
 

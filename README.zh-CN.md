@@ -1,6 +1,6 @@
 # Rivet
 
-用 [Racket](https://racket-lang.org/) 构建第一方原生桌面应用。Windows 使用 WinUI 3，macOS 使用 SwiftUI，把应用逻辑放在 Racket 中，最终交付的是真正原生应用，而不是 WebView 或跨平台控件封装层。
+用 [Racket](https://racket-lang.org/) 构建第一方原生桌面应用。Windows 使用 WinUI 3，macOS 使用 SwiftUI，Linux 使用 GTK4；把应用逻辑放在 Racket 中，最终交付的是真正原生应用，而不是 WebView 或跨平台控件封装层。
 
 [![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.3.0-C15F3C)
 
@@ -28,7 +28,7 @@ Racket 非常适合承载应用逻辑，但一直缺少一条直接连接现代�
 
 Rivet 补上的是这一层：
 
-- **第一方原生 UI** —— Windows 使用 WinUI 3，macOS 使用 SwiftUI/AppKit
+- **第一方原生 UI** —— Windows 使用 WinUI 3，macOS 使用 SwiftUI/AppKit，Linux 使用 GTK4
 - **Racket 负责应用逻辑** —— 宏、模式匹配、并发、数据处理、业务逻辑都留在 Racket
 - **一套后端契约** —— typed RPC、Event、共享 State、取消与生命周期统一走 RVT1
 - **自动生成原生客户端** —— Racket 侧的声明在构建时生成 Swift/C++ 类型化 API
@@ -39,7 +39,7 @@ Rivet 刻意不做 WebView 框架，也不做统一跨平台控件层。Windows 
 
 ### Hello Rivet
 
-两个平台共享同一份 Racket 后端：
+三个桌面平台共享同一份 Racket 后端：
 
 ```racket
 #lang racket/base
@@ -84,13 +84,13 @@ Rivet 刻意不做 WebView 框架，也不做统一跨平台控件层。Windows 
              RPC / Event / State / Cancel
                            │
                     RVT1 protocol
-                   ┌───────┴───────┐
-                   │               │
-              C++ / C++/WinRT    Swift
-                   │               │
-                 WinUI 3        SwiftUI
-                   │               │
-                Windows          macOS
+                ┌────────┬────────┐
+                │        │        │
+           C++/WinRT   Swift     C++
+                │        │        │
+             WinUI 3  SwiftUI   GTK4
+                │        │        │
+             Windows   macOS    Linux
 ```
 
 Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Racket/Chez 对象，Racket 指针也不会跨普通 native 线程传递。原生侧只看到 RVT1 帧和生成后的 Swift/C++ 值。
@@ -101,27 +101,19 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 
 ## 平台支持状态
 
-| 能力 | Windows | macOS |
-|---|---|---|
-| 原生宿主 | ✅ WinUI 3 + C++/WinRT | ✅ SwiftUI + Swift |
-| Embedded Racket CS | ✅ | ✅ |
-| RVT1 Request / Response / Error | ✅ | ✅ |
-| Event | ✅ | ✅ |
-| Shared State | ✅ | ✅ |
-| Cancel | ✅ | ✅ |
-| 类型化客户端生成 | ✅ C++ | ✅ Swift |
-| `raco rivet build` | ✅ | ✅ |
-| `raco rivet dev` | ✅ | ✅ |
-| `raco rivet package` | ✅ 原生分发目录 | ✅ `.app` bundle |
-| 发布物验证 | ✅ DLL 依赖闭包 | ✅ 签名/rpath/plist |
-| 生产签名路径 | ✅ Authenticode | ✅ Developer ID + notarization |
-| 正式安装包 | ✅ WiX MSI | ✅ 签名并公证的 DMG |
-| 安全在线更新 | ✅ Ed25519 + SHA-256 | ✅ Ed25519 + SHA-256 |
-| 系统服务 | ✅ Win32 适配层 | ✅ AppKit/系统框架适配层 |
-| 安全存储 | ✅ Credential Manager | ✅ Keychain |
-| CI 协议覆盖 | ✅ | ✅ |
+| 能力 | Windows | macOS | Linux |
+|---|---|---|---|
+| 原生宿主 | ✅ WinUI 3 + C++/WinRT | ✅ SwiftUI + Swift | 🧪 GTK4 + C++ |
+| Embedded Racket CS | ✅ | ✅ | ✅ 静态 runtime |
+| RVT1 / Event / State / Cancel | ✅ | ✅ | ✅ |
+| 类型化客户端生成 | ✅ C++ | ✅ Swift | ✅ C++ |
+| `new` / `doctor` / `build` / `dev` | ✅ | ✅ | ✅ |
+| `package` / `verify` | ✅ DLL 依赖审计 | ✅ 签名/rpath/plist | 🧪 目录 + `ldd` 审计 |
+| 生产签名 / 安装包 | ✅ Authenticode + MSI | ✅ Developer ID + DMG | — 尚需发行版适配 |
+| 系统服务 / 安全存储 | ✅ | ✅ | — |
+| 真实嵌入运行时 CI | ✅ | ✅ | ✅ |
 
-当前生产支持范围是 Windows 和 macOS，其中 Windows 优先支持 x64。实验性的 GTK4/Linux 宿主已经验证同一套嵌入式 Racket 运行时契约，但尚未接入 `raco rivet` 的代码生成、打包和发布工具链。
+Windows 和 macOS 仍是生产发布目标。Linux 已进入开发者预览：日常 CLI 全链路和真实 embedded-runtime CI 已完成；发行版原生安装包、签名策略、系统服务以及明确的 X11/Wayland 策略仍是进入生产级之前的工作。
 
 ## 环境要求
 
@@ -144,7 +136,7 @@ raco rivet doctor
 raco rivet dev
 ```
 
-生成的项目同时包含共享 Racket 后端、Windows 原生宿主和 macOS 原生宿主。项目自己的 `README.md` 会直接告诉你最常编辑哪些文件。
+生成的项目同时包含共享 Racket 后端以及 Windows、macOS、Linux 原生宿主。项目自己的 `README.md` 会直接告诉你最常编辑哪些文件。
 
 准备发布时：
 
@@ -155,7 +147,7 @@ raco rivet verify
 raco rivet release
 ```
 
-`build` 负责生成 native host 和 staged runtime；`package` 输出可分发的 Windows 目录或 macOS `.app`，并在成功前自动验证发布物；`verify` 可以重新检查已有发布物。
+`build` 负责生成 native host 和 staged runtime；`package` 输出可分发的 Windows/Linux 目录或 macOS `.app`，并在成功前自动验证发布物；`verify` 可以重新检查已有发布物。
 
 需要正式发行签名时，按 [生产签名文档](docs/production-signing.md) 配置凭据后执行 `raco rivet package --production`。
 
@@ -226,10 +218,13 @@ hello/
 │   ├── App.xaml
 │   ├── MainWindow.xaml
 │   └── RivetHost.vcxproj
-└── macos-host/
+├── macos-host/
     ├── Package.swift
     └── Sources/
         └── RivetHost/
+└── linux/
+    ├── CMakeLists.txt
+    └── src/main.cpp
 ```
 
 原生 UI 源码属于应用本身；Rivet 负责 runtime bridge、协议、codegen 和构建编排。
@@ -264,11 +259,11 @@ ctest --test-dir runtime/build
 swift test --package-path platform/macos
 ```
 
-CI 会在 Windows、macOS、Linux 上验证协议实现和真实 embedded Racket round-trip，并在两个生产支持平台上对新生成项目运行 build、package、verify、clean smoke。
+CI 会在 Windows、macOS、Linux 上验证协议实现和真实 embedded Racket round-trip，并在三个桌面平台上对新生成项目运行 build、package、verify smoke。
 
 ## 诚实的局限
 
-- **Linux 仍为实验性支持** —— GTK4 宿主和嵌入式运行时路径已经存在，但 `raco rivet` 代码生成、打包、发布工具链以及不同 compositor 的行为尚未完成。
+- **Linux 是开发者预览** —— 日常 CLI 全链路已完成，但生产签名、发行版原生安装包、系统服务和 compositor 行为还未完成。
 - **Windows 先支持 x64** —— runtime 打包链稳定后再扩展其他架构。
 - **没有统一声明式跨平台 UI DSL** —— UI 代码仍然直接写 SwiftUI/AppKit 或 WinUI 3/C++/WinRT。
 - **正式发布凭据仍属于应用自身** —— Rivet 已自动化 Authenticode、Developer ID、notarization 流程，但证书、PFX 密码、Apple notary profile 会由应用/CI 环境注入，不由 Rivet 保存。

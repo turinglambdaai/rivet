@@ -150,6 +150,35 @@
     (run-command! who signtool "verify" "/pa" "/v" (path->string executable)))
   package)
 
+(define (verify-linux-package! project package production?)
+  (define who 'verify-package!)
+  (when production?
+    (error who "production signing verification is not defined for Linux yet"))
+  (required-directory! who package "Linux application package")
+  (define executable (build-path package "RivetHost"))
+  (required-file! who executable "GTK4 executable")
+  (define permissions (file-or-directory-permissions executable))
+  (unless (if (list? permissions)
+              (and (memq 'execute permissions) #t)
+              (positive? (bitwise-and permissions #o111)))
+    (raise-arguments-error who
+                           "packaged Linux host is not executable"
+                           "file" executable))
+  (required-file! who (build-path package "res" "core.zo") "compiled Racket backend")
+  (for ([name (in-list '("petite.boot" "scheme.boot" "racket.boot"))])
+    (required-file! who (build-path package "runtime" name) "embedded Racket boot file"))
+  (verify-configured-resources! who project package)
+
+  (define ldd (find-executable-path "ldd"))
+  (define dependencies
+    (capture-command! who ldd (path->string executable)))
+  (when (regexp-match? #px"(?m:^.*=>\\s+not found\\s*$)" dependencies)
+    (raise-arguments-error who
+                           "Linux package has unresolved shared-library dependencies"
+                           "file" executable
+                           "ldd" dependencies))
+  package)
+
 (define (verify-macos-package! project app production?)
   (define who 'verify-package!)
   (required-directory! who app "macOS app bundle")
@@ -270,9 +299,10 @@
   (case (system-type 'os)
     [(windows) (verify-windows-package! project package production?)]
     [(macosx) (verify-macos-package! project package production?)]
+    [(unix) (verify-linux-package! project package production?)]
     [else
      (error 'verify-package!
-            "Rivet package verification currently targets Windows and macOS")]))
+            "Rivet package verification currently targets Windows, macOS, and Linux")]))
 
 (define (verify-project-package! project #:production? [production? #f])
   (define name (project-ref project 'name))
@@ -286,7 +316,15 @@
        (project-path project "dist" (string-append name "-windows-" architecture))]
       [(macosx)
        (project-path project "dist" (string-append name ".app"))]
+      [(unix)
+       (define architecture
+         (case (system-type 'arch)
+           [(aarch64 arm64) "arm64"]
+           [(x86_64) "x64"]
+           [else (format "~a" (system-type 'arch))]))
+       (project-path project "dist"
+                     (string-append name "-linux-" architecture))]
       [else
        (error 'verify-project-package!
-              "Rivet package verification currently targets Windows and macOS")]))
+              "Rivet package verification currently targets Windows, macOS, and Linux")]))
   (verify-package! project package #:production? production?))

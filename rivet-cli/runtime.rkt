@@ -18,6 +18,7 @@
    racket-boot
    racketcs-dll
    racketcs-def
+   racketcs-static
    racket-framework)
   #:transparent)
 
@@ -97,13 +98,35 @@
                              "missing" label
                              "Racket version" (version))))
 
+(define (environment-file name)
+  (define value (getenv name))
+  (and value
+       (positive? (string-length value))
+       (or (existing-file (string->path value))
+           (raise-arguments-error 'discover-racket-runtime
+                                  "configured runtime file does not exist"
+                                  "environment variable" name
+                                  "file" value))))
+
+(define (environment-directory name)
+  (define value (getenv name))
+  (and value
+       (positive? (string-length value))
+       (or (existing-directory (string->path value))
+           (raise-arguments-error 'discover-racket-runtime
+                                  "configured runtime directory does not exist"
+                                  "environment variable" name
+                                  "directory" value))))
+
 (define (discover-racket-runtime)
   (define include-dir
     (required 'discover-racket-runtime "include directory"
-              (existing-directory (find-include-dir))))
+              (or (environment-directory "RIVET_RACKET_INCLUDE")
+                  (existing-directory (find-include-dir)))))
   (define lib-dir
     (required 'discover-racket-runtime "lib directory"
-              (existing-directory (find-lib-dir))))
+              (or (environment-directory "RIVET_RACKET_LIB_DIR")
+                  (existing-directory (find-lib-dir)))))
   (define dll-dir (existing-directory (find-dll-dir)))
 
   (define macos? (eq? (system-type 'os) 'macosx))
@@ -117,7 +140,9 @@
   ;; Do not recursively search installation prefixes: on Unix that can turn a
   ;; simple `doctor` invocation into repeated scans of /usr.
   (define boot-dirs
-    (append (if racket-framework
+    (append (filter values
+                    (list (environment-directory "RIVET_RACKET_BOOT_DIR")))
+            (if racket-framework
                 (framework-boot-directories racket-framework)
                 '())
             (direct-boot-directories lib-dir dll-dir)))
@@ -142,6 +167,23 @@
                    (find-direct-matching-file
                     runtime-file-dirs
                     #px"(?i:^libracketcs.*\\.def$)"))))
+  (define linux? (eq? (system-type 'os) 'unix))
+  (define configured-linux-library
+    (and linux? (environment-file "RIVET_RACKET_LIBRARY")))
+  (when (and configured-linux-library
+             (not (regexp-match? #px"\\.a$"
+                                 (path->string configured-linux-library))))
+    (raise-arguments-error 'discover-racket-runtime
+                           "Linux embedding requires a static Racket CS library"
+                           "RIVET_RACKET_LIBRARY" configured-linux-library
+                           "expected" "libracketcs*.a"))
+  (define racketcs-static
+    (and linux?
+         (required 'discover-racket-runtime "libracketcs*.a"
+                   (or configured-linux-library
+                       (find-direct-matching-file
+                        runtime-file-dirs
+                        #px"^libracketcs.*\\.a$")))))
 
   (racket-runtime (version)
                   include-dir
@@ -152,6 +194,7 @@
                   racket
                   racketcs-dll
                   racketcs-def
+                  racketcs-static
                   racket-framework))
 
 (module+ test-support

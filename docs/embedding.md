@@ -13,7 +13,7 @@ A native source file that calls the Racket CS API includes:
 #include "racketcs.h"
 ```
 
-On Windows the native executable links to the versioned Racket CS DLL/import library from the matching Racket installation/runtime bundle. On macOS Rivet can use the Racket framework or an exactly matching static/dynamic Racket CS build.
+On Windows the native executable links to the versioned Racket CS DLL/import library from the matching Racket installation/runtime bundle. On macOS Rivet uses the matching Racket framework. On Linux the host links an exactly matching static `libracketcs.a`; `RIVET_RACKET_LIBRARY` and `RIVET_RACKET_BOOT_DIR` can point the CLI at a separately built embedding prefix.
 
 ## Exact version rule
 

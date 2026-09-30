@@ -28,6 +28,8 @@
       (file->string (build-path project-root "windows" "RivetHost.vcxproj")))
     (define macos-package
       (file->string (build-path project-root "macos-host" "Package.swift")))
+    (define linux-cmake
+      (file->string (build-path project-root "linux" "CMakeLists.txt")))
     (define project-config
       (file->string (build-path project-root "rivet.rktd")))
     (check-true (regexp-match? #rx"XamlControlsResources" app-xaml))
@@ -39,6 +41,7 @@
      (regexp-match? #rx"<WindowsTargetPlatformMinVersion>10\\.0\\.19041\\.0"
                     windows-project))
     (check-true (regexp-match? #rx"RIVET_MACOS_MIN_VERSION" macos-package))
+    (check-true (regexp-match? #rx"platform/linux/runtime" linux-cmake))
     (check-true
      (regexp-match? #rx"\\(macos-min-version \\. \"14\\.0\"\\)" project-config))
     (check-true
@@ -83,6 +86,9 @@ RKT
     (define cpp
       (file->string
        (build-path project-root "windows" "GeneratedBackend.hpp")))
+    (define linux-cpp
+      (file->string
+       (build-path project-root "linux" "GeneratedBackend.hpp")))
 
     (check-true (regexp-match? #rx"func greet\\(name: String\\)" swift))
     (check-true (regexp-match? #rx"func increment\\(value: Int64\\)" swift))
@@ -107,6 +113,11 @@ RKT
     (check-true (regexp-match? #rx"backend_\\.get_state_async" cpp))
     (check-true (regexp-match? #rx"backend_\\.set_state_async" cpp))
     (check-true (regexp-match? #rx"struct ProgressEvent \\{ std::int64_t value; \\};" cpp))
+    (check-true
+     (regexp-match? #rx"rivet::linux_runtime::Backend& backend" linux-cpp))
+    (check-true
+     (regexp-match? #rx"rivet::linux_runtime::CallResult raw" linux-cpp))
+    (check-false (regexp-match? #rx"rivet::windows" linux-cpp))
 
     ;; Distinct Racket identifiers can normalize to the same native API name.
     ;; Codegen must reject these cases instead of emitting uncompilable Swift/C++.

@@ -56,6 +56,7 @@ RKT
     "- Shared Racket logic: `app/backend.rkt`\n"
     "- Windows UI: `windows/MainWindow.xaml` and `windows/MainWindow.xaml.cpp`\n"
     "- macOS UI: `macos-host/Sources/RivetHost/ContentView.swift` and `RivetHostApp.swift`\n"
+    "- Linux UI: `linux/src/main.cpp` (GTK4)\n"
     "- Packaged application resources and icons: configure `resources`, `windows-icon`, and `macos-icon` in `rivet.rktd`\n"
     "- App identity/deployment targets: `rivet.rktd`\n\n"
     "## Ship a build\n\n"
@@ -107,4 +108,10 @@ RKT
   ;; Keep the app host directory distinct from Rivet's own platform/macos
   ;; package. SwiftPM uses the final path element as local package identity.
   (copy-directory/files macos-template (build-path root "macos-host"))
+
+  (define linux-template
+    (build-path (simplify-path rivet-root #t) "platform" "linux" "host"))
+  (unless (directory-exists? linux-template)
+    (error 'rivet-new "Linux host template is missing: ~a" linux-template))
+  (copy-directory/files linux-template (build-path root "linux"))
   root)
