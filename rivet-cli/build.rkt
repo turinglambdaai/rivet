@@ -314,11 +314,23 @@
   ;; Make the linked executable refer to the bundled framework through rpath
   ;; instead of the Racket installation path.
   (define install-name-tool (find-executable-path "install_name_tool"))
+  (define inner-dylib (build-path version-dir "Racket"))
   (run! 'build-project!
         install-name-tool
         "-id"
         (format "@rpath/Racket.framework/Versions/~a/Racket" version-name)
-        (path->string (build-path version-dir "Racket")))
+        (path->string inner-dylib))
+
+  ;; install_name_tool invalidated the dylib's embedded signature, and the
+  ;; dev loop (`raco rivet dev`) launches this stage directly — package-time
+  ;; signing never runs for it. On arm64 AMFI kills the process at page-in,
+  ;; so re-sign ad-hoc here: the inner Mach-O first, then the wrapper
+  ;; (signing the bundle alone leaves the inner dylib stale).
+  (define codesign (find-executable-path "codesign"))
+  (unless codesign
+    (error 'build-project! "codesign was not found; install Xcode command line tools"))
+  (run! 'build-project! codesign "--force" "--sign" "-" (path->string inner-dylib))
+  (run! 'build-project! codesign "--force" "--sign" "-" (path->string destination))
 
   frameworks-dir)
 
