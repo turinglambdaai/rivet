@@ -4,7 +4,7 @@
 
 ## 1. 安装 Rivet
 
-请使用你希望 Rivet 最终嵌入的那套 Racket CS 自带的 `raco`，从 Racket Package Catalog 安装：
+Rivet 要求 Racket 9.0 及以上版本（CS 运行时），不支持老的 BC 引擎。请使用你希望 Rivet 最终嵌入的那套 Racket CS 自带的 `raco`，从 Racket Package Catalog 安装：
 
 ```bash
 raco pkg install --auto rivet

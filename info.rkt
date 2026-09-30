@@ -10,7 +10,7 @@
 (define license 'MIT)
 
 (define deps
-  '("base"
+  '(["base" #:version "9.0"]
     "cext-lib"
     "crypto"
     "crypto-lib"

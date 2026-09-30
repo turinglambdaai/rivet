@@ -4,7 +4,7 @@ This guide takes a fresh machine from “Rivet is installed” to a running nati
 
 ## 1. Install Rivet
 
-Install from the Racket Package Catalog with the `raco` from the Racket CS installation you want Rivet to embed:
+Install from the Racket Package Catalog with the `raco` from the Racket CS installation you want Rivet to embed. Rivet requires Racket 9.0 or newer with the CS runtime; the legacy BC engine is not supported:
 
 ```bash
 raco pkg install --auto rivet
