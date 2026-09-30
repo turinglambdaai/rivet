@@ -29,6 +29,34 @@
      (case (string-ref match 0)
        [(#\&) "&amp;"] [(#\<) "&lt;"] [(#\>) "&gt;"] [else "&quot;"]))))
 
+;; Every project must own its UpgradeCode or two Rivet apps would treat each
+;; other as upgrades and silently replace one another. Derive a stable GUID
+;; from the project identifier under a fixed Rivet installer namespace (any
+;; stable GUID serves here; it is not a registered RFC namespace). The digest
+;; is SHA-256 rather than the RFC 4122 v5 SHA-1 so no extra dependency is
+;; pulled in; the version/variant nibbles are still set so the value is a
+;; well-formed UUID everywhere GUIDs are displayed.
+(define upgrade-code-namespace
+  "b2a3c0de5f4e4a678b2c1d0e9f6a7b88")
+
+(define (digest->hex digest)
+  (string-append*
+   (for/list ([byte (in-bytes digest)])
+     (string (string-ref "0123456789abcdef" (quotient byte 16))
+             (string-ref "0123456789abcdef" (remainder byte 16))))))
+
+(define (upgrade-code-for identifier)
+  (define digest
+    (sha256-bytes (bytes-append (string->bytes/utf-8 upgrade-code-namespace)
+                                (string->bytes/utf-8 identifier))))
+  (define hex (digest->hex digest))
+  (define variant
+    (string-ref "89ab" (remainder (string->number (substring hex 16 17) 16) 4)))
+  (string-append (substring hex 0 8) "-" (substring hex 8 12) "-"
+                 "5" (substring hex 13 16) "-"
+                 (string variant) (substring hex 17 20) "-"
+                 (substring hex 20 32)))
+
 (define (wix-id prefix value)
   (string-append prefix
                  (regexp-replace* #px"[^A-Za-z0-9_.]" value "_")))
@@ -43,6 +71,7 @@
 (define (write-wix-source! project package source)
   (define name (project-name project))
   (define identifier (project-identifier project))
+  (define display-name (project-display-name project))
   (define schemes (project-url-schemes project))
   (define associations (project-file-associations project))
   (define registrations? (or (pair? schemes) (pair? associations)))
@@ -50,12 +79,19 @@
     #:exists 'truncate/replace
     (lambda (out)
       (fprintf out
-               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Wix xmlns=\"http://wixtoolset.org/schemas/v4/wxs\">\n  <Package Name=\"~a\" Manufacturer=\"~a\" Version=\"~a\" UpgradeCode=\"~a\" Scope=\"perMachine\">\n    <MajorUpgrade DowngradeErrorMessage=\"A newer version is already installed.\" />\n    <MediaTemplate EmbedCab=\"yes\" />\n    <Feature Id=\"Main\"><ComponentGroupRef Id=\"ProductComponents\" /></Feature>\n  </Package>\n  <Fragment><StandardDirectory Id=\"ProgramFiles6432Folder\"><Directory Id=\"INSTALLFOLDER\" Name=\"~a\" /></StandardDirectory></Fragment>\n  <Fragment><ComponentGroup Id=\"ProductComponents\" Directory=\"INSTALLFOLDER\">\n"
-               (xml-escape (project-display-name project))
+               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Wix xmlns=\"http://wixtoolset.org/schemas/v4/wxs\">\n  <Package Name=\"~a\" Manufacturer=\"~a\" Version=\"~a\" UpgradeCode=\"~a\" Scope=\"perMachine\">\n    <MajorUpgrade DowngradeErrorMessage=\"A newer version is already installed.\" />\n    <MediaTemplate EmbedCab=\"yes\" />\n    <Feature Id=\"Main\"><ComponentGroupRef Id=\"ProductComponents\" /><ComponentGroupRef Id=\"ShortcutComponents\" /></Feature>\n  </Package>\n  <Fragment><StandardDirectory Id=\"ProgramFiles6432Folder\"><Directory Id=\"INSTALLFOLDER\" Name=\"~a\" /></StandardDirectory></Fragment>\n  <Fragment><StandardDirectory Id=\"ProgramMenuFolder\"><Directory Id=\"ApplicationProgramsFolder\" Name=\"~a\" /></StandardDirectory><StandardDirectory Id=\"DesktopFolder\" /></Fragment>\n  <Fragment><ComponentGroup Id=\"ShortcutComponents\" Directory=\"ApplicationProgramsFolder\">\n    <Component Id=\"StartMenuShortcutComponent\" Guid=\"*\">\n      <Shortcut Id=\"StartMenuApplicationShortcut\" Name=\"~a\" Description=\"~a\" Target=\"[INSTALLFOLDER]RivetHost.exe\" WorkingDirectory=\"INSTALLFOLDER\" />\n      <RemoveFolder Id=\"RemoveApplicationProgramsFolder\" Directory=\"ApplicationProgramsFolder\" On=\"uninstall\" />\n      <RegistryValue Root=\"HKLM\" Key=\"Software\\~a\\Shortcuts\" Name=\"StartMenu\" Type=\"integer\" Value=\"1\" KeyPath=\"yes\" />\n    </Component>\n    <Component Id=\"DesktopShortcutComponent\" Guid=\"*\" Directory=\"DesktopFolder\">\n      <Shortcut Id=\"DesktopApplicationShortcut\" Name=\"~a\" Description=\"~a\" Target=\"[INSTALLFOLDER]RivetHost.exe\" WorkingDirectory=\"INSTALLFOLDER\" />\n      <RegistryValue Root=\"HKLM\" Key=\"Software\\~a\\Shortcuts\" Name=\"Desktop\" Type=\"integer\" Value=\"1\" KeyPath=\"yes\" />\n    </Component>\n  </ComponentGroup></Fragment>\n  <Fragment><ComponentGroup Id=\"ProductComponents\" Directory=\"INSTALLFOLDER\">\n"
+               (xml-escape display-name)
                (xml-escape identifier)
                (xml-escape (project-version project))
-               "6B7D0F2E-8B9D-4FB5-9F69-1B12E50F60C1"
-               (xml-escape name))
+               (upgrade-code-for identifier)
+               (xml-escape name)
+               (xml-escape display-name)
+               (xml-escape display-name)
+               (xml-escape display-name)
+               (xml-escape identifier)
+               (xml-escape display-name)
+               (xml-escape display-name)
+               (xml-escape identifier))
       ;; WiX v4 recursively harvests the verified package at build time,
       ;; preserving the runtime/res hierarchy without a second file list.
       (fprintf out "    <Files Include=\"~a\\**\" />\n"
@@ -174,3 +210,7 @@
     [(macosx) (create-macos-installer! project package production?)]
     [(unix) (create-linux-installer! project package production?)]
     [else (error 'create-installer! "installers target Windows, macOS, and Linux")]))
+
+(module+ test-support
+  (provide write-wix-source!
+           upgrade-code-for))
