@@ -14,9 +14,7 @@
 
 (define (write-text path text)
   (make-parent-directory* path)
-  (call-with-output-file path
-    #:exists 'error
-    (lambda (out) (display text out))))
+  (call-with-output-file path #:exists 'error (lambda (out) (display text out))))
 
 (define backend-template
   #<<RKT
@@ -60,6 +58,8 @@ RKT
     "- Linux UI: `linux/src/main.cpp` (GTK4)\n"
     "- Packaged application resources and icons: configure `resources`, `windows-icon`, and `macos-icon` in `rivet.rktd`\n"
     "- App identity/deployment targets: `rivet.rktd`\n\n"
+    "## When Racket does not already have the capability\n\n"
+    "Run `raco rivet inspect --json` and read `capability-sourcing`. Prefer a built-in or maintained Racket package; keep platform-owned features in the native host; use a small safe FFI wrapper for a stable C ABI; use an argv-based subprocess for coarse-grained tools; reserve a sidecar for persistent or crash-isolated runtimes. The generated `AGENTS.md` contains the safety and packaging checks.\n\n"
     "## Ship a build\n\n"
     "```bash\n"
     "raco rivet build\n"
@@ -99,6 +99,35 @@ returns a failing exit status when the current host is not usable.
 - iOS/iPadOS/watchOS and Android/Wear OS are foundation targets until their
   generated app, embedding, packaging, signing, and device workflows exist.
 
+## Capability sourcing
+
+When a feature is not already present, do not reject Racket or add another
+runtime by reflex. Read `capability-sourcing` from `inspect --json`, then choose
+the narrowest boundary that fits:
+
+1. Prefer a Racket built-in or maintained package. Discover candidates with
+   `raco docs <term>`, `raco pkg show`, and
+   `raco pkg catalog-show --all --only-names`; inspect a candidate with
+   `raco pkg catalog-show --modules <package>`.
+2. Put UI, lifecycle, accessibility, notification, device, and other
+   platform-owned behavior in the first-party native host.
+3. Use FFI for a stable C ABI that needs frequent, low-latency in-process
+   calls. Hide `ffi/unsafe` behind a small safe module with explicit ownership,
+   callback, thread, ABI, and native-library packaging rules.
+4. Use `subprocess` or `system*` for a mature executable doing coarse-grained
+   work. Pass an executable and argv directly; never construct a shell command.
+   Add a version probe, timeout, bounded/concurrently drained output, exit-code
+   handling, cancellation, packaging, and license checks.
+5. Use a sidecar only for a persistent runtime, streaming workload, unstable
+   ABI, or required crash isolation. Own authentication, protocol versioning,
+   resource limits, restart/shutdown, packaging, and offline behavior.
+6. Implement the capability only when it is small or security-critical and
+   owning it is cheaper than owning the dependency boundary.
+
+For every choice, verify Racket 9.0 CS support, license/redistribution terms,
+all target OS/architectures, upstream maintenance, reproducible installation,
+failure behavior, packaged dependency closure, and a clean-machine smoke test.
+
 ## Ownership
 
 Source you may edit:
@@ -137,7 +166,8 @@ AGENTS
   (unless (safe-project-name? name)
     (raise-arguments-error 'rivet-new
                            "invalid project name; use letters, digits, '-' or '_'"
-                           "name" name))
+                           "name"
+                           name))
   (define root (build-path parent name))
   (when (or (directory-exists? root) (file-exists? root))
     (raise-arguments-error 'rivet-new "destination already exists" "path" root))
@@ -159,22 +189,19 @@ AGENTS
   (write-text (build-path root "app" "backend.rkt") backend-template)
   (write-text (build-path root ".gitignore") ".rivet/\nbuild/\ndist/\n.DS_Store\n")
 
-  (define windows-template
-    (build-path (simplify-path rivet-root #t) "platform" "windows" "host"))
+  (define windows-template (build-path (simplify-path rivet-root #t) "platform" "windows" "host"))
   (unless (directory-exists? windows-template)
     (error 'rivet-new "Windows host template is missing: ~a" windows-template))
   (copy-directory/files windows-template (build-path root "windows"))
 
-  (define macos-template
-    (build-path (simplify-path rivet-root #t) "platform" "macos" "host"))
+  (define macos-template (build-path (simplify-path rivet-root #t) "platform" "macos" "host"))
   (unless (directory-exists? macos-template)
     (error 'rivet-new "macOS host template is missing: ~a" macos-template))
   ;; Keep the app host directory distinct from Rivet's own platform/macos
   ;; package. SwiftPM uses the final path element as local package identity.
   (copy-directory/files macos-template (build-path root "macos-host"))
 
-  (define linux-template
-    (build-path (simplify-path rivet-root #t) "platform" "linux" "host"))
+  (define linux-template (build-path (simplify-path rivet-root #t) "platform" "linux" "host"))
   (unless (directory-exists? linux-template)
     (error 'rivet-new "Linux host template is missing: ~a" linux-template))
   (copy-directory/files linux-template (build-path root "linux"))

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add an agent-readable capability-sourcing contract. Generated projects now teach humans and coding agents how to choose among Racket packages, first-party native host APIs, safe FFI wrappers, argv-based CLI integrations, isolated sidecars, and owned implementations; `inspect --json` exposes the same decision order and release/security checklist as structured data.
 - Complete the Linux release path. `raco rivet release` now runs on Linux: the verified self-contained package is packed into a deterministic ustar/gzip archive and signed with a detached Ed25519 signature (`<installer>.tar.gz.sig`, base64), configured through `RIVET_LINUX_SIGN_PRIVATE_KEY` and `RIVET_LINUX_SIGN_KEY_ID`. `raco rivet verify --production` re-derives the archive from the packaged directory, requires a byte-identical match with the released installer, and validates the signature against `RIVET_LINUX_SIGN_PUBLIC_KEY`; update manifests record the artifact as platform `linux`, installer kind `targz`. `raco rivet package --production` on Linux now points to `raco rivet release`, which owns the installer-level signing flow.
 
 ## 0.4.0

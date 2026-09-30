@@ -148,7 +148,23 @@ Rivet **不会**再定义一套跨平台 UI DSL。WinUI 3 和 SwiftUI 按各自�
 
 图片、模板、本地化文件等应用数据可以统一声明在 `rivet.rktd` 中，并由 Racket 通过 `resource-path` 读取。Rivet 会在开发和打包布局之间保持相同的相对路径，详见[项目配置](configuration.md#application-resources-and-icons)。
 
-## 7. 构建、打包、验证
+## 7. 应用需要其他语言生态时怎么办
+
+先运行 `raco rivet inspect --json`。其中的 `capability-sourcing` 会把与
+生成项目 `AGENTS.md` 相同的选择顺序直接提供给编码 Agent：
+
+| 需求 | 优先边界 |
+|---|---|
+| 可移植业务逻辑 | Racket 标准库或 Package Catalog 中维护良好的包 |
+| UI 或操作系统能力 | WinUI、SwiftUI/AppKit、GTK 原生宿主 |
+| 高频、低延迟调用稳定 C ABI | 小而安全的 `ffi/unsafe` 封装 |
+| 已有成熟工具完成的有界任务 | 使用 executable + argv 的 `subprocess`/`system*` |
+| 常驻 runtime、流式任务、不稳定 ABI 或崩溃隔离 | 带认证和版本协商的本地 sidecar |
+| 很小或安全关键的缺失原语 | 自己实现，并建立一致性测试 |
+
+因此，库是否够用不是“Racket 必须独自实现所有东西”的二元问题，而是边界选择问题。无论选择哪条路径，都必须检查许可与再分发、Racket CS、平台和架构、版本固定、资源限制、打包闭包、干净机器运行以及离线行为。完整的 FFI、CLI 和 sidecar 安全规则见 [能力获取策略](agent-native.md#capability-sourcing)。
+
+## 8. 构建、打包、验证
 
 开发完成后：
 
@@ -171,7 +187,7 @@ raco rivet verify --production
 
 完整产品发布还需要单独配置 Ed25519 更新签名密钥并执行 `raco rivet release`。它会继续生成安装包（MSI、DMG 或 Ed25519 签名的 Linux tarball）、签名 channel manifest、SBOM 和第三方许可声明，详见[发布与更新](release-and-updates.md)。
 
-## 8. 日常真正需要记住的命令
+## 9. 日常真正需要记住的命令
 
 通常只需要四条：
 

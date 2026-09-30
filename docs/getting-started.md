@@ -142,7 +142,28 @@ Rivet intentionally does **not** introduce a cross-platform UI DSL. Use the firs
 
 Application data such as images, templates, and localization files can be declared once in `rivet.rktd` and read from Racket with `resource-path`. Rivet preserves relative paths across development and packaged layouts; see [project configuration](configuration.md#application-resources-and-icons).
 
-## 7. Build, package, and verify
+## 7. When the application needs another ecosystem
+
+Start with `raco rivet inspect --json`; its `capability-sourcing` object gives
+coding agents the same decision order as the generated `AGENTS.md`:
+
+| Need | Preferred boundary |
+|---|---|
+| Portable application logic | Racket standard library or maintained Package Catalog package |
+| UI or operating-system behavior | WinUI, SwiftUI/AppKit, or GTK native host |
+| Frequent low-latency calls to a stable C ABI | Small checked `ffi/unsafe` wrapper |
+| Bounded work already implemented by a mature tool | `subprocess`/`system*` with executable + argv |
+| Persistent runtime, streaming, unstable ABI, or crash isolation | Authenticated and versioned local sidecar |
+| Small or security-critical missing primitive | Owned implementation with conformance tests |
+
+Library availability is therefore a boundary-selection problem, not a binary
+test of whether Racket alone already implements everything. Every choice still
+needs license, Racket CS, platform/architecture, versioning, resource-limit,
+packaging, clean-machine, and offline checks. See
+[capability sourcing](agent-native.md#capability-sourcing) for the complete
+workflow and CLI/FFI safety rules.
+
+## 8. Build, package, and verify
 
 When the app is ready to leave the development loop:
 
@@ -165,7 +186,7 @@ Production mode uses application-owned signing credentials. See [production sign
 
 For a complete product release, configure a separate Ed25519 update key and run `raco rivet release`. It adds installer creation (MSI, DMG, or the Ed25519-signed Linux tarball), the signed channel manifest, SBOM, and third-party notices. See [release and updates](release-and-updates.md).
 
-## 8. The normal Rivet workflow
+## 9. The normal Rivet workflow
 
 For day-to-day development, the commands worth remembering are only:
 

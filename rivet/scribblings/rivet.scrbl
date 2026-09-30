@@ -51,6 +51,38 @@ The public libraries are deliberately split into three layers:
 Requiring @racketmodname[rivet] does not eagerly load the system or
 distribution layers.
 
+@section[#:tag "capability-sourcing"]{Finding and Integrating Missing Capabilities}
+
+Rivet applications are not limited to modules implemented inside this
+repository. Start with Racket's standard libraries and Package Catalog, then
+choose the narrowest maintainable integration boundary:
+
+@itemlist[
+ @item{Use a maintained Racket package for portable application logic. Inspect
+       installed packages with @exec{raco pkg show}, package metadata with
+       @exec{raco pkg catalog-show --modules} and local documentation with
+       @exec{raco docs}.}
+ @item{Keep UI, lifecycle, accessibility, device, and operating-system services
+       in the WinUI, SwiftUI/AppKit, or GTK native host.}
+ @item{Use @tt{ffi/unsafe} behind a small checked Racket module when
+       a stable C ABI requires frequent in-process calls. Explicitly own
+       pointers, callbacks, threads, ABI checks, and native-library packaging.}
+ @item{Use @racket[subprocess] or @racket[system*] for coarse-grained tools.
+       Pass an executable and argument vector instead of constructing a shell
+       command; add timeouts, bounded and concurrently drained output,
+       cancellation, exit checks, version probes, packaging, and license
+       verification.}
+ @item{Reserve a sidecar for persistent or streaming runtimes, unstable ABIs,
+       or required crash isolation. Own authentication, version negotiation,
+       resource limits, lifecycle, recovery, distribution, and offline
+       behavior.}]
+
+Generated projects repeat this decision order in @filepath{AGENTS.md}, and
+@exec{raco rivet inspect --json} exposes it as structured
+@tt{capability-sourcing} data. Every external capability must also pass license,
+Racket CS, platform/architecture, deterministic installation, failure-path,
+packaged dependency-closure, and clean-machine checks.
+
 @section{Application Backend}
 
 @defmodule[rivet]
