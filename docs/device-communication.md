@@ -7,6 +7,8 @@ Rivet separates two boundaries that solve different problems:
 
 Keeping these layers separate lets an iPhone or iPad embed Racket CS while an Apple Watch remains a lightweight companion. It also leaves room for a future independently embedded watch runtime without making that the default or coupling WatchConnectivity details to RVT1.
 
+A phone can also be a client of a desktop-hosted backend. That direction needs a long-lived authenticated session, Events, State, discovery, pairing, and an explicit API allowlist rather than the request/reply semantics below. It is specified in the [network device channel design](network-device-channel.md); the design is not yet a shipped transport.
+
 ## Typed requests
 
 Define a request and its response with normal `Codable` Swift types:
