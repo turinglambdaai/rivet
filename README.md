@@ -132,12 +132,13 @@ The mobile targets are foundations, not a claim of finished app delivery. The ph
 | Capability | Android phone / tablet | Wear OS |
 |---|---|---|
 | Kotlin RVT1 codec | ✅ shared golden vectors | ✅ portable Kotlin core |
+| Coroutine runtime client | ✅ Request/Event/State/Cancel | ✅ portable Kotlin core |
 | Typed generated client | planned | planned companion client |
 | Native UI host | planned Jetpack Compose | planned Compose for Wear OS |
 | Embedded Racket CS / JNI | not yet | companion mode by default |
 | `raco rivet new/build/package` app flow | not yet | not yet |
 
-The checked-in Gradle wrapper is version-pinned and checksum-verified. Android currently has a tested protocol foundation; JNI runtime hosting, Compose scaffolds, code generation, packaging, signing, and device/emulator round trips remain before developer-preview status. See [Android architecture](docs/android.md).
+The checked-in Gradle wrapper is version-pinned and checksum-verified. Android currently has a tested protocol and coroutine-client foundation; JNI runtime hosting, Compose scaffolds, code generation, packaging, signing, and device/emulator round trips remain before developer-preview status. See [Android architecture](docs/android.md).
 
 ## Requirements
 
@@ -269,7 +270,7 @@ rivet/
 │   ├── macos/
 │       ├── Sources/          # Swift protocol/client + C embedding bridge
 │       └── host/             # SwiftUI scaffold
-│   └── android/              # Kotlin RVT1 codec and Gradle build
+│   └── android/              # Kotlin RVT1 protocol/runtime and Gradle build
 ├── tests/
 └── docs/
 ```
@@ -291,7 +292,7 @@ CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exerc
 
 - **Linux is a developer preview** — the complete daily CLI path works, but production signing, distro-native installers, system services, and compositor-specific behavior are not complete.
 - **Apple mobile delivery is foundational** — the portable Swift and typed WatchConnectivity layers exist, but iOS/iPadOS/watchOS project generation, runtime packaging, signing, and store delivery are not complete.
-- **Android remains foundational** — its Kotlin RVT1 codec and pinned Gradle build are tested, but Jetpack Compose, JNI, portable Racket CS packaging, generated clients, signing, and device delivery are not complete.
+- **Android remains foundational** — its Kotlin RVT1 codec, coroutine runtime client, and pinned Gradle build are tested, but Jetpack Compose, JNI, portable Racket CS packaging, generated clients, signing, and device delivery are not complete.
 - **Windows starts with x64** — additional architectures can be added after the runtime packaging path is stable.
 - **No cross-platform declarative UI DSL** — native UI code remains SwiftUI/AppKit or WinUI 3/C++/WinRT.
 - **Publisher credentials remain application-specific** — Rivet automates Authenticode and Developer ID/notarization flows, but certificates, PFX passwords, and Apple notary profiles are intentionally supplied by the application/CI environment rather than stored by Rivet.

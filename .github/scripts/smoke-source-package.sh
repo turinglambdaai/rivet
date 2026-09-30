@@ -19,6 +19,8 @@ archive="$(cd "$(dirname "$archive")" && pwd)/$(basename "$archive")"
 unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/build.gradle.kts$'
 unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/gradle/wrapper/gradle-wrapper.jar$'
 unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet/runtime/Protocol.kt$'
+unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet/runtime/Client.kt$'
+unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet/runtime/State.kt$'
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT

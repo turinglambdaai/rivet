@@ -6,6 +6,7 @@
 - Promote Linux from a manually built GTK4 experiment to a developer preview: new projects include the Linux host, code generation emits a `rivet::linux_runtime` client, and `doctor`, `build`, `dev`, `package`, and `verify` support a statically embedded Racket CS runtime with real end-to-end CI.
 - Make the portable Swift runtime available to iOS/iPadOS 16 and watchOS 9, and add a bounded, versioned `RivetDevice` request/response layer with a WatchConnectivity adapter for type-safe phone/watch companion communication.
 - Add a Kotlin RVT1 codec foundation for Android, pinned Gradle tooling, and CI coverage against the same protocol vectors used by Racket, C++, and Swift.
+- Add an Android coroutine client with bounded concurrent calls, Events, State helpers, backend errors, cancellation ordering, lifecycle enforcement, and deterministic Shutdown/stream cleanup.
 
 ## 0.3.0
 

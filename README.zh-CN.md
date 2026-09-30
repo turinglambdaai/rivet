@@ -132,12 +132,13 @@ Windows 和 macOS 仍是生产发布目标。Linux 已进入开发者预览：�
 | 能力 | Android 手机 / 平板 | Wear OS |
 |---|---|---|
 | Kotlin RVT1 codec | ✅ 共享 golden vectors | ✅ 可移植 Kotlin 核心 |
+| 协程 runtime 客户端 | ✅ Request/Event/State/Cancel | ✅ 可移植 Kotlin 核心 |
 | 类型化客户端生成 | 计划中 | 计划采用 companion client |
 | 原生 UI 宿主 | 计划采用 Jetpack Compose | 计划采用 Compose for Wear OS |
 | Embedded Racket CS / JNI | 尚未完成 | 默认 companion 模式 |
 | `raco rivet new/build/package` 应用链 | 尚未完成 | 尚未完成 |
 
-仓库内的 Gradle wrapper 固定了版本并校验下载摘要。Android 目前具备经过测试的协议基础；JNI runtime 宿主、Compose 脚手架、代码生成、打包签名和设备/模拟器 round-trip 完成后，才能进入开发者预览。详见 [Android 架构](docs/android.md)。
+仓库内的 Gradle wrapper 固定了版本并校验下载摘要。Android 目前具备经过测试的协议与协程客户端基础；JNI runtime 宿主、Compose 脚手架、代码生成、打包签名和设备/模拟器 round-trip 完成后，才能进入开发者预览。详见 [Android 架构](docs/android.md)。
 
 ## 环境要求
 
@@ -269,7 +270,7 @@ rivet/
 │   ├── macos/
 │       ├── Sources/          # Swift protocol/client + C embedding bridge
 │       └── host/             # SwiftUI 模板
-│   └── android/              # Kotlin RVT1 codec 与 Gradle 构建
+│   └── android/              # Kotlin RVT1 协议/runtime 与 Gradle 构建
 ├── tests/
 └── docs/
 ```
@@ -291,7 +292,7 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
 
 - **Linux 是开发者预览** —— 日常 CLI 全链路已完成，但生产签名、发行版原生安装包、系统服务和 compositor 行为还未完成。
 - **Apple 移动端仍是基础阶段** —— 可移植 Swift 与类型安全 WatchConnectivity 层已经存在，但 iOS/iPadOS/watchOS 项目生成、runtime 打包、签名和商店交付还未完成。
-- **Android 仍处于基础阶段** —— Kotlin RVT1 codec 与固定版本的 Gradle 构建已经过测试，但 Jetpack Compose、JNI、portable Racket CS 打包、客户端生成、签名和设备交付尚未完成。
+- **Android 仍处于基础阶段** —— Kotlin RVT1 codec、协程 runtime 客户端与固定版本的 Gradle 构建已经过测试，但 Jetpack Compose、JNI、portable Racket CS 打包、客户端生成、签名和设备交付尚未完成。
 - **Windows 先支持 x64** —— runtime 打包链稳定后再扩展其他架构。
 - **没有统一声明式跨平台 UI DSL** —— UI 代码仍然直接写 SwiftUI/AppKit 或 WinUI 3/C++/WinRT。
 - **正式发布凭据仍属于应用自身** —— Rivet 已自动化 Authenticode、Developer ID、notarization 流程，但证书、PFX 密码、Apple notary profile 会由应用/CI 环境注入，不由 Rivet 保存。
