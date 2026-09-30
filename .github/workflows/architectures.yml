@@ -32,12 +32,14 @@ jobs:
           if ($hash -ne 'fcccd112afd3c8fecfdaf56d2a2fc3213fe006d8e4eac525ceaee56f10628a01') {
             throw "Racket 9.3 arm64 installer checksum mismatch: $hash"
           }
-          # NSIS silent install; /D must be last and unquoted.
+          # NSIS silent install; /D must be last and unquoted. On Windows the
+          # Racket executables (racket.exe, raco.exe) live in the install root,
+          # not a bin/ directory.
           Start-Process -FilePath $installer -ArgumentList '/S','/D=C:\Racket' -Wait -NoNewWindow
-          if (-not (Test-Path 'C:\Racket\bin\racket.exe')) {
-            throw 'Racket arm64 silent install did not produce C:\Racket\bin\racket.exe'
+          if (-not (Test-Path 'C:\Racket\racket.exe')) {
+            throw 'Racket arm64 silent install did not produce C:\Racket\racket.exe'
           }
-          Add-Content $env:GITHUB_PATH 'C:\Racket\bin'
+          Add-Content $env:GITHUB_PATH 'C:\Racket'
       - name: Install Rivet
         shell: pwsh
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
@@ -198,7 +200,14 @@ jobs:
           export PATH="$RUNNER_TEMP/racket-embed/bin:$PATH"
           embed_prefix="$RUNNER_TEMP/racket-embed"
 
-          racket_include="$embed_prefix/include"
+          # Unix-style source installs place the embed headers under
+          # include/racket (includepltdir), not include/ directly. Locate the
+          # directory that actually holds chezscheme.h.
+          racket_include="$(dirname "$(find "$embed_prefix" -name chezscheme.h -print -quit)")"
+          if [[ -z "$racket_include" || "$racket_include" = "." ]]; then
+            echo "chezscheme.h was not found under $embed_prefix" >&2
+            exit 1
+          fi
           petite_source="$(find "$embed_prefix" -name petite.boot -print -quit)"
           scheme_source="$(find "$embed_prefix" -name scheme.boot -print -quit)"
           racket_boot_source="$(find "$embed_prefix" -name racket.boot -print -quit)"
