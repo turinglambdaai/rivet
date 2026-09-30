@@ -159,12 +159,31 @@
   destination)
 
 (define (sign-macos! codesign identity entitlements racket-framework app production?)
+  ;; Hardened runtime (`--options runtime`) is for production distribution:
+  ;; with an ad-hoc development signature, its library validation rejects
+  ;; the embedded ad-hoc Racket dylib at launch with a misleading
+  ;; "different Team IDs" AMFI error.
   (define common
     (append
-     (list "--force" "--sign" identity "--options" "runtime")
-     (if production? (list "--timestamp") '())))
-  ;; Sign nested code first, then the outer app. This is more deterministic
-  ;; than asking --deep to infer the signing order.
+     (list "--force" "--sign" identity)
+     (if production? (list "--options" "runtime" "--timestamp") '())))
+  ;; Sign nested code first, then the outer app. Signing the framework
+  ;; bundle alone leaves the inner dylib's stale signature (it was modified
+  ;; by install_name_tool during staging), so the inner Mach-O is signed
+  ;; explicitly before the wrapper.
+  (define inner-dylib
+    (for/first ([version (in-list (sort
+                                   (map path->string
+                                        (directory-list
+                                         (build-path racket-framework "Versions")))
+                                   string<?))]
+                #:when (regexp-match? #rx"_CS$" version))
+      (build-path racket-framework "Versions" version "Racket")))
+  (when inner-dylib
+    (apply run!
+           'package-project!
+           codesign
+           (append common (list (path->string inner-dylib)))))
   (apply run!
          'package-project!
          codesign
