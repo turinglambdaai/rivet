@@ -98,6 +98,14 @@ final class AppModel: ObservableObject {
                 core
             ]
             if required.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) {
+                // The embedded runtime resolves its staged foreign libraries
+                // (libgmp, libcrypto, libssl — placed under runtime/lib by
+                // `raco ctool`) relative to the process working directory.
+                // Packaged apps must therefore run from their Resources
+                // directory, or backend start fails with "could not load
+                // foreign library" even though the libraries ship in the
+                // bundle.
+                FileManager.default.changeCurrentDirectoryPath(root.path)
                 return EmbeddedRacketConfiguration(
                     executable: executable,
                     petiteBoot: required[0],
