@@ -5,6 +5,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Release artifacts must not embed developer-machine library search paths;
+# every linked library (GTK4, GIO, libsecret, curses, LZ4, zlib) is a system
+# dependency resolved by the normal loader search on the target machine.
+set(CMAKE_SKIP_RPATH TRUE)
+
 # RIVET_ROOT points at the installed Rivet package. `raco rivet build` sets
 # it; manual builds may export it themselves.
 if(NOT DEFINED ENV{RIVET_ROOT})
@@ -24,6 +29,10 @@ find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 find_library(LZ4_LIBRARY NAMES lz4 REQUIRED)
 pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
+pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET gio-2.0)
+# The Secret Service adapter is compiled whenever libsecret is present; the
+# capability then reports itself at runtime based on service availability.
+pkg_check_modules(LIBSECRET IMPORTED_TARGET libsecret-1)
 if(DEFINED ENV{RIVET_RACKET_LIBRARY})
   set(RACKETCS_LIBRARY "$ENV{RIVET_RACKET_LIBRARY}")
 elseif(DEFINED ENV{RIVET_RACKET_LIB_DIR})
@@ -40,18 +49,25 @@ endif()
 add_executable(RivetHost
   src/main.cpp
   "${RIVET_ROOT}/platform/linux/runtime/backend.cpp"
+  "${RIVET_ROOT}/platform/linux/system/system_services.cpp"
   "${RIVET_ROOT}/runtime/src/protocol.cpp"
 )
+
+if(LIBSECRET_FOUND)
+  target_compile_definitions(RivetHost PRIVATE RIVET_HAVE_LIBSECRET=1)
+endif()
 
 target_include_directories(RivetHost PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}"
   "${RIVET_ROOT}/platform/linux/runtime"
+  "${RIVET_ROOT}/platform/linux/system"
   "${RIVET_ROOT}/runtime/include"
   "$ENV{RIVET_RACKET_INCLUDE}"
 )
 
 target_link_libraries(RivetHost PRIVATE
   PkgConfig::GTK4
+  PkgConfig::GLIB
   ${RACKETCS_LIBRARY}
   ZLIB::ZLIB
   ${LZ4_LIBRARY}
@@ -59,5 +75,9 @@ target_link_libraries(RivetHost PRIVATE
   Threads::Threads
   ${CMAKE_DL_LIBS}
 )
+
+if(LIBSECRET_FOUND)
+  target_link_libraries(RivetHost PRIVATE PkgConfig::LIBSECRET)
+endif()
 
 target_compile_options(RivetHost PRIVATE -Wall -Wextra -Wpedantic)

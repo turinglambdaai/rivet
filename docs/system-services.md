@@ -35,8 +35,23 @@ The host owns the window handle and receives tray callbacks on its WinUI thread.
 
 macOS asks the user for notification and login-item consent as required by the OS. Code must not treat denial as a crash.
 
+## Linux
+
+`platform/linux/system` uses first-party Linux desktop surfaces, selected for the same independence rules as the other platforms:
+
+- an abstract-namespace Unix socket for the single-instance lease; secondaries forward their activation arguments to the primary over that socket;
+- `ActivationArguments()` from `/proc/self/cmdline` for URL-scheme and file-association payloads registered by installers;
+- `org.freedesktop.Notifications` over the session bus (GDBus), with stable notification ids for tagged replacements;
+- XDG autostart entries under `$XDG_CONFIG_HOME/autostart`;
+- the Secret Service provider (GNOME Keyring, KWallet bridge) through libsecret for binary secrets; the capability is compiled in when libsecret is present and reported at runtime only when a provider is reachable;
+- `sigaction` fatal-signal hooks that append a preformatted note (signal number plus restart arguments) to a file under the XDG state directory.
+
+`rivet::system::Capabilities()` reports what the running session actually provides; a missing session bus, Secret Service provider, or libsecret build fails clearly at call time instead of silently degrading. The tray contract is deliberately absent: StatusNotifierItem hosting is compositor-dependent (GNOME hosts it only through an extension), so tray presence must be an explicit application decision rather than an adapter default.
+
+The Linux integration binary self-checks the adapter (`RivetIntegration --system`): lease acquisition and activation forwarding, autostart entries, and the crash hook always run; notification and secure-storage checks skip themselves when the session lacks those services.
+
 ## Settings, logs, and crashes
 
-`make-settings-store` reads a JSON object and writes updates through an atomic replacement under a semaphore. The application chooses the path, normally its platform Application Support/AppData directory. Secrets do not belong in settings; use secure storage.
+`make-settings-store` reads a JSON object and writes updates through an atomic replacement under a semaphore. The application chooses the path, normally its platform Application Support/AppData directory (on Linux, a file under the XDG state or config directories). Secrets do not belong in settings; use secure storage.
 
 `rivet-log` emits structured records to `current-rivet-log-sink`. `call-with-crash-reporting` records an escaping Racket exception and invokes `current-rivet-crash-reporter` before re-raising it. Native fatal hooks are deliberately minimal: crash handlers must avoid allocations and network access, then let a helper submit the report on the next launch.
