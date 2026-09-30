@@ -438,6 +438,18 @@ void SingleInstanceLease::set_activation_handler(ActivationHandler handler) {
         if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
         break;
       }
+      // The abstract namespace has no permission bits, so any local process
+      // can connect. Forwarded activations tell the primary which files and
+      // URLs to open, which crosses a trust boundary when another user on a
+      // shared machine injects them; require the peer to share our uid.
+      ucred credentials{};
+      socklen_t credentials_size = sizeof(credentials);
+      if (::getsockopt(connection, SOL_SOCKET, SO_PEERCRED, &credentials,
+                       &credentials_size) != 0 ||
+          credentials.uid != ::geteuid()) {
+        ::close(connection);
+        continue;
+      }
       try {
         auto arguments = read_arguments(connection);
         unsigned char acknowledgement = 0x01;
