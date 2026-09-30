@@ -11,7 +11,7 @@ unambiguous.
 Status: **developer preview**. CI compiles the runtime bridge against Racket's
 public embedding headers and exercises startup, concurrent RPCs, State access,
 cancellation, overload, shutdown, project scaffolding, CLI build, packaging,
-and verification against a real embedded Racket CS instance.
+verification, and release against a real embedded Racket CS instance.
 
 ## Layout
 
@@ -51,9 +51,11 @@ platform host consumes) next to `RivetHost`. `raco rivet build`, `dev`, and
 
 ## Honest gaps
 
-- Production signing and distro-native installers are not defined yet; Linux
-  packaging currently produces a verified self-contained application directory
-  whose GTK/system-library dependencies are audited with `ldd`.
+- Production releases use `raco rivet release`: a deterministic self-contained
+  `.tar.gz` with a detached Ed25519 signature, verified by re-deriving the
+  archive from the package directory. Distro-native packages (`.deb`/`.rpm`,
+  AppImage, apt repository trust) and OS-integrated update installation are
+  follow-up work.
 - GTK is a toolkit, not a display protocol: global hotkeys and always-on-top
   overlays are compositor-dependent. Application hosts that need them must
   define an explicit X11/Wayland policy.

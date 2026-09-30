@@ -3,8 +3,8 @@
 Rivet keeps development packaging and production trust credentials deliberately separate.
 
 - `raco rivet package` creates the normal self-contained development distributable. macOS uses ad-hoc signing so the bundle can be validated locally.
-- `raco rivet package --production` requires real platform signing credentials. Windows is Authenticode-signed and RFC 3161 timestamped. macOS is Developer ID signed, submitted to Apple notarization, stapled, and then production-verified.
-- `raco rivet verify --production` re-checks the platform production trust requirements on an existing artifact.
+- `raco rivet package --production` requires real platform signing credentials. Windows is Authenticode-signed and RFC 3161 timestamped. macOS is Developer ID signed, submitted to Apple notarization, stapled, and then production-verified. On Linux, production packaging is `raco rivet release`: the final installer is signed with a detached Ed25519 signature instead of OS-level code signing.
+- `raco rivet verify --production` re-checks the platform production trust requirements on an existing artifact. On Linux this re-derives the installer archive from the package directory and validates its Ed25519 signature.
 
 Rivet does not store certificate passwords, private keys, Apple credentials, or notary credentials in `rivet.rktd`.
 
@@ -59,6 +59,21 @@ Production packaging performs these steps:
 
 The temporary notarization ZIP is a build artifact, not a credential store.
 
+## Linux
+
+Linux has no OS-level code-signing gate, so Rivet defines production trust at the installer level and reuses the distribution layer's audited Ed25519 primitives:
+
+- `raco rivet release` packs the verified self-contained package into a deterministic `.tar.gz` (sorted ustar entries, epoch timestamps, root ownership, timestamp-free gzip) and writes a detached Ed25519 signature beside it as `<installer>.sig` (base64).
+- The same deterministic archive makes verification strong: `raco rivet verify --production` rebuilds the archive from the packaged directory, requires a byte-identical match with the released installer, and validates the detached signature with the configured public key.
+
+Set:
+
+- `RIVET_LINUX_SIGN_PRIVATE_KEY` — path to a DER-encoded Ed25519 private key used to sign the installer.
+- `RIVET_LINUX_SIGN_KEY_ID` — public identifier for the signing key.
+- `RIVET_LINUX_SIGN_PUBLIC_KEY` — path to the matching DER-encoded public key, required by `raco rivet verify --production`.
+
+Generate the key pair outside the repository with the same openssl flow as the update key. Distro-native packages (`.deb`/`.rpm`, AppImage, apt repository GPG trust) remain follow-up work; the signed self-contained tarball is the current production artifact.
+
 ## CI secrets
 
 Production signing should run in a separate trusted release job or environment, not in pull-request CI.
@@ -73,4 +88,4 @@ The normal Rivet CI intentionally exercises only development packaging. It verif
 
 Online updates use a separate Ed25519 key; Authenticode, Developer ID, notarization, and HTTPS are additional layers rather than substitutes. Set `RIVET_UPDATE_PRIVATE_KEY` to a DER-encoded private key path and `RIVET_UPDATE_KEY_ID` to its public identifier only in the trusted release environment. The public key is embedded by the application, while the private key must never enter the source tree or ordinary pull-request CI.
 
-`raco rivet release` signs the contained application and final installer with the platform identity, then signs the update manifest payload with Ed25519. See [Release and updates](release-and-updates.md) for rotation and rollback policy.
+`raco rivet release` signs the contained application and final installer with the platform identity (Authenticode, Developer ID, or the Linux Ed25519 artifact key), then signs the update manifest payload with Ed25519. See [Release and updates](release-and-updates.md) for rotation and rollback policy.

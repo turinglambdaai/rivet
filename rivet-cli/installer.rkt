@@ -5,9 +5,12 @@
          racket/path
          racket/string
          racket/system
+         "../rivet/distribution/crypto.rkt"
+         "linux-package.rkt"
          "package.rkt"
          "project.rkt"
-         "signing-options.rkt")
+         "signing-options.rkt"
+         "tar.rkt")
 
 (provide create-installer!)
 
@@ -139,8 +142,35 @@
     (run! 'create-installer! xcrun "stapler" "staple" (path->string output)))
   output)
 
+(define (create-linux-installer! project package production?)
+  (define output (linux-installer-path project))
+  (make-directory* (project-path project "dist"))
+  ;; The archive root keeps the verified package's own name so extraction is
+  ;; self-contained, mirroring the DMG's top-level application directory.
+  (define archive
+    (gzip-archive-bytes
+     (tar-directory->bytes
+      package
+      #:root-name (path->string (file-name-from-path package)))))
+  (call-with-output-file output
+    #:exists 'truncate/replace
+    (lambda (out) (write-bytes archive out)))
+  (when production?
+    (define settings (load-linux-production-signing))
+    (define signature
+      (ed25519-sign
+       (read-ed25519-private-key
+        (string->path (linux-signing-private-key settings)))
+       archive))
+    (call-with-output-file (string-append (path->string output) ".sig")
+      #:exists 'truncate/replace
+      (lambda (out)
+        (displayln (bytes->base64-string signature) out))))
+  output)
+
 (define (create-installer! project package #:production? [production? #f])
   (case (system-type 'os)
     [(windows) (create-windows-installer! project package production?)]
     [(macosx) (create-macos-installer! project package production?)]
-    [else (error 'create-installer! "installers target Windows and macOS")]))
+    [(unix) (create-linux-installer! project package production?)]
+    [else (error 'create-installer! "installers target Windows, macOS, and Linux")]))

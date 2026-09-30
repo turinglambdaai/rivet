@@ -114,11 +114,11 @@ See [architecture](docs/architecture.md), [agent-native development](docs/agent-
 | Typed generated client | ✅ C++ | ✅ Swift | ✅ C++ |
 | `new` / `doctor` / `build` / `dev` | ✅ | ✅ | ✅ |
 | `package` / `verify` | ✅ dependency audit | ✅ signing/rpath/plist audit | 🧪 directory + `ldd` audit |
-| Production signing / installer | ✅ Authenticode + MSI | ✅ Developer ID + DMG | — distro-specific work remains |
+| Production signing / installer | ✅ Authenticode + MSI | ✅ Developer ID + DMG | 🧪 Ed25519-signed tarball via `raco rivet release` |
 | System services / secure storage | ✅ | ✅ | — |
 | Real embedded-runtime CI | ✅ | ✅ | ✅ |
 
-Windows and macOS remain the production release targets. Linux is now a developer preview with the complete daily CLI path and real embedded-runtime CI; distro-native installers, signing policy, system-service adapters, and explicit X11/Wayland policy remain before production status.
+Windows and macOS remain the production release targets. Linux is a developer preview with the complete daily CLI path, an Ed25519-signed release artifact, and real embedded-runtime CI; distro-native installers, system-service adapters, and an explicit X11/Wayland policy remain before production status.
 
 ### Apple mobile foundation
 
