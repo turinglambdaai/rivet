@@ -97,7 +97,7 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 
 嵌入模型受到 [Noise](https://github.com/Bogdanp/Noise) 的启发，但 Rivet 把 runtime contract、协议、代码生成和生命周期都做成平台无关的统一核心，而不是以 Swift 为中心。
 
-深入设计见 [架构](docs/architecture.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[项目配置](docs/configuration.md)、[系统服务](docs/system-services.md)、[发布与更新](docs/release-and-updates.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
+深入设计见 [架构](docs/architecture.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[类型安全设备通信](docs/device-communication.md)、[项目配置](docs/configuration.md)、[系统服务](docs/system-services.md)、[发布与更新](docs/release-and-updates.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
 
 ## 平台支持状态
 
@@ -114,6 +114,18 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 | 真实嵌入运行时 CI | ✅ | ✅ | ✅ |
 
 Windows 和 macOS 仍是生产发布目标。Linux 已进入开发者预览：日常 CLI 全链路和真实 embedded-runtime CI 已完成；发行版原生安装包、签名策略、系统服务以及明确的 X11/Wayland 策略仍是进入生产级之前的工作。
+
+### Apple 移动端基础
+
+| 能力 | iPhone / iPad | Apple Watch |
+|---|---|---|
+| 可移植 Swift 协议/runtime | ✅ iOS/iPadOS 16+ | ✅ watchOS 9+ |
+| 类型安全跨设备请求/响应 | ✅ | ✅ |
+| WatchConnectivity 适配 | ✅ 手机端 | ✅ 手表端 |
+| Embedded Racket CS 应用宿主 | 计划采用 portable-bytecode runtime | 默认 companion 模式 |
+| `raco rivet new/build/package` 应用链 | 尚未完成 | 尚未完成 |
+
+这些是移动端基础能力，不代表完整应用交付已经完成。下一阶段是手机/平板 embedded runtime 和原生 SwiftUI 脚手架；watchOS 则有意从连接手机后端的类型安全 companion 模式开始。
 
 ## 环境要求
 
@@ -264,6 +276,8 @@ CI 会在 Windows、macOS、Linux 上验证协议实现和真实 embedded Racket
 ## 诚实的局限
 
 - **Linux 是开发者预览** —— 日常 CLI 全链路已完成，但生产签名、发行版原生安装包、系统服务和 compositor 行为还未完成。
+- **Apple 移动端仍是基础阶段** —— 可移植 Swift 与类型安全 WatchConnectivity 层已经存在，但 iOS/iPadOS/watchOS 项目生成、runtime 打包、签名和商店交付还未完成。
+- **Android 尚未实现** —— Jetpack Compose、JNI、portable Racket CS 打包和 Gradle 集成仍是独立产品工作。
 - **Windows 先支持 x64** —— runtime 打包链稳定后再扩展其他架构。
 - **没有统一声明式跨平台 UI DSL** —— UI 代码仍然直接写 SwiftUI/AppKit 或 WinUI 3/C++/WinRT。
 - **正式发布凭据仍属于应用自身** —— Rivet 已自动化 Authenticode、Developer ID、notarization 流程，但证书、PFX 密码、Apple notary profile 会由应用/CI 环境注入，不由 Rivet 保存。

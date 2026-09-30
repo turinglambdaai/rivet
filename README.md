@@ -97,7 +97,7 @@ Racket CS runs on a dedicated runtime thread. Native UI code never manipulates R
 
 The embedding model is inspired by [Noise](https://github.com/Bogdanp/Noise), but Rivet makes the runtime contract, protocol, code generation, and lifecycle cross-platform instead of Swift-first.
 
-See [architecture](docs/architecture.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [project configuration](docs/configuration.md), [system services](docs/system-services.md), [release and updates](docs/release-and-updates.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
+See [architecture](docs/architecture.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [typed device communication](docs/device-communication.md), [project configuration](docs/configuration.md), [system services](docs/system-services.md), [release and updates](docs/release-and-updates.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
 
 ## Platform status
 
@@ -114,6 +114,18 @@ See [architecture](docs/architecture.md), [protocol](docs/protocol.md), [embeddi
 | Real embedded-runtime CI | ✅ | ✅ | ✅ |
 
 Windows and macOS remain the production release targets. Linux is now a developer preview with the complete daily CLI path and real embedded-runtime CI; distro-native installers, signing policy, system-service adapters, and explicit X11/Wayland policy remain before production status.
+
+### Apple mobile foundation
+
+| Capability | iPhone / iPad | Apple Watch |
+|---|---|---|
+| Portable Swift protocol/runtime | ✅ iOS/iPadOS 16+ | ✅ watchOS 9+ |
+| Typed cross-device request/response | ✅ | ✅ |
+| WatchConnectivity adapter | ✅ phone endpoint | ✅ watch endpoint |
+| Embedded Racket CS app host | planned portable-bytecode runtime | companion mode by default |
+| `raco rivet new/build/package` app flow | not yet | not yet |
+
+The mobile targets are foundations, not a claim of finished app delivery. The phone/tablet embedded runtime and native SwiftUI scaffolds come next; watchOS deliberately starts as a typed companion to the phone-hosted backend.
 
 ## Requirements
 
@@ -264,6 +276,8 @@ CI runs the protocol implementation across Windows, macOS, and Linux, exercises 
 ## Honest gaps
 
 - **Linux is a developer preview** — the complete daily CLI path works, but production signing, distro-native installers, system services, and compositor-specific behavior are not complete.
+- **Apple mobile delivery is foundational** — the portable Swift and typed WatchConnectivity layers exist, but iOS/iPadOS/watchOS project generation, runtime packaging, signing, and store delivery are not complete.
+- **Android is not implemented yet** — Jetpack Compose, JNI, portable Racket CS packaging, and Gradle integration remain separate product work.
 - **Windows starts with x64** — additional architectures can be added after the runtime packaging path is stable.
 - **No cross-platform declarative UI DSL** — native UI code remains SwiftUI/AppKit or WinUI 3/C++/WinRT.
 - **Publisher credentials remain application-specific** — Rivet automates Authenticode and Developer ID/notarization flows, but certificates, PFX passwords, and Apple notary profiles are intentionally supplied by the application/CI environment rather than stored by Rivet.

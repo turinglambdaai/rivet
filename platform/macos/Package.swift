@@ -6,12 +6,16 @@ import PackageDescription
 let macosMinVersion = ProcessInfo.processInfo.environment["RIVET_MACOS_MIN_VERSION"] ?? "14.0"
 
 let package = Package(
-    name: "RivetMac",
+    name: "RivetApple",
     platforms: [
-        .macOS(macosMinVersion)
+        .macOS(macosMinVersion),
+        .iOS(.v16),
+        .watchOS(.v9)
     ],
     products: [
         .library(name: "RivetRuntime", targets: ["RivetRuntime"]),
+        .library(name: "RivetDevice", targets: ["RivetDevice"]),
+        .library(name: "RivetWatchConnectivity", targets: ["RivetWatchConnectivity"]),
         .library(name: "RivetEmbedding", targets: ["RivetEmbedding"]),
         .library(name: "RivetSystem", targets: ["RivetSystem"])
     ],
@@ -19,6 +23,15 @@ let package = Package(
         .target(
             name: "RivetRuntime",
             path: "Sources/RivetRuntime"
+        ),
+        .target(
+            name: "RivetDevice",
+            path: "Sources/RivetDevice"
+        ),
+        .target(
+            name: "RivetWatchConnectivity",
+            dependencies: ["RivetDevice"],
+            path: "Sources/RivetWatchConnectivity"
         ),
         .target(
             name: "CRivetRacket",
@@ -44,6 +57,11 @@ let package = Package(
             name: "RivetRuntimeTests",
             dependencies: ["RivetRuntime"],
             path: "Tests/RivetRuntimeTests"
+        ),
+        .testTarget(
+            name: "RivetDeviceTests",
+            dependencies: ["RivetDevice"],
+            path: "Tests/RivetDeviceTests"
         )
     ]
 )
