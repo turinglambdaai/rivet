@@ -67,7 +67,7 @@ The Racket backend declares the API shared by both native hosts:
   (serve-fds in-fd out-fd))
 ```
 
-`raco rivet build` reads the RPC, Event, State, and Record schema and generates typed native clients. Swift gets methods such as `increment(value:)`, `getCounter()`, and `setCounter(_:)`; C++ gets their native equivalents.
+`raco rivet build` reads the RPC, Event, State, Record, and Enum schema and generates typed native clients. Swift gets methods such as `increment(value:)`, `getCounter()`, and `setCounter(_:)`; C++ gets their native equivalents.
 
 ### How it compares
 
@@ -193,7 +193,7 @@ For publisher-signed output, use `raco rivet package --production` with the plat
   (format "user-~a" id))
 ```
 
-Arguments and results are validated at the Racket boundary. Supported schema values currently include `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, `(Optional T)`, and named values declared with `define-record`. Records generate native Swift structs and C++ structs and retain their declared field order on the wire.
+Arguments and results are validated at the Racket boundary. Supported schema values currently include `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, `(Optional T)`, named values declared with `define-record`, and closed cases declared with `define-enum`. Records generate native Swift/C++ structs; Enums generate Swift raw-value enums and C++ `enum class` values.
 
 ### Events
 
@@ -226,7 +226,7 @@ raco rivet schema --output rivet-schema.json
 raco rivet schema check rivet-schema.json --json
 ```
 
-New RPCs, Events, States, and Records are compatible additions. Removing one, changing an RPC signature or value type, changing the RVT1 protocol version, or changing a Record's fields or field order is reported as breaking and exits unsuccessfully. Regenerate the baseline only for an intentional, release-governed compatibility break.
+New RPCs, Events, States, Records, and Enum types are compatible additions. Removing one, changing an RPC signature or value type, changing the RVT1 protocol version, changing a Record's fields/order, or changing an existing Enum's cases/order is reported as breaking and exits unsuccessfully. Regenerate the baseline only for an intentional, release-governed compatibility break.
 
 ## CLI
 
@@ -332,7 +332,8 @@ CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exerc
   - [x] named Record schemas with Swift/C++ code generation and boundary validation
   - [x] versioned schema snapshots plus a machine-readable breaking-change gate
   - [x] Windows x64/ARM64 build selection
-  - [ ] enum schemas and Kotlin typed-client generation
+  - [x] named Enum schemas with Swift/C++ code generation and compatibility checks
+  - [ ] Kotlin typed-client generation
   - [ ] clean-runner build/package/release matrices for every supported desktop architecture
 - [ ] **Phase 7 — first-class mobile application delivery** — generated iOS/iPadOS/watchOS and Android/Wear OS projects, runtime/companion choices, signing, packaging, and device verification
 

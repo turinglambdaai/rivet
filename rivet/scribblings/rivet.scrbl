@@ -87,7 +87,7 @@ packaged dependency-closure, and clean-machine checks.
 
 @defmodule[rivet]
 
-@subsection{RPCs, Events, State, and Records}
+@subsection{RPCs, Events, State, Records, and Enums}
 
 @defstruct*[rivet-type ([name symbol?])]{Represents a public schema type descriptor.}
 
@@ -113,13 +113,17 @@ with @racket[define-state] instead of calling the constructor directly.}
 Represents the ordered schema of a named Record. Applications normally create
 one with @racket[define-record] instead of calling the constructor directly.}
 
+@defstruct*[enum-info ([name symbol?] [cases list?])]{
+Represents the ordered cases of a named Enum. Applications normally create one
+with @racket[define-enum] instead of calling the constructor directly.}
+
 @defform[(define-rpc (name [arg : type] ... : result-type) body ...)]{
 Defines a Racket procedure named @racket[name] and registers it as an RPC for
 generated Swift and C++ clients. Supported schema types are @racket[String],
 @racket[Int64], @racket[Bool], @racket[Bytes], @racket[Void], @racket[Any],
 @racket[(List type)], @racket[(Optional type)], and names introduced by
-@racket[define-record]. The result is validated before it is placed on the
-wire.}
+@racket[define-record] or @racket[define-enum]. The result is validated before
+it is placed on the wire.}
 
 @defform[(define-record name ([field : field-type] ...))]{
 Defines a constructor named @racket[name] and registers an ordered, typed
@@ -128,6 +132,15 @@ field declaration order.}
 
 @defproc[(record-ref [value any/c] [field (or/c symbol? string?)]) any/c]{
 Returns a named field from a value constructed by @racket[define-record].}
+
+@defform[(define-enum name (case ...))]{
+Defines a constructor named @racket[name] and registers a closed, ordered set
+of cases. The constructor accepts a case symbol or string. Generated Swift uses
+a raw-value enum; generated C++ uses @tt{enum class}; RVT1 carries the stable
+case name as a String.}
+
+@defproc[(enum-case [value any/c]) symbol?]{
+Returns the case symbol from a value constructed by @racket[define-enum].}
 
 @defform[(define-event name : type)]{
 Registers an event and defines @racket[name] as a one-argument procedure that
@@ -180,6 +193,7 @@ Adapts native file descriptors to binary ports and calls @racket[serve].}
 @defproc[(event-schema) list?]{Returns the registered event schema.}
 @defproc[(state-schema) list?]{Returns the registered state schema.}
 @defproc[(record-schema) list?]{Returns the registered Record schema.}
+@defproc[(enum-schema) list?]{Returns the registered Enum schema.}
 
 @section{System Services}
 

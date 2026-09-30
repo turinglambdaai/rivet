@@ -146,6 +146,15 @@ RKT
     (check-equal?
      (map (lambda (entry) (hash-ref entry 'name)) (hash-ref baseline 'rpcs))
      '("echo-user" "greet" "increment"))
+    ;; Enum support extends snapshot format v1 additively. A baseline written
+    ;; by the pre-Enum v1 tool omitted the key and means an empty enum set.
+    (define pre-enum-baseline-path
+      (build-path project-root "pre-enum-schema-baseline.json"))
+    (call-with-output-file pre-enum-baseline-path #:exists 'truncate/replace
+      (lambda (out) (write-json (hash-remove baseline 'enums) out)))
+    (check-true
+     (hash-ref (check-schema-compatibility! project pre-enum-baseline-path)
+               'compatible))
 
     (write-backend!
      project-root
@@ -232,6 +241,57 @@ RKT
                             'name)
                   "User")
 
+    ;; Named Enums use stable String wire values and native Swift/C++ enums.
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-enum Role (admin member))
+(define-rpc (echo-role [role : Role] : Role) role)
+(define (start in-fd out-fd) (serve-fds in-fd out-fd))
+RKT
+     )
+    (define enum-schema-result (generate-clients! project))
+    (check-equal? (length enum-schema-result) 5)
+    (check-equal? (length (fifth enum-schema-result)) 1)
+    (define enum-swift
+      (file->string
+       (build-path project-root
+                   "macos-host" "Sources" "RivetHost" "GeneratedBackend.swift")))
+    (define enum-cpp
+      (file->string (build-path project-root "windows" "GeneratedBackend.hpp")))
+    (check-regexp-match #rx"public enum Role: String, Sendable" enum-swift)
+    (check-regexp-match #rx"case admin = \"admin\"" enum-swift)
+    (check-regexp-match #rx"func echo_role\\(role: Role\\) async throws -> Role" enum-swift)
+    (check-regexp-match #rx"enum class Role \\{ admin, member \\};" enum-cpp)
+    (check-regexp-match #rx"std::future<Role> echo_role\\(Role role\\)" enum-cpp)
+
+    (define enum-baseline-path (build-path project-root "enum-schema.json"))
+    (write-schema-snapshot! project enum-baseline-path)
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-enum Role (admin member guest))
+(define-rpc (echo-role [role : Role] : Role) role)
+(define (start in-fd out-fd) (serve-fds in-fd out-fd))
+RKT
+     )
+    (define changed-enum-report
+      (check-schema-compatibility! project enum-baseline-path))
+    (check-false (hash-ref changed-enum-report 'compatible))
+    (check-equal? (hash-ref (first (hash-ref changed-enum-report 'breaking-changes))
+                            'name)
+                  "Role")
+
     ;; Distinct Racket identifiers can normalize to the same native API name.
     ;; Codegen must reject these cases instead of emitting uncompilable Swift/C++.
     (write-backend!
@@ -301,6 +361,25 @@ RKT
 
 (define-event foo-bar : Int64)
 (define-event foo_bar : Int64)
+
+(define (start in-fd out-fd)
+  (serve-fds in-fd out-fd))
+RKT
+     )
+    (check-exn #rx"native API name collision"
+               (lambda () (generate-clients! project)))
+
+    ;; Enum cases must also remain distinct after native normalization.
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-enum Mode (foo-bar foo_bar))
+(define-rpc (mode : Mode) (Mode 'foo-bar))
 
 (define (start in-fd out-fd)
   (serve-fds in-fd out-fd))

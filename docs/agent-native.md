@@ -54,10 +54,11 @@ raco rivet schema check rivet-schema.json --json
 
 The JSON report separates `breaking-changes` from `compatible-additions` and
 the command exits unsuccessfully for a break. RPC argument names/order/types
-and result type, Event/State types, Record fields/order/types, declaration
-removal, and the RVT1 protocol version are compatibility-significant. Adding a
-new declaration is allowed. Regenerating the baseline is a release-policy
-decision, not an automatic repair for a failing check.
+and result type, Event/State types, Record fields/order/types, existing Enum
+cases/order, declaration removal, and the RVT1 protocol version are
+compatibility-significant. Adding a new declaration is allowed. Regenerating
+the baseline is a release-policy decision, not an automatic repair for a
+failing check.
 
 `doctor --json` is the host-side complement. It reports the exact Racket CS
 runtime, boot files, compiler/build tools, native dependency probes, and a

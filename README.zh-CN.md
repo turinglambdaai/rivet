@@ -67,7 +67,7 @@ Rivet 刻意不做 WebView 框架，也不做统一跨平台控件层。Windows 
   (serve-fds in-fd out-fd))
 ```
 
-`raco rivet build` 会读取 RPC、Event、State 与 Record schema，并生成类型化原生客户端。Swift 侧得到 `increment(value:)`、`getCounter()`、`setCounter(_:)` 等方法；C++ 侧得到对应的原生接口。
+`raco rivet build` 会读取 RPC、Event、State、Record 与 Enum schema，并生成类型化原生客户端。Swift 侧得到 `increment(value:)`、`getCounter()`、`setCounter(_:)` 等方法；C++ 侧得到对应的原生接口。
 
 ### 横向对比
 
@@ -193,7 +193,7 @@ raco rivet release
   (format "user-~a" id))
 ```
 
-参数与返回值都会在 Racket 边界做类型校验。目前支持 `String`、`Int64`、`Bool`、`Bytes`、`Void`、`Any`、`(List T)`、`(Optional T)`，以及通过 `define-record` 声明的具名 Record。Record 会生成原生 Swift struct 和 C++ struct，并在传输中保留字段声明顺序。
+参数与返回值都会在 Racket 边界做类型校验。目前支持 `String`、`Int64`、`Bool`、`Bytes`、`Void`、`Any`、`(List T)`、`(Optional T)`、通过 `define-record` 声明的具名 Record，以及通过 `define-enum` 声明的封闭取值。Record 会生成 Swift/C++ struct；Enum 会生成 Swift raw-value enum 和 C++ `enum class`。
 
 ### Event
 
@@ -226,7 +226,7 @@ raco rivet schema --output rivet-schema.json
 raco rivet schema check rivet-schema.json --json
 ```
 
-新增 RPC、Event、State 和 Record 属于兼容扩展。删除接口、修改 RPC 签名或值类型、修改 RVT1 协议版本、修改 Record 字段或字段顺序都会被报告为破坏性变化，并返回失败状态。只有在版本策略明确允许破坏兼容时，才应重新生成基线。
+新增 RPC、Event、State、Record 和 Enum 类型属于兼容扩展。删除接口、修改 RPC 签名或值类型、修改 RVT1 协议版本、修改 Record 字段/顺序，或修改已有 Enum 的 case/顺序，都会被报告为破坏性变化并返回失败状态。只有在版本策略明确允许破坏兼容时，才应重新生成基线。
 
 ## CLI
 
@@ -332,7 +332,8 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
   - [x] 具名 Record schema、Swift/C++ 代码生成与边界校验
   - [x] 带版本的 schema 快照与机器可读的破坏性变更门禁
   - [x] Windows x64/ARM64 构建选择
-  - [ ] Enum schema 与 Kotlin 类型客户端生成
+  - [x] 具名 Enum schema、Swift/C++ 代码生成与兼容性检查
+  - [ ] Kotlin 类型客户端生成
   - [ ] 覆盖每个受支持桌面架构的干净 runner 构建/打包/发布矩阵
 - [ ] **Phase 7 —— 一等移动应用交付** —— 生成 iOS/iPadOS/watchOS 与 Android/Wear OS 项目、runtime/companion 选择、签名、打包和真机验证
 
