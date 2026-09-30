@@ -17,6 +17,9 @@ Example:
   (url-schemes . ("hello"))
   (file-associations . (#hasheq((extension . ".hello")
                                 (description . "Hello Document"))))
+  (resources . ("assets" "locales/en.json"))
+  (windows-icon . "branding/app.ico")
+  (macos-icon . "branding/app.icns")
   (macos-min-version . "14.0")
   (windows-min-version . "10.0.19041.0")
   (backend . "app/backend.rkt")
@@ -49,6 +52,25 @@ These values feed packaging metadata instead of being duplicated in native platf
 - `file-associations` — a list of hashes with an `extension` beginning with `.` and an optional `description`. Packaging emits native document/installer metadata.
 
 These settings describe native registration only. They do not add messages to RVT1 or create a shared UI abstraction.
+
+## Application resources and icons
+
+- `resources` — a list of project-relative files or directories copied into the application resource root while preserving their relative paths. Generated/control roots (`.git`, `.rivet`, `build`, and `dist`) and symbolic links are rejected so a release cannot accidentally capture repository metadata, stale output, or files outside the project.
+- `windows-icon` — an optional project-relative `.ico` file compiled into newly generated Windows hosts.
+- `macos-icon` — an optional project-relative `.icns` file copied into the app bundle and declared through `CFBundleIconFile`.
+
+Packaged resources live under `app/` inside the platform resource root. Racket code should use `resource-path` from `rivet/resources` (also re-exported by `rivet`) instead of guessing an executable-relative path:
+
+```racket
+(require rivet/resources)
+
+(define defaults
+  (call-with-input-file (resource-path "config" "defaults.rktd") read))
+```
+
+During `raco rivet dev`, the root is `.rivet/stage/app`. Windows packages keep it beside the executable as `app/`; macOS packages keep it at `Contents/Resources/app`. Native UI code can use those same platform-native locations. Set `RIVET_RESOURCE_ROOT` or parameterize `current-resource-root` only for tests and specialized hosts.
+
+Projects created before this feature remain valid because all three settings are optional. To embed a Windows icon in an older generated host, add Rivet's conditional `RIVET_WINDOWS_ICON_RC` `ResourceCompile` item from the current host template or regenerate the host project while preserving application UI sources.
 
 ## Deployment targets
 

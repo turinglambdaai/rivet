@@ -1,6 +1,7 @@
 #lang racket/base
 
 (require racket/file
+         racket/list
          racket/path
          racket/string)
 
@@ -22,6 +23,9 @@
          project-release-channel
          project-url-schemes
          project-file-associations
+         project-resources
+         project-windows-icon
+         project-macos-icon
          project-macos-min-version
          project-windows-min-version)
 
@@ -47,6 +51,26 @@
 (define (windows-version-string? value)
   (and (string? value)
        (regexp-match? #px"^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$" value)))
+
+(define generated-root-names '(".git" ".rivet" "build" "dist"))
+
+(define (safe-project-relative-path-string? value)
+  (and (string? value)
+       (positive? (string-length value))
+       (let* ([path (string->path value)]
+              [parts (explode-path path)])
+         (and (relative-path? path)
+              (pair? parts)
+              (andmap path? parts)
+              (not (member (string-downcase
+                            (path->string (car parts)))
+                           generated-root-names))))))
+
+(define (path-string-has-extension? value extension)
+  (and (safe-project-relative-path-string? value)
+       (let ([suffix (path-get-extension (string->path value))])
+         (and suffix
+              (string-ci=? (bytes->string/utf-8 suffix) extension)))))
 
 (define (validate-config path value)
   (define (required key predicate description)
@@ -141,6 +165,18 @@
                                           (hash-ref item 'extension))))
                     v)))
             "list of hashes containing an extension such as .rivet")
+  (optional 'resources
+            (lambda (v)
+              (and (list? v)
+                   (andmap safe-project-relative-path-string? v)
+                   (= (length v) (length (remove-duplicates v string-ci=?)))))
+            "list of unique project-relative file or directory paths outside .git, .rivet, build, and dist")
+  (optional 'windows-icon
+            (lambda (v) (path-string-has-extension? v ".ico"))
+            "project-relative .ico path")
+  (optional 'macos-icon
+            (lambda (v) (path-string-has-extension? v ".icns"))
+            "project-relative .icns path")
   value)
 
 (define (load-config path)
@@ -218,6 +254,15 @@
 
 (define (project-file-associations project)
   (project-ref project 'file-associations (lambda () '())))
+
+(define (project-resources project)
+  (project-ref project 'resources (lambda () '())))
+
+(define (project-windows-icon project)
+  (project-ref project 'windows-icon (lambda () #f)))
+
+(define (project-macos-icon project)
+  (project-ref project 'macos-icon (lambda () #f)))
 
 (define (project-macos-min-version project)
   (project-ref project

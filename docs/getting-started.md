@@ -134,6 +134,8 @@ macos-host/Sources/RivetHost/RivetHostApp.swift
 
 Rivet intentionally does **not** introduce a cross-platform UI DSL. Use the first-party UI framework normally and keep reusable application/domain logic in Racket.
 
+Application data such as images, templates, and localization files can be declared once in `rivet.rktd` and read from Racket with `resource-path`. Rivet preserves relative paths across development and packaged layouts; see [project configuration](configuration.md#application-resources-and-icons).
+
 ## 7. Build, package, and verify
 
 When the app is ready to leave the development loop:

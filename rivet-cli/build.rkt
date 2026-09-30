@@ -12,7 +12,8 @@
          "windows-tools.rkt")
 
 (provide build-project!
-         dev-project!)
+         dev-project!
+         required-project-icon)
 
 (define-runtime-path rivet-root "..")
 
@@ -45,6 +46,76 @@
                            "source" source))
   (make-parent-directory* destination)
   (copy-file source destination #t))
+
+(define (check-portable-resource-tree! source configured-path)
+  (when (link-exists? source)
+    (raise-arguments-error 'build-project!
+                           "application resources must not contain symbolic links or junctions"
+                           "resource" configured-path
+                           "link" source))
+  (when (directory-exists? source)
+    (for ([entry (in-list (directory-list source #:build? #t))])
+      (check-portable-resource-tree! entry configured-path))))
+
+(define (copy-project-resources! project stage)
+  (define resources (project-resources project))
+  (unless (null? resources)
+    (define destination-root (build-path stage "app"))
+    (make-directory* destination-root)
+    (for ([configured-path (in-list resources)])
+      (define relative (string->path configured-path))
+      (define source (project-path project relative))
+      (define destination (build-path destination-root relative))
+      (unless (or (file-exists? source) (directory-exists? source))
+        (raise-arguments-error 'build-project!
+                               "configured application resource does not exist"
+                               "resource" configured-path
+                               "source" source))
+      (check-portable-resource-tree! source configured-path)
+      (when (or (file-exists? destination) (directory-exists? destination))
+        (raise-arguments-error 'build-project!
+                               "configured application resources overlap"
+                               "resource" configured-path
+                               "destination" destination))
+      (make-parent-directory* destination)
+      (if (directory-exists? source)
+          (copy-directory/files source destination)
+          (copy-file source destination)))))
+
+(define (required-project-icon project configured-path platform)
+  (and configured-path
+       (let ([source (project-path project configured-path)])
+         (unless (file-exists? source)
+           (raise-arguments-error 'build-project!
+                                  "configured application icon does not exist"
+                                  "platform" platform
+                                  "icon" configured-path
+                                  "source" source))
+         (when (link-exists? source)
+           (raise-arguments-error 'build-project!
+                                  "application icons must not be symbolic links or junctions"
+                                  "platform" platform
+                                  "icon" configured-path
+                                  "link" source))
+         source)))
+
+(define (prepare-windows-icon-resource! project)
+  (define source
+    (required-project-icon project (project-windows-icon project) 'windows))
+  (and source
+       (let ([resource-script
+              (project-path project ".rivet" "build" "windows" "app-icon.rc")])
+         (make-parent-directory* resource-script)
+         (call-with-output-file resource-script
+           #:exists 'truncate/replace
+           (lambda (out)
+             ;; Resource Compiler treats backslashes as escapes inside quoted
+             ;; paths. Forward slashes are accepted by Windows tools and keep
+             ;; arbitrary project directory names unambiguous.
+             (define portable
+               (string-replace (path->string source) "\\" "/"))
+             (fprintf out "IDI_RIVET_APP_ICON ICON \"~a\"\n" portable)))
+         resource-script)))
 
 (define (compile-backend! project runtime stage)
   (define backend-relative (project-ref project 'backend))
@@ -95,7 +166,7 @@
         (string-append "/machine:" (string-downcase (windows-platform))))
   output)
 
-(define (with-windows-build-environment project runtime import-lib thunk)
+(define (with-windows-build-environment project runtime import-lib icon-resource thunk)
   (define env (environment-variables-copy (current-environment-variables)))
   (define (set-path! key path)
     (environment-variables-set! env key (path->bytes path)))
@@ -106,6 +177,10 @@
    env
    #"RIVET_WINDOWS_MIN_VERSION"
    (string->bytes/utf-8 (project-windows-min-version project)))
+  (environment-variables-set!
+   env
+   #"RIVET_WINDOWS_ICON_RC"
+   (if icon-resource (path->bytes icon-resource) #""))
   (parameterize ([current-environment-variables env])
     (thunk)))
 
@@ -120,6 +195,7 @@
   (define import-lib
     (prepare-windows-import-library!
      project runtime (windows-toolchain-lib toolchain)))
+  (define icon-resource (prepare-windows-icon-resource! project))
   (define racketcs-dll (racket-runtime-racketcs-dll runtime))
   (copy-required! 'build-project!
                   racketcs-dll
@@ -132,7 +208,7 @@
 
   (define out-dir (path->string stage))
   (with-windows-build-environment
-   project runtime import-lib
+   project runtime import-lib icon-resource
    (lambda ()
      (run! 'build-project!
            msbuild
@@ -293,6 +369,7 @@
   (define stage (project-path project ".rivet" "stage"))
   (fresh-directory! stage)
   (compile-backend! project runtime stage)
+  (copy-project-resources! project stage)
 
   (case (system-type 'os)
     [(windows)
@@ -316,3 +393,8 @@
        (run! 'dev-project! executable))]
     [else
      (error 'dev-project! "development runner is not available on this platform")]))
+
+(module+ test-support
+  (provide copy-project-resources!
+           required-project-icon
+           prepare-windows-icon-resource!))

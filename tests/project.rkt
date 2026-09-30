@@ -21,6 +21,9 @@
              'version "1.2.3"
              'build 7
              'identifier "dev.example.demo"
+             'resources '("assets" "locales/en.json")
+             'windows-icon "branding/app.ico"
+             'macos-icon "branding/app.icns"
              'macos-min-version "14.1"
              'windows-min-version "10.0.19045.0"
              'backend "app/backend.rkt"
@@ -33,6 +36,9 @@
     (check-equal? (project-version project) "1.2.3")
     (check-equal? (project-build project) 7)
     (check-equal? (project-identifier project) "dev.example.demo")
+    (check-equal? (project-resources project) '("assets" "locales/en.json"))
+    (check-equal? (project-windows-icon project) "branding/app.ico")
+    (check-equal? (project-macos-icon project) "branding/app.icns")
     (check-equal? (project-macos-min-version project) "14.1")
     (check-equal? (project-windows-min-version project) "10.0.19045.0")
     (check-equal? (find-project temp-root) project)
@@ -57,6 +63,9 @@
                   default-macos-min-version)
     (check-equal? (project-windows-min-version legacy-project)
                   default-windows-min-version)
+    (check-equal? (project-resources legacy-project) '())
+    (check-false (project-windows-icon legacy-project))
+    (check-false (project-macos-icon legacy-project))
 
     (write-config
      (hasheq 'name "demo"
@@ -116,7 +125,36 @@
              'module "backend"
              'entry "start"
              'protocol 1))
-    (check-exn exn:fail? (lambda () (load-project temp-root))))
+    (check-exn exn:fail? (lambda () (load-project temp-root)))
+
+    (for ([bad-resources (in-list '(("../secret")
+                                    ("assets/../secret")
+                                    (".")
+                                    (".git/private")
+                                    ("dist/generated")
+                                    ("assets" "ASSETS")))])
+      (write-config
+       (hasheq 'name "demo"
+               'resources bad-resources
+               'backend "app/backend.rkt"
+               'module "backend"
+               'entry "start"
+               'protocol 1))
+      (check-exn exn:fail? (lambda () (load-project temp-root))))
+
+    (for ([icon-config (in-list
+                        (list (cons 'windows-icon "branding/app.png")
+                              (cons 'windows-icon "../app.ico")
+                              (cons 'macos-icon "branding/app.png")
+                              (cons 'macos-icon ".rivet/app.icns")))])
+      (write-config
+       (hasheq 'name "demo"
+               (car icon-config) (cdr icon-config)
+               'backend "app/backend.rkt"
+               'module "backend"
+               'entry "start"
+               'protocol 1))
+      (check-exn exn:fail? (lambda () (load-project temp-root)))))
   (lambda ()
     (when (directory-exists? temp-root)
       (delete-directory/files temp-root))))

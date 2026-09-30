@@ -56,6 +56,7 @@ RKT
     "- Shared Racket logic: `app/backend.rkt`\n"
     "- Windows UI: `windows/MainWindow.xaml` and `windows/MainWindow.xaml.cpp`\n"
     "- macOS UI: `macos-host/Sources/RivetHost/ContentView.swift` and `RivetHostApp.swift`\n"
+    "- Packaged application resources and icons: configure `resources`, `windows-icon`, and `macos-icon` in `rivet.rktd`\n"
     "- App identity/deployment targets: `rivet.rktd`\n\n"
     "## Ship a build\n\n"
     "```bash\n"
@@ -82,7 +83,7 @@ RKT
   (write-text
    (build-path root "rivet.rktd")
    (format
-    "#hasheq((name . ~s) (display-name . ~s) (version . ~s) (build . ~s) (identifier . ~s) (release-channel . stable) (url-schemes . ()) (file-associations . ()) (macos-min-version . ~s) (windows-min-version . ~s) (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1))\n"
+    "#hasheq((name . ~s) (display-name . ~s) (version . ~s) (build . ~s) (identifier . ~s) (release-channel . stable) (url-schemes . ()) (file-associations . ()) (resources . ()) (macos-min-version . ~s) (windows-min-version . ~s) (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1))\n"
     name
     name
     default-project-version
