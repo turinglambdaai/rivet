@@ -2,6 +2,8 @@
 
 用 [Racket](https://racket-lang.org/) 构建第一方原生桌面应用。Windows 使用 WinUI 3，macOS 使用 SwiftUI，Linux 使用 GTK4；把应用逻辑放在 Racket 中，最终交付的是真正原生应用，而不是 WebView 或跨平台控件封装层。
 
+**Human-first. Agent-native. Local by design. —— 为人而生，为 Agent 原生设计，本地优先。**
+
 [![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.3.0-C15F3C)
 
 [English](README.md) · **中文**
@@ -14,11 +16,14 @@
 raco pkg install --auto rivet
 raco rivet new hello
 cd hello
+raco rivet inspect --json
 raco rivet doctor
 raco rivet dev
 ```
 
 这就是普通用户的主路径。`doctor` 会检查原生工具链，并在缺少必要组件时直接给出下一步修复建议；`dev` 会构建并启动当前平台的一等原生宿主。
+
+每个新项目都会生成 `AGENTS.md`；`inspect --json` 则提供带版本号的机器可读项目地图，包括项目身份、Racket 后端与各端原生 UI 编辑入口、目标成熟度、生成目录和安全生命周期命令。详见 [Agent-native 开发](docs/agent-native.md)。
 
 需要完整引导时直接看 **[Rivet 快速上手教程](docs/getting-started.zh-CN.md)**；安装后的包也提供可搜索的 Scribble 文档。只有开发 Rivet 框架本身时，才需要使用教程里的源码 link 安装方式。
 
@@ -97,7 +102,7 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 
 嵌入模型受到 [Noise](https://github.com/Bogdanp/Noise) 的启发，但 Rivet 把 runtime contract、协议、代码生成和生命周期都做成平台无关的统一核心，而不是以 Swift 为中心。
 
-深入设计见 [架构](docs/architecture.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[类型安全设备通信](docs/device-communication.md)、[Android 架构](docs/android.md)、[项目配置](docs/configuration.md)、[系统服务](docs/system-services.md)、[发布与更新](docs/release-and-updates.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
+深入设计见 [架构](docs/architecture.md)、[Agent-native 开发](docs/agent-native.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[类型安全设备通信](docs/device-communication.md)、[Android 架构](docs/android.md)、[项目配置](docs/configuration.md)、[系统服务](docs/system-services.md)、[发布与更新](docs/release-and-updates.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
 
 ## 平台支持状态
 

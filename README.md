@@ -2,6 +2,8 @@
 
 Build first-party native desktop apps with [Racket](https://racket-lang.org/). Use WinUI 3 on Windows, SwiftUI on macOS, and GTK4 on Linux; keep your application logic in Racket and ship a real native app instead of a WebView or a cross-platform widget layer.
 
+**Human-first. Agent-native. Local by design.**
+
 [![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.3.0-C15F3C)
 
 **English** · [中文](README.zh-CN.md)
@@ -14,11 +16,14 @@ Install Rivet from the Racket Package Catalog with the `raco` from the Racket CS
 raco pkg install --auto rivet
 raco rivet new hello
 cd hello
+raco rivet inspect --json
 raco rivet doctor
 raco rivet dev
 ```
 
 That is the normal first-run path. `doctor` checks the native toolchain and prints actionable fixes when a required component is missing; `dev` builds and launches the current platform's first-party native host.
+
+Every generated app includes an `AGENTS.md`, and `inspect --json` exposes a versioned machine-readable map of project identity, backend/native UI edit points, target maturity, generated paths, and safe lifecycle commands. See [agent-native development](docs/agent-native.md).
 
 For a guided walkthrough, read **[Getting Started with Rivet](docs/getting-started.md)**. The installed package also includes searchable Scribble documentation. If you are developing Rivet itself, use the linked-checkout workflow in that guide instead of installing from the catalog.
 
@@ -97,7 +102,7 @@ Racket CS runs on a dedicated runtime thread. Native UI code never manipulates R
 
 The embedding model is inspired by [Noise](https://github.com/Bogdanp/Noise), but Rivet makes the runtime contract, protocol, code generation, and lifecycle cross-platform instead of Swift-first.
 
-See [architecture](docs/architecture.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [typed device communication](docs/device-communication.md), [Android architecture](docs/android.md), [project configuration](docs/configuration.md), [system services](docs/system-services.md), [release and updates](docs/release-and-updates.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
+See [architecture](docs/architecture.md), [agent-native development](docs/agent-native.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [typed device communication](docs/device-communication.md), [Android architecture](docs/android.md), [project configuration](docs/configuration.md), [system services](docs/system-services.md), [release and updates](docs/release-and-updates.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
 
 ## Platform status
 

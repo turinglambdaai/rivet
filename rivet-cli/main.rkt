@@ -5,6 +5,7 @@
          "clean.rkt"
          "compliance.rkt"
          "doctor.rkt"
+         "inspect.rkt"
          "package.rkt"
          "project.rkt"
          "release.rkt"
@@ -26,6 +27,8 @@
     "  raco rivet new <name>              create a new Rivet application\n"
     "  raco rivet doctor                  inspect the local native toolchain\n"
     "  raco rivet doctor --json           emit machine-readable toolchain diagnostics\n"
+    "  raco rivet inspect                 show the current project's edit and verification map\n"
+    "  raco rivet inspect --json          emit the agent-readable project contract\n"
     "  raco rivet clean                   remove generated .rivet/build/dist artifacts\n"
     "  raco rivet build                   compile backend and native host\n"
     "  raco rivet dev                     build and run the current app\n"
@@ -63,6 +66,10 @@
      (exit (run-doctor))]
     [(list "doctor" "--json")
      (exit (run-doctor #:json? #t))]
+    [(list "inspect")
+     (exit (run-inspect (current-project!)))]
+    [(list "inspect" "--json")
+     (exit (run-inspect (current-project!) #:json? #t))]
     [(list "clean")
      (define removed (clean-project! (current-project!)))
      (if (null? removed)

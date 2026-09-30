@@ -48,6 +48,7 @@ RKT
     "A first-party native desktop app powered by Racket and Rivet.\n\n"
     "## Start here\n\n"
     "```bash\n"
+    "raco rivet inspect --json\n"
     "raco rivet doctor\n"
     "raco rivet dev\n"
     "```\n\n"
@@ -70,6 +71,68 @@ RKT
     "Rivet website: https://rivet.jrtx.site\n")
    name))
 
+(define starter-agents
+  #<<AGENTS
+# Rivet agent contract
+
+Human-first. Agent-native. Local by design.
+
+## Start every task here
+
+```bash
+raco rivet inspect --json
+raco rivet doctor --json
+```
+
+`inspect` is the machine-readable project map. It identifies the shared Racket
+backend, each native UI edit point, platform maturity, generated directories,
+and safe lifecycle commands. `doctor` reports the exact local toolchain and
+returns a failing exit status when the current host is not usable.
+
+## Architecture boundary
+
+- Keep shared application and domain logic in `app/backend.rkt`.
+- Keep Windows UI native in WinUI 3 / C++/WinRT under `windows/`.
+- Keep macOS UI native in SwiftUI/AppKit under `macos-host/`.
+- Keep Linux UI native in GTK4 under `linux/`.
+- Do not introduce a cross-platform UI DSL or bypass RVT1 with an ad-hoc IPC.
+- iOS/iPadOS/watchOS and Android/Wear OS are foundation targets until their
+  generated app, embedding, packaging, signing, and device workflows exist.
+
+## Ownership
+
+Source you may edit:
+
+- `app/`
+- `windows/`
+- `macos-host/`
+- `linux/`
+- `rivet.rktd`
+- declared application resources
+
+Generated output you should not hand-edit:
+
+- `.rivet/`
+- `build/`
+- `dist/`
+
+Use `raco rivet clean` to remove only those generated paths.
+
+## Verification loop
+
+```bash
+raco rivet build
+raco rivet dev
+raco rivet package
+raco rivet verify
+```
+
+After changing RPC, Event, or State declarations, rebuild before editing code
+that consumes generated native APIs. Preserve the first `rivet: error:` line
+and nearby compiler output when diagnosing a failure.
+AGENTS
+  )
+
 (define (create-project! name [parent (current-directory)])
   (unless (safe-project-name? name)
     (raise-arguments-error 'rivet-new
@@ -81,6 +144,7 @@ RKT
 
   (make-directory* root)
   (write-text (build-path root "README.md") (starter-readme name))
+  (write-text (build-path root "AGENTS.md") starter-agents)
   (write-text
    (build-path root "rivet.rktd")
    (format
