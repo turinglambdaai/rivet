@@ -334,7 +334,7 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
   - [x] Windows x64/ARM64 构建选择
   - [x] 具名 Enum schema、Swift/C++ 代码生成与兼容性检查
   - [x] Kotlin 类型客户端生成
-  - [ ] 覆盖每个受支持桌面架构的干净 runner 构建/打包/发布矩阵
+  - [x] 覆盖每个受支持桌面架构的干净 runner 构建/打包/发布矩阵
 - [ ] **Phase 7 —— 一等移动应用交付** —— 生成 iOS/iPadOS/watchOS 与 Android/Wear OS 项目、runtime/companion 选择、签名、打包和真机验证
 
 ## 许可证

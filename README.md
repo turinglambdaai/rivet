@@ -334,7 +334,7 @@ CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exerc
   - [x] Windows x64/ARM64 build selection
   - [x] named Enum schemas with Swift/C++ code generation and compatibility checks
   - [x] Kotlin typed-client generation
-  - [ ] clean-runner build/package/release matrices for every supported desktop architecture
+  - [x] clean-runner build/package/release matrices for every supported desktop architecture
 - [ ] **Phase 7 — first-class mobile application delivery** — generated iOS/iPadOS/watchOS and Android/Wear OS projects, runtime/companion choices, signing, packaging, and device verification
 
 ## License
