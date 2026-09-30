@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Complete the Linux release path. `raco rivet release` now runs on Linux: the verified self-contained package is packed into a deterministic ustar/gzip archive and signed with a detached Ed25519 signature (`<installer>.tar.gz.sig`, base64), configured through `RIVET_LINUX_SIGN_PRIVATE_KEY` and `RIVET_LINUX_SIGN_KEY_ID`. `raco rivet verify --production` re-derives the archive from the packaged directory, requires a byte-identical match with the released installer, and validates the signature against `RIVET_LINUX_SIGN_PUBLIC_KEY`; update manifests record the artifact as platform `linux`, installer kind `targz`. `raco rivet package --production` on Linux now points to `raco rivet release`, which owns the installer-level signing flow.
+
 ## 0.4.0
 
 - Require Racket 9.0+ with the CS runtime (`base #:version "9.0"`); the legacy BC engine and pre-9.0 releases are no longer supported. State the floor in the landing page and getting-started guides.

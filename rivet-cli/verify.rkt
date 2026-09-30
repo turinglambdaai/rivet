@@ -5,7 +5,11 @@
          racket/path
          racket/string
          racket/system
+         "../rivet/distribution/crypto.rkt"
+         "linux-package.rkt"
          "project.rkt"
+         "signing-options.rkt"
+         "tar.rkt"
          "windows-tools.rkt")
 
 (provide verify-package!
@@ -150,10 +154,44 @@
     (run-command! who signtool "verify" "/pa" "/v" (path->string executable)))
   package)
 
+(define (verify-linux-production-installer! project package)
+  (define who 'verify-package!)
+  (define public-key-path (load-linux-production-verification))
+  (define installer (linux-installer-path project))
+  (required-file! who installer "Linux production installer archive")
+  (define signature-path (string-append (path->string installer) ".sig"))
+  (required-file! who signature-path "Linux installer Ed25519 signature")
+
+  ;; The deterministic archive makes the released installer re-derivable from
+  ;; the packaged directory: a byte-identical rebuild proves the archive
+  ;; contains exactly what this verification inspected.
+  (define released (file->bytes installer))
+  (define rebuilt
+    (gzip-archive-bytes
+     (tar-directory->bytes
+      package
+      #:root-name (path->string (file-name-from-path package)))))
+  (unless (equal? released rebuilt)
+    (raise-arguments-error who
+                           "Linux installer archive does not match the packaged directory"
+                           "installer" installer
+                           "package" package))
+
+  (define signature
+    (base64-string->bytes
+     (string-trim (file->string signature-path))))
+  (unless (ed25519-verify
+           (read-ed25519-public-key (string->path public-key-path))
+           released
+           signature)
+    (raise-arguments-error who
+                           "Linux installer Ed25519 signature does not verify"
+                           "installer" installer
+                           "signature" signature-path
+                           "public-key" public-key-path)))
+
 (define (verify-linux-package! project package production?)
   (define who 'verify-package!)
-  (when production?
-    (error who "production signing verification is not defined for Linux yet"))
   (required-directory! who package "Linux application package")
   (define executable (build-path package "RivetHost"))
   (required-file! who executable "GTK4 executable")
@@ -177,6 +215,9 @@
                            "Linux package has unresolved shared-library dependencies"
                            "file" executable
                            "ldd" dependencies))
+
+  (when production?
+    (verify-linux-production-installer! project package))
   package)
 
 (define (verify-macos-package! project app production?)
@@ -317,13 +358,7 @@
       [(macosx)
        (project-path project "dist" (string-append name ".app"))]
       [(unix)
-       (define architecture
-         (case (system-type 'arch)
-           [(aarch64 arm64) "arm64"]
-           [(x86_64) "x64"]
-           [else (format "~a" (system-type 'arch))]))
-       (project-path project "dist"
-                     (string-append name "-linux-" architecture))]
+       (project-path project "dist" (linux-package-directory-name project))]
       [else
        (error 'verify-project-package!
               "Rivet package verification currently targets Windows, macOS, and Linux")]))

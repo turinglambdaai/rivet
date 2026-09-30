@@ -1,6 +1,7 @@
 #lang racket/base
 
 (require rackunit
+         racket/file
          "../rivet-cli/signing-options.rkt")
 
 (define signing-vars
@@ -9,7 +10,10 @@
     #"RIVET_WINDOWS_SIGN_PFX_PASSWORD"
     #"RIVET_WINDOWS_TIMESTAMP_URL"
     #"RIVET_MACOS_SIGN_IDENTITY"
-    #"RIVET_MACOS_NOTARY_PROFILE"))
+    #"RIVET_MACOS_NOTARY_PROFILE"
+    #"RIVET_LINUX_SIGN_PRIVATE_KEY"
+    #"RIVET_LINUX_SIGN_KEY_ID"
+    #"RIVET_LINUX_SIGN_PUBLIC_KEY"))
 
 (define (with-signing-env entries thunk)
   (define env (environment-variables-copy (current-environment-variables)))
@@ -103,3 +107,58 @@
   (check-equal? (macos-signing-identity settings)
                 "Developer ID Application: Example")
   (check-equal? (macos-signing-notary-profile settings) "rivet-notary"))
+
+(check-exn
+ #rx"RIVET_LINUX_SIGN_PRIVATE_KEY"
+ (lambda ()
+   (with-signing-env
+    (list (cons #"RIVET_LINUX_SIGN_KEY_ID" #"release-2026"))
+    load-linux-production-signing)))
+
+(check-exn
+ #rx"configured Linux signing key does not exist"
+ (lambda ()
+   (with-signing-env
+    (list (cons #"RIVET_LINUX_SIGN_PRIVATE_KEY"
+                (string->bytes/utf-8
+                 (path->string
+                  (build-path (make-temporary-file "rivet-sign-~a" 'directory)
+                              "missing.der"))))
+          (cons #"RIVET_LINUX_SIGN_KEY_ID" #"release-2026"))
+    load-linux-production-signing)))
+
+(check-exn
+ #rx"RIVET_LINUX_SIGN_KEY_ID"
+ (lambda ()
+   (define key (make-temporary-file "rivet-sign-key-~a.der"))
+   (with-signing-env
+    (list (cons #"RIVET_LINUX_SIGN_PRIVATE_KEY" (path->bytes key)))
+    load-linux-production-signing)))
+
+(let ([key (make-temporary-file "rivet-sign-key-~a.der")])
+  (let ([settings
+         (with-signing-env
+          (list (cons #"RIVET_LINUX_SIGN_PRIVATE_KEY" (path->bytes key))
+                (cons #"RIVET_LINUX_SIGN_KEY_ID" #"release-2026"))
+          load-linux-production-signing)])
+    (check-equal? (linux-signing-private-key settings) (path->string key))
+    (check-equal? (linux-signing-key-id settings) "release-2026")))
+
+(check-exn
+ #rx"RIVET_LINUX_SIGN_PUBLIC_KEY"
+ (lambda ()
+   (with-signing-env '() load-linux-production-verification)))
+
+(check-exn
+ #rx"configured Linux verification key does not exist"
+ (lambda ()
+   (with-signing-env
+    (list (cons #"RIVET_LINUX_SIGN_PUBLIC_KEY" #"missing-public.der"))
+    load-linux-production-verification)))
+
+(let ([public-key (make-temporary-file "rivet-sign-public-~a.der")])
+  (check-equal?
+   (with-signing-env
+    (list (cons #"RIVET_LINUX_SIGN_PUBLIC_KEY" (path->bytes public-key)))
+    load-linux-production-verification)
+   (path->string public-key)))

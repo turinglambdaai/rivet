@@ -5,6 +5,7 @@
          racket/path
          racket/system
          "build.rkt"
+         "linux-package.rkt"
          "project.rkt"
          "signing-options.rkt"
          "verify.rkt"
@@ -165,16 +166,9 @@
     (sign-windows-production! (build-path destination "RivetHost.exe") settings))
   destination)
 
-(define (linux-architecture)
-  (case (system-type 'arch)
-    [(aarch64 arm64) "arm64"]
-    [(x86_64) "x64"]
-    [else (format "~a" (system-type 'arch))]))
-
 (define (package-linux! project stage name)
   (define destination
-    (project-path project "dist"
-                  (string-append name "-linux-" (linux-architecture))))
+    (project-path project "dist" (linux-package-directory-name project)))
   (make-directory* (path-only destination))
   (copy-tree! stage destination)
   (file-or-directory-permissions (build-path destination "RivetHost") #o755)
@@ -330,7 +324,7 @@
 (define (package-project! project #:production? [production? #f])
   (when (and production? (eq? (system-type 'os) 'unix))
     (error 'package-project!
-           "production signing is not defined for Linux yet; create a verified development package and apply the target distribution's signing policy"))
+           "Linux production releases are produced by `raco rivet release`, which signs the self-contained installer; `package --production` targets Windows and macOS"))
   (define executable
     (build-project! project
                     #:configuration "Release"

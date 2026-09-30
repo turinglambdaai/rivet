@@ -114,11 +114,11 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 | 类型化客户端生成 | ✅ C++ | ✅ Swift | ✅ C++ |
 | `new` / `doctor` / `build` / `dev` | ✅ | ✅ | ✅ |
 | `package` / `verify` | ✅ DLL 依赖审计 | ✅ 签名/rpath/plist | 🧪 目录 + `ldd` 审计 |
-| 生产签名 / 安装包 | ✅ Authenticode + MSI | ✅ Developer ID + DMG | — 尚需发行版适配 |
+| 生产签名 / 安装包 | ✅ Authenticode + MSI | ✅ Developer ID + DMG | 🧪 `raco rivet release` 生成 Ed25519 签名 tarball |
 | 系统服务 / 安全存储 | ✅ | ✅ | — |
 | 真实嵌入运行时 CI | ✅ | ✅ | ✅ |
 
-Windows 和 macOS 仍是生产发布目标。Linux 已进入开发者预览：日常 CLI 全链路和真实 embedded-runtime CI 已完成；发行版原生安装包、签名策略、系统服务以及明确的 X11/Wayland 策略仍是进入生产级之前的工作。
+Windows 和 macOS 仍是生产发布目标。Linux 处于开发者预览：日常 CLI 全链路、Ed25519 签名发布物和真实 embedded-runtime CI 已经完成；发行版原生安装包、系统服务以及明确的 X11/Wayland 策略仍是进入生产级之前的工作。
 
 ### Apple 移动端基础
 

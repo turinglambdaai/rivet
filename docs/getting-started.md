@@ -163,7 +163,7 @@ raco rivet verify --production
 
 Production mode uses application-owned signing credentials. See [production signing](production-signing.md) before configuring secrets in CI.
 
-For a complete product release, configure a separate Ed25519 update key and run `raco rivet release`. It adds MSI/DMG creation, the signed channel manifest, SBOM, and third-party notices. See [release and updates](release-and-updates.md).
+For a complete product release, configure a separate Ed25519 update key and run `raco rivet release`. It adds installer creation (MSI, DMG, or the Ed25519-signed Linux tarball), the signed channel manifest, SBOM, and third-party notices. See [release and updates](release-and-updates.md).
 
 ## 8. The normal Rivet workflow
 

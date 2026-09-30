@@ -4,12 +4,17 @@
 
 (provide (struct-out windows-signing)
          (struct-out macos-signing)
+         (struct-out linux-signing)
          load-windows-production-signing
-         load-macos-production-signing)
+         load-macos-production-signing
+         load-linux-production-signing
+         load-linux-production-verification)
 
 (struct windows-signing (certificate-sha1 pfx pfx-password timestamp-url)
   #:transparent)
 (struct macos-signing (identity notary-profile)
+  #:transparent)
+(struct linux-signing (private-key key-id)
   #:transparent)
 
 (define (non-empty-env name)
@@ -54,3 +59,31 @@
            "production macOS packaging requires RIVET_MACOS_NOTARY_PROFILE"))
 
   (macos-signing identity notary-profile))
+
+(define (load-linux-production-signing)
+  (define private-key (non-empty-env "RIVET_LINUX_SIGN_PRIVATE_KEY"))
+  (define key-id (non-empty-env "RIVET_LINUX_SIGN_KEY_ID"))
+
+  (unless private-key
+    (error 'load-linux-production-signing
+           "production Linux packaging requires RIVET_LINUX_SIGN_PRIVATE_KEY"))
+  (unless (file-exists? private-key)
+    (raise-arguments-error 'load-linux-production-signing
+                           "configured Linux signing key does not exist"
+                           "RIVET_LINUX_SIGN_PRIVATE_KEY" private-key))
+  (unless key-id
+    (error 'load-linux-production-signing
+           "production Linux packaging requires RIVET_LINUX_SIGN_KEY_ID"))
+
+  (linux-signing private-key key-id))
+
+(define (load-linux-production-verification)
+  (define public-key (non-empty-env "RIVET_LINUX_SIGN_PUBLIC_KEY"))
+  (unless public-key
+    (error 'load-linux-production-verification
+           "production Linux verification requires RIVET_LINUX_SIGN_PUBLIC_KEY"))
+  (unless (file-exists? public-key)
+    (raise-arguments-error 'load-linux-production-verification
+                           "configured Linux verification key does not exist"
+                           "RIVET_LINUX_SIGN_PUBLIC_KEY" public-key))
+  public-key)
