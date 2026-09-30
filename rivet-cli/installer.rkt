@@ -12,7 +12,8 @@
          "signing-options.rkt"
          "tar.rkt")
 
-(provide create-installer!)
+(provide create-installer!
+         write-wix-source!)
 
 (define (run! who executable . arguments)
   (unless executable (error who "required executable was not found"))
@@ -50,12 +51,13 @@
     #:exists 'truncate/replace
     (lambda (out)
       (fprintf out
-               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Wix xmlns=\"http://wixtoolset.org/schemas/v4/wxs\">\n  <Package Name=\"~a\" Manufacturer=\"~a\" Version=\"~a\" UpgradeCode=\"~a\" Scope=\"perMachine\">\n    <MajorUpgrade DowngradeErrorMessage=\"A newer version is already installed.\" />\n    <MediaTemplate EmbedCab=\"yes\" />\n    <Feature Id=\"Main\"><ComponentGroupRef Id=\"ProductComponents\" /></Feature>\n  </Package>\n  <Fragment><StandardDirectory Id=\"ProgramFiles6432Folder\"><Directory Id=\"INSTALLFOLDER\" Name=\"~a\" /></StandardDirectory></Fragment>\n  <Fragment><ComponentGroup Id=\"ProductComponents\" Directory=\"INSTALLFOLDER\">\n"
+               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Wix xmlns=\"http://wixtoolset.org/schemas/v4/wxs\">\n  <Package Name=\"~a\" Manufacturer=\"~a\" Version=\"~a\" UpgradeCode=\"~a\" Scope=\"perMachine\">\n    <MajorUpgrade DowngradeErrorMessage=\"A newer version is already installed.\" />\n    <MediaTemplate EmbedCab=\"yes\" />\n    <Feature Id=\"Main\"><ComponentGroupRef Id=\"ProductComponents\" /></Feature>\n  </Package>\n  <Fragment><StandardDirectory Id=\"ProgramFiles6432Folder\"><Directory Id=\"INSTALLFOLDER\" Name=\"~a\" /></StandardDirectory></Fragment>\n  <Fragment><StandardDirectory Id=\"ProgramMenuFolder\"><Directory Id=\"AppProgramsFolder\" Name=\"~a\" /></StandardDirectory></Fragment>\n  <Fragment><ComponentGroup Id=\"ProductComponents\" Directory=\"INSTALLFOLDER\">\n"
                (xml-escape (project-display-name project))
                (xml-escape identifier)
                (xml-escape (project-version project))
                "6B7D0F2E-8B9D-4FB5-9F69-1B12E50F60C1"
-               (xml-escape name))
+               (xml-escape name)
+               (xml-escape (project-display-name project)))
       ;; WiX v4 recursively harvests the verified package at build time,
       ;; preserving the runtime/res hierarchy without a second file list.
       (fprintf out "    <Files Include=\"~a\\**\" />\n"
@@ -91,6 +93,14 @@
                                    "\\shell\\open\\command") ""
                     "\"[INSTALLFOLDER]RivetHost.exe\" \"%1\""))
         (display "    </Component>\n" out))
+      ;; A Start Menu shortcut inside an app program group, so an installed
+      ;; app is reachable without digging through Program Files. The
+      ;; shortcut component carries an HKCU key path, the standard pattern
+      ;; for non-advertised shortcut components.
+      (fprintf out
+               "    <Component Id=\"StartMenuShortcut\" Guid=\"*\" Directory=\"AppProgramsFolder\">\n      <Shortcut Id=\"AppStartMenuShortcut\" Name=\"~a\" Target=\"[INSTALLFOLDER]RivetHost.exe\" WorkingDirectory=\"INSTALLFOLDER\" />\n      <RemoveFolder Id=\"RemoveAppProgramsFolder\" On=\"uninstall\" />\n      <RegistryValue Root=\"HKCU\" Key=\"Software\\~a\\StartMenu\" Name=\"installed\" Type=\"integer\" Value=\"1\" KeyPath=\"yes\" />\n    </Component>\n"
+               (xml-escape (project-display-name project))
+               (xml-escape identifier))
       (display "  </ComponentGroup></Fragment>\n</Wix>\n" out))))
 
 (define (create-windows-installer! project package production?)
