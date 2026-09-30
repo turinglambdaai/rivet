@@ -137,6 +137,15 @@
         (hash 'baseline (source-report project "rivet-schema.json" 'file)
               'format "rivet-schema"
               'format-version 1)
+        'generated-clients
+        (hash 'swift
+              (source-report project "macos-host/Sources/RivetHost/GeneratedBackend.swift" 'file)
+              'cpp-windows
+              (source-report project "windows/GeneratedBackend.hpp" 'file)
+              'cpp-linux
+              (source-report project "linux/GeneratedBackend.hpp" 'file)
+              'kotlin
+              (source-report project ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt" 'file))
         'capability-sourcing
         capability-sourcing
         'edit-points

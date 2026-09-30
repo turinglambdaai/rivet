@@ -119,7 +119,7 @@ with @racket[define-enum] instead of calling the constructor directly.}
 
 @defform[(define-rpc (name [arg : type] ... : result-type) body ...)]{
 Defines a Racket procedure named @racket[name] and registers it as an RPC for
-generated Swift and C++ clients. Supported schema types are @racket[String],
+generated Swift, C++, and Kotlin clients. Supported schema types are @racket[String],
 @racket[Int64], @racket[Bool], @racket[Bytes], @racket[Void], @racket[Any],
 @racket[(List type)], @racket[(Optional type)], and names introduced by
 @racket[define-record] or @racket[define-enum]. The result is validated before
@@ -127,8 +127,8 @@ it is placed on the wire.}
 
 @defform[(define-record name ([field : field-type] ...))]{
 Defines a constructor named @racket[name] and registers an ordered, typed
-Record schema. Records generate Swift and C++ structs and use an RVT1 List in
-field declaration order.}
+Record schema. Records generate Swift and C++ structs plus Kotlin data classes
+and use an RVT1 List in field declaration order.}
 
 @defproc[(record-ref [value any/c] [field (or/c symbol? string?)]) any/c]{
 Returns a named field from a value constructed by @racket[define-record].}
@@ -136,8 +136,9 @@ Returns a named field from a value constructed by @racket[define-record].}
 @defform[(define-enum name (case ...))]{
 Defines a constructor named @racket[name] and registers a closed, ordered set
 of cases. The constructor accepts a case symbol or string. Generated Swift uses
-a raw-value enum; generated C++ uses @tt{enum class}; RVT1 carries the stable
-case name as a String.}
+a raw-value enum; generated C++ uses @tt{enum class}; generated Kotlin uses an
+@tt{enum class} with the wire name; RVT1 carries the stable case name as a
+String.}
 
 @defproc[(enum-case [value any/c]) symbol?]{
 Returns the case symbol from a value constructed by @racket[define-enum].}
