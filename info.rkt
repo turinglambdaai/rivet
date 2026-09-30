@@ -5,7 +5,7 @@
 ;; native artifacts remain three-component SemVer via `release-version`.
 (define version "0.3")
 (define release-version "0.3.0")
-(define pkg-desc "Native desktop application foundation for Racket")
+(define pkg-desc "Native application foundation for Racket")
 (define pkg-authors '(turinglambdaai))
 (define license 'MIT)
 

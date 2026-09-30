@@ -144,6 +144,21 @@ jobs:
               build
           done
 
+  kotlin-runtime:
+    name: Kotlin protocol/runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up and validate Gradle
+        uses: gradle/actions/setup-gradle@v6
+      - name: Test Kotlin runtime against shared RVT1 vectors
+        run: platform/android/gradlew -p platform/android test
+
   windows-host:
     name: Windows CLI package smoke
     runs-on: windows-latest

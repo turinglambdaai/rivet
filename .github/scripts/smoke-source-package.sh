@@ -13,6 +13,13 @@ if [[ ! -f "$archive" ]]; then
 fi
 archive="$(cd "$(dirname "$archive")" && pwd)/$(basename "$archive")"
 
+# Mobile protocol foundations are library sources rather than generated desktop
+# scaffolds. Verify them directly in the source archive so a release cannot omit
+# a platform that its package metadata and documentation advertise.
+unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/build.gradle.kts$'
+unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/gradle/wrapper/gradle-wrapper.jar$'
+unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet/runtime/Protocol.kt$'
+
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 user_home="$tmp/racket-user"
