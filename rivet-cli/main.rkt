@@ -3,6 +3,7 @@
 (require racket/match
          "build.rkt"
          "clean.rkt"
+         "codegen.rkt"
          "compliance.rkt"
          "doctor.rkt"
          "inspect.rkt"
@@ -80,6 +81,9 @@
                 (if (= (length removed) 1) "" "s"))
            (for ([path (in-list removed)])
              (printf "  ~a\n" path))))]
+    [(list "generate")
+     (generate-clients! (current-project!))
+     (say "generated Swift/C++ clients")]
     [(list "build")
      (define output (build-project! (current-project!)))
      (say "built ~a" output)]

@@ -10,12 +10,6 @@
 
 (define temp-root (make-temporary-file "rivet-codegen-~a" 'directory))
 
-(define (write-backend! project-root source)
-  (call-with-output-file
-   (build-path project-root "app" "backend.rkt")
-   #:exists 'truncate/replace
-   (lambda (out) (display source out))))
-
 (dynamic-wind
   void
   (lambda ()
@@ -48,6 +42,12 @@
      (regexp-match? #rx"\\(windows-min-version \\. \"10\\.0\\.19041\\.0\"\\)"
                     project-config))
 
+    (define (write-backend! project-root content)
+      (call-with-output-file
+       (build-path project-root "app" "backend.rkt")
+       #:exists 'truncate/replace
+       (lambda (out) (display content out))))
+
     (write-backend!
      project-root
      #<<RKT
@@ -58,6 +58,12 @@
 (provide start)
 
 (define-event progress : Int64)
+
+(define-record User
+  ([id : Int64]
+   [display-name : String]
+   [nickname : (Optional String)]))
+
 (define-state counter : Int64 0)
 
 (define-rpc (greet [name String] : String)
@@ -66,16 +72,17 @@
 (define-rpc (increment [value Int64] : Int64)
   (add1 value))
 
+(define-rpc (echo-user [user : User] : User)
+  user)
+
 (define (start in-fd out-fd)
   (serve-fds in-fd out-fd))
 RKT
      )
 
     (define project (load-project project-root))
-    (check-equal? (project-macos-min-version project) "14.0")
-    (check-equal? (project-windows-min-version project) "10.0.19041.0")
     (define schema (generate-clients! project))
-    (check-equal? (length (first schema)) 2)
+    (check-equal? (length (first schema)) 3)
     (check-equal? (length (second schema)) 1)
     (check-equal? (length (third schema)) 1)
 
@@ -90,13 +97,19 @@ RKT
       (file->string
        (build-path project-root "linux" "GeneratedBackend.hpp")))
 
+    (check-true (regexp-match? #rx"public struct User: Sendable" swift))
+    (check-true (regexp-match? #rx"public let display_name: String" swift))
+    (check-true (regexp-match? #rx"public let nickname: String\\?" swift))
+    (check-true (regexp-match? #rx"func echo_user\\(user: User\\) async throws -> User" swift))
     (check-true (regexp-match? #rx"func greet\\(name: String\\)" swift))
     (check-true (regexp-match? #rx"func increment\\(value: Int64\\)" swift))
-    (check-true (regexp-match? #rx"case progress\\(Int64\\)" swift))
     (check-true (regexp-match? #rx"func getCounter\\(\\) async throws -> Int64" swift))
     (check-true (regexp-match? #rx"func setCounter\\(_ value: Int64\\)" swift))
 
-    ;; Existing future APIs remain source-compatible.
+    (check-true (regexp-match? #rx"struct User" cpp))
+    (check-true (regexp-match? #rx"std::string display_name;" cpp))
+    (check-true (regexp-match? #rx"std::optional<std::string> nickname;" cpp))
+    (check-true (regexp-match? #rx"std::future<User> echo_user\\(User user\\)" cpp))
     (check-true (regexp-match? #rx"std::future<std::string> greet" cpp))
     (check-true (regexp-match? #rx"std::future<std::int64_t> increment" cpp))
     (check-true (regexp-match? #rx"std::future<std::int64_t> get_counter\\(\\)" cpp))

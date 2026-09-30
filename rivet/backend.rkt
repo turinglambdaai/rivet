@@ -2,6 +2,7 @@
 
 (require ffi/unsafe/port
          racket/async-channel
+         racket/list
          racket/match
          "private/event-id.rkt"
          "protocol.rkt")
@@ -12,26 +13,37 @@
          define-state
          state-ref
          state-set!
+         define-record
+         record-ref
          serve
          serve-fds
          registered-rpcs
          registered-events
          registered-states
+         registered-records
          rpc-schema
          event-schema
          state-schema
+         record-schema
          (struct-out rpc-info)
          (struct-out event-info)
-         (struct-out state-info))
+         (struct-out state-info)
+         (struct-out record-info))
+
 
 (struct rpc-info (name arg-names arg-types result-type procedure) #:transparent)
 (struct event-info (name type) #:transparent)
 (struct state-info (name type cell lock) #:transparent)
+
 (struct pending-request (custodian terminal-owned cancel-deferred cancel-requested) #:mutable)
+(struct record-info (name field-names field-types) #:transparent)
+(struct record-value (name fields) #:transparent)
+
 
 (define registry (make-hash))
 (define event-registry (make-hash))
 (define state-registry (make-hash))
+(define record-registry (make-hash))
 (define current-event-emitter (make-parameter #f))
 ;; Request workers replace this identity wrapper with a cancellation barrier.
 ;; Keeping it private lets state-set! preserve the same behavior outside serve.
@@ -74,16 +86,15 @@
   (check-api-name-length! who kind name)
   (string->symbol name))
 
-(define (emit-event! name value)
-  (unless (or (symbol? name) (string? name))
-    (raise-argument-error 'emit-event! "(or/c symbol? string?)" name))
-  (define emitter (current-event-emitter))
-  (unless emitter
-    (error 'emit-event! "no Rivet server is active on the current Racket thread"))
-  (emitter (if (symbol? name) (symbol->string name) name) value))
+(define primitive-types '(String Int64 Bool Bytes Void Any))
+
+(define (lookup-record-info type [failure #f])
+  (and (symbol? type)
+       (hash-ref record-registry type failure)))
 
 (define (supported-type? type)
-  (or (memq type '(String Int64 Bool Bytes Void Any))
+  (or (memq type primitive-types)
+      (and (symbol? type) (hash-has-key? record-registry type))
       (match type
         [(list 'List inner) (supported-type? inner)]
         [(list 'Optional inner) (supported-type? inner)]
@@ -129,26 +140,45 @@
             [(Void) (if (void? value) 'valid 'mismatch)]
             [(Any) 'valid]
             [else
-             (match type
-               [(list 'List inner)
-                (cond
-                  [(>= depth max-value-depth) 'depth-limit]
-                  [else
-                   ;; Avoid `list?` + `andmap`: both can traverse an arbitrarily
-                   ;; large application List before the RVT1 budget is applied.
-                   ;; Walking cdrs here terminates as soon as an element consumes
-                   ;; the last available protocol node.
-                   (let loop ([rest value])
-                     (cond
-                       [(null? rest) 'valid]
-                       [(not (pair? rest)) 'mismatch]
-                       [else
-                        (define item-result
-                          (matches inner (car rest) (add1 depth)))
-                        (if (eq? item-result 'valid)
-                            (loop (cdr rest))
-                            item-result)]))])]
-               [_ 'mismatch])])])]))
+             (cond
+               [(and (symbol? type) (hash-has-key? record-registry type))
+                (define info (hash-ref record-registry type))
+                (if (and (record-value? value)
+                         (eq? (record-value-name value) type)
+                         (= (length (record-value-fields value))
+                            (length (record-info-field-types info))))
+                    (let loop ([field-values (record-value-fields value)]
+                               [field-types (record-info-field-types info)])
+                      (cond
+                        [(null? field-values) 'valid]
+                        [else
+                         (define item-result
+                           (matches (car field-types) (car field-values) depth))
+                         (if (eq? item-result 'valid)
+                             (loop (cdr field-values) (cdr field-types))
+                             item-result)]))
+                    'mismatch)]
+               [else
+                (match type
+                  [(list 'List inner)
+                   (cond
+                     [(>= depth max-value-depth) 'depth-limit]
+                     [else
+                      ;; Avoid `list?` + `andmap`: both can traverse an arbitrarily
+                      ;; large application List before the RVT1 budget is applied.
+                      ;; Walking cdrs here terminates as soon as an element consumes
+                      ;; the last available protocol node.
+                      (let loop ([rest value])
+                        (cond
+                          [(null? rest) 'valid]
+                          [(not (pair? rest)) 'mismatch]
+                          [else
+                           (define item-result
+                             (matches inner (car rest) (add1 depth)))
+                           (if (eq? item-result 'valid)
+                               (loop (cdr rest))
+                               item-result)]))])]
+                  [_ 'mismatch])])])])]))
 
   (matches type value 0))
 
@@ -167,6 +197,94 @@
     [(exact-integer? value) 'Integer]
     [(or (null? value) (pair? value)) 'ListLike]
     [else 'Unsupported]))
+(define (validate-type! who owner type)
+  (unless (supported-type? type)
+    (raise-arguments-error who
+                           "unsupported Rivet type"
+                           "owner" owner
+                           "type" type)))
+
+(define (register-record! name field-names field-types)
+  (when (hash-has-key? record-registry name)
+    (error 'define-record "Record already registered: ~a" name))
+  (unless (= (length field-names) (length field-types))
+    (error 'define-record "field name/type count mismatch for ~a" name))
+  (when (check-duplicates field-names)
+    (raise-arguments-error 'define-record
+                           "record field names must be unique"
+                           "record" name
+                           "fields" field-names))
+  (for ([type (in-list field-types)])
+    (validate-type! 'define-record name type))
+  (define info (record-info name field-names field-types))
+  (hash-set! record-registry name info)
+  ;; Declarations can execute before a stdio transport starts. Returning a
+  ;; schema value here causes the Racket module runner to print it to stdout,
+  ;; corrupting the RVT1 byte stream before the hello frame.
+  (void))
+
+(define-syntax define-record
+  (syntax-rules (:)
+    [(_ name ([field : field-type] ...))
+     (begin
+       (define (name field ...)
+         (record-value 'name (list field ...)))
+       (register-record! 'name '(field ...) '(field-type ...)))]
+    [(_ name ([field field-type] ...))
+     (begin
+       (define (name field ...)
+         (record-value 'name (list field ...)))
+       (register-record! 'name '(field ...) '(field-type ...)))]))
+
+(define (record-ref value field)
+  (unless (record-value? value)
+    (raise-argument-error 'record-ref "record-value?" value))
+  (define info
+    (hash-ref record-registry
+              (record-value-name value)
+              (lambda ()
+                (error 'record-ref "unknown record type: ~a" (record-value-name value)))))
+  (define field-symbol
+    (cond
+      [(symbol? field) field]
+      [(string? field) (string->symbol field)]
+      [else (raise-argument-error 'record-ref "(or/c symbol? string?)" field)]))
+  (define index (index-of (record-info-field-names info) field-symbol))
+  (unless index
+    (error 'record-ref "unknown field ~a on record ~a"
+           field-symbol (record-info-name info)))
+  (list-ref (record-value-fields value) index))
+
+(define (value-matches-type? type value)
+  (case type
+    [(String) (string? value)]
+    [(Int64)
+     (and (exact-integer? value)
+          (<= (- (expt 2 63)) value (sub1 (expt 2 63))))]
+    [(Bool) (boolean? value)]
+    [(Bytes) (bytes? value)]
+    [(Void) (void? value)]
+    [(Any) #t]
+    [else
+     (cond
+       [(and (symbol? type) (hash-has-key? record-registry type))
+        (define info (hash-ref record-registry type))
+        (and (record-value? value)
+             (eq? (record-value-name value) type)
+             (= (length (record-value-fields value))
+                (length (record-info-field-types info)))
+             (for/and ([field-value (in-list (record-value-fields value))]
+                       [field-type (in-list (record-info-field-types info))])
+               (value-matches-type? field-type field-value)))]
+       [else
+        (match type
+          [(list 'List inner)
+           (and (list? value)
+                (andmap (lambda (item) (value-matches-type? inner item)) value))]
+          [(list 'Optional inner)
+           (or (void? value) (value-matches-type? inner value))]
+          [_ #f])])]))
+
 
 (define (validate-value who label type value)
   (case (value-validation-result type value)
@@ -188,16 +306,88 @@
                             "expected" type
                             "received" (safe-value-kind value))]))
 
+;; Record is a schema/type-system feature layered on RVT1. The wire protocol
+;; remains version 1: a record is encoded as a list in its declared field order.
+;; This keeps old runtimes compatible while generated clients expose named DTOs.
+(define (typed->wire type value)
+  (case type
+    [(Any) (wire-safe-value value)]
+    [(String Int64 Bool Bytes Void) value]
+    [else
+     (cond
+       [(and (symbol? type) (hash-has-key? record-registry type))
+        (validate-value 'typed->wire 'value type value)
+        (define info (hash-ref record-registry type))
+        (for/list ([field-value (in-list (record-value-fields value))]
+                   [field-type (in-list (record-info-field-types info))])
+          (typed->wire field-type field-value))]
+       [else
+        (match type
+          [(list 'List inner)
+           (for/list ([item (in-list value)]) (typed->wire inner item))]
+          [(list 'Optional inner)
+           (if (void? value) (void) (typed->wire inner value))]
+          [_ (error 'typed->wire "unsupported type: ~e" type)])])]))
+
+(define (wire->typed type value)
+  (case type
+    [(Any) value]
+    [(String Int64 Bool Bytes Void) value]
+    [else
+     (cond
+       [(and (symbol? type) (hash-has-key? record-registry type))
+        (define info (hash-ref record-registry type))
+        (unless (list? value)
+          (raise-arguments-error 'wire->typed
+                                 "record wire value must be a list"
+                                 "record" type
+                                 "value" value))
+        (unless (= (length value) (length (record-info-field-types info)))
+          (raise-arguments-error 'wire->typed
+                                 "record wire field count mismatch"
+                                 "record" type
+                                 "expected" (length (record-info-field-types info))
+                                 "received" (length value)))
+        (record-value
+         type
+         (for/list ([field-value (in-list value)]
+                    [field-type (in-list (record-info-field-types info))])
+           (wire->typed field-type field-value)))]
+       [else
+        (match type
+          [(list 'List inner)
+           (unless (list? value)
+             (raise-arguments-error 'wire->typed
+                                    "list wire value must be a list"
+                                    "type" type
+                                    "value" value))
+           (for/list ([item (in-list value)]) (wire->typed inner item))]
+          [(list 'Optional inner)
+           (if (void? value) (void) (wire->typed inner value))]
+          [_ (error 'wire->typed "unsupported type: ~e" type)])])]))
+
+(define (wire-safe-value value)
+  (cond
+    [(record-value? value)
+     (typed->wire (record-value-name value) value)]
+    [(list? value) (map wire-safe-value value)]
+    [else value]))
+
+(define (emit-event! name value)
+  (unless (or (symbol? name) (string? name))
+    (raise-argument-error 'emit-event! "(or/c symbol? string?)" name))
+  (define emitter (current-event-emitter))
+  (unless emitter
+    (error 'emit-event! "no Rivet server is active on the current Racket thread"))
+  (emitter (if (symbol? name) (symbol->string name) name)
+           (wire-safe-value value)))
+
 (define (register-rpc! name arg-names arg-types result-type proc)
   (check-api-name-length! 'define-rpc "RPC" (symbol->string name))
   (when (hash-has-key? registry name)
     (error 'define-rpc "RPC already registered: ~a" name))
   (for ([type (in-list (append arg-types (list result-type)))])
-    (unless (supported-type? type)
-      (raise-arguments-error 'define-rpc
-                             "unsupported Rivet RPC type"
-                             "rpc" name
-                             "type" type)))
+    (validate-type! 'define-rpc name type))
   (hash-set! registry name
              (rpc-info name arg-names arg-types result-type proc))
   (void))
@@ -225,7 +415,8 @@
        (register-event! 'name 'type)
        (define (name value)
          (validate-value 'name 'event 'type value)
-         (emit-event! 'name value)))]
+         ;; Emit the wire form so Record payloads stay RVT1-compatible.
+         (emit-event! 'name (typed->wire 'type value))))]
     [(_ name)
      (define-event name : Any)]))
 
@@ -239,11 +430,7 @@
   (check-api-name-length! 'define-state "State" (symbol->string name))
   (when (hash-has-key? state-registry name)
     (error 'define-state "state already registered: ~a" name))
-  (unless (supported-type? type)
-    (raise-arguments-error 'define-state
-                           "unsupported Rivet state type"
-                           "state" name
-                           "type" type))
+  (validate-type! 'define-state name type)
   (when (eq? type 'Void)
     (raise-arguments-error 'define-state
                            "Void is not a valid state type"
@@ -252,7 +439,8 @@
   ;; A State is a wire-visible value even before a server starts. Validate the
   ;; complete reserved Event shape before storing the initial value so every
   ;; registered State can later be synchronized to native clients.
-  (encode-state-event-payload (state-event-value name initial))
+  (encode-state-event-payload
+   (state-event-value name (typed->wire type initial)))
   (define info (state-info name type (box initial) (make-semaphore 1)))
   (hash-set! state-registry name info)
   info)
@@ -279,9 +467,11 @@
   ;; Pre-encode the exact Event before committing the cell. If the value is
   ;; type-correct but violates RVT1 byte/node/depth limits, state-set! fails
   ;; without mutating shared state or emitting a partial update.
-  (define event-value (state-event-value name value))
+  (define event-value
+    (state-event-value name (typed->wire (state-info-type state) value)))
   (define event-payload (encode-state-event-payload event-value))
   (define emitter (current-event-emitter))
+
   (define update-lock (state-update-lock state))
   ;; Waiting for an earlier update-order lock is still safely cancellable: no
   ;; State side effect has happened yet. Once this setter owns the order lock,
@@ -299,6 +489,7 @@
          (lambda () (set-box! (state-info-cell state) value)))
         (when emitter
           (emitter "$state" event-value event-payload))))))
+
   (void))
 
 (define (registered-rpcs)
@@ -315,6 +506,11 @@
   (sort (hash-values state-registry)
         string<?
         #:key (lambda (info) (symbol->string (state-info-name info)))))
+
+(define (registered-records)
+  (sort (hash-values record-registry)
+        string<?
+        #:key (lambda (info) (symbol->string (record-info-name info)))))
 
 (define (rpc-schema)
   (for/list ([info (in-list (registered-rpcs))])
@@ -336,6 +532,16 @@
   (for/list ([info (in-list (registered-states))])
     (hasheq 'name (symbol->string (state-info-name info))
             'type (format "~s" (state-info-type info)))))
+
+(define (record-schema)
+  (for/list ([info (in-list (registered-records))])
+    (hasheq
+     'name (symbol->string (record-info-name info))
+     'fields
+     (for/list ([name (in-list (record-info-field-names info))]
+                [type (in-list (record-info-field-types info))])
+       (hasheq 'name (symbol->string name)
+               'type (format "~s" type))))))
 
 (define-syntax define-rpc
   (syntax-rules (:)
@@ -403,14 +609,17 @@
   (case name
     [($state/get)
      (match args
-       [(list state-name) (state-ref (lookup-state state-name))]
+       [(list state-name)
+        (define state (lookup-state state-name))
+        (typed->wire (state-info-type state) (state-ref state))]
        [_ (error '$state/get "expected state name")])]
     [($state/set)
      (match args
-       [(list state-name value)
+       [(list state-name wire-value)
         (define state (lookup-state state-name))
+        (define value (wire->typed (state-info-type state) wire-value))
         (state-set! state value)
-        (state-ref state)]
+        (typed->wire (state-info-type state) (state-ref state))]
        [_ (error '$state/set "expected state name and value")])]
     [else (error 'serve "unknown internal request: ~a" name)]))
 
@@ -629,6 +838,7 @@
          [else (raise raised-value)])]))
 
   (define (finish! id type value)
+
     ;; Encode while the request is still claimable. If encoding fails, the
     ;; worker's handler can claim the same request and send Error. Cancellation
     ;; may still win during encoding; after a completion claim succeeds, the
@@ -685,16 +895,25 @@
                        expected
                        (if (= expected 1) "" "s")
                        (length args)))
-              (for ([arg (in-list args)]
-                    [arg-name (in-list (rpc-info-arg-names info))]
-                    [arg-type (in-list (rpc-info-arg-types info))])
-                (validate-value rpc-name arg-name arg-type arg))
-              (let ([value (apply (rpc-info-procedure info) args)])
-                (validate-value rpc-name
-                                'result
-                                (rpc-info-result-type info)
-                                value)
-                value))))
+              (define typed-args
+                (for/list ([arg (in-list args)]
+                           [arg-name (in-list (rpc-info-arg-names info))]
+                           [arg-type (in-list (rpc-info-arg-types info))])
+                  (if (and (symbol? arg-type)
+                           (hash-has-key? record-registry arg-type))
+                      ;; Record arguments arrive in wire form; wire->typed
+                      ;; validates the positional shape and field types, then
+                      ;; yields the named record value the RPC body expects.
+                      (wire->typed arg-type arg)
+                      (begin
+                        (validate-value rpc-name arg-name arg-type arg)
+                        arg))))
+              (define value (apply (rpc-info-procedure info) typed-args))
+              (validate-value rpc-name
+                              'result
+                              (rpc-info-result-type info)
+                              value)
+              (typed->wire (rpc-info-result-type info) value))))
       (finish! id message:response result)))
 
   (define (start-request! f)
@@ -745,6 +964,7 @@
                               args
                               internal-state-request?
                               info)))))))))
+
 
   (define (cancel! id)
     (define action (cancel-action! id))
