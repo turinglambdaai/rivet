@@ -12,6 +12,7 @@
 (define deps
   '("base"
     "cext-lib"
+    "crypto"
     "crypto-lib"
     "net-lib"))
 
