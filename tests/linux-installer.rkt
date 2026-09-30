@@ -19,6 +19,8 @@
 
 (use-all-factories!)
 
+(define posix-permissions? (not (eq? (system-type 'os) 'windows)))
+
 (define (nul-terminated raw)
   (define end
     (for/or ([byte (in-bytes raw)] [index (in-naturals)]
@@ -67,7 +69,11 @@
   (call-with-output-file path
     #:exists 'truncate/replace
     (lambda (out) (display content out)))
-  (when exec? (file-or-directory-permissions path #o755)))
+  ;; Windows cannot represent a Unix executable mode. The Linux and macOS
+  ;; runners still exercise mode capture and extraction; Windows exercises
+  ;; the host-independent ustar layout and deterministic gzip bytes.
+  (when (and exec? posix-permissions?)
+    (file-or-directory-permissions path #o755)))
 
 (write-package-file "RivetHost" "fake-elf" #:exec? #t)
 (write-package-file "res/core.zo" "compiled-backend")
@@ -145,13 +151,14 @@
        "app/assets/nested/really-deep-directory-chain/repeat-a/repeat-b/repeat-c/"
        "repeat-d/repeat-e/repeat-f/repeat-g/repeat-h/repeat-i/long-name-file.txt"))
      "deep")
-    (define bits
-      (file-or-directory-permissions (build-path extracted "RivetHost") 'bits))
-    (check-true
-     (if (list? bits)
-         (if (memq 'execute bits) #t #f)
-         (positive? (bitwise-and bits #o111)))
-     "the packaged executable must keep its executable mode")))
+    (when posix-permissions?
+      (define bits
+        (file-or-directory-permissions (build-path extracted "RivetHost") 'bits))
+      (check-true
+       (if (list? bits)
+           (if (memq 'execute bits) #t #f)
+           (positive? (bitwise-and bits #o111)))
+       "the packaged executable must keep its executable mode"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Linux production signing options
