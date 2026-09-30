@@ -309,14 +309,14 @@ swift test --package-path platform/macos
 platform/android/gradlew -p platform/android test
 ```
 
-CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平台执行真实 embedded Racket round-trip，为 iOS/watchOS 交叉编译可移植 Swift 层，并对新生成的桌面应用运行 build、package、verify smoke。
+CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平台执行真实 embedded Racket round-trip，为 iOS/watchOS 交叉编译可移植 Swift 层，编译生成的 Kotlin 客户端，并对新生成的桌面应用运行 build、package、verify smoke；Windows ARM64、macOS Intel 与 Linux ARM64 由独立的干净 runner 架构矩阵覆盖。
 
 ## 诚实的局限
 
 - **Linux 是开发者预览** —— 日常 CLI 全链路和 Ed25519 签名 tarball 已完成，但发行版原生安装包/信任集成、系统服务和 compositor 行为还未完成。
 - **Apple 移动端仍是基础阶段** —— 可移植 Swift 与类型安全 WatchConnectivity 层已经存在，但 iOS/iPadOS/watchOS 项目生成、runtime 打包、签名和商店交付还未完成。
 - **Android 仍处于基础阶段** —— Kotlin RVT1 codec、协程 runtime 客户端、类型化客户端生成与固定版本的 Gradle 构建已经过测试，但 Jetpack Compose、JNI、portable Racket CS 打包、签名和设备交付尚未完成。
-- **架构覆盖还不是完整发布矩阵** —— Windows 已有 x64 和 ARM64 构建路径，但所有对外支持的桌面架构尚未全部取得干净 runner 上的构建、打包和发布证据。
+- **架构证据覆盖构建/打包/验证，尚不覆盖生产发布** —— 干净 runner 门禁覆盖 Windows x64/ARM64、macOS Apple Silicon/Intel 与 Linux x64/ARM64，但生产发布产物仍由标签驱动的发布流程按应用生成。
 - **没有统一声明式跨平台 UI DSL** —— UI 代码仍然直接写 SwiftUI/AppKit 或 WinUI 3/C++/WinRT。
 - **正式发布凭据仍属于应用自身** —— Rivet 已自动化 Authenticode、Developer ID、notarization 流程，但证书、PFX 密码、Apple notary profile 会由应用/CI 环境注入，不由 Rivet 保存。
 - **Public API 仍处于 pre-1.0** —— 协议有版本控制，但高层 API 仍可能继续调整。
@@ -334,7 +334,7 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
   - [x] Windows x64/ARM64 构建选择
   - [x] 具名 Enum schema、Swift/C++ 代码生成与兼容性检查
   - [x] Kotlin 类型客户端生成
-  - [ ] 覆盖每个受支持桌面架构的干净 runner 构建/打包/发布矩阵
+  - [x] 覆盖每个受支持桌面架构的干净 runner 构建/打包/发布矩阵
 - [ ] **Phase 7 —— 一等移动应用交付** —— 生成 iOS/iPadOS/watchOS 与 Android/Wear OS 项目、runtime/companion 选择、签名、打包和真机验证
 
 ## 许可证
