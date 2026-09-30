@@ -15,20 +15,25 @@
          state-set!
          define-record
          record-ref
+         define-enum
+         enum-case
          serve
          serve-fds
          registered-rpcs
          registered-events
          registered-states
          registered-records
+         registered-enums
          rpc-schema
          event-schema
          state-schema
          record-schema
+         enum-schema
          (struct-out rpc-info)
          (struct-out event-info)
          (struct-out state-info)
-         (struct-out record-info))
+         (struct-out record-info)
+         (struct-out enum-info))
 
 
 (struct rpc-info (name arg-names arg-types result-type procedure) #:transparent)
@@ -38,12 +43,15 @@
 (struct pending-request (custodian terminal-owned cancel-deferred cancel-requested) #:mutable)
 (struct record-info (name field-names field-types) #:transparent)
 (struct record-value (name fields) #:transparent)
+(struct enum-info (name cases) #:transparent)
+(struct enum-value (name case) #:transparent)
 
 
 (define registry (make-hash))
 (define event-registry (make-hash))
 (define state-registry (make-hash))
 (define record-registry (make-hash))
+(define enum-registry (make-hash))
 (define current-event-emitter (make-parameter #f))
 ;; Request workers replace this identity wrapper with a cancellation barrier.
 ;; Keeping it private lets state-set! preserve the same behavior outside serve.
@@ -87,14 +95,20 @@
   (string->symbol name))
 
 (define primitive-types '(String Int64 Bool Bytes Void Any))
+(define reserved-type-names (append primitive-types '(List Optional)))
 
 (define (lookup-record-info type [failure #f])
   (and (symbol? type)
        (hash-ref record-registry type failure)))
 
+(define (lookup-enum-info type [failure #f])
+  (and (symbol? type)
+       (hash-ref enum-registry type failure)))
+
 (define (supported-type? type)
   (or (memq type primitive-types)
       (and (symbol? type) (hash-has-key? record-registry type))
+      (and (symbol? type) (hash-has-key? enum-registry type))
       (match type
         [(list 'List inner) (supported-type? inner)]
         [(list 'Optional inner) (supported-type? inner)]
@@ -158,6 +172,13 @@
                              (loop (cdr field-values) (cdr field-types))
                              item-result)]))
                     'mismatch)]
+               [(and (symbol? type) (hash-has-key? enum-registry type))
+                (define info (hash-ref enum-registry type))
+                (if (and (enum-value? value)
+                         (eq? (enum-value-name value) type)
+                         (member (enum-value-case value) (enum-info-cases info)))
+                    'valid
+                    'mismatch)]
                [else
                 (match type
                   [(list 'List inner)
@@ -205,8 +226,10 @@
                            "type" type)))
 
 (define (register-record! name field-names field-types)
-  (when (hash-has-key? record-registry name)
-    (error 'define-record "Record already registered: ~a" name))
+  (when (or (memq name reserved-type-names)
+            (hash-has-key? record-registry name)
+            (hash-has-key? enum-registry name))
+    (error 'define-record "schema type already registered: ~a" name))
   (unless (= (length field-names) (length field-types))
     (error 'define-record "field name/type count mismatch for ~a" name))
   (when (check-duplicates field-names)
@@ -255,6 +278,52 @@
            field-symbol (record-info-name info)))
   (list-ref (record-value-fields value) index))
 
+(define (register-enum! name cases)
+  (when (or (memq name reserved-type-names)
+            (hash-has-key? enum-registry name)
+            (hash-has-key? record-registry name))
+    (error 'define-enum "schema type already registered: ~a" name))
+  (when (null? cases)
+    (raise-arguments-error 'define-enum "enum must declare at least one case" "enum" name))
+  (when (check-duplicates cases)
+    (raise-arguments-error 'define-enum
+                           "enum cases must be unique"
+                           "enum" name
+                           "cases" cases))
+  (check-api-name-length! 'define-enum "Enum" (symbol->string name))
+  (for ([case (in-list cases)])
+    (check-api-name-length! 'define-enum "Enum case" (symbol->string case)))
+  (hash-set! enum-registry name (enum-info name cases))
+  (void))
+
+(define (make-enum-value name case)
+  (define case-symbol
+    (cond
+      [(symbol? case) case]
+      [(string? case) (string->symbol case)]
+      [else (raise-argument-error name "(or/c symbol? string?)" case)]))
+  (define info
+    (hash-ref enum-registry name
+              (lambda () (error name "unknown Rivet Enum type: ~a" name))))
+  (unless (member case-symbol (enum-info-cases info))
+    (raise-arguments-error name
+                           "unknown Rivet Enum case"
+                           "case" case-symbol
+                           "allowed" (enum-info-cases info)))
+  (enum-value name case-symbol))
+
+(define-syntax define-enum
+  (syntax-rules ()
+    [(_ name (case ...))
+     (begin
+       (define (name value) (make-enum-value 'name value))
+       (register-enum! 'name '(case ...)))]))
+
+(define (enum-case value)
+  (unless (enum-value? value)
+    (raise-argument-error 'enum-case "Rivet Enum value" value))
+  (enum-value-case value))
+
 (define (value-matches-type? type value)
   (case type
     [(String) (string? value)]
@@ -276,6 +345,11 @@
              (for/and ([field-value (in-list (record-value-fields value))]
                        [field-type (in-list (record-info-field-types info))])
                (value-matches-type? field-type field-value)))]
+       [(and (symbol? type) (hash-has-key? enum-registry type))
+        (define info (hash-ref enum-registry type))
+        (and (enum-value? value)
+             (eq? (enum-value-name value) type)
+             (member (enum-value-case value) (enum-info-cases info)))]
        [else
         (match type
           [(list 'List inner)
@@ -321,6 +395,9 @@
         (for/list ([field-value (in-list (record-value-fields value))]
                    [field-type (in-list (record-info-field-types info))])
           (typed->wire field-type field-value))]
+       [(and (symbol? type) (hash-has-key? enum-registry type))
+        (validate-value 'typed->wire 'value type value)
+        (symbol->string (enum-value-case value))]
        [else
         (match type
           [(list 'List inner)
@@ -353,6 +430,13 @@
          (for/list ([field-value (in-list value)]
                     [field-type (in-list (record-info-field-types info))])
            (wire->typed field-type field-value)))]
+       [(and (symbol? type) (hash-has-key? enum-registry type))
+        (unless (string? value)
+          (raise-arguments-error 'wire->typed
+                                 "enum wire value must be a string"
+                                 "enum" type
+                                 "value" value))
+        (make-enum-value type value)]
        [else
         (match type
           [(list 'List inner)
@@ -370,6 +454,8 @@
   (cond
     [(record-value? value)
      (typed->wire (record-value-name value) value)]
+    [(enum-value? value)
+     (typed->wire (enum-value-name value) value)]
     [(list? value) (map wire-safe-value value)]
     [else value]))
 
@@ -512,6 +598,11 @@
         string<?
         #:key (lambda (info) (symbol->string (record-info-name info)))))
 
+(define (registered-enums)
+  (sort (hash-values enum-registry)
+        string<?
+        #:key (lambda (info) (symbol->string (enum-info-name info)))))
+
 (define (rpc-schema)
   (for/list ([info (in-list (registered-rpcs))])
     (hasheq
@@ -542,6 +633,11 @@
                 [type (in-list (record-info-field-types info))])
        (hasheq 'name (symbol->string name)
                'type (format "~s" type))))))
+
+(define (enum-schema)
+  (for/list ([info (in-list (registered-enums))])
+    (hasheq 'name (symbol->string (enum-info-name info))
+            'cases (map symbol->string (enum-info-cases info)))))
 
 (define-syntax define-rpc
   (syntax-rules (:)
@@ -900,10 +996,11 @@
                            [arg-name (in-list (rpc-info-arg-names info))]
                            [arg-type (in-list (rpc-info-arg-types info))])
                   (if (and (symbol? arg-type)
-                           (hash-has-key? record-registry arg-type))
-                      ;; Record arguments arrive in wire form; wire->typed
-                      ;; validates the positional shape and field types, then
-                      ;; yields the named record value the RPC body expects.
+                           (or (hash-has-key? record-registry arg-type)
+                               (hash-has-key? enum-registry arg-type)))
+                      ;; Named Record/Enum arguments arrive in wire form;
+                      ;; wire->typed validates and constructs the Racket value
+                      ;; that the RPC body expects.
                       (wire->typed arg-type arg)
                       (begin
                         (validate-value rpc-name arg-name arg-type arg)

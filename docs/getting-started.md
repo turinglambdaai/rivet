@@ -117,7 +117,7 @@ raco rivet schema --output rivet-schema.json
 raco rivet schema check rivet-schema.json --json
 ```
 
-The second command permits new declarations and fails for removed or changed RPC, Event, State, or Record contracts.
+The second command permits new declarations and fails for removed or changed RPC, Event, State, Record, or existing Enum contracts.
 
 ## 6. Where to edit the UI
 

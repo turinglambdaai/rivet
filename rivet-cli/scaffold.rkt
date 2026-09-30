@@ -161,8 +161,9 @@ raco rivet schema --output rivet-schema.json
 ```
 
 Before accepting later API changes, run the compatibility gate. Adding a new
-RPC, Event, State, or Record is compatible; removing one or changing a type,
-argument order, result, or Record field/order is breaking:
+RPC, Event, State, Record, or Enum type is compatible; removing one or changing
+a type, argument order, result, Record field/order, or an existing Enum's
+cases/order is breaking:
 
 ```bash
 raco rivet schema check rivet-schema.json --json
@@ -175,8 +176,8 @@ raco rivet package
 raco rivet verify
 ```
 
-After changing RPC, Event, State, or Record declarations, run the compatibility
-gate and rebuild before editing code that consumes generated native APIs.
+After changing RPC, Event, State, Record, or Enum declarations, run the
+compatibility gate and rebuild before editing code that consumes generated native APIs.
 Update the baseline only when a breaking change is intentional and governed by
 the application's release policy. Preserve the first `rivet: error:` line and
 nearby compiler output when diagnosing a failure.

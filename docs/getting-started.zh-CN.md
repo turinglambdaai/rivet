@@ -123,7 +123,7 @@ raco rivet schema --output rivet-schema.json
 raco rivet schema check rivet-schema.json --json
 ```
 
-第二条命令允许新增声明，但删除或修改 RPC、Event、State、Record 契约时会失败。
+第二条命令允许新增声明，但删除或修改 RPC、Event、State、Record 或已有 Enum 契约时会失败。
 
 ## 6. UI 应该从哪里改
 
