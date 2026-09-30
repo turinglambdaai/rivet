@@ -313,7 +313,7 @@ CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exerc
 
 ## Honest gaps
 
-- **Linux is a developer preview** — the complete daily CLI path and Ed25519-signed tarball work, but distro-native installers/trust integration, system services, and compositor-specific behavior are not complete.
+- **Linux is a developer preview** — the complete daily CLI path, Ed25519-signed tarball, and first-party system adapter work, but distro-native installers/trust integration, a tray contract, and explicit compositor policy are not complete.
 - **Apple mobile delivery is foundational** — the portable Swift and typed WatchConnectivity layers exist, but iOS/iPadOS/watchOS project generation, runtime packaging, signing, and store delivery are not complete.
 - **Android remains foundational** — its Kotlin RVT1 codec, coroutine runtime client, typed client code generation, and pinned Gradle build are tested, but Jetpack Compose, JNI, portable Racket CS packaging, signing, and device delivery are not complete.
 - **Architecture evidence covers build/package/verify, not production releases** — clean-runner gates exercise Windows x64/ARM64, macOS Apple-Silicon/Intel, and Linux x64/ARM64, but production release artifacts are still produced by the tag-driven release flow per application.
@@ -328,13 +328,13 @@ CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exerc
 - [x] **Phase 3** — typed RPC, Event, State, Cancel, generated Swift/C++ clients
 - [x] **Phase 4** — `new` / `doctor` / `build` / `dev` / `package`
 - [x] **Phase 5** — package verification, production signing/notarization entry points, and tag-driven release engineering
-- [ ] **Phase 6 — schema evolution and desktop architecture hardening**
+- [x] **Phase 6 — schema evolution and desktop architecture hardening**
   - [x] named Record schemas with Swift/C++ code generation and boundary validation
   - [x] versioned schema snapshots plus a machine-readable breaking-change gate
   - [x] Windows x64/ARM64 build selection
   - [x] named Enum schemas with Swift/C++ code generation and compatibility checks
   - [x] Kotlin typed-client generation
-  - [x] clean-runner build/package/release matrices for every supported desktop architecture
+  - [x] clean-runner build/package/verify evidence for every supported desktop architecture
 - [ ] **Phase 7 — first-class mobile application delivery** — generated iOS/iPadOS/watchOS and Android/Wear OS projects, runtime/companion choices, signing, packaging, and device verification
 
 ## License

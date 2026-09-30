@@ -313,7 +313,7 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
 
 ## 诚实的局限
 
-- **Linux 是开发者预览** —— 日常 CLI 全链路和 Ed25519 签名 tarball 已完成，但发行版原生安装包/信任集成、系统服务和 compositor 行为还未完成。
+- **Linux 是开发者预览** —— 日常 CLI 全链路、Ed25519 签名 tarball 与一方系统适配器已经完成，但发行版原生安装包/信任集成、托盘契约与明确的 compositor 策略还未完成。
 - **Apple 移动端仍是基础阶段** —— 可移植 Swift 与类型安全 WatchConnectivity 层已经存在，但 iOS/iPadOS/watchOS 项目生成、runtime 打包、签名和商店交付还未完成。
 - **Android 仍处于基础阶段** —— Kotlin RVT1 codec、协程 runtime 客户端、类型化客户端生成与固定版本的 Gradle 构建已经过测试，但 Jetpack Compose、JNI、portable Racket CS 打包、签名和设备交付尚未完成。
 - **架构证据覆盖构建/打包/验证，尚不覆盖生产发布** —— 干净 runner 门禁覆盖 Windows x64/ARM64、macOS Apple Silicon/Intel 与 Linux x64/ARM64，但生产发布产物仍由标签驱动的发布流程按应用生成。
@@ -328,13 +328,13 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
 - [x] **Phase 3** —— Typed RPC、Event、State、Cancel、Swift/C++ codegen
 - [x] **Phase 4** —— `new` / `doctor` / `build` / `dev` / `package`
 - [x] **Phase 5** —— 发布物验证、生产签名/公证入口与 tag-driven release engineering
-- [ ] **Phase 6 —— Schema 演进与桌面架构加固**
+- [x] **Phase 6 —— Schema 演进与桌面架构加固**
   - [x] 具名 Record schema、Swift/C++ 代码生成与边界校验
   - [x] 带版本的 schema 快照与机器可读的破坏性变更门禁
   - [x] Windows x64/ARM64 构建选择
   - [x] 具名 Enum schema、Swift/C++ 代码生成与兼容性检查
   - [x] Kotlin 类型客户端生成
-  - [x] 覆盖每个受支持桌面架构的干净 runner 构建/打包/发布矩阵
+  - [x] 覆盖每个受支持桌面架构的干净 runner 构建/打包/验证证据
 - [ ] **Phase 7 —— 一等移动应用交付** —— 生成 iOS/iPadOS/watchOS 与 Android/Wear OS 项目、runtime/companion 选择、签名、打包和真机验证
 
 ## 许可证
