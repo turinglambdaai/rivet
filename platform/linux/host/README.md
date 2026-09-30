@@ -20,6 +20,9 @@ platform/linux/
 ├── runtime/
 │   ├── backend.hpp        # rivet::linux_runtime::Backend — same contract as rivet::windows
 │   └── backend.cpp        # racketcs boot + RVT1-over-socketpair transport
+├── system/
+│   ├── system_services.hpp  # rivet::system — single-instance, notifications,
+│   └── system_services.cpp  #   autostart, Secret Service, crash hook, capabilities
 └── host/
     ├── GeneratedBackend.hpp  # scaffold schema; raco rivet build replaces it
     ├── CMakeLists.txt
@@ -56,6 +59,11 @@ platform host consumes) next to `RivetHost`. `raco rivet build`, `dev`, and
   archive from the package directory. Distro-native packages (`.deb`/`.rpm`,
   AppImage, apt repository trust) and OS-integrated update installation are
   follow-up work.
+- The system adapter covers single-instance, notifications, XDG autostart,
+  Secret Service secure storage, and crash hooks, with runtime capability
+  reporting. The tray contract is deliberately absent: StatusNotifierItem
+  hosting is compositor-dependent, so it belongs to an explicit application
+  policy, not an adapter default.
 - GTK is a toolkit, not a display protocol: global hotkeys and always-on-top
   overlays are compositor-dependent. Application hosts that need them must
   define an explicit X11/Wayland policy.

@@ -1,14 +1,21 @@
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <future>
 #include <iostream>
+#include <iterator>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+#include <gio/gio.h>
+
 #include "backend.hpp"
+#include "system_services.hpp"
 
 namespace {
 
@@ -28,9 +35,158 @@ void progress(char const* message) {
   std::cerr << "[rivet-linux-integration] " << message << "\n" << std::flush;
 }
 
+bool has_capability(std::vector<std::string> const& capabilities,
+                    std::string const& name) {
+  for (std::string const& capability : capabilities) {
+    if (capability == name) return true;
+  }
+  return false;
+}
+
+void require(bool condition, std::string const& message) {
+  if (!condition) {
+    throw std::runtime_error(message);
+  }
+}
+
+class TempEnvOverride {
+ public:
+  TempEnvOverride(char const* name, std::string const& value) : name_(name) {
+    char const* previous = getenv(name);
+    if (previous) previous_ = previous;
+    setenv(name, value.c_str(), 1);
+  }
+  ~TempEnvOverride() {
+    if (previous_) setenv(name_.c_str(), previous_->c_str(), 1);
+    else unsetenv(name_.c_str());
+  }
+  TempEnvOverride(TempEnvOverride const&) = delete;
+  TempEnvOverride& operator=(TempEnvOverride const&) = delete;
+
+ private:
+  std::string name_;
+  std::optional<std::string> previous_;
+};
+
+std::filesystem::path make_temp_directory(char const* prefix) {
+  std::string pattern = std::string("/tmp/") + prefix + "-XXXXXX";
+  std::vector<char> buffer(pattern.begin(), pattern.end());
+  buffer.push_back('\0');
+  char* created = mkdtemp(buffer.data());
+  if (created == nullptr) {
+    throw std::runtime_error("mkdtemp failed for system self-check");
+  }
+  return std::filesystem::path(created);
+}
+
+int run_system_self_check(std::vector<std::string> const& arguments) {
+  auto const capabilities = rivet::system::Capabilities();
+  progress("checking activation arguments");
+  require(rivet::system::ActivationArguments() == arguments,
+          "ActivationArguments must round-trip the process payload");
+
+  progress("checking single-instance lease and activation forwarding");
+  rivet::system::SingleInstanceLease primary("org.rivet.integration.test");
+  require(primary.is_primary(), "the first lease must be primary");
+  std::promise<std::vector<std::string>> delivered;
+  auto delivery = delivered.get_future();
+  primary.set_activation_handler(
+      [&delivered](std::vector<std::string> activation) {
+        delivered.set_value(std::move(activation));
+      });
+  {
+    rivet::system::SingleInstanceLease secondary("org.rivet.integration.test");
+    require(!secondary.is_primary(), "the second lease must not be primary");
+    require(secondary.forward_arguments({"open", "file.txt"}),
+            "forwarding to the primary instance failed");
+  }
+  if (delivery.wait_for(std::chrono::seconds(3)) != std::future_status::ready) {
+    throw std::runtime_error("the primary instance never received the activation");
+  }
+  require((delivery.get() == std::vector<std::string>{"open", "file.txt"}),
+          "the forwarded activation payload does not match");
+
+  progress("checking XDG autostart entries");
+  std::string const autostart_id = "org.rivet.autostart.integration";
+  {
+    auto config_dir = make_temp_directory("rivet-autostart");
+    TempEnvOverride config_override("XDG_CONFIG_HOME", config_dir.string());
+    require(!rivet::system::Autostart::Enabled(autostart_id),
+            "autostart must start disabled");
+    rivet::system::Autostart::SetEnabled(autostart_id, "/usr/bin/rivet-demo", true);
+    require(rivet::system::Autostart::Enabled(autostart_id),
+            "autostart did not persist after SetEnabled(true)");
+    std::ifstream entry(config_dir / "autostart" / (autostart_id + ".desktop"));
+    require(entry.is_open(), "the autostart entry file is missing");
+    std::string contents((std::istreambuf_iterator<char>(entry)),
+                         std::istreambuf_iterator<char>());
+    require(contents.find("Exec=/usr/bin/rivet-demo") != std::string::npos,
+            "the autostart entry lost its Exec line");
+    rivet::system::Autostart::SetEnabled(autostart_id, "", false);
+    require(!rivet::system::Autostart::Enabled(autostart_id),
+            "autostart stayed enabled after SetEnabled(false)");
+    std::filesystem::remove_all(config_dir);
+  }
+
+  if (has_capability(capabilities, "notification")) {
+    progress("checking desktop notifications");
+    std::uint32_t const first =
+        rivet::system::Notifications::Notify("RivetIntegration", "integration",
+                                             "Rivet Linux integration",
+                                             "tagged notification");
+    require(first != 0, "Notify returned no notification id");
+    std::uint32_t const replaced = rivet::system::Notifications::Notify(
+        "RivetIntegration", "integration", "Rivet Linux integration",
+        "replacement notification");
+    require(replaced == first, "a tagged notification must replace, not stack");
+    rivet::system::Notifications::CloseTag("integration");
+  } else {
+    progress("skipping notifications (no session bus or notification host)");
+  }
+
+  if (has_capability(capabilities, "secure-storage")) {
+    progress("checking Secret Service secure storage");
+    std::string const service = "org.rivet.integration.test";
+    std::string const account = "roundtrip";
+    rivet::system::SecretStore::Set(service, account,
+                                    {0x00, 0x01, 0x02, 0x00, 0xFF});
+    auto stored = rivet::system::SecretStore::Get(service, account);
+    require(stored.has_value(), "secure storage lost the stored secret");
+    require((*stored == std::vector<std::uint8_t>{0x00, 0x01, 0x02, 0x00, 0xFF}),
+            "secure storage returned different bytes");
+    rivet::system::SecretStore::Remove(service, account);
+    require(!rivet::system::SecretStore::Get(service, account).has_value(),
+            "secure storage kept the secret after Remove");
+  } else {
+    progress("skipping secure storage (no Secret Service provider)");
+  }
+
+  progress("installing the crash hook");
+  {
+    auto state_dir = make_temp_directory("rivet-crash");
+    TempEnvOverride state_override("XDG_STATE_HOME", state_dir.string());
+    rivet::system::InstallCrashHook([](int) noexcept {}, "integration crash args");
+    require(std::filesystem::exists(state_dir / "rivet" / "crash.log"),
+            "the crash hook did not prepare its crash log");
+    std::filesystem::remove_all(state_dir);
+  }
+
+  std::cout << "Rivet Linux system adapter checks passed\n";
+  return 0;
+}
+
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
+  std::vector<std::string> arguments(argv + 1, argv + argc);
+  if (!arguments.empty() && arguments.front() == "--system") {
+    try {
+      return run_system_self_check(arguments);
+    } catch (std::exception const& error) {
+      std::cerr << "Rivet Linux system adapter failure: " << error.what() << "\n";
+      return 1;
+    }
+  }
   try {
     auto const exe = executable_path();
     auto const root = exe.parent_path();

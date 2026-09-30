@@ -33,7 +33,7 @@ exercised by `tests/protocol-golden.txt` across Racket, C++, Swift, and Kotlin.
 - `runtime/`: portable C++ RVT1 runtime used by Windows and Linux
 - `platform/windows/`: WinUI 3 host and native adapters
 - `platform/macos/`: Swift runtime, SwiftUI host, embedding, device channels
-- `platform/linux/`: GTK4 host and embedded runtime
+- `platform/linux/`: GTK4 host, embedded runtime, and system adapter
 - `platform/android/`: Kotlin protocol and coroutine runtime foundation
 - `tests/`: Racket behavior and CLI regression tests
 - `.github/workflows/`: clean-platform and embedded-runtime gates, plus the

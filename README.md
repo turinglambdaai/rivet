@@ -116,10 +116,10 @@ See [architecture](docs/architecture.md), [agent-native development](docs/agent-
 | `new` / `doctor` / `build` / `dev` | ✅ | ✅ | ✅ |
 | `package` / `verify` | ✅ dependency audit | ✅ signing/rpath/plist audit | 🧪 directory + `ldd` audit |
 | Production signing / installer | ✅ Authenticode + MSI | ✅ Developer ID + DMG | 🧪 Ed25519-signed tarball via `raco rivet release` |
-| System services / secure storage | ✅ | ✅ | — |
+| System services / secure storage | ✅ | ✅ | 🧪 Linux adapter (no tray) |
 | Real embedded-runtime CI | ✅ | ✅ | ✅ |
 
-Windows and macOS remain the production release targets. Linux is a developer preview with the complete daily CLI path, an Ed25519-signed release artifact, and real embedded-runtime CI; distro-native installers, system-service adapters, and an explicit X11/Wayland policy remain before production status.
+Windows and macOS remain the production release targets. Linux is a developer preview with the complete daily CLI path, an Ed25519-signed release artifact, real embedded-runtime CI, and a first-party system adapter for single-instance, notifications, autostart, secure storage, and crash hooks; the tray contract and distro-native installers remain before production status, along with an explicit X11/Wayland policy.
 
 ### Apple mobile foundation
 
