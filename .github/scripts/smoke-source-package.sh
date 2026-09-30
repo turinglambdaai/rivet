@@ -76,6 +76,14 @@ assert report["contract-version"] == 1
 assert report["project"]["name"] == "ArchiveSmoke"
 assert report["backend"]["source"]["exists"] is True
 assert report["edit-points"]["windows-ui"][0]["exists"] is True
+assert report["generated-clients"]["kotlin"]["path"] == \
+    ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
 PY
+
+# The published archive must still generate every typed client, including the
+# Kotlin client that Android applications consume from the shared tree.
+PLTUSERHOME="$user_home" \
+  raco rivet generate
+test -s .rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt
 
 printf 'source package smoke test passed: %s\n' "$archive"

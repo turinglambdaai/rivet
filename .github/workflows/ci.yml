@@ -149,6 +149,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Install Rivet
+        run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Set up Java 17
         uses: actions/setup-java@v6
         with:
@@ -156,6 +165,22 @@ jobs:
           java-version: '17'
       - name: Set up and validate Gradle
         uses: gradle/actions/setup-gradle@v6
+      - name: Compile the generated typed client from the shared schema matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/rivet-kotlin-codegen"
+          mkdir -p "$root"
+          cd "$root"
+          raco rivet new KtSmoke
+          cd KtSmoke
+          cp "$GITHUB_WORKSPACE/tests/fixtures/schema-matrix-backend.rkt" app/backend.rkt
+          raco rivet generate
+          generated=".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
+          test -s "$generated"
+          destination="$GITHUB_WORKSPACE/platform/android/src/test/kotlin/dev/rivet/generated"
+          mkdir -p "$destination"
+          cp "$generated" "$destination/GeneratedBackend.kt"
       - name: Test Kotlin runtime against shared RVT1 vectors
         run: platform/android/gradlew -p platform/android test
 

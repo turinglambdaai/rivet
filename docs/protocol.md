@@ -163,13 +163,13 @@ State values are wire-validated against this complete reserved Event shape befor
 
 ## Typed RPC, Event, State, Record, and Enum schema
 
-`define-rpc` records argument names, argument types, and the result type. `define-event` records the Event name and payload type. `define-state` records the State name, value type, and current value. `define-record` records a named, ordered set of fields. `define-enum` records a named, closed, ordered set of cases. Rivet validates values at the Racket boundary and generates Swift/C++ wrappers before each native build.
+`define-rpc` records argument names, argument types, and the result type. `define-event` records the Event name and payload type. `define-state` records the State name, value type, and current value. `define-record` records a named, ordered set of fields. `define-enum` records a named, closed, ordered set of cases. Rivet validates values at the Racket boundary and generates Swift/C++/Kotlin wrappers before each native build.
 
 Declared RPC, Event, and State API names are limited to 1024 UTF-8 bytes. Incoming RPC and State lookup names are checked against the same limit before the backend converts them to Racket symbols for registry lookup, so arbitrary wire strings cannot force oversized symbol allocation. The limit is measured in encoded UTF-8 bytes rather than Unicode character count.
 
 Schema types are `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, `(Optional T)`, and names introduced by `define-record` or `define-enum`. State and Event payloads accept the same value types except `Void`. Optional null uses Null/Void. A Record uses List in declaration order and requires exactly the declared fields. An Enum uses its declared case name as a String and rejects unknown cases. All reuse existing RVT1 value tags.
 
-Generated State accessors use `$state/get` and `$state/set` internally; applications normally call the typed Swift/C++ API rather than constructing those reserved requests directly.
+Generated State accessors use `$state/get` and `$state/set` internally; applications normally call the typed Swift/C++/Kotlin API rather than constructing those reserved requests directly.
 
 Code generation rejects declarations that normalize to the same Swift or C++ identifier. Rivet reports the conflicting source declarations instead of writing native source that later fails with an opaque compiler error.
 

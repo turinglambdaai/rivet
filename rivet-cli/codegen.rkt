@@ -295,8 +295,18 @@
         raw))
   (if (member result keywords) (string-append "rivet_" result) result))
 
+;; Hard keywords only: soft/contextual keywords such as `value`, `get`, and
+;; `suspend` remain valid identifiers everywhere the generator emits them, and
+;; keeping the raw name preserves parity with the Swift/C++ clients.
+(define kotlin-keywords
+  '("as" "break" "class" "continue" "do" "else" "false" "for" "fun" "if"
+    "in" "interface" "is" "null" "object" "package" "return" "super"
+    "this" "throw" "true" "try" "typealias" "typeof" "val" "var" "when"
+    "while" "init"))
+
 (define (swift-id value) (identifier value swift-keywords))
 (define (cpp-id value) (identifier value cpp-keywords))
+(define (kotlin-id value) (identifier value kotlin-keywords))
 
 (define (upper-first value)
   (if (zero? (string-length value))
@@ -343,6 +353,29 @@
         [else (string ch)])))
    "\""))
 
+(define (kotlin-string-literal value)
+  (string-append
+   "\""
+   (apply
+    string-append
+    (for/list ([ch (in-string value)])
+      (define code (char->integer ch))
+      (cond
+        [(char=? ch #\\) "\\\\"]
+        [(char=? ch #\") "\\\""]
+        [(char=? ch #\newline) "\\n"]
+        [(char=? ch #\return) "\\r"]
+        [(char=? ch #\tab) "\\t"]
+        [(char=? ch #\$) "\\$"]
+        [(or (< code 32) (= code 127))
+         (format "\\u~a" (string-upcase (pad-hex-4 code)))]
+        [else (string ch)])))
+   "\""))
+
+(define (pad-hex-4 n)
+  (define raw (number->string n 16))
+  (string-append (make-string (max 0 (- 4 (string-length raw))) #\0) raw))
+
 (define (check-unique-native-names! language entries)
   (define seen (make-hash))
   (for ([entry (in-list entries)])
@@ -372,7 +405,11 @@
     (check-unique-native-names!
      "C++ arguments"
      (for/list ([name (in-list (schema-rpc-arg-names info))])
-       (cons (cpp-id name) (format "~a argument ~a" rpc-label name)))))
+       (cons (cpp-id name) (format "~a argument ~a" rpc-label name))))
+    (check-unique-native-names!
+     "Kotlin arguments"
+     (for/list ([name (in-list (schema-rpc-arg-names info))])
+       (cons (kotlin-id name) (format "~a argument ~a" rpc-label name)))))
 
   (check-unique-native-names!
    "Swift schema types"
@@ -392,6 +429,21 @@
     (for/list ([enum (in-list enums)])
       (cons (record-native-name (schema-enum-name enum) cpp-id)
             (format "Enum ~a" (schema-enum-name enum))))))
+  (check-unique-native-names!
+   "Kotlin schema types"
+   (append
+    ;; A schema type named after a runtime/generated identifier would shadow it
+    ;; inside the single generated file.
+    (for/list ([reserved (in-list '("RivetValue" "RivetClient" "RivetAPI"
+                                    "RivetEvent" "RivetGeneratedException"
+                                    "RivetGeneratedConfig"))])
+      (cons reserved "Kotlin reserved generated name"))
+    (for/list ([record (in-list records)])
+      (cons (record-native-name (schema-record-name record) kotlin-id)
+            (format "Record ~a" (schema-record-name record))))
+    (for/list ([enum (in-list enums)])
+      (cons (record-native-name (schema-enum-name enum) kotlin-id)
+            (format "Enum ~a" (schema-enum-name enum))))))
 
   (for ([record (in-list records)])
     (check-unique-native-names!
@@ -401,7 +453,11 @@
     (check-unique-native-names!
      "C++ Record fields"
      (for/list ([field (in-list (schema-record-field-names record))])
-       (cons (cpp-id field) (format "Record ~a field ~a" (schema-record-name record) field)))))
+       (cons (cpp-id field) (format "Record ~a field ~a" (schema-record-name record) field))))
+    (check-unique-native-names!
+     "Kotlin Record fields"
+     (for/list ([field (in-list (schema-record-field-names record))])
+       (cons (kotlin-id field) (format "Record ~a field ~a" (schema-record-name record) field)))))
 
   (for ([enum (in-list enums)])
     (check-unique-native-names!
@@ -411,7 +467,11 @@
     (check-unique-native-names!
      "C++ Enum cases"
      (for/list ([case (in-list (schema-enum-cases enum))])
-       (cons (cpp-id case) (format "Enum ~a case ~a" (schema-enum-name enum) case)))))
+       (cons (cpp-id case) (format "Enum ~a case ~a" (schema-enum-name enum) case))))
+    (check-unique-native-names!
+     "Kotlin Enum cases"
+     (for/list ([case (in-list (schema-enum-cases enum))])
+       (cons (kotlin-id case) (format "Enum ~a case ~a" (schema-enum-name enum) case)))))
 
   (check-unique-native-names!
    "Swift API"
@@ -426,6 +486,31 @@
                    (format "State getter ~a" (schema-state-name state)))
              (cons (string-append "set" suffix)
                    (format "State setter ~a" (schema-state-name state))))))))
+
+  ;; Kotlin mirrors the Swift member surface: RPC methods plus get/set accessors
+  ;; with an UpperFirst state suffix. RivetAPI also owns a `client` property.
+  (check-unique-native-names!
+   "Kotlin API"
+   (append
+    (list (cons "client" "RivetAPI constructor property"))
+    (for/list ([info (in-list rpcs)])
+      (cons (kotlin-id (schema-rpc-name info))
+            (format "RPC ~a" (schema-rpc-name info))))
+    (append*
+     (for/list ([state (in-list states)])
+       (define suffix (upper-first (kotlin-id (schema-state-name state))))
+       (list (cons (string-append "get" suffix)
+                   (format "State getter ~a" (schema-state-name state)))
+             (cons (string-append "set" suffix)
+                   (format "State setter ~a" (schema-state-name state))))))))
+
+  ;; Event payloads become nested data classes named with UpperFirst, so two
+  ;; events differing only in case would collapse onto one class.
+  (check-unique-native-names!
+   "Kotlin Event"
+   (for/list ([event (in-list events)])
+     (cons (upper-first (kotlin-id (schema-event-name event)))
+           (format "Event ~a" (schema-event-name event)))))
 
   ;; C++ emits both the historical future API and a non-blocking completion API.
   ;; Check all generated names together so an RPC named foo_async cannot collide
@@ -568,6 +653,21 @@
      (if (or (schema-record-for type) (schema-enum-for type))
          (record-native-name type cpp-id)
          (error 'generate-clients! "unsupported C++ type: ~e" type))]))
+
+(define (kotlin-type type)
+  (match type
+    ['String "String"]
+    ['Int64 "Long"]
+    ['Bool "Boolean"]
+    ['Bytes "ByteArray"]
+    ['Void "Unit"]
+    ['Any "RivetValue"]
+    [(list 'List inner) (format "List<~a>" (kotlin-type inner))]
+    [(list 'Optional inner) (format "~a?" (kotlin-type inner))]
+    [_
+     (if (or (schema-record-for type) (schema-enum-for type))
+         (record-native-name type kotlin-id)
+         (error 'generate-clients! "unsupported Kotlin type: ~e" type))]))
 
 (define (swift-record-definition record)
   (define name (record-native-name (schema-record-name record) swift-id))
@@ -960,6 +1060,185 @@
    (format "\n private:\n  ~a::Backend& backend_;\n};\n\n}  // namespace rivet_app\n"
            backend-namespace)))
 
+(define (kotlin-enum-definition enum)
+  (define name (record-native-name (schema-enum-name enum) kotlin-id))
+  (string-append
+   (format "enum class ~a(val wireName: String) {\n" name)
+   (apply string-append
+          (for/list ([case (in-list (schema-enum-cases enum))])
+            (format "    ~a(~a),\n"
+                    (kotlin-id case)
+                    (kotlin-string-literal (symbol->string case)))))
+   "    ;\n\n"
+   (format "    companion object {\n        fun fromWireName(name: String): ~a =\n            entries.firstOrNull { it.wireName == name }\n                ?: throw RivetGeneratedException(\"Rivet result type mismatch: ~a\")\n    }\n}\n\n"
+           name name)))
+
+(define (kotlin-record-definition record)
+  (define name (record-native-name (schema-record-name record) kotlin-id))
+  (define fields (map kotlin-id (schema-record-field-names record)))
+  (define types (schema-record-field-types record))
+  (format "data class ~a(\n~a)\n\n"
+          name
+          (string-join
+           (for/list ([field (in-list fields)] [type (in-list types)])
+             (format "    val ~a: ~a," field (kotlin-type type)))
+           "\n")))
+
+(define (kotlin-encoder type)
+  (define key (type-key type))
+  (define record (schema-record-for type))
+  (define enum (schema-enum-for type))
+  (cond
+    [record
+     (define fields (map kotlin-id (schema-record-field-names record)))
+     (define types (schema-record-field-types record))
+     (define encoded
+       (string-join
+        (for/list ([field (in-list fields)] [field-type (in-list types)])
+          (format "encode_~a(v.~a)" (type-key field-type) field))
+        ", "))
+     (format "private fun encode_~a(v: ~a): RivetValue =\n    RivetValue.ListValue(listOf(~a))\n"
+             key (kotlin-type type) encoded)]
+    [enum
+     (format "private fun encode_~a(v: ~a): RivetValue =\n    RivetValue.StringValue(v.wireName)\n"
+             key (kotlin-type type))]
+    [else
+     (match type
+       ['String (format "private fun encode_~a(v: String): RivetValue =\n    RivetValue.StringValue(v)\n" key)]
+       ['Int64 (format "private fun encode_~a(v: Long): RivetValue =\n    RivetValue.Int64(v)\n" key)]
+       ['Bool (format "private fun encode_~a(v: Boolean): RivetValue =\n    RivetValue.Bool(v)\n" key)]
+       ['Bytes (format "private fun encode_~a(v: ByteArray): RivetValue =\n    RivetValue.Bytes(v)\n" key)]
+       ['Void (format "private fun encode_~a(v: Unit): RivetValue =\n    RivetValue.Null\n" key)]
+       ['Any (format "private fun encode_~a(v: RivetValue): RivetValue = v\n" key)]
+       [(list 'List inner)
+        (format "private fun encode_~a(v: ~a): RivetValue =\n    RivetValue.ListValue(v.map { encode_~a(it) })\n"
+                key (kotlin-type type) (type-key inner))]
+       [(list 'Optional inner)
+        (format "private fun encode_~a(v: ~a): RivetValue =\n    v?.let { encode_~a(it) } ?: RivetValue.Null\n"
+                key (kotlin-type type) (type-key inner))])]))
+
+(define (kotlin-decoder type)
+  (define key (type-key type))
+  (define mismatch
+    (kotlin-string-literal
+     (string-append "Rivet result type mismatch: " (format "~s" type))))
+  (define record (schema-record-for type))
+  (define enum (schema-enum-for type))
+  (cond
+    [record
+     (define name (kotlin-type type))
+     (define fields (map kotlin-id (schema-record-field-names record)))
+     (define types (schema-record-field-types record))
+     (format
+      "private fun decode_~a(v: RivetValue): ~a {\n    val xs = v as? RivetValue.ListValue ?: throw RivetGeneratedException(~a)\n    if (xs.values.size != ~a) throw RivetGeneratedException(~a)\n    return ~a(\n~a    )\n}\n"
+      key name mismatch (length types) mismatch name
+      (apply
+       string-append
+       (for/list ([field (in-list fields)]
+                  [field-type (in-list types)]
+                  [index (in-naturals)])
+         (format "        ~a = decode_~a(xs.values[~a]),\n"
+                 field (type-key field-type) index))))]
+    [enum
+     (format "private fun decode_~a(v: RivetValue): ~a {\n    val raw = v as? RivetValue.StringValue ?: throw RivetGeneratedException(~a)\n    return ~a.fromWireName(raw.value)\n}\n"
+             key (kotlin-type type) mismatch (kotlin-type type))]
+    [else
+     (match type
+       ['String (format "private fun decode_~a(v: RivetValue): String =\n    (v as? RivetValue.StringValue)?.value ?: throw RivetGeneratedException(~a)\n" key mismatch)]
+       ['Int64 (format "private fun decode_~a(v: RivetValue): Long =\n    (v as? RivetValue.Int64)?.value ?: throw RivetGeneratedException(~a)\n" key mismatch)]
+       ['Bool (format "private fun decode_~a(v: RivetValue): Boolean =\n    (v as? RivetValue.Bool)?.value ?: throw RivetGeneratedException(~a)\n" key mismatch)]
+       ['Bytes (format "private fun decode_~a(v: RivetValue): ByteArray =\n    (v as? RivetValue.Bytes)?.toByteArray() ?: throw RivetGeneratedException(~a)\n" key mismatch)]
+       ['Void (format "private fun decode_~a(v: RivetValue) {\n    if (v != RivetValue.Null) throw RivetGeneratedException(~a)\n}\n" key mismatch)]
+       ['Any (format "private fun decode_~a(v: RivetValue): RivetValue = v\n" key)]
+       [(list 'List inner)
+        (format "private fun decode_~a(v: RivetValue): ~a =\n    (v as? RivetValue.ListValue)?.values?.map { decode_~a(it) } ?: throw RivetGeneratedException(~a)\n"
+                key (kotlin-type type) (type-key inner) mismatch)]
+       [(list 'Optional inner)
+        (format "private fun decode_~a(v: RivetValue): ~a {\n    if (v == RivetValue.Null) return null\n    return decode_~a(v)\n}\n"
+                key (kotlin-type type) (type-key inner))])]))
+
+(define (kotlin-rpc-method info)
+  (define names (map kotlin-id (schema-rpc-arg-names info)))
+  (define types (schema-rpc-arg-types info))
+  (define result (schema-rpc-result-type info))
+  (define params
+    (string-join
+     (for/list ([name (in-list names)] [type (in-list types)])
+       (format "~a: ~a" name (kotlin-type type)))
+     ", "))
+  (define call
+    (if (null? names)
+        (format "client.call(~a)" (kotlin-string-literal (symbol->string (schema-rpc-name info))))
+        (format "client.call(~a, listOf(~a))"
+                (kotlin-string-literal (symbol->string (schema-rpc-name info)))
+                (string-join
+                 (for/list ([name (in-list names)] [type (in-list types)])
+                   (format "encode_~a(~a)" (type-key type) name))
+                 ", "))))
+  (format
+   "    suspend fun ~a(~a): ~a {\n        val result = ~a\n        return decode_~a(result)\n    }\n"
+   (kotlin-id (schema-rpc-name info)) params (kotlin-type result)
+   call (type-key result)))
+
+(define (kotlin-state-methods state)
+  (define raw-name (symbol->string (schema-state-name state)))
+  (define suffix (upper-first (kotlin-id raw-name)))
+  (define type (schema-state-type state))
+  (format
+   "    suspend fun get~a(): ~a {\n        val result = client.getState(~a)\n        return decode_~a(result)\n    }\n\n    suspend fun set~a(value: ~a): ~a {\n        val result = client.setState(~a, encode_~a(value))\n        return decode_~a(result)\n    }\n"
+   suffix (kotlin-type type) (kotlin-string-literal raw-name) (type-key type)
+   suffix (kotlin-type type) (kotlin-type type)
+   (kotlin-string-literal raw-name) (type-key type) (type-key type)))
+
+(define (generate-kotlin-events events)
+  (if (null? events)
+      ""
+      (string-append
+       "sealed interface RivetEvent {\n"
+       (apply
+        string-append
+        (for/list ([event (in-list events)])
+          (format "    data class ~a(val value: ~a) : RivetEvent\n"
+                  (upper-first (kotlin-id (schema-event-name event)))
+                  (kotlin-type (schema-event-type event)))))
+       "\n    companion object {\n        fun decode(name: String, value: RivetValue): RivetEvent = when (name) {\n"
+       (apply
+        string-append
+        (for/list ([event (in-list events)])
+          (format "            ~a -> ~a(decode_~a(value))\n"
+                  (kotlin-string-literal (symbol->string (schema-event-name event)))
+                  (upper-first (kotlin-id (schema-event-name event)))
+                  (type-key (schema-event-type event)))))
+       "            else -> throw RivetGeneratedException(\"unknown Rivet event: \" + name)\n        }\n    }\n}\n\n")))
+
+(define (generate-kotlin rpcs events states records enums module-name entry-name)
+  (define types (all-types rpcs events states records enums))
+  (string-append
+   "// Generated by Rivet. Do not edit by hand.\npackage dev.rivet.generated\n\n"
+   "import dev.rivet.runtime.RivetClient\nimport dev.rivet.runtime.RivetValue\n"
+   ;; State accessors are package-level extension functions in the Kotlin
+   ;; runtime, so generated callers must import them explicitly.
+   (if (null? states)
+       ""
+       "import dev.rivet.runtime.getState\nimport dev.rivet.runtime.setState\n")
+   "\n"
+   "class RivetGeneratedException(message: String) : IllegalArgumentException(message)\n\n"
+   (format "object RivetGeneratedConfig {\n    const val moduleName = ~a\n    const val entryName = ~a\n}\n\n"
+           (kotlin-string-literal module-name)
+           (kotlin-string-literal entry-name))
+   (apply string-append (map kotlin-enum-definition enums))
+   (apply string-append (map kotlin-record-definition (order-records records)))
+   (apply string-append (map kotlin-encoder types))
+   "\n"
+   (apply string-append (map kotlin-decoder types))
+   "\n"
+   (generate-kotlin-events events)
+   "class RivetAPI(val client: RivetClient) {\n"
+   (apply string-append (map kotlin-rpc-method rpcs))
+   (if (null? states) "" "\n    // Shared state\n")
+   (apply string-append (map kotlin-state-methods states))
+   "}\n"))
+
 (define (write-generated! path content)
   (make-parent-directory* path)
   (call-with-output-file path #:exists 'truncate/replace
@@ -988,7 +1267,14 @@
       (write-generated!
        (build-path linux-host "GeneratedBackend.hpp")
        (generate-cpp rpcs events states records enums module-name entry-name
-                     "rivet::linux_runtime"))))
+                     "rivet::linux_runtime")))
+    ;; Android consumes the typed client from the shared generated tree until
+    ;; generated Compose projects exist; the package layout keeps the file
+    ;; drop-in for Gradle source sets.
+    (write-generated!
+     (project-path project ".rivet" "generated" "kotlin" "dev" "rivet"
+                   "generated" "GeneratedBackend.kt")
+     (generate-kotlin rpcs events states records enums module-name entry-name)))
   ;; Preserve the historical first two result positions for callers that
   ;; inspect codegen output programmatically; Events, Records, and Enums follow.
   (list rpcs states events records enums))

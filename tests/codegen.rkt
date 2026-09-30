@@ -97,6 +97,11 @@ RKT
     (define linux-cpp
       (file->string
        (build-path project-root "linux" "GeneratedBackend.hpp")))
+    (define kotlin
+      (file->string
+       (build-path project-root
+                   ".rivet" "generated" "kotlin" "dev" "rivet" "generated"
+                   "GeneratedBackend.kt")))
 
     (check-true (regexp-match? #rx"public struct User: Sendable" swift))
     (check-true (regexp-match? #rx"public let display_name: String" swift))
@@ -132,6 +137,38 @@ RKT
     (check-true
      (regexp-match? #rx"rivet::linux_runtime::CallResult raw" linux-cpp))
     (check-false (regexp-match? #rx"rivet::windows" linux-cpp))
+
+    ;; The typed Kotlin client targets the coroutine runtime. State accessors
+    ;; are package-level extension functions, so the imports are load-bearing.
+    (check-true (regexp-match? #rx"package dev.rivet.generated" kotlin))
+    (check-true
+     (regexp-match? #rx"import dev\\.rivet\\.runtime\\.RivetClient" kotlin))
+    (check-true
+     (regexp-match? #rx"import dev\\.rivet\\.runtime\\.getState" kotlin))
+    (check-true
+     (regexp-match? #rx"import dev\\.rivet\\.runtime\\.setState" kotlin))
+    (check-true (regexp-match? #rx"data class User\\(" kotlin))
+    (check-true (regexp-match? #rx"val display_name: String," kotlin))
+    (check-true (regexp-match? #rx"val nickname: String\\?," kotlin))
+    (check-true
+     (regexp-match? #rx"suspend fun greet\\(name: String\\): String" kotlin))
+    (check-true
+     (regexp-match? #rx"suspend fun echo_user\\(user: User\\): User" kotlin))
+    (check-true
+     (regexp-match? #rx"suspend fun getCounter\\(\\): Long" kotlin))
+    (check-true
+     (regexp-match? #rx"suspend fun setCounter\\(value: Long\\): Long" kotlin))
+    (check-true
+     (regexp-match? #rx"client\\.getState\\(\"counter\"\\)" kotlin))
+    (check-true
+     (regexp-match? #rx"client\\.setState\\(\"counter\", encode_Int64\\(value\\)\\)" kotlin))
+    (check-true
+     (regexp-match? #rx"class RivetAPI\\(val client: RivetClient\\)" kotlin))
+    (check-true (regexp-match? #rx"sealed interface RivetEvent" kotlin))
+    (check-true
+     (regexp-match? #rx"data class Progress\\(val value: Long\\) : RivetEvent" kotlin))
+    (check-true
+     (regexp-match? #rx"\"progress\" -> Progress\\(decode_Int64\\(value\\)\\)" kotlin))
 
     ;; A versioned snapshot is suitable for source control and CI. Additions are
     ;; compatible, while changing a published signature is reported and fails.
@@ -269,6 +306,15 @@ RKT
     (check-regexp-match #rx"func echo_role\\(role: Role\\) async throws -> Role" enum-swift)
     (check-regexp-match #rx"enum class Role \\{ admin, member \\};" enum-cpp)
     (check-regexp-match #rx"std::future<Role> echo_role\\(Role role\\)" enum-cpp)
+    (define enum-kotlin
+      (file->string
+       (build-path project-root
+                   ".rivet" "generated" "kotlin" "dev" "rivet" "generated"
+                   "GeneratedBackend.kt")))
+    (check-regexp-match #rx"enum class Role\\(val wireName: String\\)" enum-kotlin)
+    (check-regexp-match #rx"admin\\(\"admin\"\\)," enum-kotlin)
+    (check-regexp-match #rx"suspend fun echo_role\\(role: Role\\): Role" enum-kotlin)
+    (check-regexp-match #rx"Role\\.fromWireName" enum-kotlin)
 
     (define enum-baseline-path (build-path project-root "enum-schema.json"))
     (write-schema-snapshot! project enum-baseline-path)
@@ -380,6 +426,28 @@ RKT
 
 (define-enum Mode (foo-bar foo_bar))
 (define-rpc (mode : Mode) (Mode 'foo-bar))
+
+(define (start in-fd out-fd)
+  (serve-fds in-fd out-fd))
+RKT
+     )
+    (check-exn #rx"native API name collision"
+               (lambda () (generate-clients! project)))
+
+    ;; Kotlin event payloads become nested data classes with UpperFirst names,
+    ;; so events differing only in case would collapse onto one class.
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-event foo : Int64)
+(define-event Foo : Int64)
+
+(define-rpc (health : Bool) #t)
 
 (define (start in-fd out-fd)
   (serve-fds in-fd out-fd))

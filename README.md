@@ -67,7 +67,7 @@ The Racket backend declares the API shared by both native hosts:
   (serve-fds in-fd out-fd))
 ```
 
-`raco rivet build` reads the RPC, Event, State, Record, and Enum schema and generates typed native clients. Swift gets methods such as `increment(value:)`, `getCounter()`, and `setCounter(_:)`; C++ gets their native equivalents.
+`raco rivet build` reads the RPC, Event, State, Record, and Enum schema and generates typed native clients. Swift gets methods such as `increment(value:)`, `getCounter()`, and `setCounter(_:)`; C++ gets their native equivalents; Kotlin gets suspend methods such as `increment(value)` in `.rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt`.
 
 ### How it compares
 
@@ -139,12 +139,12 @@ The mobile targets are foundations, not a claim of finished app delivery. The ph
 |---|---|---|
 | Kotlin RVT1 codec | ✅ shared golden vectors | ✅ portable Kotlin core |
 | Coroutine runtime client | ✅ Request/Event/State/Cancel | ✅ portable Kotlin core |
-| Typed generated client | planned | planned companion client |
+| Typed generated client | ✅ generated from the shared schema, compiled in CI | planned companion client |
 | Native UI host | planned Jetpack Compose | planned Compose for Wear OS |
 | Embedded Racket CS / JNI | not yet | companion mode by default |
 | `raco rivet new/build/package` app flow | not yet | not yet |
 
-The checked-in Gradle wrapper is version-pinned and checksum-verified. Android currently has a tested protocol and coroutine-client foundation; JNI runtime hosting, Compose scaffolds, code generation, packaging, signing, and device/emulator round trips remain before developer-preview status. See [Android architecture](docs/android.md).
+The checked-in Gradle wrapper is version-pinned and checksum-verified. Android currently has a tested protocol, coroutine-client, and typed-client-codegen foundation; JNI runtime hosting, Compose scaffolds, packaging, signing, and device/emulator round trips remain before developer-preview status. See [Android architecture](docs/android.md).
 
 ## Requirements
 
@@ -193,7 +193,7 @@ For publisher-signed output, use `raco rivet package --production` with the plat
   (format "user-~a" id))
 ```
 
-Arguments and results are validated at the Racket boundary. Supported schema values currently include `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, `(Optional T)`, named values declared with `define-record`, and closed cases declared with `define-enum`. Records generate native Swift/C++ structs; Enums generate Swift raw-value enums and C++ `enum class` values.
+Arguments and results are validated at the Racket boundary. Supported schema values currently include `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, `(Optional T)`, named values declared with `define-record`, and closed cases declared with `define-enum`. Records generate native Swift structs, C++ structs, and Kotlin data classes; Enums generate Swift raw-value enums, C++ `enum class` values, and Kotlin `enum class` values.
 
 ### Events
 
@@ -315,7 +315,7 @@ CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exerc
 
 - **Linux is a developer preview** — the complete daily CLI path and Ed25519-signed tarball work, but distro-native installers/trust integration, system services, and compositor-specific behavior are not complete.
 - **Apple mobile delivery is foundational** — the portable Swift and typed WatchConnectivity layers exist, but iOS/iPadOS/watchOS project generation, runtime packaging, signing, and store delivery are not complete.
-- **Android remains foundational** — its Kotlin RVT1 codec, coroutine runtime client, and pinned Gradle build are tested, but Jetpack Compose, JNI, portable Racket CS packaging, generated clients, signing, and device delivery are not complete.
+- **Android remains foundational** — its Kotlin RVT1 codec, coroutine runtime client, typed client code generation, and pinned Gradle build are tested, but Jetpack Compose, JNI, portable Racket CS packaging, signing, and device delivery are not complete.
 - **Architecture coverage is not yet a full release matrix** — Windows has x64 and ARM64 build paths, while clean-runner packaging/release evidence for every advertised desktop architecture is still incomplete.
 - **No cross-platform declarative UI DSL** — native UI code remains SwiftUI/AppKit or WinUI 3/C++/WinRT.
 - **Publisher credentials remain application-specific** — Rivet automates Authenticode and Developer ID/notarization flows, but certificates, PFX passwords, and Apple notary profiles are intentionally supplied by the application/CI environment rather than stored by Rivet.
@@ -333,7 +333,7 @@ CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exerc
   - [x] versioned schema snapshots plus a machine-readable breaking-change gate
   - [x] Windows x64/ARM64 build selection
   - [x] named Enum schemas with Swift/C++ code generation and compatibility checks
-  - [ ] Kotlin typed-client generation
+  - [x] Kotlin typed-client generation
   - [ ] clean-runner build/package/release matrices for every supported desktop architecture
 - [ ] **Phase 7 — first-class mobile application delivery** — generated iOS/iPadOS/watchOS and Android/Wear OS projects, runtime/companion choices, signing, packaging, and device verification
 

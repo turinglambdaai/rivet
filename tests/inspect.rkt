@@ -45,6 +45,13 @@
           [entry (in-list (hash-ref edits group))])
      (check-true (hash-ref entry 'exists)))
 
+   ;; Every supported client language is discoverable from the report,
+   ;; including the Kotlin client inside the shared generated tree.
+   (define clients (hash-ref report 'generated-clients))
+   (for ([key (in-list '(swift cpp-windows cpp-linux kotlin))])
+     (check-true (hash? (hash-ref clients key #f)))
+     (check-true (string? (hash-ref (hash-ref clients key) 'path))))
+
    (check-true (file-exists? (build-path root "AGENTS.md")))
    (define instructions (file->string (build-path root "AGENTS.md")))
    (check-regexp-match #rx"raco rivet inspect --json" instructions)
