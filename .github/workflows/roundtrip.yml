@@ -26,6 +26,10 @@ jobs:
           version: '9.3'
       - name: Install Rivet
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
+      - name: Install system adapter development files
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libglib2.0-dev libsecret-1-dev
       - name: Cache embeddable Racket CS
         id: cache-racket-embed
         uses: actions/cache/restore@v5
@@ -116,6 +120,12 @@ jobs:
       - name: Exercise embedded runtime
         timeout-minutes: 2
         run: "$RIVET_LINUX_ROUNDTRIP_STAGE/RivetIntegration"
+      - name: Exercise Linux system adapter
+        timeout-minutes: 2
+        # Notification and Secret Service checks skip themselves on a runner
+        # without a session bus; single-instance, autostart, and the crash
+        # hook always run.
+        run: '"$RIVET_LINUX_ROUNDTRIP_STAGE/RivetIntegration" --system ci ci'
       - name: Install GTK4 development files
         run: |
           sudo apt-get update

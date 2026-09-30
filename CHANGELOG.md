@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the first-party Linux system adapter in `platform/linux/system`, mirroring the Windows and macOS surfaces: an abstract-socket single-instance lease with activation forwarding, desktop notifications over `org.freedesktop.Notifications` with tagged replacement ids, XDG autostart entries, Secret Service binary secrets through libsecret (compiled when present, reported as a runtime capability), POSIX fatal-signal crash hooks, and a `Capabilities()` probe that reflects what the running session actually provides. The tray contract stays deliberately absent because StatusNotifierItem hosting is compositor-dependent. The Linux integration binary self-checks the adapter (`RivetIntegration --system`), CI runs it, and the Linux host packaging no longer embeds build-machine rpaths.
+
+## 0.4.0
+
 - Complete the Linux release path. `raco rivet release` now runs on Linux: the verified self-contained package is packed into a deterministic ustar/gzip archive and signed with a detached Ed25519 signature (`<installer>.tar.gz.sig`, base64), configured through `RIVET_LINUX_SIGN_PRIVATE_KEY` and `RIVET_LINUX_SIGN_KEY_ID`. `raco rivet verify --production` re-derives the archive from the packaged directory, requires a byte-identical match with the released installer, and validates the signature against `RIVET_LINUX_SIGN_PUBLIC_KEY`; update manifests record the artifact as platform `linux`, installer kind `targz`. `raco rivet package --production` on Linux now points to `raco rivet release`, which owns the installer-level signing flow.
 
 ## 0.4.0
