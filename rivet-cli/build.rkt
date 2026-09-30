@@ -215,6 +215,11 @@
            (path->string host-project)
            "/restore"
            "/m"
+           ;; On ARM64 Windows hosts MSBuild otherwise selects the 32-bit
+           ;; HostX86 cross compiler, whose address space cannot hold the
+           ;; WinUI precompiled header (C3859/C1076). The x64-hosted toolchain
+           ;; is already a hard requirement of Rivet's toolchain discovery.
+           "/p:PreferredToolArchitecture=x64"
            (string-append "/p:Configuration=" configuration)
            (string-append "/p:Platform=" (windows-platform))
            (string-append "/p:RivetSelfContained="

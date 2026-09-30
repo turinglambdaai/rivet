@@ -309,14 +309,14 @@ swift test --package-path platform/macos
 platform/android/gradlew -p platform/android test
 ```
 
-CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exercises real embedded Racket round trips on all three desktop platforms; cross-compiles the portable Swift layers for iOS/watchOS; and smoke-builds, packages, and verifies generated desktop applications.
+CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exercises real embedded Racket round trips on all three desktop platforms; cross-compiles the portable Swift layers for iOS/watchOS; compiles the generated Kotlin client; smoke-builds, packages, and verifies generated desktop applications; and covers Windows ARM64, macOS Intel, and Linux ARM64 on dedicated clean-runner architecture gates.
 
 ## Honest gaps
 
 - **Linux is a developer preview** — the complete daily CLI path and Ed25519-signed tarball work, but distro-native installers/trust integration, system services, and compositor-specific behavior are not complete.
 - **Apple mobile delivery is foundational** — the portable Swift and typed WatchConnectivity layers exist, but iOS/iPadOS/watchOS project generation, runtime packaging, signing, and store delivery are not complete.
 - **Android remains foundational** — its Kotlin RVT1 codec, coroutine runtime client, typed client code generation, and pinned Gradle build are tested, but Jetpack Compose, JNI, portable Racket CS packaging, signing, and device delivery are not complete.
-- **Architecture coverage is not yet a full release matrix** — Windows has x64 and ARM64 build paths, while clean-runner packaging/release evidence for every advertised desktop architecture is still incomplete.
+- **Architecture evidence covers build/package/verify, not production releases** — clean-runner gates exercise Windows x64/ARM64, macOS Apple-Silicon/Intel, and Linux x64/ARM64, but production release artifacts are still produced by the tag-driven release flow per application.
 - **No cross-platform declarative UI DSL** — native UI code remains SwiftUI/AppKit or WinUI 3/C++/WinRT.
 - **Publisher credentials remain application-specific** — Rivet automates Authenticode and Developer ID/notarization flows, but certificates, PFX passwords, and Apple notary profiles are intentionally supplied by the application/CI environment rather than stored by Rivet.
 - **The public API is still pre-1.0** — protocol compatibility is versioned, but higher-level APIs may still evolve.
@@ -334,7 +334,7 @@ CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exerc
   - [x] Windows x64/ARM64 build selection
   - [x] named Enum schemas with Swift/C++ code generation and compatibility checks
   - [x] Kotlin typed-client generation
-  - [ ] clean-runner build/package/release matrices for every supported desktop architecture
+  - [x] clean-runner build/package/release matrices for every supported desktop architecture
 - [ ] **Phase 7 — first-class mobile application delivery** — generated iOS/iPadOS/watchOS and Android/Wear OS projects, runtime/companion choices, signing, packaging, and device verification
 
 ## License
