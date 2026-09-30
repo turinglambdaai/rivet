@@ -110,6 +110,15 @@ raco rivet dev
 
 During the build, Rivet reads the backend schema and regenerates the typed native API. On macOS the generated Swift client exposes native async methods; on Windows the generated C++ API exposes completion-driven methods. You do not hand-write protocol frames or marshal Racket values across UI threads.
 
+The generated project already contains `rivet-schema.json`. Commit that compatibility baseline and make CI check it; refresh it only when an API change is intentional:
+
+```bash
+raco rivet schema --output rivet-schema.json
+raco rivet schema check rivet-schema.json --json
+```
+
+The second command permits new declarations and fails for removed or changed RPC, Event, State, or Record contracts.
+
 ## 6. Where to edit the UI
 
 ### Windows

@@ -23,7 +23,7 @@ raco rivet dev
 
 That is the normal first-run path. `doctor` checks the native toolchain and prints actionable fixes when a required component is missing; `dev` builds and launches the current platform's first-party native host.
 
-Every generated app includes an `AGENTS.md`, and `inspect --json` exposes a versioned machine-readable map of project identity, backend/native UI edit points, target maturity, generated paths, and safe lifecycle commands. See [agent-native development](docs/agent-native.md).
+Every generated app includes an `AGENTS.md` and an initial `rivet-schema.json` compatibility baseline. `inspect --json` exposes a versioned machine-readable map of project identity, backend/native UI edit points, schema checks, target maturity, generated paths, and safe lifecycle commands. See [agent-native development](docs/agent-native.md).
 
 For a guided walkthrough, read **[Getting Started with Rivet](docs/getting-started.md)**. The installed package also includes searchable Scribble documentation. If you are developing Rivet itself, use the linked-checkout workflow in that guide instead of installing from the catalog.
 
@@ -67,7 +67,7 @@ The Racket backend declares the API shared by both native hosts:
   (serve-fds in-fd out-fd))
 ```
 
-`raco rivet build` reads the RPC and State schema and generates typed native clients. Swift gets methods such as `increment(value:)`, `getCounter()`, and `setCounter(_:)`; C++ gets their native equivalents.
+`raco rivet build` reads the RPC, Event, State, and Record schema and generates typed native clients. Swift gets methods such as `increment(value:)`, `getCounter()`, and `setCounter(_:)`; C++ gets their native equivalents.
 
 ### How it compares
 
@@ -193,7 +193,7 @@ For publisher-signed output, use `raco rivet package --production` with the plat
   (format "user-~a" id))
 ```
 
-Arguments and results are validated at the Racket boundary. Supported schema values currently include `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, and `(Optional T)`.
+Arguments and results are validated at the Racket boundary. Supported schema values currently include `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, `(Optional T)`, and named values declared with `define-record`. Records generate native Swift structs and C++ structs and retain their declared field order on the wire.
 
 ### Events
 
@@ -217,12 +217,29 @@ Native clients can get and set the state through generated typed accessors. Upda
 
 Long-running requests use RVT1 request IDs. Native clients can cancel an outstanding request; the Racket server tears down the request custodian and returns a cancellation error without killing the backend.
 
+### Schema compatibility
+
+Every generated project includes the public backend contract as a versioned, language-neutral JSON baseline. Commit it and enforce it in CI:
+
+```bash
+raco rivet schema --output rivet-schema.json
+raco rivet schema check rivet-schema.json --json
+```
+
+New RPCs, Events, States, and Records are compatible additions. Removing one, changing an RPC signature or value type, changing the RVT1 protocol version, or changing a Record's fields or field order is reported as breaking and exits unsuccessfully. Regenerate the baseline only for an intentional, release-governed compatibility break.
+
 ## CLI
 
 ```text
 raco rivet new <name>              Create a Rivet application
 raco rivet doctor                  Inspect Racket and native toolchains
 raco rivet doctor --json           Emit machine-readable diagnostics
+raco rivet inspect                 Show the project's edit and verification map
+raco rivet inspect --json          Emit the agent-readable project contract
+raco rivet schema --json           Emit the current versioned API schema
+raco rivet schema --output <file>  Write a schema compatibility baseline
+raco rivet schema check <file>     Reject breaking changes from a baseline
+raco rivet schema check <file> --json  Emit a machine-readable compatibility report
 raco rivet clean                   Remove generated .rivet/build/dist artifacts
 raco rivet build                   Compile backend, generate clients, build native host
 raco rivet dev                     Build and run the current application
@@ -296,10 +313,10 @@ CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exerc
 
 ## Honest gaps
 
-- **Linux is a developer preview** — the complete daily CLI path works, but production signing, distro-native installers, system services, and compositor-specific behavior are not complete.
+- **Linux is a developer preview** — the complete daily CLI path and Ed25519-signed tarball work, but distro-native installers/trust integration, system services, and compositor-specific behavior are not complete.
 - **Apple mobile delivery is foundational** — the portable Swift and typed WatchConnectivity layers exist, but iOS/iPadOS/watchOS project generation, runtime packaging, signing, and store delivery are not complete.
 - **Android remains foundational** — its Kotlin RVT1 codec, coroutine runtime client, and pinned Gradle build are tested, but Jetpack Compose, JNI, portable Racket CS packaging, generated clients, signing, and device delivery are not complete.
-- **Windows starts with x64** — additional architectures can be added after the runtime packaging path is stable.
+- **Architecture coverage is not yet a full release matrix** — Windows has x64 and ARM64 build paths, while clean-runner packaging/release evidence for every advertised desktop architecture is still incomplete.
 - **No cross-platform declarative UI DSL** — native UI code remains SwiftUI/AppKit or WinUI 3/C++/WinRT.
 - **Publisher credentials remain application-specific** — Rivet automates Authenticode and Developer ID/notarization flows, but certificates, PFX passwords, and Apple notary profiles are intentionally supplied by the application/CI environment rather than stored by Rivet.
 - **The public API is still pre-1.0** — protocol compatibility is versioned, but higher-level APIs may still evolve.
@@ -311,7 +328,13 @@ CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exerc
 - [x] **Phase 3** — typed RPC, Event, State, Cancel, generated Swift/C++ clients
 - [x] **Phase 4** — `new` / `doctor` / `build` / `dev` / `package`
 - [x] **Phase 5** — package verification, production signing/notarization entry points, and tag-driven release engineering
-- [ ] **Phase 6** — broader architectures, richer schema/codegen types, and long-term protocol compatibility tooling
+- [ ] **Phase 6 — schema evolution and desktop architecture hardening**
+  - [x] named Record schemas with Swift/C++ code generation and boundary validation
+  - [x] versioned schema snapshots plus a machine-readable breaking-change gate
+  - [x] Windows x64/ARM64 build selection
+  - [ ] enum schemas and Kotlin typed-client generation
+  - [ ] clean-runner build/package/release matrices for every supported desktop architecture
+- [ ] **Phase 7 — first-class mobile application delivery** — generated iOS/iPadOS/watchOS and Android/Wear OS projects, runtime/companion choices, signing, packaging, and device verification
 
 ## License
 

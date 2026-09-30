@@ -2,6 +2,7 @@
 
 (require json
          racket/file
+         racket/list
          racket/port
          rackunit
          "../rivet-cli/inspect.rkt"
@@ -21,6 +22,8 @@
    (check-equal? (hash-ref report 'principles) '("Human-first" "Agent-native" "Local by design"))
    (check-equal? (hash-ref (hash-ref report 'project) 'name) "AgentDemo")
    (check-true (hash? (hash-ref (hash-ref report 'backend) 'source)))
+   (check-true
+    (hash-ref (hash-ref (hash-ref report 'schema) 'baseline) 'exists))
 
    (define sourcing (hash-ref report 'capability-sourcing))
    (check-equal? (hash-ref sourcing 'version) 1)
@@ -29,6 +32,13 @@
    (check-equal? (map (lambda (option) (hash-ref option 'kind)) (hash-ref sourcing 'decision-order))
                  '("racket-library" "native-host" "ffi" "cli" "sidecar" "implement"))
    (check-not-false (member "license and redistribution" (hash-ref sourcing 'required-checks)))
+
+   (define commands (hash-ref report 'commands))
+   (check-not-false
+    (findf (lambda (entry)
+             (and (equal? (hash-ref entry 'name) "check-schema-compatibility")
+                  (not (hash-ref entry 'mutates))))
+           commands))
 
    (define edits (hash-ref report 'edit-points))
    (for* ([group (in-list '(shared-logic windows-ui macos-ui linux-ui configuration))]
@@ -41,6 +51,7 @@
    (check-regexp-match #rx"cross-platform UI DSL" instructions)
    (check-regexp-match #rx"Capability sourcing" instructions)
    (check-regexp-match #rx"never construct a shell command" instructions)
+   (check-regexp-match #rx"raco rivet schema check rivet-schema.json --json" instructions)
 
    (define encoded
      (let ([out (open-output-string)])

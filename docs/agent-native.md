@@ -26,6 +26,7 @@ raco rivet doctor --json
 - honest maturity for desktop and mobile targets;
 - generated-path state for `.rivet`, `build`, and `dist`;
 - safe inspect, diagnose, build, run, package, verify, and cleanup commands;
+- schema snapshot and backward-compatibility commands suitable for CI;
 - a mutation flag for each command so an agent can distinguish read-only
   inspection from a build or cleanup operation;
 - a structured `capability-sourcing` decision order for selecting a Racket
@@ -33,6 +34,30 @@ raco rivet doctor --json
 
 The command writes one JSON value to standard output and no explanatory banner,
 making it safe for editors, coding agents, CI, and bug-report collectors.
+
+## Schema evolution
+
+An agent should not infer whether a backend API edit is safe from a generated
+Swift or C++ diff. Generated projects include `rivet-schema.json`; keep that
+intentional public contract in source control. Refresh it only when a change is
+deliberate:
+
+```bash
+raco rivet schema --output rivet-schema.json
+```
+
+Then run the read-only gate before accepting later declaration changes:
+
+```bash
+raco rivet schema check rivet-schema.json --json
+```
+
+The JSON report separates `breaking-changes` from `compatible-additions` and
+the command exits unsuccessfully for a break. RPC argument names/order/types
+and result type, Event/State types, Record fields/order/types, declaration
+removal, and the RVT1 protocol version are compatibility-significant. Adding a
+new declaration is allowed. Regenerating the baseline is a release-policy
+decision, not an automatic repair for a failing check.
 
 `doctor --json` is the host-side complement. It reports the exact Racket CS
 runtime, boot files, compiler/build tools, native dependency probes, and a

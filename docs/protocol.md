@@ -161,13 +161,13 @@ State values are wire-validated against this complete reserved Event shape befor
 
 `$state` is a reserved runtime event rather than an application `define-event` declaration. Native code can subscribe once and react to State changes without polling.
 
-## Typed RPC, Event, and State schema
+## Typed RPC, Event, State, and Record schema
 
-`define-rpc` records argument names, argument types, and the result type. `define-event` records the Event name and payload type. `define-state` records the State name, value type, and current value. Rivet validates values at the Racket boundary and generates Swift/C++ wrappers before each native build.
+`define-rpc` records argument names, argument types, and the result type. `define-event` records the Event name and payload type. `define-state` records the State name, value type, and current value. `define-record` records a named, ordered set of fields. Rivet validates values at the Racket boundary and generates Swift/C++ wrappers before each native build.
 
 Declared RPC, Event, and State API names are limited to 1024 UTF-8 bytes. Incoming RPC and State lookup names are checked against the same limit before the backend converts them to Racket symbols for registry lookup, so arbitrary wire strings cannot force oversized symbol allocation. The limit is measured in encoded UTF-8 bytes rather than Unicode character count.
 
-Schema types are `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, and `(Optional T)`. State and Event payloads accept the same value types except `Void`. Optional null is encoded with the existing Null/Void tag, so typed schema evolution does not change RVT1 framing.
+Schema types are `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, `(Optional T)`, and a name introduced by `define-record`. State and Event payloads accept the same value types except `Void`. Optional null is encoded with the existing Null/Void tag. A Record is encoded as a List in declaration order and must contain exactly the declared number and types of fields. Both reuse existing RVT1 value tags.
 
 Generated State accessors use `$state/get` and `$state/set` internally; applications normally call the typed Swift/C++ API rather than constructing those reserved requests directly.
 
@@ -176,5 +176,7 @@ Code generation rejects declarations that normalize to the same Swift or C++ ide
 ## Compatibility
 
 Rivet will keep framing changes explicit. If a future release cannot decode the v1 frame/value format, it must increment the protocol version and fail the Hello negotiation instead of guessing.
+
+Applications can save their higher-level API contract with `raco rivet schema --output rivet-schema.json` and enforce it with `raco rivet schema check rivet-schema.json --json`. The checker treats additions as compatible. Removal, signature/type changes, Record field/order changes, and RVT1 version changes are breaking and produce a nonzero exit status plus a structured report.
 
 Resource limits such as maximum frame/value byte size, value nesting, and total value-node count are part of the v1 decoder contract and are tested consistently across the Racket, C++, and Swift implementations.
