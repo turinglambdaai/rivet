@@ -39,6 +39,7 @@ Rivet 补上的是这一层：
 - **自动生成原生客户端** —— Racket 侧的声明在构建时生成 Swift/C++ 类型化 API
 - **进程内嵌 Racket CS** —— 不需要额外启动后端进程，Racket runtime 直接嵌入应用
 - **精确 runtime 匹配** —— 构建时使用当前安装的精确 Racket CS 版本，不会静默退回相邻版本
+- **明确的生态扩展路径** —— 新项目的 Agent 指南和 `inspect --json` 会说明何时选择 Racket 包、原生宿主 API、FFI、外部 CLI 或隔离 sidecar，并列出每种选择必须完成的安全与发布检查
 
 Rivet 刻意不做 WebView 框架，也不做统一跨平台控件层。Windows 应用仍然是 Windows 应用，macOS 应用仍然是 macOS 应用。
 

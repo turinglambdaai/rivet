@@ -39,6 +39,7 @@ Rivet fills that gap:
 - **Generated native clients** — Racket declarations become typed Swift and C++ APIs at build time
 - **Embedded Racket CS** — the Racket runtime lives inside the application process; no external backend process is required
 - **Exact runtime matching** — Rivet stages the installed Racket CS runtime and never silently falls back to a nearby version
+- **Documented ecosystem escape hatches** — generated Agent guidance and `inspect --json` explain when to use a Racket package, a native host API, FFI, an external CLI, or an isolated sidecar, including the release and security checks for each
 
 Rivet is intentionally not a WebView framework and not a cross-platform widget toolkit. The Windows app remains a Windows app; the macOS app remains a macOS app.
 
