@@ -68,7 +68,7 @@ include and framework search paths selected by the installed Racket CS:
 ```bash
 racket_include="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
 racket_lib="$(racket -e '(require setup/dirs) (display (path->string (find-lib-dir)))')"
-swift test --package-path platform/macos -Xcc "-I${racket_include}" -Xlinker "-F${racket_lib}" -Xlinker -framework -Xlinker Racket
+RIVET_RACKET_FRAMEWORK_DIR="$racket_lib" swift test --package-path platform/macos -Xcc "-I${racket_include}"
 ```
 
 Generated application paths are `.rivet/`, `build/`, and `dist/`; do not hand
