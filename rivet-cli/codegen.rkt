@@ -304,9 +304,14 @@
   (compare-schema-snapshots baseline (schema-snapshot project)))
 
 (define swift-keywords
-  '("class" "struct" "enum" "protocol" "extension" "func" "let" "var"
-    "import" "return" "throw" "throws" "async" "await" "actor" "self"
-    "switch" "case" "default" "if" "else" "for" "while" "in" "where"))
+  '("Any" "Self" "actor" "as" "associatedtype" "async" "await" "break"
+    "case" "catch" "class" "continue" "default" "defer" "deinit" "do"
+    "else" "enum" "extension" "fallthrough" "false" "fileprivate" "for"
+    "func" "guard" "if" "import" "in" "init" "inout" "internal" "is"
+    "let" "nil" "nonisolated" "open" "operator" "precedencegroup"
+    "private" "protocol" "public" "repeat" "rethrows" "return" "self"
+    "static" "struct" "subscript" "super" "switch" "throw" "throws"
+    "true" "try" "typealias" "var" "where" "while"))
 
 (define cpp-keywords
   '("class" "struct" "enum" "template" "typename" "auto" "return" "throw"
@@ -414,7 +419,8 @@
     (when previous
       (raise-arguments-error
        'generate-clients!
-       "native API name collision after identifier normalization"
+       (format "~a native API name collision: ~a and ~a both generate ~a"
+               language previous source generated)
        "language" language
        "generated name" generated
        "first declaration" previous
