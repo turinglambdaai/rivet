@@ -62,6 +62,11 @@ let package = Package(
             name: "RivetDeviceTests",
             dependencies: ["RivetDevice"],
             path: "Tests/RivetDeviceTests"
+        ),
+        .testTarget(
+            name: "RivetEmbeddingTests",
+            dependencies: ["RivetEmbedding"],
+            path: "Tests/RivetEmbeddingTests"
         )
     ]
 )
