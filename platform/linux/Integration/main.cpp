@@ -9,8 +9,10 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <signal.h>
 #include <stdexcept>
 #include <string>
+#include <unistd.h>
 #include <vector>
 
 #include <gio/gio.h>
@@ -195,6 +197,17 @@ int run_system_self_check(std::vector<std::string> const& arguments) {
   return 0;
 }
 
+int run_shutdown_probe(std::filesystem::path marker) {
+  rivet::system::InstallShutdownHook([marker = std::move(marker)] {
+    std::ofstream output(marker);
+    output << "shutdown\n";
+    output.close();
+    if (!output) throw std::runtime_error("shutdown marker write failed");
+  });
+  std::cout << "ready\n" << std::flush;
+  while (true) ::pause();
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -204,6 +217,14 @@ int main(int argc, char** argv) {
       return run_system_self_check(arguments);
     } catch (std::exception const& error) {
       std::cerr << "Rivet Linux system adapter failure: " << error.what() << "\n";
+      return 1;
+    }
+  }
+  if (arguments.size() == 2 && arguments.front() == "--shutdown-probe") {
+    try {
+      return run_shutdown_probe(arguments[1]);
+    } catch (std::exception const& error) {
+      std::cerr << "Rivet Linux shutdown probe failure: " << error.what() << "\n";
       return 1;
     }
   }
