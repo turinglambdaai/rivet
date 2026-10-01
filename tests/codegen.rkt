@@ -120,6 +120,11 @@ RKT
                    "GeneratedBackend.kt")))
 
     (check-true (regexp-match? #rx"public struct User: Sendable" swift))
+    (check-true (regexp-match? #rx"displayName = \"demo\"" swift))
+    (check-true (regexp-match? #rx"version = \"0[.]1[.]0\"" swift))
+    (check-true (regexp-match? #rx"build: Int64 = 1" swift))
+    (check-true (regexp-match? #rx"identifier = \"dev[.]rivet[.]demo\"" swift))
+    (check-true (regexp-match? #rx"releaseChannel = \"stable\"" swift))
     (check-false (regexp-match? #rx"import RivetDevice" swift))
     (check-false (regexp-match? #rx"registerGeneratedBackend" swift))
     (check-true (regexp-match? #rx"public let display_name: String" swift))
@@ -131,6 +136,11 @@ RKT
     (check-true (regexp-match? #rx"func setCounter\\(_ value: Int64\\)" swift))
 
     (check-true (regexp-match? #rx"struct User" cpp))
+    (check-true (regexp-match? #rx"kDisplayName\\[\\] = \"demo\"" cpp))
+    (check-true (regexp-match? #rx"kVersion\\[\\] = \"0[.]1[.]0\"" cpp))
+    (check-true (regexp-match? #rx"kBuild = 1" cpp))
+    (check-true (regexp-match? #rx"kIdentifier\\[\\] = \"dev[.]rivet[.]demo\"" cpp))
+    (check-true (regexp-match? #rx"kReleaseChannel\\[\\] = \"stable\"" cpp))
     (check-true (regexp-match? #rx"std::string display_name;" cpp))
     (check-true (regexp-match? #rx"std::optional<std::string> nickname;" cpp))
     (check-true (regexp-match? #rx"std::future<User> echo_user\\(User user\\)" cpp))
@@ -159,6 +169,11 @@ RKT
     ;; The typed Kotlin client targets the coroutine runtime. State accessors
     ;; are package-level extension functions, so the imports are load-bearing.
     (check-true (regexp-match? #rx"package dev.rivet.generated" kotlin))
+    (check-true (regexp-match? #rx"displayName = \"demo\"" kotlin))
+    (check-true (regexp-match? #rx"version = \"0[.]1[.]0\"" kotlin))
+    (check-true (regexp-match? #rx"build: Long = 1L" kotlin))
+    (check-true (regexp-match? #rx"identifier = \"dev[.]rivet[.]demo\"" kotlin))
+    (check-true (regexp-match? #rx"releaseChannel = \"stable\"" kotlin))
     (check-true
      (regexp-match? #rx"import dev\\.rivet\\.runtime\\.RivetClient" kotlin))
     (check-true

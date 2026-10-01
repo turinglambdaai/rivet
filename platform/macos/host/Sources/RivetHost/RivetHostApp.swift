@@ -9,7 +9,7 @@ struct RivetHostApp: App {
     private let activationRouter = RivetActivationRouter()
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(RivetGeneratedConfig.displayName) {
             ContentView()
                 .environmentObject(model)
                 .frame(minWidth: 520, minHeight: 360)

@@ -80,6 +80,9 @@
 (write-package-file "runtime/petite.boot" "petite")
 (write-package-file "runtime/scheme.boot" "scheme")
 (write-package-file "runtime/racket.boot" "racket")
+(write-package-file
+ "app/rivet-app-info.rktd"
+ "#hasheq((name . \"Smoke\") (display-name . \"Smoke\") (version . \"0.1.0\") (build . 1) (identifier . \"dev.rivet.smoke\") (release-channel . stable))\n")
 (write-package-file "app/assets/nested/product.txt" "packaged-resource")
 ;; Exercise the ustar prefix field with a name beyond the 100-byte limit.
 (write-package-file

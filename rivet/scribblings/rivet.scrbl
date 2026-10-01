@@ -196,6 +196,33 @@ Adapts native file descriptors to binary ports and calls @racket[serve].}
 @defproc[(record-schema) list?]{Returns the registered Record schema.}
 @defproc[(enum-schema) list?]{Returns the registered Enum schema.}
 
+@section{Application Identity}
+
+@defmodule[rivet/app-info]
+
+@defstruct*[app-info
+            ([name string?]
+             [display-name string?]
+             [version string?]
+             [build exact-positive-integer?]
+             [identifier string?]
+             [release-channel symbol?])]
+            #:transparent] {
+Represents the release identity staged from @filepath{rivet.rktd}.}
+
+@defproc[(current-app-info) app-info?]{Reads and validates the identity for the running application.}
+@defproc[(app-name) string?]{Returns the configured project name.}
+@defproc[(app-display-name) string?]{Returns the user-visible application name.}
+@defproc[(app-version) string?]{Returns the application release version.}
+@defproc[(app-build) exact-positive-integer?]{Returns the application build number.}
+@defproc[(app-identifier) string?]{Returns the application/bundle identifier.}
+@defproc[(app-release-channel) symbol?]{Returns @racket['stable], @racket['beta], or @racket['dev].}
+
+The build writes @filepath{rivet-app-info.rktd} into the application resource
+root on every platform. The procedures fail explicitly when that generated
+file is absent or malformed, so update checks cannot silently use a stale
+hardcoded fallback.
+
 @section{System Services}
 
 @defmodule[rivet/system]

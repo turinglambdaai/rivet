@@ -10,6 +10,11 @@ public enum RivetGeneratedError: Error {
 public enum RivetGeneratedConfig {
     public static let moduleName = "backend"
     public static let entryName = "start"
+    public static let displayName = "Rivet"
+    public static let version = "0.1.0"
+    public static let build: Int64 = 1
+    public static let identifier = "dev.rivet.app"
+    public static let releaseChannel = "stable"
 }
 
 public struct RivetAPI: Sendable {
