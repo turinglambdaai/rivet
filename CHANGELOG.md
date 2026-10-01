@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keep macOS development and test executables outside an `.app` bundle from
+  entering `UNUserNotificationCenter`, whose missing bundle identity otherwise
+  raises an uncatchable Objective-C exception. Notification availability is now
+  explicit; authorization returns `false` and delivery throws a catchable error.
 - Normalize Swift declaration keywords such as `init` and `public` before
   emitting client APIs, and put both source declarations plus the generated
   identifier in the first line of native-name collision errors.

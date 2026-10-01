@@ -35,6 +35,8 @@ The host owns the window handle and receives tray callbacks on its WinUI thread.
 
 macOS asks the user for notification and login-item consent as required by the OS. Code must not treat denial as a crash.
 
+`UserNotifications` is available only to a packaged `.app` with an application identifier. `RivetNotifications.isAvailable` reports whether the running process has that identity. Development executables such as `.rivet/stage/RivetHost` therefore return `false` from `requestAuthorization()` and `show(...)` throws the catchable `RivetSystemError.notificationsUnavailable`, instead of entering `UNUserNotificationCenter` and triggering an Objective-C exception.
+
 ## Linux
 
 `platform/linux/system` uses first-party Linux desktop surfaces, selected for the same independence rules as the other platforms:
