@@ -209,7 +209,8 @@ AGENTS
   (write-text
    (build-path root "rivet.rktd")
    (format
-    "#hasheq((name . ~s) (display-name . ~s) (version . ~s) (build . ~s) (identifier . ~s) (release-channel . stable) (url-schemes . ()) (file-associations . ()) (resources . ()) (device-rpcs . ()) (macos-min-version . ~s) (windows-min-version . ~s) (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1))\n"
+    "#hasheq((name . ~s) (display-name . ~s) (publisher . ~s) (version . ~s) (build . ~s) (identifier . ~s) (release-channel . stable) (url-schemes . ()) (file-associations . ()) (resources . ()) (device-rpcs . ()) (macos-min-version . ~s) (windows-min-version . ~s) (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1))\n"
+    name
     name
     name
     default-project-version

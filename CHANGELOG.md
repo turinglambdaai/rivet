@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add optional human-readable `publisher` project metadata and use it for the
+  Windows MSI `Manufacturer`/Apps & Features Publisher value. Legacy projects
+  fall back to `display-name` instead of exposing a reverse-DNS identifier.
 - Keep macOS development and test executables outside an `.app` bundle from
   entering `UNUserNotificationCenter`, whose missing bundle identity otherwise
   raises an uncatchable Objective-C exception. Notification availability is now

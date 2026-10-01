@@ -116,6 +116,8 @@
               (project-name project)
               'display-name
               (project-display-name project)
+              'publisher
+              (project-publisher project)
               'version
               (project-version project)
               'build

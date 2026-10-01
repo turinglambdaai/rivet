@@ -17,6 +17,7 @@
          project-path
          project-name
          project-display-name
+         project-publisher
          project-version
          project-build
          project-identifier
@@ -136,6 +137,7 @@
                    (<= v #x7fffffffffffffff)))
             "positive signed 64-bit integer")
   (optional 'display-name non-empty-string? "non-empty string")
+  (optional 'publisher non-empty-string? "non-empty publisher string")
   (optional 'identifier
             (lambda (v)
               (and (string? v)
@@ -247,6 +249,11 @@
   (project-ref project
                'display-name
                (lambda () (project-name project))))
+
+(define (project-publisher project)
+  (project-ref project
+               'publisher
+               (lambda () (project-display-name project))))
 
 (define (project-version project)
   (project-ref project

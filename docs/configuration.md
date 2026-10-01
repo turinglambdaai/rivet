@@ -10,6 +10,7 @@ Example:
 #hasheq(
   (name . "hello")
   (display-name . "hello")
+  (publisher . "Example Company")
   (version . "0.1.0")
   (build . 1)
   (identifier . "dev.rivet.hello")
@@ -40,6 +41,7 @@ Example:
 ## Release metadata
 
 - `display-name` — user-visible application name. Defaults to `name` for legacy projects.
+- `publisher` — human-readable publisher used by Windows installer metadata and Apps & Features. Defaults to `display-name` for legacy projects; do not use the reverse-DNS `identifier` here.
 - `version` — application release version. Defaults to `0.1.0` for legacy projects.
 - `build` — positive signed 64-bit integer build number. Defaults to `1` for legacy projects.
 - `identifier` — application/bundle identifier. Legacy projects derive `dev.rivet.<name>`.

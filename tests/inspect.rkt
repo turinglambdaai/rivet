@@ -21,6 +21,7 @@
    (check-equal? (hash-ref report 'contract-version) 1)
    (check-equal? (hash-ref report 'principles) '("Human-first" "Agent-native" "Local by design"))
    (check-equal? (hash-ref (hash-ref report 'project) 'name) "AgentDemo")
+   (check-equal? (hash-ref (hash-ref report 'project) 'publisher) "AgentDemo")
    (check-true (hash? (hash-ref (hash-ref report 'backend) 'source)))
    (check-true
     (hash-ref (hash-ref (hash-ref report 'schema) 'baseline) 'exists))
@@ -72,6 +73,7 @@
    (define decoded (call-with-input-string encoded read-json))
    (check-equal? (hash-ref decoded 'contract-version) 1)
    (check-equal? (hash-ref (hash-ref decoded 'project) 'identifier) "dev.rivet.agentdemo")
+   (check-equal? (hash-ref (hash-ref decoded 'project) 'publisher) "AgentDemo")
    (check-equal? (hash-ref (car (hash-ref (hash-ref decoded 'capability-sourcing) 'decision-order))
                            'kind)
                  "racket-library")

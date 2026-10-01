@@ -18,6 +18,7 @@
     (write-config
      (hasheq 'name "demo"
              'display-name "Demo App"
+             'publisher "Example Company"
              'version "1.2.3"
              'build 7
              'identifier "dev.example.demo"
@@ -34,6 +35,7 @@
     (define project (load-project temp-root))
     (check-equal? (project-name project) "demo")
     (check-equal? (project-display-name project) "Demo App")
+    (check-equal? (project-publisher project) "Example Company")
     (check-equal? (project-version project) "1.2.3")
     (check-equal? (project-build project) 7)
     (check-equal? (project-identifier project) "dev.example.demo")
@@ -56,6 +58,7 @@
     (define legacy-project (load-project temp-root))
     (check-equal? (project-name legacy-project) "Demo_App")
     (check-equal? (project-display-name legacy-project) "Demo_App")
+    (check-equal? (project-publisher legacy-project) "Demo_App")
     (check-equal? (project-version legacy-project) default-project-version)
     (check-equal? (project-build legacy-project) default-project-build)
     (check-equal? (project-identifier legacy-project)
@@ -113,6 +116,16 @@
              'entry "start"
              'protocol 1))
     (check-exn exn:fail? (lambda () (load-project temp-root)))
+
+    (write-config
+     (hasheq 'name "demo"
+             'publisher ""
+             'backend "app/backend.rkt"
+             'module "backend"
+             'entry "start"
+             'protocol 1))
+    (check-exn #rx"non-empty publisher string"
+               (lambda () (load-project temp-root)))
 
     (write-config
      (hasheq 'name "demo"
