@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Launch packaged GUI artifacts as the final verification gate when a graphical
+  session is available. The executable starts from an unrelated temporary
+  directory, must remain alive for five seconds, and is then terminated;
+  premature exit reports bounded stdout/stderr. Headless environments report
+  an explicit skip, and `package`/`verify --skip-launch-smoke` provide an
+  intentional override without disabling structural or signature checks.
 - Generate application identity from `rivet.rktd` for every native client and
   stage the same values for Racket through `rivet/app-info`. Swift, C++, and
   Kotlin now receive display name, version, build, identifier, and release

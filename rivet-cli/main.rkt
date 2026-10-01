@@ -40,11 +40,13 @@
     "  raco rivet dev                     build and run the current app\n"
     "  raco rivet package                 create and verify a development distributable\n"
     "  raco rivet package --production    create, sign, and verify a production distributable\n"
+    "  raco rivet package --skip-launch-smoke  package without starting the GUI artifact\n"
     "  raco rivet release                 build signed installer, update manifest, SBOM, and notices\n"
     "  raco rivet release --development   exercise release flow without platform production signing\n"
     "  raco rivet compliance              generate SBOM/notices and run the license audit\n"
     "  raco rivet verify                  re-verify the current packaged artifact\n"
     "  raco rivet verify --production     verify production trust/notarization requirements\n"
+    "  raco rivet verify --skip-launch-smoke  verify without starting the GUI artifact\n"
     "  raco rivet help                    show this help\n")))
 
 (define (current-project!)
@@ -125,10 +127,22 @@
     [(list "package")
      (define output (package-project! (current-project!)))
      (say "packaged and verified ~a" output)]
-    [(list "package" "--production")
+    [(list "package" "--skip-launch-smoke")
      (define output
-       (package-project! (current-project!) #:production? #t))
-     (say "production packaged, signed, and verified ~a" output)]
+       (package-project! (current-project!) #:launch-smoke? #f))
+     (say "packaged and verified ~a (launch smoke skipped)" output)]
+    [(or (list "package" "--production")
+         (list "package" "--production" "--skip-launch-smoke")
+         (list "package" "--skip-launch-smoke" "--production"))
+     (define launch-smoke?
+       (not (member "--skip-launch-smoke" args)))
+     (define output
+       (package-project! (current-project!)
+                         #:production? #t
+                         #:launch-smoke? launch-smoke?))
+     (say "production packaged, signed, and verified ~a~a"
+          output
+          (if launch-smoke? "" " (launch smoke skipped)"))]
     [(or (list "release") (list "release" "--development"))
      (define production? (equal? args '("release")))
      (define-values (installer manifest sbom notices)
@@ -140,10 +154,22 @@
     [(list "verify")
      (define output (verify-project-package! (current-project!)))
      (say "verified ~a" output)]
-    [(list "verify" "--production")
+    [(list "verify" "--skip-launch-smoke")
      (define output
-       (verify-project-package! (current-project!) #:production? #t))
-     (say "production trust verified ~a" output)]
+       (verify-project-package! (current-project!) #:launch-smoke? #f))
+     (say "verified ~a (launch smoke skipped)" output)]
+    [(or (list "verify" "--production")
+         (list "verify" "--production" "--skip-launch-smoke")
+         (list "verify" "--skip-launch-smoke" "--production"))
+     (define launch-smoke?
+       (not (member "--skip-launch-smoke" args)))
+     (define output
+       (verify-project-package! (current-project!)
+                                #:production? #t
+                                #:launch-smoke? launch-smoke?))
+     (say "production trust verified ~a~a"
+          output
+          (if launch-smoke? "" " (launch smoke skipped)"))]
     [(list "compliance")
      (define-values (sbom notices)
        (generate-compliance-artifacts! (current-project!)))

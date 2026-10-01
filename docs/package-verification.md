@@ -8,6 +8,33 @@ Use `raco rivet verify` to re-run the same checks against the package already pr
 
 `raco rivet package --production` adds publisher signing/trust steps, and `raco rivet verify --production` re-runs the corresponding production trust checks.
 
+## Launch smoke
+
+After the platform-specific structural, dependency, and trust checks pass,
+Rivet starts the packaged executable from the system temporary directory. The
+artifact must remain alive for five seconds. Rivet then terminates the process
+and reports success. An early exit fails verification with its exit status and
+bounded stdout/stderr diagnostics; each stream is drained concurrently and
+captured up to 64 KiB so a noisy failure cannot deadlock verification or grow
+memory without bound.
+
+Starting outside the package directory is deliberate. It exercises the same
+relocatable resource and foreign-library assumptions as Finder, Explorer, or a
+desktop launcher instead of accidentally making relative paths work through
+the verifier's current directory.
+
+The launch smoke runs by default when Rivet detects an interactive Windows
+session, the current macOS console user, or a Linux `DISPLAY`/Wayland session.
+Headless environments print an explicit skip notice. Use
+`--skip-launch-smoke` with `package` or `verify` when the packaging machine
+cannot open GUI applications; this flag skips only process startup, never the
+normal layout, dependency, metadata, signature, or installer checks. It can be
+combined with `--production` in either order.
+
+The smoke gate proves that the artifact survives initial process and embedded
+runtime startup. It is not a substitute for application-specific UI
+interaction or accessibility tests.
+
 ## Windows
 
 The Windows verifier checks that the portable directory contains the WinUI executable, the compiled Racket backend, all three Racket CS boot files, and the embedded Racket CS DLL.
@@ -48,6 +75,6 @@ In production verification mode, the verifier additionally requires the released
 
 ## CI
 
-The Windows, macOS, and Linux package-smoke jobs run `raco rivet package` and then run `raco rivet verify` again. They exercise real generated applications and packaged resources; Windows and macOS additionally override deployment targets so those platform metadata paths are covered rather than only their defaults.
+The Windows, macOS, and Linux package-smoke jobs run `raco rivet package` and then run `raco rivet verify` again. They exercise real generated applications and packaged resources; Windows and macOS additionally override deployment targets so those platform metadata paths are covered rather than only their defaults. Interactive Windows and macOS runners also execute the launch gate. Headless Linux runners retain the static/package checks and print the launch-skip notice unless the job supplies a graphical session.
 
 Normal pull-request CI does not contain publisher certificates or Apple notarization credentials, so it intentionally exercises development packaging. Production credential parsing is covered by platform-independent Racket tests; certificate-backed production signing belongs in a trusted publisher release environment.
