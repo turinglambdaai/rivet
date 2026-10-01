@@ -1,4 +1,15 @@
 {
+  "device-rpcs": [
+    {
+      "name": "get-task"
+    },
+    {
+      "name": "list-tasks"
+    },
+    {
+      "name": "select-task"
+    }
+  ],
   "enums": [
     {
       "cases": [

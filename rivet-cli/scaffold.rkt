@@ -99,7 +99,7 @@ returns a failing exit status when the current host is not usable.
 - Keep macOS UI native in SwiftUI/AppKit under `macos-host/`.
 - Keep Linux UI native in GTK4 under `linux/`.
 - Do not introduce a cross-platform UI DSL or bypass RVT1 with an ad-hoc IPC.
-- iOS/iPadOS/watchOS and Android/Wear OS are foundation targets until their
+- iOS/iPadOS/watchOS and Android are foundation targets until their
   generated app, embedding, packaging, signing, and device workflows exist.
 
 ## Capability sourcing
@@ -209,7 +209,7 @@ AGENTS
   (write-text
    (build-path root "rivet.rktd")
    (format
-    "#hasheq((name . ~s) (display-name . ~s) (version . ~s) (build . ~s) (identifier . ~s) (release-channel . stable) (url-schemes . ()) (file-associations . ()) (resources . ()) (macos-min-version . ~s) (windows-min-version . ~s) (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1))\n"
+    "#hasheq((name . ~s) (display-name . ~s) (version . ~s) (build . ~s) (identifier . ~s) (release-channel . stable) (url-schemes . ()) (file-associations . ()) (resources . ()) (device-rpcs . ()) (macos-min-version . ~s) (windows-min-version . ~s) (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1))\n"
     name
     name
     default-project-version

@@ -22,4 +22,4 @@ This module is not yet an Android application host. The remaining layers are del
 2. A first-party Jetpack Compose scaffold plus Gradle/Android Studio project generation that consumes the generated client.
 3. Emulator/device round trips, lifecycle and process-death recovery, package verification, app signing, and release automation.
 
-Wear OS starts as a companion target, mirroring the watchOS decision: native watch UI communicates with a phone-hosted backend through a typed device channel. An independently embedded watch runtime can remain a later option without making every watch application pay its size and lifecycle cost.
+Wear OS is not in Rivet's current committed platform set. Its portable Kotlin pieces may make a future companion feasible, but delivery work is scoped to Android phones and tablets until that target is explicitly adopted.

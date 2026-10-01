@@ -128,23 +128,23 @@ Windows 和 macOS 仍是生产发布目标。Linux 处于开发者预览：日�
 | 能力 | iPhone / iPad | Apple Watch |
 |---|---|---|
 | 可移植 Swift 协议/runtime | ✅ iOS/iPadOS 16+ | ✅ watchOS 9+ |
-| 类型安全跨设备请求/响应 | ✅ | ✅ |
+| 类型安全跨设备请求/响应 | ✅ 生成式白名单与 router | ✅ 生成式客户端 |
 | WatchConnectivity 适配 | ✅ 手机端 | ✅ 手表端 |
 | Embedded Racket CS 应用宿主 | 计划采用 portable-bytecode runtime | 默认 companion 模式 |
 | `raco rivet new/build/package` 应用链 | 尚未完成 | 尚未完成 |
 
-这些是移动端基础能力，不代表完整应用交付已经完成。下一阶段是手机/平板 embedded runtime 和原生 SwiftUI 脚手架；watchOS 则有意从连接手机后端的类型安全 companion 模式开始。
+共享 Racket schema 现在可以生成默认拒绝的 Codable companion API，CI 会把这份生成代码分别交叉编译到 iOS 与 watchOS。这些仍是移动端基础能力，不代表完整应用交付已经完成：下一阶段是手机/平板 embedded runtime 和原生 SwiftUI 脚手架；watchOS 则有意从连接手机后端的类型安全 companion 模式开始。
 
 ### Android 基础
 
-| 能力 | Android 手机 / 平板 | Wear OS |
-|---|---|---|
-| Kotlin RVT1 codec | ✅ 共享 golden vectors | ✅ 可移植 Kotlin 核心 |
-| 协程 runtime 客户端 | ✅ Request/Event/State/Cancel | ✅ 可移植 Kotlin 核心 |
-| 类型化客户端生成 | ✅ 从共享 schema 生成并在 CI 编译 | 计划采用 companion client |
-| 原生 UI 宿主 | 计划采用 Jetpack Compose | 计划采用 Compose for Wear OS |
-| Embedded Racket CS / JNI | 尚未完成 | 默认 companion 模式 |
-| `raco rivet new/build/package` 应用链 | 尚未完成 | 尚未完成 |
+| 能力 | Android 手机 / 平板 |
+|---|---|
+| Kotlin RVT1 codec | ✅ 共享 golden vectors |
+| 协程 runtime 客户端 | ✅ Request/Event/State/Cancel |
+| 类型化客户端生成 | ✅ 从共享 schema 生成并在 CI 编译 |
+| 原生 UI 宿主 | 计划采用 Jetpack Compose |
+| Embedded Racket CS / JNI | 尚未完成 |
+| `raco rivet new/build/package` 应用链 | 尚未完成 |
 
 仓库内的 Gradle wrapper 固定了版本并校验下载摘要。Android 目前具备经过测试的协议、协程客户端与类型化客户端生成基础；JNI runtime 宿主、Compose 脚手架、打包签名和设备/模拟器 round-trip 完成后，才能进入开发者预览。详见 [Android 架构](docs/android.md)。
 
@@ -337,7 +337,7 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
   - [x] 具名 Enum schema、Swift/C++ 代码生成与兼容性检查
   - [x] Kotlin 类型客户端生成
   - [x] 覆盖每个受支持桌面架构的干净 runner 构建/打包/验证证据
-- [ ] **Phase 7 —— 一等移动应用交付** —— 生成 iOS/iPadOS/watchOS 与 Android/Wear OS 项目、runtime/companion 选择、签名、打包和真机验证
+- [ ] **Phase 7 —— 一等移动应用交付** —— 生成 iOS/iPadOS/watchOS 与 Android 项目、runtime/companion 选择、签名、打包和真机验证
 
 ## 许可证
 

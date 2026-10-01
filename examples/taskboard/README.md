@@ -52,6 +52,12 @@ The public record is named `BoardTask` rather than `Task` because generated
 types must coexist cleanly with Swift concurrency's `Task`. Public schema names
 are cross-language API design, not just Racket implementation details.
 
+The project also demonstrates the least-privilege Apple companion boundary.
+`rivet.rktd` exports only `list-tasks`, `get-task`, and `select-task` through
+`device-rpcs`; mutations remain phone-owned. The generated Swift file therefore
+contains Codable `BoardTask`/`TaskStatus` values, typed watch-side client
+methods, and `RivetDeviceRouter.registerGeneratedBackend` for the phone.
+
 ## Make the first change
 
 Open [`app/backend.rkt`](app/backend.rkt), find `initial-tasks`, and change the
