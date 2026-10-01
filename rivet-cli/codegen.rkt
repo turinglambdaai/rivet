@@ -80,13 +80,35 @@
 (define (sort-schema entries name-of)
   (sort entries string<? #:key (lambda (entry) (schema-name (name-of entry)))))
 
+(define (resolve-device-rpcs project rpcs [who 'generate-clients!])
+  (define by-name
+    (for/hash ([rpc (in-list rpcs)])
+      (values (schema-rpc-name rpc) rpc)))
+  (for/list ([name (in-list (project-device-rpcs project))])
+    (hash-ref
+     by-name
+     name
+     (lambda ()
+       (raise-arguments-error
+        who
+        "device-rpcs contains an RPC that the backend does not declare"
+        "RPC" name)))))
+
 (define (schema-snapshot project)
   (define backend (project-path project (project-ref project 'backend)))
   (define-values (rpcs events states records enums) (load-schema backend))
+  (define device-rpcs (resolve-device-rpcs project rpcs 'schema-snapshot))
+  (parameterize ([current-records records]
+                 [current-enums enums])
+    (void (all-types rpcs events states records enums))
+    (validate-device-rpcs! device-rpcs))
   (hash
    'format schema-snapshot-format
    'format-version schema-snapshot-version
    'rvt-protocol (project-ref project 'protocol)
+   'device-rpcs
+   (for/list ([rpc (in-list (sort-schema device-rpcs schema-rpc-name))])
+     (hash 'name (schema-name (schema-rpc-name rpc))))
    'records
    (for/list ([record (in-list (sort-schema records schema-record-name))])
      (hash
@@ -128,9 +150,10 @@
   destination)
 
 (define (snapshot-section snapshot key)
-  ;; `enums` was added additively to snapshot format v1. Baselines written by
-  ;; earlier v1 implementations omit it and therefore mean an empty enum set.
-  (define value (hash-ref snapshot key (if (eq? key 'enums) '() #f)))
+  ;; `enums` and `device-rpcs` were added additively to snapshot format v1.
+  ;; Older v1 baselines omit them and therefore mean empty sets.
+  (define value
+    (hash-ref snapshot key (if (memq key '(enums device-rpcs)) '() #f)))
   (unless (list? value)
     (error 'check-schema-compatibility! "schema snapshot field ~a must be an array" key))
   value)
@@ -150,7 +173,7 @@
            (hash-ref snapshot 'format-version #f)))
   (unless (hash-has-key? snapshot 'rvt-protocol)
     (error 'check-schema-compatibility! "~a schema snapshot has no rvt-protocol" label))
-  (for ([section (in-list '(records enums rpcs events states))])
+  (for ([section (in-list '(records enums rpcs events states device-rpcs))])
     (for ([entry (in-list (snapshot-section snapshot section))])
       (unless (and (hash? entry) (string? (hash-ref entry 'name #f)))
         (error 'check-schema-compatibility!
@@ -198,7 +221,8 @@
   (define names (sort (remove-duplicates (append (hash-keys before) (hash-keys after))) string<?))
   (define label
     (hash-ref (hash 'records "record" 'enums "enum" 'rpcs "RPC"
-                    'events "event" 'states "state")
+                    'events "event" 'states "state"
+                    'device-rpcs "device RPC export")
               section))
   (for/fold ([breakages '()] [additions '()]) ([name (in-list names)])
     (cond
@@ -250,19 +274,24 @@
     (compare-section baseline current 'events "event type changed"))
   (define-values (state-breakages state-additions)
     (compare-section baseline current 'states "state type changed"))
+  (define-values (device-breakages device-additions)
+    (compare-section baseline current 'device-rpcs
+                     "device RPC export changed"))
   (define breakages
     (append protocol-breakages
             (reverse record-breakages)
             (reverse enum-breakages)
             (reverse rpc-breakages)
             (reverse event-breakages)
-            (reverse state-breakages)))
+            (reverse state-breakages)
+            (reverse device-breakages)))
   (define additions
     (append (reverse record-additions)
             (reverse enum-additions)
             (reverse rpc-additions)
             (reverse event-additions)
-            (reverse state-additions)))
+            (reverse state-additions)
+            (reverse device-additions)))
   (hash 'compatible (null? breakages)
         'format schema-snapshot-format
         'format-version schema-snapshot-version
@@ -395,7 +424,7 @@
 (define (cpp-event-type-name event)
   (string-append (upper-first (cpp-id (schema-event-name event))) "Event"))
 
-(define (validate-native-identifiers! rpcs events states records enums)
+(define (validate-native-identifiers! rpcs events states records enums [device-rpcs '()])
   (for ([info (in-list rpcs)])
     (define rpc-label (format "RPC ~a" (schema-rpc-name info)))
     (check-unique-native-names!
@@ -419,7 +448,21 @@
             (format "Record ~a" (schema-record-name record))))
     (for/list ([enum (in-list enums)])
       (cons (record-native-name (schema-enum-name enum) swift-id)
-            (format "Enum ~a" (schema-enum-name enum))))))
+            (format "Enum ~a" (schema-enum-name enum))))
+    (if (null? device-rpcs)
+        '()
+        (append
+         (list (cons "RivetDeviceRequests" "generated device request namespace"))
+         (if (ormap (lambda (rpc) (eq? (schema-rpc-result-type rpc) 'Void))
+                    device-rpcs)
+             (list (cons "RivetDeviceUnit" "generated device Void response"))
+             '())))))
+
+  (check-unique-native-names!
+   "Swift device request types"
+   (for/list ([rpc (in-list device-rpcs)])
+     (cons (swift-device-request-name rpc)
+           (format "device RPC ~a" (schema-rpc-name rpc)))))
   (check-unique-native-names!
    "C++ schema types"
    (append
@@ -550,6 +593,7 @@
 
 (define current-records (make-parameter '()))
 (define current-enums (make-parameter '()))
+(define current-swift-codable-types (make-parameter '()))
 
 (define (schema-record-for type)
   (and (symbol? type)
@@ -563,6 +607,51 @@
 
 (define (record-native-name type id-proc)
   (upper-first (id-proc type)))
+
+(define (device-codable-type? type #:void-result? [void-result? #f])
+  (match type
+    [(or 'String 'Int64 'Bool 'Bytes) #t]
+    ['Void void-result?]
+    ['Any #f]
+    [(list (or 'List 'Optional) inner)
+     (device-codable-type? inner)]
+    [_
+     (define record (schema-record-for type))
+     (cond
+       [record
+        (andmap device-codable-type? (schema-record-field-types record))]
+       [(schema-enum-for type) #t]
+       [else #f])]))
+
+(define (validate-device-rpcs! rpcs)
+  (for ([rpc (in-list rpcs)])
+    (for ([name (in-list (schema-rpc-arg-names rpc))]
+          [type (in-list (schema-rpc-arg-types rpc))])
+      (unless (device-codable-type? type)
+        (raise-arguments-error
+         'generate-clients!
+         "device RPC argument is not representable by the Codable companion channel"
+         "RPC" (schema-rpc-name rpc)
+         "argument" name
+         "type" type)))
+    (unless (device-codable-type? (schema-rpc-result-type rpc) #:void-result? #t)
+      (raise-arguments-error
+       'generate-clients!
+       "device RPC result is not representable by the Codable companion channel"
+       "RPC" (schema-rpc-name rpc)
+       "type" (schema-rpc-result-type rpc)))))
+
+(define (device-codable-named-types rpcs)
+  (remove-duplicates
+   (filter
+    (lambda (type) (or (schema-record-for type) (schema-enum-for type)))
+    (append*
+     (for/list ([rpc (in-list rpcs)])
+       (append*
+        (map nested-types
+             (append (schema-rpc-arg-types rpc)
+                     (list (schema-rpc-result-type rpc))))))))
+   eq?))
 
 (define (type-dependencies type)
   (match type
@@ -686,8 +775,12 @@
     (apply string-append
            (for/list ([field (in-list fields)])
              (format "        self.~a = ~a\n" field field))))
-  (format "public struct ~a: Sendable {\n~a    public init(~a) {\n~a    }\n}\n\n"
-          name declarations params assignments))
+  (define conformances
+    (if (memq (schema-record-name record) (current-swift-codable-types))
+        "Codable, Sendable"
+        "Sendable"))
+  (format "public struct ~a: ~a {\n~a    public init(~a) {\n~a    }\n}\n\n"
+          name conformances declarations params assignments))
 
 (define (cpp-record-definition record)
   (define name (record-native-name (schema-record-name record) cpp-id))
@@ -702,8 +795,12 @@
 
 (define (swift-enum-definition enum)
   (define name (record-native-name (schema-enum-name enum) swift-id))
+  (define conformances
+    (if (memq (schema-enum-name enum) (current-swift-codable-types))
+        "String, Codable, Sendable"
+        "String, Sendable"))
   (string-append
-   (format "public enum ~a: String, Sendable {\n" name)
+   (format "public enum ~a: ~a {\n" name conformances)
    (apply string-append
           (for/list ([case (in-list (schema-enum-cases enum))])
             (format "    case ~a = ~a\n"
@@ -835,10 +932,109 @@
                   (type-key (schema-event-type event)))))
        "        default: throw RivetGeneratedError.unknownEvent(name)\n        }\n    }\n}\n\n")))
 
-(define (generate-swift rpcs events states records enums module-name entry-name)
+(define (swift-device-request-name rpc)
+  (define normalized (swift-id (schema-rpc-name rpc)))
+  (define words (filter (lambda (word) (not (string=? word "")))
+                        (regexp-split #rx"_+" normalized)))
+  (define camel (apply string-append (map upper-first words)))
+  (cond
+    [(string=? camel "") normalized]
+    [(string-prefix? normalized "_") (string-append "_" camel)]
+    [else camel]))
+
+(define (swift-device-response-type type)
+  (if (eq? type 'Void) "RivetDeviceUnit" (swift-type type)))
+
+(define (swift-device-request-definition rpc)
+  (define request-name (swift-device-request-name rpc))
+  (define names (map swift-id (schema-rpc-arg-names rpc)))
+  (define types (schema-rpc-arg-types rpc))
+  (define declarations
+    (apply string-append
+           (for/list ([name (in-list names)] [type (in-list types)])
+             (format "        public let ~a: ~a\n" name (swift-type type)))))
+  (define params
+    (string-join
+     (for/list ([name (in-list names)] [type (in-list types)])
+       (format "~a: ~a" name (swift-type type)))
+     ", "))
+  (define assignments
+    (apply string-append
+           (for/list ([name (in-list names)])
+             (format "            self.~a = ~a\n" name name))))
+  (string-append
+   (format "    public struct ~a: RivetDeviceRequest {\n" request-name)
+   (format "        public typealias Response = ~a\n"
+           (swift-device-response-type (schema-rpc-result-type rpc)))
+   (format "        public static let route = ~a\n"
+           (swift-string-literal
+            (string-append "rpc." (symbol->string (schema-rpc-name rpc)))))
+   declarations
+   (format "        public init(~a) {\n" params)
+   assignments
+   "        }\n"
+   "    }\n"))
+
+(define (swift-device-client-method rpc)
+  (define names (map swift-id (schema-rpc-arg-names rpc)))
+  (define types (schema-rpc-arg-types rpc))
+  (define result (schema-rpc-result-type rpc))
+  (define params
+    (string-join
+     (for/list ([name (in-list names)] [type (in-list types)])
+       (format "~a: ~a" name (swift-type type)))
+     ", "))
+  (define arguments
+    (string-join
+     (for/list ([name (in-list names)]) (format "~a: ~a" name name))
+     ", "))
+  (if (eq? result 'Void)
+      (format "    func ~a(~a) async throws {\n        _ = try await send(RivetDeviceRequests.~a(~a))\n    }\n"
+              (swift-id (schema-rpc-name rpc)) params
+              (swift-device-request-name rpc) arguments)
+      (format "    func ~a(~a) async throws -> ~a {\n        try await send(RivetDeviceRequests.~a(~a))\n    }\n"
+              (swift-id (schema-rpc-name rpc)) params (swift-type result)
+              (swift-device-request-name rpc) arguments)))
+
+(define (swift-device-router-registration rpc)
+  (define names (map swift-id (schema-rpc-arg-names rpc)))
+  (define result (schema-rpc-result-type rpc))
+  (define arguments
+    (string-join
+     (for/list ([name (in-list names)]) (format "~a: request.~a" name name))
+     ", "))
+  (define call
+    (format "try await api.~a(~a)" (swift-id (schema-rpc-name rpc)) arguments))
+  (if (eq? result 'Void)
+      (format "        try register(RivetDeviceRequests.~a.self) { request in\n            ~a\n            return RivetDeviceUnit()\n        }\n"
+              (swift-device-request-name rpc) call)
+      (format "        try register(RivetDeviceRequests.~a.self) { request in\n            ~a\n        }\n"
+              (swift-device-request-name rpc) call)))
+
+(define (generate-swift-device-api rpcs)
+  (if (null? rpcs)
+      ""
+      (string-append
+       (if (ormap (lambda (rpc) (eq? (schema-rpc-result-type rpc) 'Void)) rpcs)
+           "public struct RivetDeviceUnit: Codable, Sendable { public init() {} }\n\n"
+           "")
+       "public enum RivetDeviceRequests {\n"
+       (apply string-append (map swift-device-request-definition rpcs))
+       "}\n\n"
+       "public extension RivetDeviceClient {\n"
+       (apply string-append (map swift-device-client-method rpcs))
+       "}\n\n"
+       "public extension RivetDeviceRouter {\n"
+       "    func registerGeneratedBackend(_ api: RivetAPI) throws {\n"
+       (apply string-append (map swift-device-router-registration rpcs))
+       "    }\n"
+       "}\n")))
+
+(define (generate-swift rpcs events states records enums device-rpcs module-name entry-name)
   (define types (all-types rpcs events states records enums))
   (string-append
-   "// Generated by Rivet. Do not edit by hand.\nimport Foundation\nimport RivetRuntime\n\n"
+   "// Generated by Rivet. Do not edit by hand.\nimport Foundation\nimport RivetRuntime\n"
+   (if (null? device-rpcs) "\n" "import RivetDevice\n\n")
    "public enum RivetGeneratedError: Error { case typeMismatch(String); case unknownEvent(String) }\n"
    (format "public enum RivetGeneratedConfig { public static let moduleName = ~a; public static let entryName = ~a }\n\n"
            (swift-string-literal module-name)
@@ -854,7 +1050,10 @@
    (apply string-append (map swift-rpc-method rpcs))
    (if (null? states) "" "\n    // Shared state\n")
    (apply string-append (map swift-state-methods states))
-   "}\n"))
+   "}\n"
+   (if (null? device-rpcs)
+       ""
+       (string-append "\n" (generate-swift-device-api device-rpcs)))))
 
 (define (cpp-encoder type)
   (define key (type-key type))
@@ -1249,16 +1448,24 @@
   (define-values (rpcs events states records enums) (load-schema backend))
   (define module-name (project-ref project 'module))
   (define entry-name (project-ref project 'entry))
+  (define device-rpcs (resolve-device-rpcs project rpcs))
   (unless (and (string? module-name) (string? entry-name))
     (error 'generate-clients! "project module and entry settings must be strings"))
   (when (and (null? rpcs) (null? events) (null? states) (null? records) (null? enums))
     (error 'generate-clients! "the backend declares no RPCs, Events, shared states, Records, or Enums"))
-  (validate-native-identifiers! rpcs events states records enums)
+  (validate-native-identifiers! rpcs events states records enums device-rpcs)
   (parameterize ([current-records records]
                  [current-enums enums])
-    (write-generated!
-     (project-path project "macos-host" "Sources" "RivetHost" "GeneratedBackend.swift")
-     (generate-swift rpcs events states records enums module-name entry-name))
+    ;; Force dependency ordering first so recursive record graphs fail before
+    ;; companion-channel Codable analysis attempts to walk them.
+    (define schema-types (all-types rpcs events states records enums))
+    (define codable-types (device-codable-named-types device-rpcs))
+    (void schema-types)
+    (validate-device-rpcs! device-rpcs)
+    (parameterize ([current-swift-codable-types codable-types])
+      (write-generated!
+       (project-path project "macos-host" "Sources" "RivetHost" "GeneratedBackend.swift")
+       (generate-swift rpcs events states records enums device-rpcs module-name entry-name)))
     (write-generated!
      (project-path project "windows" "GeneratedBackend.hpp")
      (generate-cpp rpcs events states records enums module-name entry-name "rivet::windows"))

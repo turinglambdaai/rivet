@@ -44,6 +44,12 @@ raco rivet dev
 公开记录使用 `BoardTask` 而不是 `Task`，是为了避免生成的 Swift 类型与并发
 `Task` 冲突。公共 schema 命名是跨语言 API 设计，不只是 Racket 内部命名。
 
+本项目也展示 Apple companion 的最小权限边界。`rivet.rktd` 只通过
+`device-rpcs` 导出 `list-tasks`、`get-task` 与 `select-task`，所有修改操作仍由
+手机端掌控。生成的 Swift 文件因此包含 Codable 的 `BoardTask`/`TaskStatus`、
+手表端类型化 client 方法，以及手机端的
+`RivetDeviceRouter.registerGeneratedBackend`。
+
 ## 完成第一次修改
 
 打开 [`app/backend.rkt`](app/backend.rkt)，在 `initial-tasks` 中修改任意任务的

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Generate a default-deny Apple companion API from the shared Racket schema.
+  Projects explicitly list `device-rpcs`; Rivet emits Codable request/response
+  types, typed `RivetDeviceClient` methods, and phone-side
+  `registerGeneratedBackend` routing, records export compatibility in schema
+  snapshots, rejects `Any`, and cross-compiles the generated surface for iOS
+  and watchOS in CI.
 - Centralize the canonical macOS embedded-runtime layout probe in
   `EmbeddedRacketConfiguration.resolvedDefault`. Generated and reference hosts
   now select packaged `Contents/Resources` or staged development layouts

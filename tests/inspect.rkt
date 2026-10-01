@@ -52,6 +52,10 @@
      (check-true (hash? (hash-ref clients key #f)))
      (check-true (string? (hash-ref (hash-ref clients key) 'path))))
 
+   (check-equal?
+    (map (lambda (entry) (hash-ref entry 'name)) (hash-ref report 'targets))
+    '("windows" "macos" "linux" "ios" "ipados" "watchos" "android"))
+
    (check-true (file-exists? (build-path root "AGENTS.md")))
    (define instructions (file->string (build-path root "AGENTS.md")))
    (check-regexp-match #rx"raco rivet inspect --json" instructions)

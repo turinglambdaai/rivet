@@ -18,6 +18,7 @@ Example:
   (file-associations . (#hasheq((extension . ".hello")
                                 (description . "Hello Document"))))
   (resources . ("assets" "locales/en.json"))
+  (device-rpcs . (current-score refresh-score))
   (windows-icon . "branding/app.ico")
   (macos-icon . "branding/app.icns")
   (macos-min-version . "14.0")
@@ -52,6 +53,20 @@ These values feed packaging metadata instead of being duplicated in native platf
 - `file-associations` — a list of hashes with an `extension` beginning with `.` and an optional `description`. Packaging emits native document/installer metadata.
 
 These settings describe native registration only. They do not add messages to RVT1 or create a shared UI abstraction.
+
+## Companion-device API
+
+- `device-rpcs` — an explicit list of backend RPC symbols exposed through the
+  generated Apple companion API. It defaults to the empty list, so upgrading
+  an existing project does not expose backend methods to another device.
+
+Every name must identify a declared RPC and fit the bounded RivetDevice route
+syntax. Selected argument/result types must be Codable-compatible; `Any` is
+rejected. Generation produces Swift request types, typed
+`RivetDeviceClient` methods, and `RivetDeviceRouter.registerGeneratedBackend`.
+The exported names are included in `rivet-schema.json`: removing one is a
+breaking change, while adding one is compatible. See
+[typed device communication](device-communication.md).
 
 ## Application resources and icons
 

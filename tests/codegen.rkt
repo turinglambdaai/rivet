@@ -41,6 +41,7 @@
      (regexp-match? #rx"<WindowsTargetPlatformMinVersion>10\\.0\\.19041\\.0"
                     windows-project))
     (check-true (regexp-match? #rx"RIVET_MACOS_MIN_VERSION" macos-package))
+    (check-true (regexp-match? #rx"RivetDevice" macos-package))
     (check-true (regexp-match? #rx"platform/linux/runtime" linux-cmake))
     (for ([generated-path (in-list '("windows/Generated Files/"
                                      "windows/obj/"
@@ -55,7 +56,8 @@
      (regexp-match? #rx"\\(macos-min-version \\. \"14\\.0\"\\)" project-config))
     (check-true
      (regexp-match? #rx"\\(windows-min-version \\. \"10\\.0\\.19041\\.0\"\\)"
-                    project-config))
+                     project-config))
+    (check-true (regexp-match? #rx"\\(device-rpcs \\. \\(\\)\\)" project-config))
 
     (define (write-backend! project-root content)
       (call-with-output-file
@@ -118,6 +120,8 @@ RKT
                    "GeneratedBackend.kt")))
 
     (check-true (regexp-match? #rx"public struct User: Sendable" swift))
+    (check-false (regexp-match? #rx"import RivetDevice" swift))
+    (check-false (regexp-match? #rx"registerGeneratedBackend" swift))
     (check-true (regexp-match? #rx"public let display_name: String" swift))
     (check-true (regexp-match? #rx"public let nickname: String\\?" swift))
     (check-true (regexp-match? #rx"func echo_user\\(user: User\\) async throws -> User" swift))

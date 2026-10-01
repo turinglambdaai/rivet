@@ -26,6 +26,7 @@ let package = Package(
             name: "RivetHost",
             dependencies: [
                 .product(name: "RivetRuntime", package: "macos"),
+                .product(name: "RivetDevice", package: "macos"),
                 .product(name: "RivetEmbedding", package: "macos"),
                 .product(name: "RivetSystem", package: "macos")
             ],

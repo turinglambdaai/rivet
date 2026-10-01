@@ -9,36 +9,29 @@ Keeping these layers separate lets an iPhone or iPad embed Racket CS while an Ap
 
 A phone can also be a client of a desktop-hosted backend. That direction needs a long-lived authenticated session, Events, State, discovery, pairing, and an explicit API allowlist rather than the request/reply semantics below. It is specified in the [network device channel design](network-device-channel.md); the design is not yet a shipped transport.
 
-## Typed requests
+## Generated companion API
 
-Define a request and its response with normal `Codable` Swift types:
+Declare the backend RPC normally, then opt only the companion-safe subset into
+`rivet.rktd`:
+
+```racket
+(device-rpcs . (current-score refresh-score))
+```
+
+`raco rivet generate` emits the request/response association, route, typed
+`RivetDeviceClient` convenience methods, and phone-side handler registration
+from that one schema. On the phone, connect `RivetAPI` to the embedded backend
+and register the generated handlers:
 
 ```swift
 import RivetDevice
 
-struct CurrentScore: RivetDeviceRequest {
-    static let route = "score.current"
-    typealias Response = Score
-
-    let gameID: String
-}
-
-struct Score: Codable, Sendable {
-    let home: Int
-    let away: Int
-}
-```
-
-The phone registers the handler:
-
-```swift
 let router = RivetDeviceRouter()
-try await router.register(CurrentScore.self) { request in
-    try await scores.current(gameID: request.gameID)
-}
+let api = RivetAPI(client: embeddedBackendClient)
+try await router.registerGeneratedBackend(api)
 ```
 
-The watch receives the declared response type without stringly typed casts:
+The watch calls the same generated schema without route strings or casts:
 
 ```swift
 import RivetWatchConnectivity
@@ -46,12 +39,24 @@ import RivetWatchConnectivity
 let transport = RivetWatchConnectivityTransport()
 try transport.activate()
 let client = RivetDeviceClient(transport: transport)
-let score = try await client.send(CurrentScore(gameID: "final"))
+let score = try await client.current_score(game_id: "final")
 ```
+
+The allowlist is empty by default. Missing RPC names fail generation. Selected
+arguments and results must be representable by `Codable`: the primitive,
+`List`, `Optional`, Record, and Enum schema types are supported, while `Any` is
+rejected. A direct `Void` result is represented by an internal generated unit
+response. Records and Enums reachable from selected RPCs gain `Codable`
+conformance; unrelated desktop types do not acquire an unnecessary wire
+contract. Removing an exported RPC is reported as a schema compatibility
+break, while adding one is compatible.
+
+Applications can still implement `RivetDeviceRequest` manually when a device
+message intentionally has no backend RPC equivalent.
 
 `RivetDeviceRouter` rejects duplicate/invalid routes, bounds request and response sizes, validates protocol version and correlation IDs, and converts registered remote errors into stable code/message pairs. `RivetWatchConnectivityTransport` adapts this contract to `WCSession.sendMessageData`; the typed channel itself is transport-neutral and testable with an in-memory transport.
 
-This design follows the core idea in [DSLs for Safe iOS/watchOS Communication](https://defn.io/2025/02/16/type-safe-watchos-communication/): encode the request/response relationship in types and centralize dispatch instead of spreading dictionaries, route strings, and casts throughout both apps. Rivet's next layer will generate these declarations and handler registration from the shared project schema.
+This design follows the core idea in [DSLs for Safe iOS/watchOS Communication](https://defn.io/2025/02/16/type-safe-watchos-communication/): encode the request/response relationship in types and centralize dispatch instead of spreading dictionaries, route strings, and casts throughout both apps. Rivet generates that relationship from the shared Racket schema while keeping the exported device surface explicit.
 
 ## Platform boundary
 
