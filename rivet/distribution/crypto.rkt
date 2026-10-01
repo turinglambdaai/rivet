@@ -21,7 +21,13 @@
 ;; libsodium, or Decaf). The manifest pins the algorithm to Ed25519, so a
 ;; provider that lacks it fails closed instead of falling back to another
 ;; signature scheme.
-(use-all-factories!)
+;;
+;; Instantiate exactly the factories that satisfy that pin. use-all-factories!
+;; would also probe the gmp factory, whose FFI load kills the process at
+;; module-import time on hosts without libgmp — every embedded app that
+;; merely verifies a manifest would ship that landmine (found by packaging a
+;; real app for macOS, where the CI-built bundle would not start).
+(crypto-factories (list libcrypto-factory sodium-factory decaf-factory))
 
 ;; libgcrypt advertises Ed25519 on some Linux distributions but older
 ;; combinations fail at signing time with "Invalid object". Rivet release
