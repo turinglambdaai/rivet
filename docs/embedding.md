@@ -107,6 +107,15 @@ Packaging should use `raco ctool --runtime` alongside `--mods` to collect runtim
 
 The target machine should not need a globally installed Racket distribution.
 
+On macOS, `raco ctool --runtime-access runtime` records staged foreign-library
+paths relative to the application resource root. Configurations returned by
+`EmbeddedRacketConfiguration.resolvedDefault` therefore carry that root as the
+backend working directory, and `EmbeddedRacketBackend.start` selects it before
+booting Racket. This is a process-wide directory change, consistent with the
+process-scoped, single-start embedded runtime. A manually constructed
+configuration can leave `workingDirectory` unset when it owns an alternative
+foreign-library lookup strategy.
+
 On macOS, construct the normal staged or packaged layout without repeating
 path probes in every application:
 

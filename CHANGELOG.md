@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Make the centralized macOS embedded-runtime configuration select its staged
+  resource root before Racket starts, so packaged backends can load foreign
+  dependencies such as libgmp, libcrypto, and libssl regardless of the launch
+  process's original working directory. The real embedded round-trip now loads
+  `rivet/distribution` to keep this dependency path covered in CI.
 - Generate a default-deny Apple companion API from the shared Racket schema.
   Projects explicitly list `device-rpcs`; Rivet emits Codable request/response
   types, typed `RivetDeviceClient` methods, and phone-side
