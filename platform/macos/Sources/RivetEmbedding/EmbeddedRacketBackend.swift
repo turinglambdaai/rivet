@@ -33,6 +33,93 @@ public struct EmbeddedRacketConfiguration: Sendable {
         self.entryName = entryName
         self.maxPendingRequests = maxPendingRequests
     }
+
+    /// Resolves the canonical Rivet runtime layout used by both packaged apps
+    /// and `raco rivet dev`.
+    ///
+    /// Packaged applications keep `runtime/*.boot` and `res/core.zo` under
+    /// `Bundle.main.resourceURL`. Development builds stage those directories
+    /// beside the host executable. The packaged layout is preferred when both
+    /// are present.
+    public static func resolvedDefault(
+        moduleName: String = "backend",
+        entryName: String = "start",
+        maxPendingRequests: Int = 1024
+    ) throws -> EmbeddedRacketConfiguration {
+        let executable = Bundle.main.executableURL
+            ?? URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+        let roots = [
+            Bundle.main.resourceURL,
+            executable.deletingLastPathComponent()
+        ].compactMap { $0 }
+
+        return try resolve(
+            executable: executable,
+            candidateRoots: roots,
+            moduleName: moduleName,
+            entryName: entryName,
+            maxPendingRequests: maxPendingRequests
+        )
+    }
+
+    static func resolve(
+        executable: URL,
+        candidateRoots: [URL],
+        moduleName: String,
+        entryName: String,
+        maxPendingRequests: Int,
+        fileManager: FileManager = .default
+    ) throws -> EmbeddedRacketConfiguration {
+        var searchedRoots: [URL] = []
+        var seen = Set<String>()
+
+        for candidate in candidateRoots {
+            let root = candidate.standardizedFileURL
+            guard seen.insert(root.path).inserted else { continue }
+            searchedRoots.append(root)
+
+            let runtime = root.appendingPathComponent("runtime", isDirectory: true)
+            let petiteBoot = runtime.appendingPathComponent("petite.boot")
+            let schemeBoot = runtime.appendingPathComponent("scheme.boot")
+            let racketBoot = runtime.appendingPathComponent("racket.boot")
+            let core = root.appendingPathComponent("res/core.zo")
+            let required = [petiteBoot, schemeBoot, racketBoot, core]
+
+            guard required.allSatisfy({ url in
+                var isDirectory: ObjCBool = false
+                return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
+                    && !isDirectory.boolValue
+            }) else { continue }
+
+            return EmbeddedRacketConfiguration(
+                executable: executable,
+                petiteBoot: petiteBoot,
+                schemeBoot: schemeBoot,
+                racketBoot: racketBoot,
+                core: core,
+                moduleName: moduleName,
+                entryName: entryName,
+                maxPendingRequests: maxPendingRequests
+            )
+        }
+
+        throw EmbeddedRacketConfigurationError.missingRuntimeLayout(
+            searchedRoots: searchedRoots
+        )
+    }
+}
+
+public enum EmbeddedRacketConfigurationError: Error, Sendable, CustomStringConvertible {
+    case missingRuntimeLayout(searchedRoots: [URL])
+
+    public var description: String {
+        switch self {
+        case .missingRuntimeLayout(let searchedRoots):
+            let roots = searchedRoots.map(\.path).joined(separator: ", ")
+            return "missing Rivet runtime/petite.boot, runtime/scheme.boot, "
+                + "runtime/racket.boot, or res/core.zo under: \(roots)"
+        }
+    }
 }
 
 public final class EmbeddedRacketBackend: @unchecked Sendable {

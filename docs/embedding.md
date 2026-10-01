@@ -107,6 +107,22 @@ Packaging should use `raco ctool --runtime` alongside `--mods` to collect runtim
 
 The target machine should not need a globally installed Racket distribution.
 
+On macOS, construct the normal staged or packaged layout without repeating
+path probes in every application:
+
+```swift
+let configuration = try EmbeddedRacketConfiguration.resolvedDefault(
+    moduleName: RivetGeneratedConfig.moduleName,
+    entryName: RivetGeneratedConfig.entryName
+)
+let backend = EmbeddedRacketBackend(configuration: configuration)
+```
+
+The resolver checks the packaged app's `Contents/Resources` directory first,
+then the directory containing the staged executable used by `raco rivet dev`.
+Applications with an intentionally nonstandard layout can continue to pass all
+runtime URLs to the public initializer.
+
 ## Shutdown
 
 The expected normal sequence is:

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Centralize the canonical macOS embedded-runtime layout probe in
+  `EmbeddedRacketConfiguration.resolvedDefault`. Generated and reference hosts
+  now select packaged `Contents/Resources` or staged development layouts
+  without duplicating app-side boot/core path discovery.
+
 ## 0.5.0
 
 - Give Windows installers a per-product identity and desktop presence. The WiX installer now derives each project's `UpgradeCode` from its identifier under a fixed Rivet namespace — the previous shared hardcoded code made two Rivet applications treat each other as upgrades and silently replace one another — and authors start-menu (in a per-app folder) and desktop shortcuts pointing at `RivetHost.exe`, removing the start-menu folder on uninstall. Shortcut components carry machine-scoped registry key paths, display names and identifiers stay XML-escaped, and `tests/windows-installer.rkt` covers code derivation, shortcut authoring, escaping, and a real `wix build` where WiX is installed. Applications installed from a release built before this change will side-by-side with the next version instead of upgrading in place; uninstall the old entry once after upgrading.

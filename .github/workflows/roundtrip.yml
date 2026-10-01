@@ -238,11 +238,6 @@ jobs:
           chmod +x "$stage/RivetIntegration"
 
           echo "RIVET_ROUNDTRIP_STAGE=$stage" >> "$GITHUB_ENV"
-          echo "RIVET_TEST_EXECUTABLE=$stage/RivetIntegration" >> "$GITHUB_ENV"
-          echo "RIVET_TEST_CORE=$stage/res/core.zo" >> "$GITHUB_ENV"
-          echo "RIVET_TEST_PETITE_BOOT=$stage/runtime/petite.boot" >> "$GITHUB_ENV"
-          echo "RIVET_TEST_SCHEME_BOOT=$stage/runtime/scheme.boot" >> "$GITHUB_ENV"
-          echo "RIVET_TEST_RACKET_BOOT=$stage/runtime/racket.boot" >> "$GITHUB_ENV"
       - name: Exercise embedded runtime
         timeout-minutes: 2
         run: "$RIVET_ROUNDTRIP_STAGE/RivetIntegration"
