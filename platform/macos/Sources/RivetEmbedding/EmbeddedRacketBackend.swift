@@ -9,6 +9,9 @@ public struct EmbeddedRacketConfiguration: Sendable {
     public var schemeBoot: URL
     public var racketBoot: URL
     public var core: URL
+    /// Resource root used to resolve relative foreign-library paths staged by
+    /// `raco ctool`. `nil` preserves the caller's process working directory.
+    public var workingDirectory: URL?
     public var moduleName: String
     public var entryName: String
     public var maxPendingRequests: Int
@@ -19,6 +22,7 @@ public struct EmbeddedRacketConfiguration: Sendable {
         schemeBoot: URL,
         racketBoot: URL,
         core: URL,
+        workingDirectory: URL? = nil,
         moduleName: String = "backend",
         entryName: String = "start",
         maxPendingRequests: Int = 1024
@@ -29,6 +33,7 @@ public struct EmbeddedRacketConfiguration: Sendable {
         self.schemeBoot = schemeBoot
         self.racketBoot = racketBoot
         self.core = core
+        self.workingDirectory = workingDirectory
         self.moduleName = moduleName
         self.entryName = entryName
         self.maxPendingRequests = maxPendingRequests
@@ -97,6 +102,7 @@ public struct EmbeddedRacketConfiguration: Sendable {
                 schemeBoot: schemeBoot,
                 racketBoot: racketBoot,
                 core: core,
+                workingDirectory: root,
                 moduleName: moduleName,
                 entryName: entryName,
                 maxPendingRequests: maxPendingRequests
@@ -161,6 +167,11 @@ public final class EmbeddedRacketBackend: @unchecked Sendable {
         lifecycle.unlock()
 
         do {
+            if let workingDirectory = configuration.workingDirectory,
+               !FileManager.default.changeCurrentDirectoryPath(workingDirectory.path) {
+                throw EmbeddedBackendError.workingDirectoryFailed(workingDirectory.path)
+            }
+
             let racketInput = Darwin.dup(requestPipe.fileHandleForReading.fileDescriptor)
             guard racketInput >= 0 else {
                 throw EmbeddedBackendError.dupFailed(errno)
@@ -320,6 +331,7 @@ private func runEmbeddedRacket(
 public enum EmbeddedBackendError: Error, CustomStringConvertible {
     case alreadyStarted
     case dupFailed(Int32)
+    case workingDirectoryFailed(String)
 
     public var description: String {
         switch self {
@@ -327,6 +339,8 @@ public enum EmbeddedBackendError: Error, CustomStringConvertible {
             return "embedded Racket backend instances cannot be restarted"
         case .dupFailed(let code):
             return "dup() failed while creating Racket pipe descriptors (errno \(code))"
+        case .workingDirectoryFailed(let path):
+            return "could not select the Rivet runtime working directory: \(path)"
         }
     }
 }

@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require rivet/backend)
+(require rivet/backend
+         rivet/distribution)
 
 (provide start)
 
