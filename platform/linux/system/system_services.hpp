@@ -100,4 +100,13 @@ using CrashCallback = void (*)(int signal_number) noexcept;
 void InstallCrashHook(CrashCallback callback,
                       std::string const& restart_arguments = std::string());
 
+// SIGTERM/SIGINT shutdown plumbing (embedded runtimes install their own
+// signal handlers and otherwise absorb termination requests, so hosts that
+// persist state on exit never see SIGTERM). The first signal drains into a
+// self-pipe; a watcher thread runs `callback` on a normal stack — state
+// flushing is allowed there — and the process then exits with status 0. A
+// second signal restores the default disposition so operators can still
+// hard-kill a stuck shutdown. Install once, early, from the main thread.
+void InstallShutdownHook(std::function<void()> callback);
+
 }  // namespace rivet::system
