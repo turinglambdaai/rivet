@@ -27,6 +27,8 @@ raco rivet dev
 
 需要完整引导时直接看 **[Rivet 快速上手教程](docs/getting-started.zh-CN.md)**；安装后的包也提供可搜索的 Scribble 文档。只有开发 Rivet 框架本身时，才需要使用教程里的源码 link 安装方式。
 
+跑通 counter 后，继续学习长期维护的 **[Rivet Taskboard 参考应用](examples/taskboard/README.zh-CN.md)**：三个平台分别使用 WinUI 3、SwiftUI、GTK4，在同一份经过测试的 Racket 契约之上实现列表/详情工作流。
+
 ## 为什么选择 Rivet？
 
 Racket 非常适合承载应用逻辑，但一直缺少一条直接连接现代第一方桌面 UI 技术栈的路径。要做产品级 Windows/macOS 应用，往往不得不在“放弃 Racket”“接受 WebView”或“换成跨平台控件库”之间做选择。

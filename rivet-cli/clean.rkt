@@ -6,7 +6,14 @@
 
 (provide clean-project!)
 
-(define generated-directories '(".rivet" "build" "dist"))
+(define generated-directories
+  '(".rivet"
+    "build"
+    "dist"
+    "windows/Generated Files"
+    "windows/obj"
+    "windows/RivetHost"
+    "macos-host/.build"))
 
 (define (remove-generated-path! path)
   (define kind (file-or-directory-type path #f))

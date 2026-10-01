@@ -17,7 +17,11 @@
 (define markdown-files
   (append
    (filter markdown-file? (directory-list repository-root #:build? #t))
-   (find-files markdown-file? (build-path repository-root "docs"))))
+   (find-files markdown-file? (build-path repository-root "docs"))
+   (let ([examples (build-path repository-root "examples")])
+     (if (directory-exists? examples)
+         (find-files markdown-file? examples)
+         '()))))
 
 (define (fence-line? line)
   (regexp-match? #px"^[ \t]*(```|~~~)" line))

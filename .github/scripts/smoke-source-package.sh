@@ -22,6 +22,17 @@ unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet
 unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet/runtime/Client.kt$'
 unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet/runtime/State.kt$'
 
+# The canonical learning project and both walkthrough languages are public
+# package content, not files that happen to exist only in the Git checkout.
+unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/app/backend.rkt$'
+unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/rivet-schema.json$'
+unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/README.md$'
+unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/README.zh-CN.md$'
+unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/PERFORMANCE.md$'
+unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/windows/MainWindow.xaml$'
+unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/macos-host/Sources/RivetHost/ContentView.swift$'
+unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/linux/src/main.cpp$'
+
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 user_home="$tmp/racket-user"
@@ -38,6 +49,13 @@ PLTUSERHOME="$user_home" \
   racket -e '(require rivet/backend rivet/protocol rivet/resources)'
 PLTUSERHOME="$user_home" \
   raco rivet help >/dev/null
+
+installed_root="$(PLTUSERHOME="$user_home" racket -e \
+  '(require pkg/lib) (display (path->string (pkg-directory "rivet")))')"
+test -f "$installed_root/examples/taskboard/app/backend.rkt"
+test -f "$installed_root/examples/taskboard/README.md"
+test -f "$installed_root/examples/taskboard/README.zh-CN.md"
+test -f "$installed_root/examples/taskboard/PERFORMANCE.md"
 
 # Exercise packaged scaffold resources too. A source archive that omitted CLI
 # templates or other package data can load its modules yet still fail here.

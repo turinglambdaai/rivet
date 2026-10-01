@@ -240,6 +240,20 @@ jobs:
           if (-not (Test-Path 'app\backend.rkt')) {
             throw 'raco rivet clean removed application source'
           }
+      - name: Build and verify the maintained WinUI reference app
+        shell: pwsh
+        run: |
+          Set-Location (Join-Path $env:GITHUB_WORKSPACE 'examples\taskboard')
+          raco rivet schema check rivet-schema.json --json
+          raco rivet package
+          raco rivet verify
+          if (-not (Test-Path 'dist\rivet-taskboard-windows-x64\RivetHost.exe')) {
+            throw 'Taskboard WinUI executable was not packaged'
+          }
+          if (-not (Test-Path 'dist\rivet-taskboard-windows-x64\app\assets\sample-tasks.rktd')) {
+            throw 'Taskboard sample resource was not packaged'
+          }
+          raco rivet clean
 
   macos-host:
     name: macOS CLI package smoke
@@ -303,3 +317,15 @@ jobs:
           test ! -e build
           test ! -e dist
           test -f app/backend.rkt
+      - name: Build and verify the maintained SwiftUI reference app
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/examples/taskboard"
+          raco rivet schema check rivet-schema.json --json
+          raco rivet package
+          raco rivet verify
+          test -x "dist/rivet-taskboard.app/Contents/MacOS/rivet-taskboard"
+          test -f "dist/rivet-taskboard.app/Contents/Resources/app/assets/sample-tasks.rktd"
+          codesign --verify --deep --strict "dist/rivet-taskboard.app"
+          raco rivet clean

@@ -27,6 +27,8 @@ Every generated app includes an `AGENTS.md` and an initial `rivet-schema.json` c
 
 For a guided walkthrough, read **[Getting Started with Rivet](docs/getting-started.md)**. The installed package also includes searchable Scribble documentation. If you are developing Rivet itself, use the linked-checkout workflow in that guide instead of installing from the catalog.
 
+After the counter, study **[Rivet Taskboard](examples/taskboard/README.md)**: a maintained list/detail application with independent WinUI 3, SwiftUI, and GTK4 interfaces over one tested Racket contract.
+
 ## Why Rivet?
 
 Racket is an excellent language for application logic, but there is no direct path from a Racket backend to the modern first-party desktop stacks that commercial applications increasingly use.

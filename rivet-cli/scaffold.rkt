@@ -145,11 +145,20 @@ Source you may edit:
 
 Generated output you should not hand-edit:
 
+- `windows/GeneratedBackend.hpp`
+- `macos-host/Sources/RivetHost/GeneratedBackend.swift`
+- `linux/GeneratedBackend.hpp`
 - `.rivet/`
 - `build/`
 - `dist/`
+- `windows/Generated Files/`
+- `windows/obj/`
+- `windows/RivetHost/`
+- `macos-host/.build/`
 
-Use `raco rivet clean` to remove only those generated paths.
+`raco rivet build` regenerates the typed clients. Use `raco rivet clean` to
+remove transient build output while keeping the generated client sources that
+make the native API reviewable.
 
 ## Verification loop
 
@@ -209,7 +218,17 @@ AGENTS
     default-macos-min-version
     default-windows-min-version))
   (write-text (build-path root "app" "backend.rkt") backend-template)
-  (write-text (build-path root ".gitignore") ".rivet/\nbuild/\ndist/\n.DS_Store\n")
+  (write-text
+   (build-path root ".gitignore")
+   (string-append
+    ".rivet/\n"
+    "build/\n"
+    "dist/\n"
+    "windows/Generated Files/\n"
+    "windows/obj/\n"
+    "windows/RivetHost/\n"
+    "macos-host/.build/\n"
+    ".DS_Store\n"))
 
   (define windows-template (build-path (simplify-path rivet-root #t) "platform" "windows" "host"))
   (unless (directory-exists? windows-template)

@@ -154,6 +154,17 @@ jobs:
           raco rivet verify
           test -x dist/Smoke-linux-x64/RivetHost
           test "$(cat dist/Smoke-linux-x64/app/assets/nested/product.txt)" = packaged-resource
+      - name: Build and verify the maintained GTK4 reference app
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/examples/taskboard"
+          raco rivet schema check rivet-schema.json --json
+          raco rivet package
+          raco rivet verify
+          test -x dist/rivet-taskboard-linux-x64/RivetHost
+          test -f dist/rivet-taskboard-linux-x64/app/assets/sample-tasks.rktd
+          raco rivet clean
 
   macos-roundtrip:
     name: macOS embedded Racket round trip
