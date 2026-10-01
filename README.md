@@ -73,16 +73,16 @@ The Racket backend declares the API shared by both native hosts:
 
 ### How it compares
 
-| | Rivet | Glaze | Bezel |
-|---|---|---|---|
-| UI stack | **WinUI 3 / SwiftUI** | HTML/CSS/JS + WebView | Qt 6 Widgets |
-| Racket role | shared backend | backend + local web server | application + bindings |
-| Native widgets | **first-party OS UI** | no | Qt widgets |
-| One UI codebase | no | yes | yes |
-| Styling model | platform native | CSS | QSS |
-| Best fit | platform-native commercial apps | web-tech desktop apps | traditional cross-platform GUI |
+| | Rivet | Glaze |
+|---|---|---|
+| UI stack | **WinUI 3 / SwiftUI** | HTML/CSS/JS + WebView |
+| Racket role | shared backend | backend + local web server |
+| Native widgets | **first-party OS UI** | no |
+| One UI codebase | no | yes |
+| Styling model | platform native | CSS |
+| Best fit | platform-native commercial apps | web-tech desktop apps |
 
-The three projects serve different trade-offs rather than replacing one another.
+The two projects serve different trade-offs rather than replacing one another.
 
 ## How it works
 

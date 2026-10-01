@@ -73,16 +73,16 @@ Rivet 刻意不做 WebView 框架，也不做统一跨平台控件层。Windows 
 
 ### 横向对比
 
-| | Rivet | Glaze | Bezel |
-|---|---|---|---|
-| UI 技术栈 | **WinUI 3 / SwiftUI** | HTML/CSS/JS + WebView | Qt 6 Widgets |
-| Racket 的角色 | 共享后端 | 后端 + 本地 Web 服务 | 应用 + Qt 绑定 |
-| 原生控件 | **系统第一方 UI** | 否 | Qt 控件 |
-| 一套 UI 跨平台 | 否 | 是 | 是 |
-| 样式体系 | 平台原生 | CSS | QSS |
-| 最适合 | 原生商业桌面应用 | Web 技术桌面应用 | 传统跨平台 GUI |
+| | Rivet | Glaze |
+|---|---|---|
+| UI 技术栈 | **WinUI 3 / SwiftUI** | HTML/CSS/JS + WebView |
+| Racket 的角色 | 共享后端 | 后端 + 本地 Web 服务 |
+| 原生控件 | **系统第一方 UI** | 否 |
+| 一套 UI 跨平台 | 否 | 是 |
+| 样式体系 | 平台原生 | CSS |
+| 最适合 | 原生商业桌面应用 | Web 技术桌面应用 |
 
-这三个项目不是互相替代，而是在解决不同的桌面开发取舍。
+这两个项目不是互相替代，而是在解决不同的桌面开发取舍。
 
 ## 工作原理
 
