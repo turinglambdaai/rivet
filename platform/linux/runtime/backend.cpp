@@ -148,6 +148,17 @@ std::exception_ptr stopped_error() {
   return std::make_exception_ptr(std::runtime_error("Rivet backend stopped"));
 }
 
+std::string exception_message(std::exception_ptr error) noexcept {
+  if (!error) return "unknown failure";
+  try {
+    std::rethrow_exception(error);
+  } catch (std::exception const& exception) {
+    return exception.what();
+  } catch (...) {
+    return "non-standard exception";
+  }
+}
+
 ptr quoted_symbol(std::string const& name) {
   auto const quote = Sstring_to_symbol("quote");
   auto const module = Sstring_to_symbol(name.c_str());
@@ -179,11 +190,13 @@ class Backend::Impl {
       throw std::logic_error("Rivet backend instances cannot be restarted");
     }
     started_ = true;
+    emit_diagnostic("native-runtime", "backend-start", "begin");
 
     auto endpoints = create_socket_endpoints();
     auto server_read = std::move(endpoints.server_read);
     auto server_write = std::move(endpoints.server_write);
     transport_ = std::make_unique<FdTransport>(std::move(endpoints.native));
+    emit_diagnostic("transport", "channel-opened", "success");
 
     ready_ = std::make_shared<std::promise<void>>();
     ready_future_ = ready_->get_future();
@@ -200,7 +213,17 @@ class Backend::Impl {
 
     // The first valid frame from Racket is Hello. Waiting for it makes start
     // fail synchronously when boot files, core.zo, or the entry point are bad.
-    ready_future_.get();
+    try {
+      ready_future_.get();
+      emit_diagnostic("protocol", "handshake", "success");
+      emit_diagnostic("native-runtime", "backend-start", "success");
+    } catch (...) {
+      emit_diagnostic("protocol", "handshake", "failure",
+                      exception_message(std::current_exception()));
+      emit_diagnostic("native-runtime", "backend-start", "failure",
+                      exception_message(std::current_exception()));
+      throw;
+    }
   }
 
   void stop() {
@@ -211,13 +234,16 @@ class Backend::Impl {
       if (!started_) {
         return;
       }
+      stopping_.store(true, std::memory_order_release);
       running_.store(false, std::memory_order_release);
     }
+    emit_diagnostic("native-runtime", "backend-stop", "begin");
 
     try {
       std::lock_guard write_lock(write_mutex_);
       auto* transport = transport_.get();
       if (transport != nullptr) {
+        note_protocol_event("shutdown");
         write_frame(*transport, Frame{MessageType::Shutdown, 0, {}});
       }
     } catch (...) {
@@ -238,6 +264,7 @@ class Backend::Impl {
     }
 
     reject_all(stopped_error());
+    emit_diagnostic("native-runtime", "backend-stop", "success");
   }
 
   bool running() const noexcept {
@@ -286,6 +313,9 @@ class Backend::Impl {
 
     auto* transport = transport_.get();
     if (transport != nullptr) {
+      note_protocol_event("cancel");
+      emit_diagnostic("native-client", "request-cancel", "begin", "",
+                      request_id);
       write_frame(*transport, Frame{MessageType::Cancel, request_id, {}});
     }
   }
@@ -296,6 +326,31 @@ class Backend::Impl {
   }
 
  private:
+  void note_protocol_event(std::string event) noexcept {
+    std::lock_guard lock(diagnostic_mutex_);
+    last_protocol_event_ = std::move(event);
+  }
+
+  void emit_diagnostic(std::string layer,
+                       std::string event,
+                       std::string status,
+                       std::string message = {},
+                       std::optional<std::uint64_t> request_id = std::nullopt)
+      noexcept {
+    DiagnosticRecord record;
+    {
+      std::lock_guard lock(diagnostic_mutex_);
+      record = DiagnosticRecord{std::move(layer), std::move(event),
+                                std::move(status), last_protocol_event_,
+                                request_id, std::move(message)};
+    }
+    try {
+      if (config_.diagnostic_sink) config_.diagnostic_sink(record);
+    } catch (...) {
+      // Diagnostics must never become a new runtime failure path.
+    }
+  }
+
   std::uint64_t submit_request(std::string rpc_name,
                                Value::List arguments,
                                PendingRequest pending) {
@@ -322,6 +377,9 @@ class Backend::Impl {
         throw std::logic_error("Rivet request id collision");
       }
     }
+
+    note_protocol_event("request");
+    emit_diagnostic("native-client", "rpc-dispatch", "begin", rpc_name, id);
 
     Value::List request;
     request.reserve(arguments.size() + 1);
@@ -355,6 +413,8 @@ class Backend::Impl {
         write_frame(*transport, Frame{MessageType::Cancel, id, {}});
       }
     } catch (...) {
+      emit_diagnostic("transport", "request-write", "failure",
+                      exception_message(std::current_exception()), id);
       fail_request(id, std::current_exception());
     }
 
@@ -362,6 +422,8 @@ class Backend::Impl {
   }
 
   void racket_main(UniqueFd server_read, UniqueFd server_write) noexcept {
+    emit_diagnostic("abi-bridge", "backend-init", "begin");
+    bool initialized = false;
     try {
       racket_boot_arguments_t boot{};
       boot.boot1_path = config_.petite_boot.c_str();
@@ -386,13 +448,25 @@ class Backend::Impl {
           Scons(Sfixnum(server_read.get()),
                 Scons(Sfixnum(server_write.get()), Snil));
 
+      initialized = true;
+      emit_diagnostic("abi-bridge", "backend-init", "success");
+
       // The ports created by serve-fds own distinct descriptors referring to
       // the same full-duplex socket. They close them during server teardown.
       (void)server_read.release();
       (void)server_write.release();
       (void)racket_apply(procedure, args);
       Sscheme_deinit();
+      emit_diagnostic(
+          "racket-backend", "backend-exit",
+          stopping_.load(std::memory_order_acquire) ? "success" : "failure",
+          stopping_.load(std::memory_order_acquire)
+              ? ""
+              : "backend returned before native shutdown");
     } catch (...) {
+      emit_diagnostic(initialized ? "racket-backend" : "abi-bridge",
+                      initialized ? "backend-exit" : "backend-init", "failure",
+                      exception_message(std::current_exception()));
       // Owned descriptors are closed on native startup failures. Once they are
       // transferred, serve-fds owns their lifetime.
     }
@@ -414,28 +488,40 @@ class Backend::Impl {
 
         auto frame = read_frame(*transport);
         if (!frame.has_value()) {
+          if (!stopping_.load(std::memory_order_acquire)) {
+            emit_diagnostic("transport", "channel-closed", "failure",
+                            "Rivet transport closed unexpectedly");
+          }
           break;
         }
 
         switch (frame->type) {
           case MessageType::Hello:
+            note_protocol_event("hello");
             accept_hello(*frame);
             break;
           case MessageType::Response:
+            note_protocol_event("response");
+            emit_diagnostic("native-client", "rpc-dispatch", "success", "",
+                            frame->id);
             resolve_request(frame->id, decode_value(frame->payload));
             break;
           case MessageType::Error: {
+            note_protocol_event("error");
             auto error_value = decode_value(frame->payload);
             std::string message{"Rivet backend error"};
             if (auto* text = std::get_if<std::string>(&error_value.data)) {
               message = *text;
             }
+            emit_diagnostic("racket-backend", "rpc-dispatch", "failure",
+                            message, frame->id);
             fail_request(
                 frame->id,
                 std::make_exception_ptr(std::runtime_error(std::move(message))));
             break;
           }
           case MessageType::Event:
+            note_protocol_event("event");
             deliver_event(decode_value(frame->payload));
             break;
           default:
@@ -447,6 +533,8 @@ class Backend::Impl {
         set_ready_exception(stopped_error());
       }
     } catch (...) {
+      emit_diagnostic("protocol", "reader-loop", "failure",
+                      exception_message(std::current_exception()));
       set_ready_exception(std::current_exception());
       reject_all(std::current_exception());
     }
@@ -602,6 +690,7 @@ class Backend::Impl {
   std::mutex write_mutex_;
   std::mutex pending_mutex_;
   std::mutex event_mutex_;
+  std::mutex diagnostic_mutex_;
   std::unique_ptr<FdTransport> transport_;
   std::thread racket_thread_;
   std::thread reader_thread_;
@@ -610,6 +699,8 @@ class Backend::Impl {
   detail::RequestIdAllocator request_ids_;
   std::atomic<bool> running_{false};
   std::atomic<bool> hello_seen_{false};
+  std::atomic<bool> stopping_{false};
+  std::string last_protocol_event_{"none"};
   bool started_{false};
   std::shared_ptr<std::promise<void>> ready_;
   std::future<void> ready_future_;

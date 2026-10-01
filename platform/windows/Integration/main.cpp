@@ -10,8 +10,10 @@
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "backend.hpp"
 
@@ -186,6 +188,27 @@ int main(int argc, char** argv) {
     config.dll_dir = runtime.wstring();
     config.max_pending_requests = 1;
 
+    std::mutex diagnostics_mutex;
+    std::vector<rivet::DiagnosticRecord> diagnostics;
+    config.diagnostic_sink = [&](rivet::DiagnosticRecord const& record) {
+      std::lock_guard lock(diagnostics_mutex);
+      diagnostics.push_back(record);
+    };
+
+    auto require_diagnostic = [&](std::string const& layer,
+                                  std::string const& event,
+                                  std::string const& status) {
+      std::lock_guard lock(diagnostics_mutex);
+      for (auto const& record : diagnostics) {
+        if (record.layer == layer && record.event == event &&
+            record.status == status) {
+          return;
+        }
+      }
+      throw std::runtime_error("missing diagnostic: " + layer + "/" + event +
+                               "/" + status);
+    };
+
     progress("starting backend");
     rivet::windows::Backend backend(std::move(config));
     auto const startup_begin = BenchmarkClock::now();
@@ -196,6 +219,7 @@ int main(int argc, char** argv) {
     if (benchmark) {
       run_benchmark(backend, startup_ms);
       backend.stop();
+      require_diagnostic("native-runtime", "backend-stop", "success");
       return 0;
     }
 
@@ -310,6 +334,10 @@ int main(int argc, char** argv) {
     }
 
     progress("backend stopped");
+    require_diagnostic("abi-bridge", "backend-init", "success");
+    require_diagnostic("protocol", "handshake", "success");
+    require_diagnostic("native-client", "rpc-dispatch", "success");
+    require_diagnostic("native-runtime", "backend-stop", "success");
     std::cout << "Rivet embedded Windows round-trip passed\n";
     return 0;
   } catch (std::exception const& error) {

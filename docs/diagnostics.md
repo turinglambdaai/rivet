@@ -80,3 +80,58 @@ raco rivet build
 ```
 
 For automated diagnostics, substitute `raco rivet doctor --json` and archive the resulting JSON with the failing build logs.
+
+## Embedded runtime diagnostics
+
+The embedded Windows, macOS, and Linux runtimes and the Racket backend emit one
+JSON object per line for lifecycle and request-boundary events. This is separate
+from RVT1: it does not add protocol frames, alter application payloads, or couple
+the runtime to a logging provider.
+
+```json
+{"schema":"rivet.diagnostic.v1","layer":"native-client","event":"rpc-dispatch","status":"success","last_protocol_event":"response","request_id":42}
+```
+
+Every record contains:
+
+- `schema`: always `rivet.diagnostic.v1`;
+- `layer`: `native-runtime`, `abi-bridge`, `transport`, `protocol`,
+  `native-client`, or `racket-backend`;
+- `event` and `status`: the lifecycle boundary and `begin`, `success`, or
+  `failure`;
+- `last_protocol_event`: the most recently observed RVT1 message kind, or
+  `none` before the first frame;
+- optional `request_id` and `message` fields.
+
+The event stream covers backend initialization, transport creation, Hello
+handshake, per-RPC dispatch, cancellation, orderly shutdown, unexpected channel
+closure, reader-loop failure, and backend exit. A failure record therefore says
+whether the last known boundary was the Racket backend, the ABI bridge, RVT1
+validation, transport I/O, or the native client.
+
+By default, embedded applications write JSONL to standard error. Applications
+can redirect records to their own logger or crash reporter without adding a
+Rivet logging dependency:
+
+```cpp
+rivet::windows::RacketRuntimeConfig config;
+config.diagnostic_sink = [](rivet::DiagnosticRecord const& record) {
+  application_log(rivet::diagnostic_json_line(record));
+};
+```
+
+The same `diagnostic_sink` field is available in the Linux runtime config. On
+Apple platforms, pass `diagnosticSink:` to
+`EmbeddedRacketConfiguration.resolvedDefault` or `RivetClient`. On the Racket
+side, `serve-fds` uses `current-rivet-diagnostic-sink`; direct `serve` callers
+can pass `#:diagnostic-sink` explicitly.
+
+Diagnostic sinks run on runtime and request threads. They should be fast,
+thread-safe, non-blocking, and must not call back into the same runtime. C++
+sink exceptions are isolated from the application lifecycle.
+
+Rivet never records RPC argument or result payloads. RPC begin records may name
+the called API, and failure messages may contain application exception text;
+treat the JSONL stream as operational log data and apply the same redaction and
+retention policy as other crash reports. Racket-side messages are bounded to
+4096 characters and avoid invoking custom printers on arbitrary raised values.

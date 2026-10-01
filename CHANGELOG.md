@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add provider-neutral, layer-attributed JSONL diagnostics across the Racket
+  backend, C++/Swift native clients, transports, and embedding bridges. Records
+  identify lifecycle/RPC boundaries, status, last RVT1 event, and request id;
+  stderr defaults and injectable sinks keep logging dependencies out of the
+  runtime and leave the RVT1 wire contract unchanged.
 - Launch packaged GUI artifacts as the final verification gate when a graphical
   session is available. The executable starts from an unrelated temporary
   directory, must remain alive for five seconds, and is then terminated;

@@ -1,3 +1,4 @@
+#include "rivet/diagnostics.hpp"
 #include "rivet/protocol.hpp"
 
 #include <cassert>
@@ -253,6 +254,15 @@ int main() {
     rejected_invalid_utf8_encode = true;
   }
   assert(rejected_invalid_utf8_encode);
+
+  auto diagnostic = rivet::diagnostic_json_line(rivet::DiagnosticRecord{
+      "racket-backend", "rpc-dispatch", "failure", "request\nread", 42,
+      "quote: \" and control: \x01"});
+  assert(diagnostic ==
+         "{\"schema\":\"rivet.diagnostic.v1\",\"layer\":\"racket-backend\","
+         "\"event\":\"rpc-dispatch\",\"status\":\"failure\","
+         "\"last_protocol_event\":\"request\\nread\",\"request_id\":42,"
+         "\"message\":\"quote: \\\" and control: \\u0001\"}");
 
   return 0;
 }
