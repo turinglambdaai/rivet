@@ -130,8 +130,11 @@
   ;; project-level source of truth instead of native-template literals.
   (optional 'version non-empty-string? "non-empty version string")
   (optional 'build
-            (lambda (v) (and (exact-integer? v) (positive? v)))
-            "positive integer")
+            (lambda (v)
+              (and (exact-integer? v)
+                   (positive? v)
+                   (<= v #x7fffffffffffffff)))
+            "positive signed 64-bit integer")
   (optional 'display-name non-empty-string? "non-empty string")
   (optional 'identifier
             (lambda (v)

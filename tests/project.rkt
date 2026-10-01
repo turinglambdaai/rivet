@@ -80,6 +80,17 @@
 
     (write-config
      (hasheq 'name "demo"
+             'version "1.0.0"
+             'build #x8000000000000000
+             'backend "app/backend.rkt"
+             'module "backend"
+             'entry "start"
+             'protocol 1))
+    (check-exn #rx"positive signed 64-bit integer"
+               (lambda () (load-project temp-root)))
+
+    (write-config
+     (hasheq 'name "demo"
              'backend (path->string (build-path temp-root "backend.rkt"))
              'module "backend"
              'entry "start"

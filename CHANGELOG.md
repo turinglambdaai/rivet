@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Generate application identity from `rivet.rktd` for every native client and
+  stage the same values for Racket through `rivet/app-info`. Swift, C++, and
+  Kotlin now receive display name, version, build, identifier, and release
+  channel without app-local copies; the generated macOS window title uses the
+  display name instead of the `RivetHost` process name.
 - Generate a default-deny Apple companion API from the shared Racket schema.
   Projects explicitly list `device-rpcs`; Rivet emits Codable request/response
   types, typed `RivetDeviceClient` methods, and phone-side

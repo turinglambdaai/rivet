@@ -4,7 +4,15 @@ import RivetRuntime
 import RivetDevice
 
 public enum RivetGeneratedError: Error { case typeMismatch(String); case unknownEvent(String) }
-public enum RivetGeneratedConfig { public static let moduleName = "backend"; public static let entryName = "start" }
+public enum RivetGeneratedConfig {
+    public static let moduleName = "backend"
+    public static let entryName = "start"
+    public static let displayName = "Rivet Taskboard"
+    public static let version = "0.1.0"
+    public static let build: Int64 = 1
+    public static let identifier = "dev.rivet.taskboard"
+    public static let releaseChannel = "stable"
+}
 
 public enum TaskStatus: String, Codable, Sendable {
     case backlog = "backlog"

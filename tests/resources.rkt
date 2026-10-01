@@ -5,7 +5,9 @@
          racket/path
          (submod "../rivet-cli/build.rkt" test-support)
          (submod "../rivet-cli/package.rkt" test-support)
+         (submod "../rivet-cli/verify.rkt" test-support)
          "../rivet-cli/project.rkt"
+         "../rivet/app-info.rkt"
          "../rivet/resources.rkt")
 
 (define temp-root (make-temporary-file "rivet-resources-~a" 'directory))
@@ -30,11 +32,13 @@
     (define project
       (rivet-project
        temp-root
-       #hasheq((resources . ("assets" "config/defaults.json"))
+       #hasheq((name . "Demo_App")
+               (resources . ("assets" "config/defaults.json"))
                (windows-icon . "branding/app.ico"))))
     (define stage (build-path temp-root ".rivet" "stage"))
     (make-directory* stage)
     (copy-project-resources! project stage)
+    (write-app-info! project stage)
 
     (check-equal? (file->string (build-path stage "app" "assets" "images" "hero.txt"))
                   "hero")
@@ -45,8 +49,24 @@
     (parameterize ([current-resource-root (build-path stage "app")])
       (check-equal? (file->string (resource-path "assets" "images" "hero.txt"))
                     "hero")
+      (check-equal? (app-name) "Demo_App")
+      (check-equal? (app-display-name) "Demo_App")
+      (check-equal? (app-version) "0.1.0")
+      (check-equal? (app-build) 1)
+      (check-equal? (app-identifier) "dev.rivet.demo-app")
+      (check-equal? (app-release-channel) 'stable)
       (check-exn exn:fail? (lambda () (resource-path ".." "secret")))
       (check-exn exn:fail? (lambda () (resource-path "assets/../secret"))))
+
+    (define metadata-path (build-path stage "app" "rivet-app-info.rktd"))
+    (verify-configured-resources! 'test project stage)
+    (check-exn #rx"reserved metadata path"
+               (lambda () (write-app-info! project stage)))
+    (write-text metadata-path "#hasheq((name . \"broken\"))\n")
+    (parameterize ([current-resource-root (build-path stage "app")])
+      (check-exn #rx"missing a required field" current-app-info))
+    (check-exn #rx"does not match rivet.rktd"
+               (lambda () (verify-configured-resources! 'test project stage)))
 
     (define rc (prepare-windows-icon-resource! project))
     (check-true (file-exists? rc))

@@ -17,6 +17,11 @@
 namespace rivet_app {
 inline constexpr char kModuleName[] = "backend";
 inline constexpr char kEntryName[] = "start";
+inline constexpr char kDisplayName[] = "Rivet Taskboard";
+inline constexpr char kVersion[] = "0.1.0";
+inline constexpr std::int64_t kBuild = 1;
+inline constexpr char kIdentifier[] = "dev.rivet.taskboard";
+inline constexpr char kReleaseChannel[] = "stable";
 
 enum class TaskStatus { backlog, active, done };
 

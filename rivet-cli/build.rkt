@@ -82,6 +82,29 @@
           (copy-directory/files source destination)
           (copy-file source destination)))))
 
+(define (write-app-info! project stage)
+  (define destination-root (build-path stage "app"))
+  (define destination (build-path destination-root "rivet-app-info.rktd"))
+  (when (or (file-exists? destination)
+            (directory-exists? destination)
+            (link-exists? destination))
+    (raise-arguments-error 'build-project!
+                           "application resources use Rivet's reserved metadata path"
+                           "path" destination))
+  (make-directory* destination-root)
+  (call-with-output-file destination
+    #:exists 'error
+    (lambda (out)
+      (write
+       (hasheq 'name (project-name project)
+               'display-name (project-display-name project)
+               'version (project-version project)
+               'build (project-build project)
+               'identifier (project-identifier project)
+               'release-channel (project-release-channel project))
+       out)
+      (newline out))))
+
 (define (required-project-icon project configured-path platform)
   (and configured-path
        (let ([source (project-path project configured-path)])
@@ -430,6 +453,7 @@
   (fresh-directory! stage)
   (compile-backend! project runtime stage)
   (copy-project-resources! project stage)
+  (write-app-info! project stage)
 
   (case (system-type 'os)
     [(windows)
@@ -458,5 +482,6 @@
 
 (module+ test-support
   (provide copy-project-resources!
+           write-app-info!
            required-project-icon
            prepare-windows-icon-resource!))

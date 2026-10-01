@@ -30,6 +30,25 @@
                            "purpose" label)))
 
 (define (verify-configured-resources! who project packaged-root)
+  (define app-info-path
+    (build-path packaged-root "app" "rivet-app-info.rktd"))
+  (required-file! who app-info-path "generated application identity")
+  (define-values (app-info trailing)
+    (call-with-input-file app-info-path
+      (lambda (in) (values (read in) (read in)))))
+  (define expected-app-info
+    (hasheq 'name (project-name project)
+            'display-name (project-display-name project)
+            'version (project-version project)
+            'build (project-build project)
+            'identifier (project-identifier project)
+            'release-channel (project-release-channel project)))
+  (unless (and (eof-object? trailing) (equal? app-info expected-app-info))
+    (raise-arguments-error who
+                           "packaged application identity does not match rivet.rktd"
+                           "file" app-info-path
+                           "expected" expected-app-info
+                           "actual" app-info))
   (for ([configured-path (in-list (project-resources project))])
     (define relative (string->path configured-path))
     (define source (project-path project relative))
@@ -363,3 +382,6 @@
        (error 'verify-project-package!
               "Rivet package verification currently targets Windows, macOS, and Linux")]))
   (verify-package! project package #:production? production?))
+
+(module+ test-support
+  (provide verify-configured-resources!))

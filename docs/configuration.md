@@ -41,10 +41,30 @@ Example:
 
 - `display-name` — user-visible application name. Defaults to `name` for legacy projects.
 - `version` — application release version. Defaults to `0.1.0` for legacy projects.
-- `build` — positive integer build number. Defaults to `1` for legacy projects.
+- `build` — positive signed 64-bit integer build number. Defaults to `1` for legacy projects.
 - `identifier` — application/bundle identifier. Legacy projects derive `dev.rivet.<name>`.
 
-These values feed packaging metadata instead of being duplicated in native platform templates.
+These values feed packaging metadata and generated native constants instead of
+being duplicated in platform templates. Swift and Kotlin expose them on
+`RivetGeneratedConfig`; C++ exposes `kDisplayName`, `kVersion`, `kBuild`,
+`kIdentifier`, and `kReleaseChannel` beside the generated module/entry names.
+The generated macOS host uses `displayName` for its `WindowGroup` title.
+
+The build also stages this identity for backend code. Require `rivet/app-info`
+(or the aggregate `rivet` module) instead of hardcoding a second version:
+
+```racket
+(require rivet/app-info)
+
+(define current-version (app-version))
+(define update-channel (app-release-channel))
+```
+
+`current-app-info` returns all six fields as an `app-info` value. The
+convenience procedures `app-name`, `app-display-name`, `app-version`,
+`app-build`, `app-identifier`, and `app-release-channel` read the same staged
+metadata. Missing or malformed metadata fails explicitly; Rivet does not guess
+release identity from the executable name.
 
 ## Distribution and activation metadata
 
@@ -74,7 +94,7 @@ breaking change, while adding one is compatible. See
 - `windows-icon` — an optional project-relative `.ico` file compiled into newly generated Windows hosts.
 - `macos-icon` — an optional project-relative `.icns` file copied into the app bundle and declared through `CFBundleIconFile`.
 
-Packaged resources live under `app/` inside the platform resource root. Racket code should use `resource-path` from `rivet/resources` (also re-exported by `rivet`) instead of guessing an executable-relative path:
+Packaged resources live under `app/` inside the platform resource root. Racket code should use `resource-path` from `rivet/resources` (also re-exported by `rivet`) instead of guessing an executable-relative path. The filename `rivet-app-info.rktd` at this root is reserved for Rivet's generated application identity:
 
 ```racket
 (require rivet/resources)
