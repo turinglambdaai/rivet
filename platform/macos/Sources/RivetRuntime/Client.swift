@@ -121,24 +121,29 @@ public final class RivetClient: @unchecked Sendable {
     private let input: FileHandle
     private let output: FileHandle
     private let maxPendingRequests: Int
+    private let diagnosticSink: RivetDiagnosticSink
     private let stateLock = NSLock()
     private let writeLock = NSLock()
+    private let diagnosticLock = NSLock()
     private let readerQueue = DispatchQueue(label: "dev.rivet.protocol-reader")
 
     private var requestIDs = RequestIDAllocator()
     private var lifecycle = ClientLifecycleState()
     private var pending: [UInt64: CheckedContinuation<RivetValue, Error>] = [:]
     private var eventHandler: EventHandler?
+    private var lastProtocolEvent = "none"
 
     public init(
         input: FileHandle,
         output: FileHandle,
-        maxPendingRequests: Int = 1024
+        maxPendingRequests: Int = 1024,
+        diagnosticSink: @escaping RivetDiagnosticSink = RivetDiagnostics.standardError
     ) {
         precondition(maxPendingRequests > 0, "Rivet native pending request limit must be positive")
         self.input = input
         self.output = output
         self.maxPendingRequests = maxPendingRequests
+        self.diagnosticSink = diagnosticSink
     }
 
     deinit {
@@ -154,9 +159,11 @@ public final class RivetClient: @unchecked Sendable {
             stateLock.unlock()
             throw error
         }
+        diagnose(layer: "native-client", event: "client-start", status: "begin")
 
         do {
             let hello = try readFrame()
+            noteProtocolEvent("hello")
             try validateHello(hello)
 
             stateLock.lock()
@@ -168,10 +175,24 @@ public final class RivetClient: @unchecked Sendable {
                 stateLock.unlock()
                 throw error
             }
+            diagnose(layer: "protocol", event: "handshake", status: "success")
+            diagnose(layer: "native-client", event: "client-start", status: "success")
         } catch {
             stateLock.lock()
             lifecycle.failStart()
             stateLock.unlock()
+            diagnose(
+                layer: "protocol",
+                event: "handshake",
+                status: "failure",
+                message: String(describing: error)
+            )
+            diagnose(
+                layer: "native-client",
+                event: "client-start",
+                status: "failure",
+                message: String(describing: error)
+            )
             throw error
         }
 
@@ -205,6 +226,14 @@ public final class RivetClient: @unchecked Sendable {
                 do {
                     var values: [RivetValue] = [.string(name)]
                     values.append(contentsOf: arguments)
+                    noteProtocolEvent("request")
+                    diagnose(
+                        layer: "native-client",
+                        event: "rpc-dispatch",
+                        status: "begin",
+                        requestID: id,
+                        message: name
+                    )
                     try write(
                         RivetFrame(
                             type: .request,
@@ -216,6 +245,13 @@ public final class RivetClient: @unchecked Sendable {
                         cancel(cancelledID)
                     }
                 } catch {
+                    diagnose(
+                        layer: "transport",
+                        event: "request-write",
+                        status: "failure",
+                        requestID: id,
+                        message: String(describing: error)
+                    )
                     if let continuation = takePending(id) {
                         continuation.resume(throwing: error)
                     }
@@ -250,6 +286,13 @@ public final class RivetClient: @unchecked Sendable {
         }
 
         do {
+            noteProtocolEvent("cancel")
+            diagnose(
+                layer: "native-client",
+                event: "request-cancel",
+                status: "begin",
+                requestID: requestID
+            )
             try output.write(contentsOf: data)
             stateLock.unlock()
             writeLock.unlock()
@@ -270,9 +313,14 @@ public final class RivetClient: @unchecked Sendable {
         stateLock.unlock()
 
         if wasRunning {
+            diagnose(layer: "native-client", event: "client-stop", status: "begin")
+            noteProtocolEvent("shutdown")
             try? write(RivetFrame(type: .shutdown, id: 0))
         }
         failAll(ClientError.stopped)
+        if wasRunning {
+            diagnose(layer: "native-client", event: "client-stop", status: "success")
+        }
     }
 
     private func registerPending(
@@ -351,9 +399,16 @@ public final class RivetClient: @unchecked Sendable {
         do {
             while isRunning {
                 let frame = try readFrame()
+                noteProtocolEvent(protocolEventName(frame.type))
                 switch frame.type {
                 case .response:
                     let value = try decodeRivetValue(frame.payload)
+                    diagnose(
+                        layer: "native-client",
+                        event: "rpc-dispatch",
+                        status: "success",
+                        requestID: frame.id
+                    )
                     takePending(frame.id)?.resume(returning: value)
                 case .error:
                     let value = try decodeRivetValue(frame.payload)
@@ -363,6 +418,13 @@ public final class RivetClient: @unchecked Sendable {
                     } else {
                         message = "Rivet backend error"
                     }
+                    diagnose(
+                        layer: "racket-backend",
+                        event: "rpc-dispatch",
+                        status: "failure",
+                        requestID: frame.id,
+                        message: message
+                    )
                     takePending(frame.id)?.resume(throwing: ClientError.backend(message))
                 case .event:
                     deliverEvent(frame)
@@ -417,9 +479,55 @@ public final class RivetClient: @unchecked Sendable {
 
     private func finishWithError(_ error: Error) {
         stateLock.lock()
-        lifecycle.stop()
+        let wasRunning = lifecycle.stop()
         stateLock.unlock()
+        if wasRunning {
+            diagnose(
+                layer: error is RivetProtocolError ? "protocol" : "transport",
+                event: "reader-loop",
+                status: "failure",
+                message: String(describing: error)
+            )
+        }
         failAll(error)
+    }
+
+    private func protocolEventName(_ type: RivetMessageType) -> String {
+        switch type {
+        case .hello: return "hello"
+        case .request: return "request"
+        case .response: return "response"
+        case .error: return "error"
+        case .event: return "event"
+        case .cancel: return "cancel"
+        case .shutdown: return "shutdown"
+        }
+    }
+
+    private func noteProtocolEvent(_ event: String) {
+        diagnosticLock.lock()
+        lastProtocolEvent = event
+        diagnosticLock.unlock()
+    }
+
+    private func diagnose(
+        layer: String,
+        event: String,
+        status: String,
+        requestID: UInt64? = nil,
+        message: String? = nil
+    ) {
+        diagnosticLock.lock()
+        let record = RivetDiagnosticRecord(
+            layer: layer,
+            event: event,
+            status: status,
+            lastProtocolEvent: lastProtocolEvent,
+            requestID: requestID,
+            message: message
+        )
+        diagnosticLock.unlock()
+        diagnosticSink(record)
     }
 }
 

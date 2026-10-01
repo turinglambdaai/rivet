@@ -7,6 +7,7 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -202,6 +203,27 @@ int main(int argc, char** argv) {
     config.entry_symbol = "start";
     config.max_pending_requests = 32;
 
+    std::mutex diagnostics_mutex;
+    std::vector<rivet::DiagnosticRecord> diagnostics;
+    config.diagnostic_sink = [&](rivet::DiagnosticRecord const& record) {
+      std::lock_guard lock(diagnostics_mutex);
+      diagnostics.push_back(record);
+    };
+
+    auto require_diagnostic = [&](std::string const& layer,
+                                  std::string const& event,
+                                  std::string const& status) {
+      std::lock_guard lock(diagnostics_mutex);
+      for (auto const& record : diagnostics) {
+        if (record.layer == layer && record.event == event &&
+            record.status == status) {
+          return;
+        }
+      }
+      throw std::runtime_error("missing diagnostic: " + layer + "/" + event +
+                               "/" + status);
+    };
+
     progress("starting backend");
     rivet::linux_runtime::Backend backend(std::move(config));
     backend.start();
@@ -311,6 +333,10 @@ int main(int argc, char** argv) {
     }
 
     progress("backend stopped");
+    require_diagnostic("abi-bridge", "backend-init", "success");
+    require_diagnostic("protocol", "handshake", "success");
+    require_diagnostic("native-client", "rpc-dispatch", "success");
+    require_diagnostic("native-runtime", "backend-stop", "success");
     std::cout << "Rivet embedded Linux round-trip passed\n";
     return 0;
   } catch (std::exception const& error) {

@@ -6,6 +6,24 @@
 
 (define result-writer-called? (box #f))
 (define exit-writer-called? (box #f))
+(define diagnostic-records (box '()))
+(define diagnostic-lock (make-semaphore 1))
+
+(define (capture-diagnostic! record)
+  (call-with-semaphore
+   diagnostic-lock
+   (lambda ()
+     (set-box! diagnostic-records
+               (cons record (unbox diagnostic-records))))))
+
+(define (diagnostic-record-exists? layer event status [request-id #f])
+  (for/or ([record (in-list (unbox diagnostic-records))])
+    (and (equal? (hash-ref record 'schema) "rivet.diagnostic.v1")
+         (equal? (hash-ref record 'layer) layer)
+         (equal? (hash-ref record 'event) event)
+         (equal? (hash-ref record 'status) status)
+         (or (not request-id)
+             (= (hash-ref record 'request_id) request-id)))))
 
 (struct explosive-result ()
   #:property prop:custom-write
@@ -45,7 +63,7 @@
      (channel-put
       server-result
       (with-handlers ([exn? values])
-        (serve server-in server-out)
+        (serve server-in server-out #:diagnostic-sink capture-diagnostic!)
         'completed)))))
 
 (define hello (read-frame/timeout client-in))
@@ -87,3 +105,19 @@
 (write-frame (frame message:shutdown 0 #"") client-out)
 (check-equal? (sync/timeout 2 server-result) 'completed)
 (thread-wait server-thread)
+
+(check-true
+ (diagnostic-record-exists? "protocol" "handshake" "success"))
+(check-true
+ (diagnostic-record-exists? "racket-backend" "rpc-dispatch" "failure" 3))
+(check-true
+ (diagnostic-record-exists? "racket-backend" "backend-exit" "success"))
+(define rpc-failure
+  (for/first ([record (in-list (unbox diagnostic-records))]
+              #:when (and (equal? (hash-ref record 'event) "rpc-dispatch")
+                          (equal? (hash-ref record 'status) "failure")
+                          (= (hash-ref record 'request_id -1) 3)))
+    record))
+(check-equal? (hash-ref rpc-failure 'last_protocol_event) "request")
+(check-false (regexp-match? #rx"EXPLOSIVE-EXIT"
+                            (hash-ref rpc-failure 'message)))

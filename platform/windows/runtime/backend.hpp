@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "rivet/diagnostics.hpp"
 #include "rivet/protocol.hpp"
 
 namespace rivet::windows {
@@ -27,6 +28,7 @@ struct RacketRuntimeConfig {
   std::string config_dir;
   std::wstring dll_dir;
   std::size_t max_pending_requests{1024};
+  DiagnosticSink diagnostic_sink{default_diagnostic_sink()};
 };
 
 struct PendingCall {

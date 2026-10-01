@@ -3,6 +3,26 @@ import Foundation
 import CRivetRacket
 import RivetRuntime
 
+private final class EmbeddedDiagnosticContext: @unchecked Sendable {
+    private let lock = NSLock()
+    private var lastProtocolEvent = "none"
+
+    func forward(_ record: RivetDiagnosticRecord, to sink: RivetDiagnosticSink) {
+        if record.lastProtocolEvent != "none" {
+            lock.lock()
+            lastProtocolEvent = record.lastProtocolEvent
+            lock.unlock()
+        }
+        sink(record)
+    }
+
+    func snapshot() -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return lastProtocolEvent
+    }
+}
+
 public struct EmbeddedRacketConfiguration: Sendable {
     public var executable: URL
     public var petiteBoot: URL
@@ -15,6 +35,7 @@ public struct EmbeddedRacketConfiguration: Sendable {
     public var moduleName: String
     public var entryName: String
     public var maxPendingRequests: Int
+    public var diagnosticSink: RivetDiagnosticSink
 
     public init(
         executable: URL,
@@ -25,7 +46,8 @@ public struct EmbeddedRacketConfiguration: Sendable {
         workingDirectory: URL? = nil,
         moduleName: String = "backend",
         entryName: String = "start",
-        maxPendingRequests: Int = 1024
+        maxPendingRequests: Int = 1024,
+        diagnosticSink: @escaping RivetDiagnosticSink = RivetDiagnostics.standardError
     ) {
         precondition(maxPendingRequests > 0, "Rivet native pending request limit must be positive")
         self.executable = executable
@@ -37,6 +59,7 @@ public struct EmbeddedRacketConfiguration: Sendable {
         self.moduleName = moduleName
         self.entryName = entryName
         self.maxPendingRequests = maxPendingRequests
+        self.diagnosticSink = diagnosticSink
     }
 
     /// Resolves the canonical Rivet runtime layout used by both packaged apps
@@ -49,7 +72,8 @@ public struct EmbeddedRacketConfiguration: Sendable {
     public static func resolvedDefault(
         moduleName: String = "backend",
         entryName: String = "start",
-        maxPendingRequests: Int = 1024
+        maxPendingRequests: Int = 1024,
+        diagnosticSink: @escaping RivetDiagnosticSink = RivetDiagnostics.standardError
     ) throws -> EmbeddedRacketConfiguration {
         let executable = Bundle.main.executableURL
             ?? URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
@@ -63,7 +87,8 @@ public struct EmbeddedRacketConfiguration: Sendable {
             candidateRoots: roots,
             moduleName: moduleName,
             entryName: entryName,
-            maxPendingRequests: maxPendingRequests
+            maxPendingRequests: maxPendingRequests,
+            diagnosticSink: diagnosticSink
         )
     }
 
@@ -73,6 +98,7 @@ public struct EmbeddedRacketConfiguration: Sendable {
         moduleName: String,
         entryName: String,
         maxPendingRequests: Int,
+        diagnosticSink: @escaping RivetDiagnosticSink,
         fileManager: FileManager = .default
     ) throws -> EmbeddedRacketConfiguration {
         var searchedRoots: [URL] = []
@@ -105,7 +131,8 @@ public struct EmbeddedRacketConfiguration: Sendable {
                 workingDirectory: root,
                 moduleName: moduleName,
                 entryName: entryName,
-                maxPendingRequests: maxPendingRequests
+                maxPendingRequests: maxPendingRequests,
+                diagnosticSink: diagnosticSink
             )
         }
 
@@ -143,6 +170,7 @@ public final class EmbeddedRacketBackend: @unchecked Sendable {
     private let responsePipe = Pipe()
     private let lifecycle = NSCondition()
     private let serverExited = DispatchSemaphore(value: 0)
+    private let diagnosticContext = EmbeddedDiagnosticContext()
 
     private var state: Lifecycle = .created
     private var serverThread: Thread?
@@ -150,7 +178,10 @@ public final class EmbeddedRacketBackend: @unchecked Sendable {
     public private(set) lazy var client = RivetClient(
         input: responsePipe.fileHandleForReading,
         output: requestPipe.fileHandleForWriting,
-        maxPendingRequests: configuration.maxPendingRequests
+        maxPendingRequests: configuration.maxPendingRequests,
+        diagnosticSink: { [diagnosticContext, sink = configuration.diagnosticSink] record in
+            diagnosticContext.forward(record, to: sink)
+        }
     )
 
     public init(configuration: EmbeddedRacketConfiguration) {
@@ -165,6 +196,7 @@ public final class EmbeddedRacketBackend: @unchecked Sendable {
         }
         state = .starting
         lifecycle.unlock()
+        diagnose(layer: "abi-bridge", event: "backend-init", status: "begin")
 
         do {
             if let workingDirectory = configuration.workingDirectory,
@@ -191,9 +223,25 @@ public final class EmbeddedRacketBackend: @unchecked Sendable {
 
             let config = configuration
             let completion = serverExited
+            let diagnostics = diagnosticContext
             let server = Thread {
                 defer { completion.signal() }
-                runEmbeddedRacket(config, inputFD: racketInput, outputFD: racketOutput)
+                let result = runEmbeddedRacket(
+                    config,
+                    inputFD: racketInput,
+                    outputFD: racketOutput
+                )
+                if result != 0 {
+                    config.diagnosticSink(
+                        RivetDiagnosticRecord(
+                            layer: "abi-bridge",
+                            event: "backend-exit",
+                            status: "failure",
+                            lastProtocolEvent: diagnostics.snapshot(),
+                            message: "rivet_racket_run returned status \(result)"
+                        )
+                    )
+                }
             }
             server.name = "Rivet Racket CS"
             server.qualityOfService = .userInitiated
@@ -205,6 +253,12 @@ public final class EmbeddedRacketBackend: @unchecked Sendable {
 
             // Hello is emitted only after the Racket module and server have loaded.
             try client.start(onEvent: onEvent)
+            diagnose(
+                layer: "abi-bridge",
+                event: "backend-init",
+                status: "success",
+                lastProtocolEvent: "hello"
+            )
 
             lifecycle.lock()
             if state == .starting {
@@ -228,6 +282,12 @@ public final class EmbeddedRacketBackend: @unchecked Sendable {
                 closeNativePipeEndpoints()
                 waitForServerExit()
             }
+            diagnose(
+                layer: "abi-bridge",
+                event: "backend-init",
+                status: "failure",
+                message: String(describing: error)
+            )
             throw error
         }
     }
@@ -251,6 +311,11 @@ public final class EmbeddedRacketBackend: @unchecked Sendable {
         case .starting, .running:
             state = .stopping
             lifecycle.unlock()
+            diagnose(
+                layer: "native-runtime",
+                event: "backend-stop",
+                status: "begin"
+            )
         case .stopping:
             // The loop above consumes this state.
             lifecycle.unlock()
@@ -265,6 +330,7 @@ public final class EmbeddedRacketBackend: @unchecked Sendable {
         state = .stopped
         lifecycle.broadcast()
         lifecycle.unlock()
+        diagnose(layer: "native-runtime", event: "backend-stop", status: "success")
     }
 
     deinit {
@@ -288,13 +354,32 @@ public final class EmbeddedRacketBackend: @unchecked Sendable {
         serverThread = nil
         lifecycle.unlock()
     }
+
+    private func diagnose(
+        layer: String,
+        event: String,
+        status: String,
+        lastProtocolEvent: String? = nil,
+        message: String? = nil
+    ) {
+        configuration.diagnosticSink(
+            RivetDiagnosticRecord(
+                layer: layer,
+                event: event,
+                status: status,
+                lastProtocolEvent: lastProtocolEvent ?? diagnosticContext.snapshot(),
+                message: message
+            )
+        )
+    }
 }
 
+@discardableResult
 private func runEmbeddedRacket(
     _ config: EmbeddedRacketConfiguration,
     inputFD: Int32,
     outputFD: Int32
-) {
+) -> Int32 {
     let result: Int32 = config.executable.path.withCString { executable in
         config.petiteBoot.path.withCString { petite in
             config.schemeBoot.path.withCString { scheme in
@@ -326,6 +411,7 @@ private func runEmbeddedRacket(
         Darwin.close(inputFD)
         Darwin.close(outputFD)
     }
+    return result
 }
 
 public enum EmbeddedBackendError: Error, CustomStringConvertible {

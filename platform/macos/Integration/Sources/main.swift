@@ -3,6 +3,25 @@ import Foundation
 import RivetEmbedding
 import RivetRuntime
 
+private final class DiagnosticCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var records: [RivetDiagnosticRecord] = []
+
+    func append(_ record: RivetDiagnosticRecord) {
+        lock.lock()
+        records.append(record)
+        lock.unlock()
+    }
+
+    func contains(layer: String, event: String, status: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return records.contains {
+            $0.layer == layer && $0.event == event && $0.status == status
+        }
+    }
+}
+
 #if arch(arm64)
 private let benchmarkArchitecture = "arm64"
 #elseif arch(x86_64)
@@ -120,9 +139,11 @@ private func runBenchmark(
 struct RivetIntegration {
     static func main() async throws {
         let benchmark = try benchmarkMode()
+        let diagnostics = DiagnosticCapture()
         let configuration = try EmbeddedRacketConfiguration.resolvedDefault(
             moduleName: "backend",
-            entryName: "start"
+            entryName: "start",
+            diagnosticSink: { diagnostics.append($0) }
         )
         let backend = EmbeddedRacketBackend(configuration: configuration)
 
@@ -145,6 +166,12 @@ struct RivetIntegration {
                 startupMilliseconds: startupMilliseconds
             )
             backend.stop()
+            try requireDiagnostic(
+                diagnostics,
+                layer: "native-runtime",
+                event: "backend-stop",
+                status: "success"
+            )
             return
         }
 
@@ -177,6 +204,15 @@ struct RivetIntegration {
         backend.stop()
         backend.stop() // stop is intentionally idempotent.
 
+        try requireDiagnostic(
+            diagnostics, layer: "abi-bridge", event: "backend-init", status: "success")
+        try requireDiagnostic(
+            diagnostics, layer: "protocol", event: "handshake", status: "success")
+        try requireDiagnostic(
+            diagnostics, layer: "native-client", event: "rpc-dispatch", status: "success")
+        try requireDiagnostic(
+            diagnostics, layer: "native-runtime", event: "backend-stop", status: "success")
+
         do {
             try backend.start()
             throw IntegrationError.restartWasAllowed
@@ -186,6 +222,17 @@ struct RivetIntegration {
 
         print("Rivet embedded macOS round-trip passed")
     }
+
+    private static func requireDiagnostic(
+        _ diagnostics: DiagnosticCapture,
+        layer: String,
+        event: String,
+        status: String
+    ) throws {
+        guard diagnostics.contains(layer: layer, event: event, status: status) else {
+            throw IntegrationError.missingDiagnostic("\(layer)/\(event)/\(status)")
+        }
+    }
 }
 
 enum IntegrationError: Error, CustomStringConvertible {
@@ -193,6 +240,7 @@ enum IntegrationError: Error, CustomStringConvertible {
     case restartWasAllowed
     case invalidArguments([String])
     case benchmarkEncoding
+    case missingDiagnostic(String)
     case unexpectedWorkingDirectory(expected: String, actual: String)
 
     var description: String {
@@ -205,6 +253,8 @@ enum IntegrationError: Error, CustomStringConvertible {
             return "usage: RivetIntegration [--benchmark]; received: \(arguments)"
         case .benchmarkEncoding:
             return "failed to encode benchmark report as UTF-8 JSON"
+        case .missingDiagnostic(let record):
+            return "missing runtime diagnostic: \(record)"
         case .unexpectedWorkingDirectory(let expected, let actual):
             return "embedded runtime working directory was \(actual), expected \(expected)"
         }

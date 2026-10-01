@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "rivet/diagnostics.hpp"
 #include "rivet/protocol.hpp"
 
 namespace rivet::linux_runtime {
@@ -26,6 +27,7 @@ struct RacketRuntimeConfig {
   std::string module_name{"backend"};
   std::string entry_symbol{"start"};
   std::size_t max_pending_requests{1024};
+  DiagnosticSink diagnostic_sink{default_diagnostic_sink()};
 };
 
 struct PendingCall {

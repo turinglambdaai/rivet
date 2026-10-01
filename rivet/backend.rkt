@@ -1,6 +1,7 @@
 #lang racket/base
 
 (require ffi/unsafe/port
+         json
          racket/async-channel
          racket/list
          racket/match
@@ -19,6 +20,7 @@
          enum-case
          serve
          serve-fds
+         current-rivet-diagnostic-sink
          registered-rpcs
          registered-events
          registered-states
@@ -53,6 +55,24 @@
 (define record-registry (make-hash))
 (define enum-registry (make-hash))
 (define current-event-emitter (make-parameter #f))
+
+(define diagnostic-schema "rivet.diagnostic.v1")
+
+(define current-rivet-diagnostic-sink
+  (make-parameter
+   (lambda (record)
+     (write-json record (current-error-port))
+     (newline (current-error-port))
+     (flush-output (current-error-port)))))
+
+(define (safe-diagnostic-message raised)
+  (define message
+    (if (exn? raised)
+        (exn-message raised)
+        "non-exception value"))
+  (if (<= (string-length message) 4096)
+      message
+      (string-append (substring message 0 4080) "... [truncated]")))
 ;; Request workers replace this identity wrapper with a cancellation barrier.
 ;; Keeping it private lets state-set! preserve the same behavior outside serve.
 (define current-state-commit-guard (make-parameter (lambda (thunk) (thunk))))
@@ -721,7 +741,8 @@
 
 (define (serve in out
                #:max-pending-requests [max-pending-requests 1024]
-               #:max-outgoing-frames [max-outgoing-frames 64])
+               #:max-outgoing-frames [max-outgoing-frames 64]
+               #:diagnostic-sink [diagnostic-sink void])
   (unless (input-port? in)
     (raise-argument-error 'serve "input-port?" in))
   (unless (output-port? out)
@@ -732,6 +753,49 @@
   (unless (and (exact-integer? max-outgoing-frames)
                (positive? max-outgoing-frames))
     (raise-argument-error 'serve "positive exact integer" max-outgoing-frames))
+  (unless (and (procedure? diagnostic-sink)
+               (procedure-arity-includes? diagnostic-sink 1))
+    (raise-argument-error 'serve "procedure accepting one argument" diagnostic-sink))
+
+  (define diagnostic-lock (make-semaphore 1))
+  (define last-protocol-event "none")
+
+  (define (note-protocol-event! event)
+    (call-with-semaphore
+     diagnostic-lock
+     (lambda () (set! last-protocol-event event))))
+
+  (define (diagnose! layer event status
+                     #:request-id [request-id #f]
+                     #:message [message #f])
+    (define record
+      (call-with-semaphore
+       diagnostic-lock
+       (lambda ()
+         (define base
+           (hasheq 'schema diagnostic-schema
+                   'layer layer
+                   'event event
+                   'status status
+                   'last_protocol_event last-protocol-event))
+         (define with-id
+           (if request-id (hash-set base 'request_id request-id) base))
+         (if message (hash-set with-id 'message message) with-id))))
+    (with-handlers ([(lambda (_) #t) void])
+      (diagnostic-sink record)))
+
+  (define (frame-event-name f)
+    (case (frame-type f)
+      [(1) "hello"]
+      [(2) "request"]
+      [(3) "response"]
+      [(4) "error"]
+      [(5) "event"]
+      [(6) "cancel"]
+      [(7) "shutdown"]
+      [else "unknown-frame"]))
+
+  (diagnose! "racket-backend" "backend-init" "begin")
 
   ;; Keep application/request threads and the writer in separate custodians.
   ;; Graceful shutdown can stop every producer first, drain already accepted
@@ -755,6 +819,8 @@
        (lambda ()
          (with-handlers ([exn?
                           (lambda (e)
+                            (diagnose! "transport" "response-writer" "failure"
+                                       #:message (safe-diagnostic-message e))
                             (set-box! writer-error e))])
            (let loop ()
              (define response (async-channel-get responses))
@@ -773,6 +839,8 @@
     ;; A bounded channel applies output backpressure. Waiting producers also
     ;; observe writer death, so a broken transport cannot strand request/Event
     ;; threads forever behind a full queue.
+    (when (frame? value)
+      (note-protocol-event! (frame-event-name value)))
     (define outcome
       (sync
        (handle-evt (async-channel-put-evt responses value)
@@ -980,6 +1048,9 @@
   (define (run-request! id rpc-name args internal-state-request? info)
     (with-handlers ([(lambda (_) #t)
                      (lambda (raised)
+                       (diagnose! "racket-backend" "rpc-dispatch" "failure"
+                                  #:request-id id
+                                  #:message (safe-diagnostic-message raised))
                        (request-error! id raised))])
       (define result
         (if internal-state-request?
@@ -1011,6 +1082,8 @@
                               (rpc-info-result-type info)
                               value)
               (typed->wire (rpc-info-result-type info) value))))
+      (diagnose! "racket-backend" "rpc-dispatch" "success"
+                 #:request-id id)
       (finish! id message:response result)))
 
   (define (start-request! f)
@@ -1028,8 +1101,14 @@
       ;; failures local.
       (with-handlers ((exn:fail?
                        (lambda (e)
+                         (diagnose! "racket-backend" "rpc-dispatch" "failure"
+                                    #:request-id id
+                                    #:message (safe-diagnostic-message e))
                          (reject-request! id (exn-message e)))))
         (define-values (rpc-name args) (request->call (frame-payload f)))
+        (diagnose! "racket-backend" "rpc-dispatch" "begin"
+                   #:request-id id
+                   #:message (symbol->string rpc-name))
         (define internal-state-request?
           (memq rpc-name '($state/get $state/set)))
         (define info
@@ -1073,6 +1152,7 @@
        (frame message:error id (error-message->payload "request cancelled")))))
 
   (define (dispatch! f)
+    (note-protocol-event! (frame-event-name f))
     (case (frame-type f)
       [(2) (start-request! f)]
       [(6) (cancel! (frame-id f))]
@@ -1105,8 +1185,10 @@
                                  (raise value)
                                  (error 'rivet/backend
                                         "backend requested exit with non-exception value")))])
+             (diagnose! "racket-backend" "backend-init" "success")
              (send! (frame message:hello 0
                            (encode-value (list "rivet" protocol-version))))
+             (diagnose! "protocol" "handshake" "success")
              (let loop ()
                (unless stopped?
                  (define f (read-frame in))
@@ -1162,31 +1244,40 @@
       [reader-problem (raise reader-problem)]
       [else (void)]))
 
-  (dynamic-wind
-    void
-    (lambda ()
-      (define first-exit
-        (sync
-         (handle-evt reader-dead-evt (lambda (_) 'reader))
-         (handle-evt writer-dead-evt (lambda (_) 'writer))))
-      (cond
-        [(eq? first-exit 'writer)
-         (define failure (unbox writer-error))
-         (abort-server!)
-         (if failure
-             (raise failure)
-             (error 'serve "response writer terminated unexpectedly"))]
-        [else
-         (finish-after-reader!)]))
-    (lambda ()
-      (unless cleanup-done?
-        (abort-server!))))
+  (with-handlers ([(lambda (_) #t)
+                   (lambda (raised)
+                     (diagnose! "racket-backend" "backend-exit" "failure"
+                                #:message (safe-diagnostic-message raised))
+                     (raise raised))])
+    (dynamic-wind
+      void
+      (lambda ()
+        (define first-exit
+          (sync
+           (handle-evt reader-dead-evt (lambda (_) 'reader))
+           (handle-evt writer-dead-evt (lambda (_) 'writer))))
+        (cond
+          [(eq? first-exit 'writer)
+           (define failure (unbox writer-error))
+           (abort-server!)
+           (if failure
+               (raise failure)
+               (error 'serve "response writer terminated unexpectedly"))]
+          [else
+           (finish-after-reader!)]))
+      (lambda ()
+        (unless cleanup-done?
+          (abort-server!)))))
+
+  (diagnose! "racket-backend" "backend-exit" "success")
 
   (void))
 
 (define (serve-fds in-fd out-fd
                    #:max-pending-requests [max-pending-requests 1024]
-                   #:max-outgoing-frames [max-outgoing-frames 64])
+                   #:max-outgoing-frames [max-outgoing-frames 64]
+                   #:diagnostic-sink
+                   [diagnostic-sink (current-rivet-diagnostic-sink)])
   (unless (exact-integer? in-fd)
     (raise-argument-error 'serve-fds "exact-integer?" in-fd))
   (unless (exact-integer? out-fd)
@@ -1197,16 +1288,12 @@
     void
     (lambda ()
       (with-handlers ([exn?
-                       (lambda (e)
-                         ((error-display-handler)
-                          (format "Rivet backend terminated: ~a"
-                                  (exn-message e))
-                          e)
-                         (void))])
+                       (lambda (_e) (void))])
         (serve in
                out
                #:max-pending-requests max-pending-requests
-               #:max-outgoing-frames max-outgoing-frames)))
+               #:max-outgoing-frames max-outgoing-frames
+               #:diagnostic-sink diagnostic-sink)))
     (lambda ()
       (unless (port-closed? in) (close-input-port in))
       (unless (port-closed? out) (close-output-port out)))))
