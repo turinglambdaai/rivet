@@ -1,0 +1,86 @@
+<Window
+    x:Class="RivetHost.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Padding="24" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" Spacing="12">
+            <TextBlock Text="Rivet Taskboard" FontSize="30" FontWeight="SemiBold" />
+            <TextBlock Text="Racket + WinUI 3" VerticalAlignment="Center" Opacity="0.65" />
+        </StackPanel>
+
+        <InfoBar
+            x:Name="StatusBar"
+            Grid.Row="1"
+            IsOpen="True"
+            IsClosable="False"
+            Severity="Informational"
+            Message="Starting embedded Racket CS…"
+            AutomationProperties.AutomationId="application-status" />
+
+        <Grid Grid.Row="2" ColumnSpacing="20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" MinWidth="280" />
+                <ColumnDefinition Width="3*" MinWidth="340" />
+            </Grid.ColumnDefinitions>
+
+            <ListView
+                x:Name="TaskList"
+                SelectionMode="Single"
+                IsEnabled="False"
+                SelectionChanged="TaskList_SelectionChanged"
+                AutomationProperties.Name="Tasks"
+                AutomationProperties.AutomationId="task-list" />
+
+            <Border Grid.Column="1" Padding="28" BorderThickness="1" CornerRadius="8">
+                <StackPanel Spacing="14">
+                    <TextBlock
+                        x:Name="TaskTitle"
+                        Text="Select a task"
+                        FontSize="26"
+                        FontWeight="SemiBold"
+                        TextWrapping="Wrap"
+                        AutomationProperties.AutomationId="task-title" />
+                    <TextBlock x:Name="TaskStatus" Opacity="0.65" />
+                    <TextBlock
+                        x:Name="TaskNotes"
+                        Text="Task details are provided by the shared Racket backend."
+                        TextWrapping="Wrap"
+                        AutomationProperties.AutomationId="task-notes" />
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button
+                            x:Name="AdvanceButton"
+                            Content="Start Task"
+                            IsEnabled="False"
+                            Click="Advance_Click"
+                            AutomationProperties.AutomationId="advance-task" />
+                        <Button
+                            x:Name="DeleteButton"
+                            Content="Delete"
+                            IsEnabled="False"
+                            Click="Delete_Click"
+                            AutomationProperties.AutomationId="delete-task" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="10">
+            <Button x:Name="NewButton" Content="New Task" IsEnabled="False"
+                    Click="New_Click" AutomationProperties.AutomationId="new-task" />
+            <Button x:Name="SamplesButton" Content="Reload Samples" IsEnabled="False"
+                    Click="Samples_Click" AutomationProperties.AutomationId="reload-samples" />
+            <Button x:Name="GenerateButton" Content="Generate 1,000" IsEnabled="False"
+                    Click="Generate_Click" AutomationProperties.AutomationId="generate-demo" />
+            <Button x:Name="CancelButton" Content="Cancel" Visibility="Collapsed"
+                    Click="Cancel_Click" AutomationProperties.AutomationId="cancel-generation" />
+        </StackPanel>
+    </Grid>
+</Window>
