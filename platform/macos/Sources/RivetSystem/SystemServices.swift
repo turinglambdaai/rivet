@@ -9,6 +9,7 @@ public enum RivetSystemError: Error, CustomStringConvertible {
     case posix(String, Int32)
     case keychain(OSStatus)
     case invalidUTF8
+    case notificationsUnavailable
 
     public var description: String {
         switch self {
@@ -16,6 +17,8 @@ public enum RivetSystemError: Error, CustomStringConvertible {
         case .keychain(let status):
             return SecCopyErrorMessageString(status, nil) as String? ?? "Keychain error \(status)"
         case .invalidUTF8: return "stored secret is not valid UTF-8"
+        case .notificationsUnavailable:
+            return "macOS notifications require a packaged .app bundle with an application identifier"
         }
     }
 }
@@ -93,12 +96,29 @@ public enum RivetSecureStorage {
 }
 
 public enum RivetNotifications {
+    /// UserNotifications raises an Objective-C exception, rather than a Swift
+    /// error, when invoked by a command-line executable outside an app bundle.
+    /// Check the process identity before crossing that framework boundary.
+    public static var isAvailable: Bool {
+        isAvailable(
+            bundleURL: Bundle.main.bundleURL,
+            bundleIdentifier: Bundle.main.bundleIdentifier
+        )
+    }
+
+    static func isAvailable(bundleURL: URL, bundleIdentifier: String?) -> Bool {
+        bundleURL.pathExtension.caseInsensitiveCompare("app") == .orderedSame
+            && !(bundleIdentifier?.isEmpty ?? true)
+    }
+
     public static func requestAuthorization() async throws -> Bool {
-        try await UNUserNotificationCenter.current()
+        guard isAvailable else { return false }
+        return try await UNUserNotificationCenter.current()
             .requestAuthorization(options: [.alert, .badge, .sound])
     }
 
     public static func show(title: String, body: String, identifier: String = UUID().uuidString) async throws {
+        guard isAvailable else { throw RivetSystemError.notificationsUnavailable }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
