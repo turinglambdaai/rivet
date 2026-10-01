@@ -113,7 +113,7 @@ public enum RivetNotifications {
 
     public static func requestAuthorization() async throws -> Bool {
         guard isAvailable else { return false }
-        try await UNUserNotificationCenter.current()
+        return try await UNUserNotificationCenter.current()
             .requestAuthorization(options: [.alert, .badge, .sound])
     }
 
