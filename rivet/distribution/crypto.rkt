@@ -1,7 +1,7 @@
 #lang racket/base
 
 (require crypto
-         crypto/all
+         (only-in crypto/libcrypto libcrypto-factory)
          net/base64
          racket/file
          racket/port
@@ -22,20 +22,19 @@
 ;; provider that lacks it fails closed instead of falling back to another
 ;; signature scheme.
 ;;
-;; Instantiate exactly the factories that satisfy that pin. use-all-factories!
-;; would also probe the gmp factory, whose FFI load kills the process at
-;; module-import time on hosts without libgmp — every embedded app that
-;; merely verifies a manifest would ship that landmine (found by packaging a
-;; real app for macOS, where the CI-built bundle would not start).
-(crypto-factories (list libcrypto-factory sodium-factory decaf-factory))
+;; Rivet's manifest crypto is exactly SHA-256 digests and Ed25519
+;; sign/verify, so the provider set is pinned to libcrypto alone: the
+;; official Racket distributions bundle OpenSSL on every desktop target.
+;; Requiring crypto/all (or instantiating more factories) would drag in
+;; factory modules whose FFI loads run at module-import time — the gmp
+;; factory kills the process there on hosts without libgmp, and every
+;; embedded app that merely verifies a manifest shipped that landmine
+;; (found by packaging a real app for macOS, where the CI-built bundle
+;; would not start).
+(crypto-factories (list libcrypto-factory))
 
-;; libgcrypt advertises Ed25519 on some Linux distributions but older
-;; combinations fail at signing time with "Invalid object". Rivet release
-;; manifests use providers whose Ed25519 implementation is exercised by the
-;; upstream crypto library on our desktop targets. This also makes an
-;; unsupported host fail while importing the key, before a release is built.
 (define ed25519-factories
-  (list libcrypto-factory sodium-factory decaf-factory))
+  (list libcrypto-factory))
 
 (define (bytes->base64-string value)
   (bytes->string/utf-8 (base64-encode value #"")))
