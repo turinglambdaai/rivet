@@ -67,7 +67,20 @@ struct SocketEndpoints {
 
 SocketEndpoints create_socket_endpoints() {
   int fds[2]{-1, -1};
-  if (::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, fds) != 0) {
+#if defined(SOCK_CLOEXEC)
+  int const rc = ::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, fds);
+#else
+  // Platforms without SOCK_CLOEXEC (macOS): set the flag on both ends right
+  // after the pair exists; this thread does no I/O in between.
+  int rc = ::socketpair(AF_UNIX, SOCK_STREAM, 0, fds);
+  if (rc == 0) {
+    if (::fcntl(fds[0], F_SETFD, FD_CLOEXEC) != 0 ||
+        ::fcntl(fds[1], F_SETFD, FD_CLOEXEC) != 0) {
+      rc = -1;
+    }
+  }
+#endif
+  if (rc != 0) {
     throw std::runtime_error("socketpair failed: " +
                              std::string(std::strerror(errno)));
   }

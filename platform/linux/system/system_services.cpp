@@ -8,9 +8,12 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <cerrno>
 #include <cstring>
+#include <functional>
 #include <mutex>
+#include <thread>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -726,6 +729,104 @@ void InstallCrashHook(CrashCallback callback,
       crash_user_callback = nullptr;
       ::close(fd);
       throw std::runtime_error(std::string("crash hook installation failed: ") +
+                               std::strerror(saved));
+    }
+  }
+}
+
+// ---------------------------------------------------------- shutdown hook
+
+namespace {
+
+int shutdown_pipe_read = -1;
+int shutdown_pipe_write = -1;
+std::function<void()> shutdown_callback;
+std::atomic<bool> shutdown_in_flight{false};
+std::thread shutdown_watcher;
+
+extern "C" void rivet_shutdown_signal_handler(int) noexcept {
+  // Async-signal-safe: a single write into the self-pipe is all the handler
+  // does; everything else happens on the watcher thread.
+  if (shutdown_pipe_write >= 0) {
+    char const byte = 's';
+    ssize_t ignored = ::write(shutdown_pipe_write, &byte, 1);
+    (void)ignored;
+  }
+}
+
+void rivet_shutdown_watch_loop() {
+  char byte = 0;
+  while (true) {
+    ssize_t const read_bytes = ::read(shutdown_pipe_read, &byte, 1);
+    if (read_bytes < 0 && errno == EINTR) continue;
+    break;  // pipe closed at teardown, or a signal drained through
+  }
+  if (shutdown_in_flight.exchange(true)) return;
+
+  // A second signal must hard-kill even if the callback hangs: restore the
+  // default disposition right before the callback runs.
+  struct sigaction action;
+  std::memset(&action, 0, sizeof(action));
+  action.sa_handler = SIG_DFL;
+  sigemptyset(&action.sa_mask);
+  ::sigaction(SIGTERM, &action, nullptr);
+  ::sigaction(SIGINT, &action, nullptr);
+
+  if (shutdown_callback) shutdown_callback();
+  std::exit(0);
+}
+
+}  // namespace
+
+void InstallShutdownHook(std::function<void()> callback) {
+  if (shutdown_pipe_read >= 0)
+    throw std::runtime_error("shutdown hook is already installed");
+
+  int fds[2]{-1, -1};
+#if defined(SOCK_CLOEXEC)
+  if (::pipe2(fds, O_CLOEXEC) != 0) {
+#else
+  if (::pipe(fds) != 0) {
+#endif
+    throw std::runtime_error(std::string("shutdown hook pipe failed: ") +
+                             std::strerror(errno));
+  }
+#ifndef SOCK_CLOEXEC
+  ::fcntl(fds[0], F_SETFD, FD_CLOEXEC);
+  ::fcntl(fds[1], F_SETFD, FD_CLOEXEC);
+#endif
+  // Non-blocking read end so the watcher can never wedge on a partial pipe.
+  int const flags = ::fcntl(fds[0], F_GETFL, 0);
+  ::fcntl(fds[0], F_SETFL, flags | O_NONBLOCK);
+
+  shutdown_pipe_read = fds[0];
+  shutdown_pipe_write = fds[1];
+  shutdown_callback = std::move(callback);
+
+  try {
+    shutdown_watcher = std::thread(rivet_shutdown_watch_loop);
+  } catch (...) {
+    ::close(shutdown_pipe_read);
+    ::close(shutdown_pipe_write);
+    shutdown_pipe_read = shutdown_pipe_write = -1;
+    shutdown_callback = nullptr;
+    throw;
+  }
+
+  struct sigaction action;
+  std::memset(&action, 0, sizeof(action));
+  action.sa_handler = rivet_shutdown_signal_handler;
+  sigemptyset(&action.sa_mask);
+  for (int signal_number : {SIGTERM, SIGINT}) {
+    if (::sigaction(signal_number, &action, nullptr) != 0) {
+      int const saved = errno;
+      ::sigaction(signal_number, &action, nullptr);
+      // Best effort unwind; the watcher exits when the pipe is closed.
+      shutdown_callback = nullptr;
+      ::close(shutdown_pipe_read);
+      ::close(shutdown_pipe_write);
+      shutdown_pipe_read = shutdown_pipe_write = -1;
+      throw std::runtime_error(std::string("shutdown hook installation failed: ") +
                                std::strerror(saved));
     }
   }
