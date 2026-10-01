@@ -62,15 +62,5 @@ For Kotlin changes:
 platform/android/gradlew -p platform/android test
 ```
 
-For Swift package tests that include `RivetEmbedding`, pass the exact Racket
-include and framework search paths selected by the installed Racket CS:
-
-```bash
-racket_include="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
-racket_lib="$(racket -e '(require setup/dirs) (display (path->string (find-lib-dir)))')"
-test -d "$racket_lib/Racket.framework"
-RIVET_RACKET_FRAMEWORK_DIR="$racket_lib" DYLD_FRAMEWORK_PATH="$racket_lib" swift test --package-path platform/macos -Xcc "-I${racket_include}" -Xswiftc "-F${racket_lib}"
-```
-
 Generated application paths are `.rivet/`, `build/`, and `dist/`; do not hand
 edit them. `raco rivet clean` is the scoped cleanup operation.

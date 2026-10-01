@@ -4,10 +4,6 @@ import Foundation
 import PackageDescription
 
 let macosMinVersion = ProcessInfo.processInfo.environment["RIVET_MACOS_MIN_VERSION"] ?? "14.0"
-let racketFrameworkDir = ProcessInfo.processInfo.environment["RIVET_RACKET_FRAMEWORK_DIR"]
-let embeddingTestLinkerSettings: [LinkerSetting] = racketFrameworkDir.map {
-    [.unsafeFlags(["-F", $0]), .linkedFramework("Racket")]
-} ?? []
 
 let package = Package(
     name: "RivetApple",
@@ -66,12 +62,6 @@ let package = Package(
             name: "RivetDeviceTests",
             dependencies: ["RivetDevice"],
             path: "Tests/RivetDeviceTests"
-        ),
-        .testTarget(
-            name: "RivetEmbeddingTests",
-            dependencies: ["RivetEmbedding"],
-            path: "Tests/RivetEmbeddingTests",
-            linkerSettings: embeddingTestLinkerSettings
         )
     ]
 )

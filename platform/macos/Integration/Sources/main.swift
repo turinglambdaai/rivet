@@ -120,21 +120,8 @@ private func runBenchmark(
 struct RivetIntegration {
     static func main() async throws {
         let benchmark = try benchmarkMode()
-        let environment = ProcessInfo.processInfo.environment
-        func required(_ key: String) throws -> URL {
-            guard let value = environment[key], !value.isEmpty else {
-                throw IntegrationError.missingEnvironment(key)
-            }
-            return URL(fileURLWithPath: value)
-        }
-
         let backend = EmbeddedRacketBackend(
-            configuration: EmbeddedRacketConfiguration(
-                executable: try required("RIVET_TEST_EXECUTABLE"),
-                petiteBoot: try required("RIVET_TEST_PETITE_BOOT"),
-                schemeBoot: try required("RIVET_TEST_SCHEME_BOOT"),
-                racketBoot: try required("RIVET_TEST_RACKET_BOOT"),
-                core: try required("RIVET_TEST_CORE"),
+            configuration: try EmbeddedRacketConfiguration.resolvedDefault(
                 moduleName: "backend",
                 entryName: "start"
             )
@@ -195,7 +182,6 @@ struct RivetIntegration {
 }
 
 enum IntegrationError: Error, CustomStringConvertible {
-    case missingEnvironment(String)
     case unexpected(String, RivetValue)
     case restartWasAllowed
     case invalidArguments([String])
@@ -203,8 +189,6 @@ enum IntegrationError: Error, CustomStringConvertible {
 
     var description: String {
         switch self {
-        case .missingEnvironment(let key):
-            return "missing integration environment variable: \(key)"
         case .unexpected(let operation, let value):
             return "unexpected \(operation) result: \(value)"
         case .restartWasAllowed:
