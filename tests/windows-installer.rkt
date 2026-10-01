@@ -48,6 +48,10 @@
 
 (define plain-source (wix-source-for (hasheq)))
 
+(check-regexp-match #rx"<Package Name=\"Smoke\" Manufacturer=\"Smoke\"" plain-source
+                    "legacy projects must use the display name as their publisher")
+(check-regexp-match #rx"Scope=\"perMachine\"" plain-source
+                    "the existing elevated installation scope must remain explicit")
 (check-regexp-match #px"UpgradeCode=\"[0-9a-f]{8}-" plain-source
                     "the upgrade code must be derived, not the shared hardcoded constant")
 (check-false (regexp-match? #rx"6B7D0F2E-8B9D-4FB5-9F69-1B12E50F60C1" plain-source)
@@ -69,9 +73,14 @@
 ;; Display names and identifiers are XML-escaped everywhere they are emitted.
 (define escaped-source
   (wix-source-for (hasheq 'display-name "Smoke & Stack"
+                          'publisher "Example <Apps> & Co."
                           'identifier "dev.rivet.smoke-test")))
 (check-regexp-match #rx"Name=\"Smoke &amp; Stack\"" escaped-source
                     "display names must be XML-escaped")
+(check-regexp-match #rx"Manufacturer=\"Example &lt;Apps&gt; &amp; Co[.]\"" escaped-source
+                    "the human-readable publisher must be XML-escaped")
+(check-false (regexp-match? #rx"Manufacturer=\"dev[.]rivet[.]smoke-test\"" escaped-source)
+             "the reverse-DNS identifier must not leak into ARP Publisher")
 (check-regexp-match #rx"Key=\"Software\\\\dev\\.rivet\\.smoke-test\\\\Shortcuts\"" escaped-source)
 
 ;; Shortcut authoring coexists with URL scheme / file association registration.

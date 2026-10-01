@@ -72,6 +72,7 @@
   (define name (project-name project))
   (define identifier (project-identifier project))
   (define display-name (project-display-name project))
+  (define publisher (project-publisher project))
   (define schemes (project-url-schemes project))
   (define associations (project-file-associations project))
   (define registrations? (or (pair? schemes) (pair? associations)))
@@ -81,7 +82,7 @@
       (fprintf out
                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Wix xmlns=\"http://wixtoolset.org/schemas/v4/wxs\">\n  <Package Name=\"~a\" Manufacturer=\"~a\" Version=\"~a\" UpgradeCode=\"~a\" Scope=\"perMachine\">\n    <MajorUpgrade DowngradeErrorMessage=\"A newer version is already installed.\" />\n    <MediaTemplate EmbedCab=\"yes\" />\n    <Feature Id=\"Main\"><ComponentGroupRef Id=\"ProductComponents\" /><ComponentGroupRef Id=\"ShortcutComponents\" /></Feature>\n  </Package>\n  <Fragment><StandardDirectory Id=\"ProgramFiles6432Folder\"><Directory Id=\"INSTALLFOLDER\" Name=\"~a\" /></StandardDirectory></Fragment>\n  <Fragment><StandardDirectory Id=\"ProgramMenuFolder\"><Directory Id=\"ApplicationProgramsFolder\" Name=\"~a\" /></StandardDirectory><StandardDirectory Id=\"DesktopFolder\" /></Fragment>\n  <Fragment><ComponentGroup Id=\"ShortcutComponents\" Directory=\"ApplicationProgramsFolder\">\n    <Component Id=\"StartMenuShortcutComponent\" Guid=\"*\">\n      <Shortcut Id=\"StartMenuApplicationShortcut\" Name=\"~a\" Description=\"~a\" Target=\"[INSTALLFOLDER]RivetHost.exe\" WorkingDirectory=\"INSTALLFOLDER\" />\n      <RemoveFolder Id=\"RemoveApplicationProgramsFolder\" Directory=\"ApplicationProgramsFolder\" On=\"uninstall\" />\n      <RegistryValue Root=\"HKLM\" Key=\"Software\\~a\\Shortcuts\" Name=\"StartMenu\" Type=\"integer\" Value=\"1\" KeyPath=\"yes\" />\n    </Component>\n    <Component Id=\"DesktopShortcutComponent\" Guid=\"*\" Directory=\"DesktopFolder\">\n      <Shortcut Id=\"DesktopApplicationShortcut\" Name=\"~a\" Description=\"~a\" Target=\"[INSTALLFOLDER]RivetHost.exe\" WorkingDirectory=\"INSTALLFOLDER\" />\n      <RegistryValue Root=\"HKLM\" Key=\"Software\\~a\\Shortcuts\" Name=\"Desktop\" Type=\"integer\" Value=\"1\" KeyPath=\"yes\" />\n    </Component>\n  </ComponentGroup></Fragment>\n  <Fragment><ComponentGroup Id=\"ProductComponents\" Directory=\"INSTALLFOLDER\">\n"
                (xml-escape display-name)
-               (xml-escape identifier)
+               (xml-escape publisher)
                (xml-escape (project-version project))
                (upgrade-code-for identifier)
                (xml-escape name)
