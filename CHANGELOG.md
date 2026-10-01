@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Normalize Swift declaration keywords such as `init` and `public` before
+  emitting client APIs, and put both source declarations plus the generated
+  identifier in the first line of native-name collision errors.
 - Add provider-neutral, layer-attributed JSONL diagnostics across the Racket
   backend, C++/Swift native clients, transports, and embedding bridges. Records
   identify lifecycle/RPC boundaries, status, last RVT1 event, and request id;

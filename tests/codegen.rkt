@@ -391,6 +391,61 @@ RKT
     (check-exn #rx"native API name collision"
                (lambda () (generate-clients! project)))
 
+    ;; Swift declaration keywords must be normalized before source emission.
+    ;; `init` is especially easy to miss because it remains legal in C++.
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-rpc (init : Void) (void))
+(define-rpc (public : Bool) #t)
+
+(define (start in-fd out-fd)
+  (serve-fds in-fd out-fd))
+RKT
+     )
+    (generate-clients! project)
+    (define keyword-swift
+      (file->string
+       (build-path project-root
+                   "macos-host"
+                   "Sources"
+                   "RivetHost"
+                   "GeneratedBackend.swift")))
+    (check-regexp-match #rx"public func rivet_init\\(\\) async throws -> Void"
+                        keyword-swift)
+    (check-regexp-match #rx"public func rivet_public\\(\\) async throws -> Bool"
+                        keyword-swift)
+
+    ;; Put the complete collision in the first line because CI wrappers and
+    ;; agent logs often retain only that line of a Racket exception.
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-state config : String "")
+(define-rpc (set-config [value : String] : Void) (void))
+
+(define (start in-fd out-fd)
+  (serve-fds in-fd out-fd))
+RKT
+     )
+    (define state-collision-message
+      (with-handlers ([exn:fail? exn-message])
+        (generate-clients! project)
+        ""))
+    (check-regexp-match
+     #rx"C\\+\\+ API native API name collision: RPC set-config and State setter config both generate set_config"
+     state-collision-message)
+
     ;; Generated async companions are part of the C++ API namespace too.
     (write-backend!
      project-root
