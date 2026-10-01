@@ -169,8 +169,7 @@
               (target "ios" "foundation" "SwiftUI" #f)
               (target "ipados" "foundation" "SwiftUI" #f)
               (target "watchos" "typed-companion-foundation" "SwiftUI" #f)
-              (target "android" "protocol-runtime-foundation" "Jetpack Compose" #f)
-              (target "wearos" "companion-foundation" "Compose for Wear OS" #f))
+              (target "android" "protocol-runtime-foundation" "Jetpack Compose" #f))
         'generated-paths
         (for/list ([relative (in-list '(".rivet" "build" "dist"))])
           (source-report project relative 'directory))

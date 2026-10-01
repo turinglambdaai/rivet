@@ -120,30 +120,24 @@ private func runBenchmark(
 struct RivetIntegration {
     static func main() async throws {
         let benchmark = try benchmarkMode()
-        let environment = ProcessInfo.processInfo.environment
-        func required(_ key: String) throws -> URL {
-            guard let value = environment[key], !value.isEmpty else {
-                throw IntegrationError.missingEnvironment(key)
-            }
-            return URL(fileURLWithPath: value)
-        }
-
-        let backend = EmbeddedRacketBackend(
-            configuration: EmbeddedRacketConfiguration(
-                executable: try required("RIVET_TEST_EXECUTABLE"),
-                petiteBoot: try required("RIVET_TEST_PETITE_BOOT"),
-                schemeBoot: try required("RIVET_TEST_SCHEME_BOOT"),
-                racketBoot: try required("RIVET_TEST_RACKET_BOOT"),
-                core: try required("RIVET_TEST_CORE"),
-                moduleName: "backend",
-                entryName: "start"
-            )
+        let configuration = try EmbeddedRacketConfiguration.resolvedDefault(
+            moduleName: "backend",
+            entryName: "start"
         )
+        let backend = EmbeddedRacketBackend(configuration: configuration)
 
         let startupStart = DispatchTime.now().uptimeNanoseconds
         try backend.start()
         let startupEnd = DispatchTime.now().uptimeNanoseconds
         let startupMilliseconds = elapsedMilliseconds(from: startupStart, to: startupEnd)
+        let actualDirectory = FileManager.default.currentDirectoryPath
+        if let expectedDirectory = configuration.workingDirectory,
+           actualDirectory != expectedDirectory.standardizedFileURL.path {
+            throw IntegrationError.unexpectedWorkingDirectory(
+                expected: expectedDirectory.path,
+                actual: actualDirectory
+            )
+        }
 
         if benchmark {
             try await runBenchmark(
@@ -195,16 +189,14 @@ struct RivetIntegration {
 }
 
 enum IntegrationError: Error, CustomStringConvertible {
-    case missingEnvironment(String)
     case unexpected(String, RivetValue)
     case restartWasAllowed
     case invalidArguments([String])
     case benchmarkEncoding
+    case unexpectedWorkingDirectory(expected: String, actual: String)
 
     var description: String {
         switch self {
-        case .missingEnvironment(let key):
-            return "missing integration environment variable: \(key)"
         case .unexpected(let operation, let value):
             return "unexpected \(operation) result: \(value)"
         case .restartWasAllowed:
@@ -213,6 +205,8 @@ enum IntegrationError: Error, CustomStringConvertible {
             return "usage: RivetIntegration [--benchmark]; received: \(arguments)"
         case .benchmarkEncoding:
             return "failed to encode benchmark report as UTF-8 JSON"
+        case .unexpectedWorkingDirectory(let expected, let actual):
+            return "embedded runtime working directory was \(actual), expected \(expected)"
         }
     }
 }

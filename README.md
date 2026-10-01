@@ -27,6 +27,8 @@ Every generated app includes an `AGENTS.md` and an initial `rivet-schema.json` c
 
 For a guided walkthrough, read **[Getting Started with Rivet](docs/getting-started.md)**. The installed package also includes searchable Scribble documentation. If you are developing Rivet itself, use the linked-checkout workflow in that guide instead of installing from the catalog.
 
+After the counter, study **[Rivet Taskboard](examples/taskboard/README.md)**: a maintained list/detail application with independent WinUI 3, SwiftUI, and GTK4 interfaces over one tested Racket contract.
+
 ## Why Rivet?
 
 Racket is an excellent language for application logic, but there is no direct path from a Racket backend to the modern first-party desktop stacks that commercial applications increasingly use.
@@ -71,16 +73,16 @@ The Racket backend declares the API shared by both native hosts:
 
 ### How it compares
 
-| | Rivet | Glaze | Bezel |
-|---|---|---|---|
-| UI stack | **WinUI 3 / SwiftUI** | HTML/CSS/JS + WebView | Qt 6 Widgets |
-| Racket role | shared backend | backend + local web server | application + bindings |
-| Native widgets | **first-party OS UI** | no | Qt widgets |
-| One UI codebase | no | yes | yes |
-| Styling model | platform native | CSS | QSS |
-| Best fit | platform-native commercial apps | web-tech desktop apps | traditional cross-platform GUI |
+| | Rivet | Glaze |
+|---|---|---|
+| UI stack | **WinUI 3 / SwiftUI** | HTML/CSS/JS + WebView |
+| Racket role | shared backend | backend + local web server |
+| Native widgets | **first-party OS UI** | no |
+| One UI codebase | no | yes |
+| Styling model | platform native | CSS |
+| Best fit | platform-native commercial apps | web-tech desktop apps |
 
-The three projects serve different trade-offs rather than replacing one another.
+The two projects serve different trade-offs rather than replacing one another.
 
 ## How it works
 
@@ -126,23 +128,23 @@ Windows and macOS remain the production release targets. Linux is a developer pr
 | Capability | iPhone / iPad | Apple Watch |
 |---|---|---|
 | Portable Swift protocol/runtime | ✅ iOS/iPadOS 16+ | ✅ watchOS 9+ |
-| Typed cross-device request/response | ✅ | ✅ |
+| Typed cross-device request/response | ✅ generated allowlist + router | ✅ generated client |
 | WatchConnectivity adapter | ✅ phone endpoint | ✅ watch endpoint |
 | Embedded Racket CS app host | planned portable-bytecode runtime | companion mode by default |
 | `raco rivet new/build/package` app flow | not yet | not yet |
 
-The mobile targets are foundations, not a claim of finished app delivery. The phone/tablet embedded runtime and native SwiftUI scaffolds come next; watchOS deliberately starts as a typed companion to the phone-hosted backend.
+The shared Racket schema now generates a default-deny, Codable companion API and CI cross-compiles that generated surface for both iOS and watchOS. The mobile targets are still foundations, not a claim of finished app delivery: the phone/tablet embedded runtime and native SwiftUI scaffolds come next, while watchOS deliberately starts as a typed companion to the phone-hosted backend.
 
 ### Android foundation
 
-| Capability | Android phone / tablet | Wear OS |
-|---|---|---|
-| Kotlin RVT1 codec | ✅ shared golden vectors | ✅ portable Kotlin core |
-| Coroutine runtime client | ✅ Request/Event/State/Cancel | ✅ portable Kotlin core |
-| Typed generated client | ✅ generated from the shared schema, compiled in CI | planned companion client |
-| Native UI host | planned Jetpack Compose | planned Compose for Wear OS |
-| Embedded Racket CS / JNI | not yet | companion mode by default |
-| `raco rivet new/build/package` app flow | not yet | not yet |
+| Capability | Android phone / tablet |
+|---|---|
+| Kotlin RVT1 codec | ✅ shared golden vectors |
+| Coroutine runtime client | ✅ Request/Event/State/Cancel |
+| Typed generated client | ✅ generated from the shared schema, compiled in CI |
+| Native UI host | planned Jetpack Compose |
+| Embedded Racket CS / JNI | not yet |
+| `raco rivet new/build/package` app flow | not yet |
 
 The checked-in Gradle wrapper is version-pinned and checksum-verified. Android currently has a tested protocol, coroutine-client, and typed-client-codegen foundation; JNI runtime hosting, Compose scaffolds, packaging, signing, and device/emulator round trips remain before developer-preview status. See [Android architecture](docs/android.md).
 
@@ -335,7 +337,7 @@ CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exerc
   - [x] named Enum schemas with Swift/C++ code generation and compatibility checks
   - [x] Kotlin typed-client generation
   - [x] clean-runner build/package/verify evidence for every supported desktop architecture
-- [ ] **Phase 7 — first-class mobile application delivery** — generated iOS/iPadOS/watchOS and Android/Wear OS projects, runtime/companion choices, signing, packaging, and device verification
+- [ ] **Phase 7 — first-class mobile application delivery** — generated iOS/iPadOS/watchOS and Android projects, runtime/companion choices, signing, packaging, and device verification
 
 ## License
 

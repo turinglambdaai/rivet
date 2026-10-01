@@ -99,7 +99,7 @@ returns a failing exit status when the current host is not usable.
 - Keep macOS UI native in SwiftUI/AppKit under `macos-host/`.
 - Keep Linux UI native in GTK4 under `linux/`.
 - Do not introduce a cross-platform UI DSL or bypass RVT1 with an ad-hoc IPC.
-- iOS/iPadOS/watchOS and Android/Wear OS are foundation targets until their
+- iOS/iPadOS/watchOS and Android are foundation targets until their
   generated app, embedding, packaging, signing, and device workflows exist.
 
 ## Capability sourcing
@@ -145,11 +145,20 @@ Source you may edit:
 
 Generated output you should not hand-edit:
 
+- `windows/GeneratedBackend.hpp`
+- `macos-host/Sources/RivetHost/GeneratedBackend.swift`
+- `linux/GeneratedBackend.hpp`
 - `.rivet/`
 - `build/`
 - `dist/`
+- `windows/Generated Files/`
+- `windows/obj/`
+- `windows/RivetHost/`
+- `macos-host/.build/`
 
-Use `raco rivet clean` to remove only those generated paths.
+`raco rivet build` regenerates the typed clients. Use `raco rivet clean` to
+remove transient build output while keeping the generated client sources that
+make the native API reviewable.
 
 ## Verification loop
 
@@ -200,7 +209,7 @@ AGENTS
   (write-text
    (build-path root "rivet.rktd")
    (format
-    "#hasheq((name . ~s) (display-name . ~s) (version . ~s) (build . ~s) (identifier . ~s) (release-channel . stable) (url-schemes . ()) (file-associations . ()) (resources . ()) (macos-min-version . ~s) (windows-min-version . ~s) (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1))\n"
+    "#hasheq((name . ~s) (display-name . ~s) (version . ~s) (build . ~s) (identifier . ~s) (release-channel . stable) (url-schemes . ()) (file-associations . ()) (resources . ()) (device-rpcs . ()) (macos-min-version . ~s) (windows-min-version . ~s) (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1))\n"
     name
     name
     default-project-version
@@ -209,7 +218,17 @@ AGENTS
     default-macos-min-version
     default-windows-min-version))
   (write-text (build-path root "app" "backend.rkt") backend-template)
-  (write-text (build-path root ".gitignore") ".rivet/\nbuild/\ndist/\n.DS_Store\n")
+  (write-text
+   (build-path root ".gitignore")
+   (string-append
+    ".rivet/\n"
+    "build/\n"
+    "dist/\n"
+    "windows/Generated Files/\n"
+    "windows/obj/\n"
+    "windows/RivetHost/\n"
+    "macos-host/.build/\n"
+    ".DS_Store\n"))
 
   (define windows-template (build-path (simplify-path rivet-root #t) "platform" "windows" "host"))
   (unless (directory-exists? windows-template)

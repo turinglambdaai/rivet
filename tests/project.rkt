@@ -22,6 +22,7 @@
              'build 7
              'identifier "dev.example.demo"
              'resources '("assets" "locales/en.json")
+             'device-rpcs '(greet sync-profile)
              'windows-icon "branding/app.ico"
              'macos-icon "branding/app.icns"
              'macos-min-version "14.1"
@@ -37,6 +38,7 @@
     (check-equal? (project-build project) 7)
     (check-equal? (project-identifier project) "dev.example.demo")
     (check-equal? (project-resources project) '("assets" "locales/en.json"))
+    (check-equal? (project-device-rpcs project) '(greet sync-profile))
     (check-equal? (project-windows-icon project) "branding/app.ico")
     (check-equal? (project-macos-icon project) "branding/app.icns")
     (check-equal? (project-macos-min-version project) "14.1")
@@ -64,6 +66,7 @@
     (check-equal? (project-windows-min-version legacy-project)
                   default-windows-min-version)
     (check-equal? (project-resources legacy-project) '())
+    (check-equal? (project-device-rpcs legacy-project) '())
     (check-false (project-windows-icon legacy-project))
     (check-false (project-macos-icon legacy-project))
 
@@ -136,6 +139,20 @@
       (write-config
        (hasheq 'name "demo"
                'resources bad-resources
+               'backend "app/backend.rkt"
+               'module "backend"
+               'entry "start"
+               'protocol 1))
+      (check-exn exn:fail? (lambda () (load-project temp-root))))
+
+    (for ([bad-device-rpcs (in-list '(greet
+                                      ("greet")
+                                      (greet greet)
+                                      (bad/name)
+                                      (bad\ name)))])
+      (write-config
+       (hasheq 'name "demo"
+               'device-rpcs bad-device-rpcs
                'backend "app/backend.rkt"
                'module "backend"
                'entry "start"

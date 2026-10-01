@@ -19,7 +19,15 @@
       #:exists 'truncate/replace
       (lambda (out) (display "#lang racket/base\n" out)))
 
-    (for ([name (in-list '(".rivet" "build" "dist"))])
+    (define generated-names
+      '(".rivet"
+        "build"
+        "dist"
+        "windows/Generated Files"
+        "windows/obj"
+        "windows/RivetHost"
+        "macos-host/.build"))
+    (for ([name (in-list generated-names)])
       (define generated (build-path root name))
       (make-directory* generated)
       (call-with-output-file (build-path generated "marker")
@@ -27,8 +35,8 @@
         (lambda (out) (display "generated" out))))
 
     (define removed (clean-project! project))
-    (check-equal? (length removed) 3)
-    (for ([name (in-list '(".rivet" "build" "dist"))])
+    (check-equal? (length removed) (length generated-names))
+    (for ([name (in-list generated-names)])
       (check-false (file-or-directory-type (build-path root name) #f)))
     (check-true (file-exists? source))
 

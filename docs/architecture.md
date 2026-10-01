@@ -148,7 +148,6 @@ Windows applications should be able to use everything WinUI 3 exposes. macOS app
 This differs from:
 
 - Glaze: shared web UI rendered in WebViews;
-- Bezel: one shared Qt widget API;
 - Rivet: shared Racket application/runtime logic with first-party platform UI.
 
 ## Build artifacts

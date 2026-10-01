@@ -116,6 +116,8 @@ jobs:
           distribution: full
           variant: CS
           version: '9.3'
+      - name: Install Rivet
+        run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Test Swift runtime and C bridge
         shell: bash
         run: |
@@ -126,7 +128,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cd platform/macos
+          root="$RUNNER_TEMP/rivet-apple-device-codegen"
+          mkdir -p "$root"
+          cd "$root"
+          raco rivet new AppleDeviceSmoke
+          cd AppleDeviceSmoke
+          cp "$GITHUB_WORKSPACE/tests/fixtures/schema-matrix-backend.rkt" app/backend.rkt
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("rivet.rktd")
+          original = path.read_text(encoding="utf-8")
+          updated = original.replace(
+              '(device-rpcs . ())',
+              '(device-rpcs . (roundtrip-user roundtrip-optional-string no-result))',
+          )
+          if updated == original:
+              raise SystemExit("failed to configure Apple device RPC exports")
+          path.write_text(updated, encoding="utf-8")
+          PY
+          raco rivet generate
+          fixture="$GITHUB_WORKSPACE/tests/fixtures/apple-device-codegen/Sources/AppleDeviceCodegenFixture"
+          cp macos-host/Sources/RivetHost/GeneratedBackend.swift "$fixture/GeneratedBackend.swift"
+
+          cd "$GITHUB_WORKSPACE/platform/macos"
           for scheme in RivetRuntime RivetWatchConnectivity; do
             xcodebuild \
               -workspace . \
@@ -140,6 +164,17 @@ jobs:
               -scheme "$scheme" \
               -destination 'generic/platform=watchOS' \
               -derivedDataPath "$RUNNER_TEMP/rivet-${scheme}-watchos" \
+              CODE_SIGNING_ALLOWED=NO \
+              build
+          done
+
+          cd "$GITHUB_WORKSPACE/tests/fixtures/apple-device-codegen"
+          for platform in iOS watchOS; do
+            xcodebuild \
+              -workspace . \
+              -scheme AppleDeviceCodegenFixture \
+              -destination "generic/platform=${platform}" \
+              -derivedDataPath "$RUNNER_TEMP/rivet-device-codegen-${platform}" \
               CODE_SIGNING_ALLOWED=NO \
               build
           done
@@ -240,6 +275,20 @@ jobs:
           if (-not (Test-Path 'app\backend.rkt')) {
             throw 'raco rivet clean removed application source'
           }
+      - name: Build and verify the maintained WinUI reference app
+        shell: pwsh
+        run: |
+          Set-Location (Join-Path $env:GITHUB_WORKSPACE 'examples\taskboard')
+          raco rivet schema check rivet-schema.json --json
+          raco rivet package
+          raco rivet verify
+          if (-not (Test-Path 'dist\rivet-taskboard-windows-x64\RivetHost.exe')) {
+            throw 'Taskboard WinUI executable was not packaged'
+          }
+          if (-not (Test-Path 'dist\rivet-taskboard-windows-x64\app\assets\sample-tasks.rktd')) {
+            throw 'Taskboard sample resource was not packaged'
+          }
+          raco rivet clean
 
   macos-host:
     name: macOS CLI package smoke
@@ -303,3 +352,15 @@ jobs:
           test ! -e build
           test ! -e dist
           test -f app/backend.rkt
+      - name: Build and verify the maintained SwiftUI reference app
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/examples/taskboard"
+          raco rivet schema check rivet-schema.json --json
+          raco rivet package
+          raco rivet verify
+          test -x "dist/rivet-taskboard.app/Contents/MacOS/rivet-taskboard"
+          test -f "dist/rivet-taskboard.app/Contents/Resources/app/assets/sample-tasks.rktd"
+          codesign --verify --deep --strict "dist/rivet-taskboard.app"
+          raco rivet clean

@@ -24,6 +24,7 @@
          project-url-schemes
          project-file-associations
          project-resources
+         project-device-rpcs
          project-windows-icon
          project-macos-icon
          project-macos-min-version
@@ -171,6 +172,19 @@
                    (andmap safe-project-relative-path-string? v)
                    (= (length v) (length (remove-duplicates v string-ci=?)))))
             "list of unique project-relative file or directory paths outside .git, .rivet, build, and dist")
+  (optional 'device-rpcs
+            (lambda (v)
+              (and (list? v)
+                   (andmap
+                    (lambda (name)
+                      (and (symbol? name)
+                           (let ([raw (symbol->string name)])
+                             (and (positive? (string-length raw))
+                                  (<= (bytes-length (string->bytes/utf-8 raw)) 124)
+                                  (regexp-match? #px"^[A-Za-z0-9._-]+$" raw)))))
+                    v)
+                   (= (length v) (length (remove-duplicates v eq?)))))
+            "unique RPC symbols whose names contain only letters, digits, '.', '-', or '_' and fit a device route")
   (optional 'windows-icon
             (lambda (v) (path-string-has-extension? v ".ico"))
             "project-relative .ico path")
@@ -257,6 +271,9 @@
 
 (define (project-resources project)
   (project-ref project 'resources (lambda () '())))
+
+(define (project-device-rpcs project)
+  (project-ref project 'device-rpcs (lambda () '())))
 
 (define (project-windows-icon project)
   (project-ref project 'windows-icon (lambda () #f)))

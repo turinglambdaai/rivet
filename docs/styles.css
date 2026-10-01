@@ -690,7 +690,6 @@ html.js-anim .animate-on-scroll.is-visible { opacity: 1; transform: translateY(0
     }
     .compare td:nth-child(2)::before { content: "Rivet"; }
     .compare td:nth-child(3)::before { content: "Glaze"; }
-    .compare td:nth-child(4)::before { content: "Bezel"; }
 
     footer { margin-top: 20px; padding: 32px 0 36px; }
     .footer-content { align-items: flex-start; gap: 18px; }

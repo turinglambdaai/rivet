@@ -1,0 +1,282 @@
+{
+  "device-rpcs": [
+    {
+      "name": "get-task"
+    },
+    {
+      "name": "list-tasks"
+    },
+    {
+      "name": "select-task"
+    }
+  ],
+  "enums": [
+    {
+      "cases": [
+        "backlog",
+        "active",
+        "done"
+      ],
+      "name": "TaskStatus"
+    }
+  ],
+  "events": [
+    {
+      "name": "operation-progress",
+      "type": {
+        "kind": "record",
+        "name": "ImportProgress"
+      }
+    },
+    {
+      "name": "task-saved",
+      "type": {
+        "kind": "record",
+        "name": "BoardTask"
+      }
+    }
+  ],
+  "format": "rivet-schema",
+  "format-version": 1,
+  "records": [
+    {
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "scalar",
+            "name": "Int64"
+          }
+        },
+        {
+          "name": "title",
+          "type": {
+            "kind": "scalar",
+            "name": "String"
+          }
+        },
+        {
+          "name": "notes",
+          "type": {
+            "kind": "scalar",
+            "name": "String"
+          }
+        },
+        {
+          "name": "status",
+          "type": {
+            "kind": "record",
+            "name": "TaskStatus"
+          }
+        }
+      ],
+      "name": "BoardTask"
+    },
+    {
+      "fields": [
+        {
+          "name": "completed",
+          "type": {
+            "kind": "scalar",
+            "name": "Int64"
+          }
+        },
+        {
+          "name": "total",
+          "type": {
+            "kind": "scalar",
+            "name": "Int64"
+          }
+        },
+        {
+          "name": "message",
+          "type": {
+            "kind": "scalar",
+            "name": "String"
+          }
+        }
+      ],
+      "name": "ImportProgress"
+    }
+  ],
+  "rpcs": [
+    {
+      "arguments": [
+        {
+          "name": "title",
+          "type": {
+            "kind": "scalar",
+            "name": "String"
+          }
+        },
+        {
+          "name": "notes",
+          "type": {
+            "kind": "scalar",
+            "name": "String"
+          }
+        }
+      ],
+      "name": "create-task",
+      "result": {
+        "kind": "record",
+        "name": "BoardTask"
+      }
+    },
+    {
+      "arguments": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "scalar",
+            "name": "Int64"
+          }
+        }
+      ],
+      "name": "delete-task",
+      "result": {
+        "kind": "scalar",
+        "name": "Bool"
+      }
+    },
+    {
+      "arguments": [
+        {
+          "name": "count",
+          "type": {
+            "kind": "scalar",
+            "name": "Int64"
+          }
+        }
+      ],
+      "name": "generate-demo-tasks",
+      "result": {
+        "element": {
+          "kind": "record",
+          "name": "BoardTask"
+        },
+        "kind": "list"
+      }
+    },
+    {
+      "arguments": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "scalar",
+            "name": "Int64"
+          }
+        }
+      ],
+      "name": "get-task",
+      "result": {
+        "element": {
+          "kind": "record",
+          "name": "BoardTask"
+        },
+        "kind": "optional"
+      }
+    },
+    {
+      "arguments": [],
+      "name": "list-tasks",
+      "result": {
+        "element": {
+          "kind": "record",
+          "name": "BoardTask"
+        },
+        "kind": "list"
+      }
+    },
+    {
+      "arguments": [],
+      "name": "reload-sample-tasks",
+      "result": {
+        "element": {
+          "kind": "record",
+          "name": "BoardTask"
+        },
+        "kind": "list"
+      }
+    },
+    {
+      "arguments": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "scalar",
+            "name": "Int64"
+          }
+        }
+      ],
+      "name": "select-task",
+      "result": {
+        "element": {
+          "kind": "record",
+          "name": "BoardTask"
+        },
+        "kind": "optional"
+      }
+    },
+    {
+      "arguments": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "scalar",
+            "name": "Int64"
+          }
+        },
+        {
+          "name": "title",
+          "type": {
+            "kind": "scalar",
+            "name": "String"
+          }
+        },
+        {
+          "name": "notes",
+          "type": {
+            "kind": "scalar",
+            "name": "String"
+          }
+        },
+        {
+          "name": "status",
+          "type": {
+            "kind": "record",
+            "name": "TaskStatus"
+          }
+        }
+      ],
+      "name": "update-task",
+      "result": {
+        "kind": "record",
+        "name": "BoardTask"
+      }
+    }
+  ],
+  "rvt-protocol": 1,
+  "states": [
+    {
+      "name": "selected-task-id",
+      "type": {
+        "element": {
+          "kind": "scalar",
+          "name": "Int64"
+        },
+        "kind": "optional"
+      }
+    },
+    {
+      "name": "tasks",
+      "type": {
+        "element": {
+          "kind": "record",
+          "name": "BoardTask"
+        },
+        "kind": "list"
+      }
+    }
+  ]
+}

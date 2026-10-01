@@ -12,7 +12,6 @@
 (define deps
   '(["base" #:version "9.0"]
     "cext-lib"
-    "crypto"
     "crypto-lib"
     "net-lib"))
 
