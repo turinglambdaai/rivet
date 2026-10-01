@@ -21,6 +21,32 @@ struct RivetHostApp: App {
 
 @MainActor
 final class AppModel: ObservableObject {
+    @MainActor
+    private final class EventRelay {
+        weak var model: AppModel?
+
+        init(_ model: AppModel) {
+            self.model = model
+        }
+
+        func receive(_ event: RivetEvent) {
+            model?.receive(event)
+        }
+
+        func ready(tasks: [BoardTask], selectedID: Int64?) {
+            guard let model else { return }
+            model.tasks = tasks
+            model.selectedID = selectedID ?? tasks.first?.id
+            model.ready = true
+            model.status = "Embedded Racket CS is ready"
+        }
+
+        func fail(_ message: String) {
+            model?.ready = false
+            model?.status = "Backend error: \(message)"
+        }
+    }
+
     @Published var status = "Starting embedded Racket CS…"
     @Published var tasks: [BoardTask] = []
     @Published var selectedID: Int64?
@@ -41,32 +67,24 @@ final class AppModel: ObservableObject {
         do {
             let config = try Self.runtimeConfiguration()
             let backend = EmbeddedRacketBackend(configuration: config)
+            let relay = EventRelay(self)
             self.backend = backend
 
-            Swift.Task.detached { [weak self, backend] in
+            Swift.Task.detached { [backend, relay] in
                 do {
                     try backend.start { name, value in
                         guard let event = try? RivetEvent.decode(name: name, value: value) else {
                             return
                         }
-                        Swift.Task { @MainActor [weak self] in self?.receive(event) }
+                        Swift.Task { @MainActor in relay.receive(event) }
                     }
                     let api = RivetAPI(client: backend.client)
                     async let loadedTasks = api.list_tasks()
                     async let selected = api.getSelected_task_id()
                     let (items, selectedID) = try await (loadedTasks, selected)
-                    await MainActor.run { [weak self] in
-                        guard let self else { return }
-                        self.tasks = items
-                        self.selectedID = selectedID ?? items.first?.id
-                        self.ready = true
-                        self.status = "Embedded Racket CS is ready"
-                    }
+                    await relay.ready(tasks: items, selectedID: selectedID)
                 } catch {
-                    await MainActor.run { [weak self] in
-                        self?.ready = false
-                        self?.status = "Backend error: \(error)"
-                    }
+                    await relay.fail(String(describing: error))
                 }
             }
         } catch {
