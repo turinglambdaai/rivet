@@ -321,7 +321,9 @@
      (sign-macos! codesign "-" entitlements racket-framework app #f)])
   app)
 
-(define (package-project! project #:production? [production? #f])
+(define (package-project! project
+                          #:production? [production? #f]
+                          #:launch-smoke? [launch-smoke? #t])
   (when (and production? (eq? (system-type 'os) 'unix))
     (error 'package-project!
            "Linux production releases are produced by `raco rivet release`, which signs the self-contained installer; `package --production` targets Windows and macOS"))
@@ -344,7 +346,9 @@
   ;; `package` should never report success for an artifact that still depends
   ;; on the developer machine. Production mode additionally verifies the
   ;; platform trust/notarization result.
-  (verify-package! project packaged #:production? production?)
+  (verify-package! project packaged
+                   #:production? production?
+                   #:launch-smoke? launch-smoke?)
   packaged)
 
 (module+ test-support

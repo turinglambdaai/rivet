@@ -6,6 +6,7 @@
          racket/string
          racket/system
          "../rivet/distribution/crypto.rkt"
+         "launch-smoke.rkt"
          "linux-package.rkt"
          "project.rkt"
          "signing-options.rkt"
@@ -355,16 +356,40 @@
                   (path->string app)))
   app)
 
-(define (verify-package! project package #:production? [production? #f])
+(define (packaged-executable package)
   (case (system-type 'os)
-    [(windows) (verify-windows-package! project package production?)]
-    [(macosx) (verify-macos-package! project package production?)]
-    [(unix) (verify-linux-package! project package production?)]
-    [else
-     (error 'verify-package!
-            "Rivet package verification currently targets Windows, macOS, and Linux")]))
+    [(windows) (build-path package "RivetHost.exe")]
+    [(macosx)
+     (define executable-name
+       (path->string (path-replace-extension (file-name-from-path package) #"")))
+     (build-path package "Contents" "MacOS" executable-name)]
+    [(unix) (build-path package "RivetHost")]))
 
-(define (verify-project-package! project #:production? [production? #f])
+(define (verify-package! project package
+                         #:production? [production? #f]
+                         #:launch-smoke? [launch-smoke? #t])
+  (define verified
+    (case (system-type 'os)
+      [(windows) (verify-windows-package! project package production?)]
+      [(macosx) (verify-macos-package! project package production?)]
+      [(unix) (verify-linux-package! project package production?)]
+      [else
+       (error 'verify-package!
+              "Rivet package verification currently targets Windows, macOS, and Linux")]))
+  (when launch-smoke?
+    (cond
+      [(gui-session-available?)
+       (define executable (packaged-executable package))
+       (launch-smoke! executable)
+       (printf "rivet: launch smoke passed: ~a\n" executable)]
+      [else
+       (eprintf
+        "rivet: launch smoke skipped because no graphical session was detected; use a packaging machine with a GUI to exercise startup\n")]))
+  verified)
+
+(define (verify-project-package! project
+                                 #:production? [production? #f]
+                                 #:launch-smoke? [launch-smoke? #t])
   (define name (project-ref project 'name))
   (define package
     (case (system-type 'os)
@@ -381,7 +406,9 @@
       [else
        (error 'verify-project-package!
               "Rivet package verification currently targets Windows, macOS, and Linux")]))
-  (verify-package! project package #:production? production?))
+  (verify-package! project package
+                   #:production? production?
+                   #:launch-smoke? launch-smoke?))
 
 (module+ test-support
   (provide verify-configured-resources!))

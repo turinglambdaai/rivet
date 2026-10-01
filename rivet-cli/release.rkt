@@ -58,7 +58,11 @@
                       #:production? (and production? (not linux-release?))))
   (define installer (create-installer! project package #:production? production?))
   (when (and production? linux-release?)
-    (verify-package! project package #:production? #t))
+    ;; package-project! already performed the launch smoke. This second pass
+    ;; adds Linux installer trust verification without opening the app twice.
+    (verify-package! project package
+                     #:production? #t
+                     #:launch-smoke? #f))
   (define-values (sbom notices) (generate-compliance-artifacts! project))
   (define base-url (required-environment "RIVET_UPDATE_BASE_URL"))
   (define key-path (string->path (required-environment "RIVET_UPDATE_PRIVATE_KEY")))

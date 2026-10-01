@@ -255,7 +255,9 @@
       (check-equal?
        (with-production-env
         (lambda ()
-          (verify-package! project package #:production? #t)))
+          (verify-package! project package
+                           #:production? #t
+                           #:launch-smoke? #f)))
        package)
 
       ;; Re-creating the installer over an untouched package is byte-stable,
@@ -274,7 +276,9 @@
        (lambda ()
          (with-production-env
           (lambda ()
-            (verify-package! project package #:production? #t)))))
+            (verify-package! project package
+                             #:production? #t
+                             #:launch-smoke? #f)))))
       (write-package-file "app/assets/nested/product.txt" "packaged-resource")
 
       ;; A corrupted signature must fail Ed25519 verification.
@@ -289,7 +293,9 @@
        (lambda ()
          (with-production-env
           (lambda ()
-            (verify-package! project package #:production? #t))))))
+            (verify-package! project package
+                             #:production? #t
+                             #:launch-smoke? #f))))))
 
     (delete-file private-key-path)
     (delete-file public-key-path))
