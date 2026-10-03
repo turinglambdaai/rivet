@@ -44,13 +44,14 @@ macOS asks the user for notification and login-item consent as required by the O
 - an abstract-namespace Unix socket for the single-instance lease; secondaries forward their activation arguments to the primary over that socket;
 - `ActivationArguments()` from `/proc/self/cmdline` for URL-scheme and file-association payloads registered by installers;
 - `org.freedesktop.Notifications` over the session bus (GDBus), with stable notification ids for tagged replacements;
+- `TrayIcon` — org.kde.StatusNotifierItem plus a com.canonical.dbusmenu menu, through the session bus (GDBus). This is an explicit opt-in, not an adapter default: desktop hosting is compositor-dependent (GNOME hosts it only through the AppIndicator extension, KDE natively), so the application checks `TrayIcon::available()` (or the `tray` capability) and decides. The icon, tooltip, and flat menu (labelled items, separators, enabled state) update in place; the watcher is re-registered whenever it reappears, so GNOME Shell restarts and extension reloads do not strand a running process without its icon. Methods and menu callbacks run on the thread-default main context the icon was constructed on — for GTK hosts, the main-loop thread;
 - XDG autostart entries under `$XDG_CONFIG_HOME/autostart`;
 - the Secret Service provider (GNOME Keyring, KWallet bridge) through libsecret for binary secrets; the capability is compiled in when libsecret is present and reported at runtime only when a provider is reachable;
 - `sigaction` fatal-signal hooks that append a preformatted note (signal number plus restart arguments) to a file under the XDG state directory.
 
-`rivet::system::Capabilities()` reports what the running session actually provides; a missing session bus, Secret Service provider, or libsecret build fails clearly at call time instead of silently degrading. The tray contract is deliberately absent: StatusNotifierItem hosting is compositor-dependent (GNOME hosts it only through an extension), so tray presence must be an explicit application decision rather than an adapter default.
+`rivet::system::Capabilities()` reports what the running session actually provides; a missing session bus, Secret Service provider, or libsecret build fails clearly at call time instead of silently degrading.
 
-The Linux integration binary self-checks the adapter (`RivetIntegration --system`): lease acquisition and activation forwarding, autostart entries, and the crash hook always run; notification and secure-storage checks skip themselves when the session lacks those services.
+The Linux integration binary self-checks the adapter (`RivetIntegration --system`): lease acquisition and activation forwarding, autostart entries, and the crash hook always run; notification, tray, and secure-storage checks skip themselves when the session lacks those services.
 
 ## Settings, logs, and crashes
 
