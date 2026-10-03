@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add the Linux tray contract: `rivet::system::TrayIcon` hosts an
+  org.kde.StatusNotifierItem with a com.canonical.dbusmenu menu over the
+  session bus (GDBus), the pairing every desktop watcher serves (GNOME via
+  the AppIndicator extension, KDE natively). The opt-in stays an application
+  decision — `TrayIcon::available()` and the `tray` capability report a
+  reachable watcher; the icon, tooltip, and flat menu update in place, and
+  the watcher is re-registered automatically when GNOME Shell or the
+  extension reloads. Verified end to end against the real desktop watcher
+  (registration, property reads, menu layout, click dispatch) plus the
+  graceful no-watcher path in an isolated D-Bus session.
 - Add optional human-readable `publisher` project metadata and use it for the
   Windows MSI `Manufacturer`/Apps & Features Publisher value. Legacy projects
   fall back to `display-name` instead of exposing a reverse-DNS identifier.

@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <thread>
@@ -18,11 +19,11 @@
 namespace rivet::system {
 
 // Runtime capability names, matching the Racket system-adapter contract:
-// single-instance, notification, autostart, secure-storage, crash-hook.
-// Tray is deliberately absent: the StatusNotifierItem contract is
-// compositor-dependent (GNOME hosts it only through an extension), so tray
-// presence must be an explicit application decision rather than a silent
-// adapter default.
+// single-instance, notification, tray, autostart, secure-storage, crash-hook.
+// The tray capability reflects a reachable session bus with a
+// StatusNotifierItem watcher (a compositor service: GNOME hosts it through
+// the AppIndicator extension, KDE natively), so tray presence stays an
+// explicit application decision rather than a silent adapter default.
 std::vector<std::string> Capabilities();
 
 // Command-line activation payload (URL schemes and file associations
@@ -90,6 +91,58 @@ class Notifications final {
                               std::string const& body);
   static void Close(std::uint32_t id);
   static void CloseTag(std::string const& tag);
+};
+
+// One StatusNotifierItem menu entry: a labelled, optionally disabled item
+// with a click callback, or a separator. Callbacks run on the
+// thread-default main context TrayIcon was constructed on — for GTK hosts,
+// the main-loop thread.
+struct TrayMenuItem final {
+  enum class Type { item, separator };
+
+  TrayMenuItem() = default;
+  TrayMenuItem(std::string label, std::function<void()> activated,
+               bool enabled = true);
+  explicit TrayMenuItem(Type type) : type(type) {}
+
+  Type type = Type::item;
+  std::string label;
+  bool enabled = true;
+  std::function<void()> activated;
+};
+
+// org.kde.StatusNotifierItem with a com.canonical.dbusmenu menu, through the
+// session bus (GDBus). This is the Linux counterpart of the Windows
+// Shell_NotifyIcon adapter: an explicit opt-in — check available() (or the
+// "tray" capability) and construct only when a StatusNotifierItem watcher is
+// running, since desktop hosting is compositor-dependent. Methods must be
+// called from the thread-default main context the icon was constructed on;
+// GTK hosts satisfy this with their main loop.
+class TrayIcon final {
+ public:
+  // True when the session bus has a StatusNotifierItem watcher to register
+  // with. False without a session bus — same contract as Notifications.
+  static bool available();
+
+  TrayIcon(std::string const& application_id, std::string const& title,
+           std::string const& icon_name);
+  ~TrayIcon();
+  TrayIcon(TrayIcon const&) = delete;
+  TrayIcon& operator=(TrayIcon const&) = delete;
+
+  // Themed icon name (installed icon theme entry, e.g. "syncpilot").
+  void set_icon(std::string const& icon_name);
+  void set_tooltip(std::string const& title, std::string const& body);
+  // Replaces the whole menu and bumps the layout revision. Item callbacks
+  // are invoked on the main context when the watcher reports a click.
+  void set_menu(std::vector<TrayMenuItem> items);
+  // Left-click / Activate handling where the watcher supports it (KDE; the
+  // GNOME AppIndicator extension opens the menu instead).
+  void set_activation_handler(std::function<void()> handler);
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 // POSIX fatal-signal hook. The handler is async-signal-safe: it appends a

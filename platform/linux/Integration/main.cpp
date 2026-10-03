@@ -145,6 +145,25 @@ int run_system_self_check(std::vector<std::string> const& arguments) {
     progress("skipping notifications (no session bus or notification host)");
   }
 
+  if (has_capability(capabilities, "tray")) {
+    progress("checking the StatusNotifierItem tray");
+    require(rivet::system::TrayIcon::available(),
+            "the tray capability must imply an available StatusNotifierItem watcher");
+    rivet::system::TrayIcon tray("org.rivet.integration.test",
+                                 "Rivet Linux integration",
+                                 "network-transmit-receive");
+    std::vector<rivet::system::TrayMenuItem> items;
+    items.emplace_back("Open", [] {});
+    items.emplace_back(rivet::system::TrayMenuItem::Type::separator);
+    items.emplace_back("Disabled", [] {}, false);
+    tray.set_menu(std::move(items));
+    tray.set_tooltip("Rivet Linux integration", "tray self-check");
+    // Registration went to the watcher; a desktop session answers the
+    // layout/property fetches from the main loop this thread must run.
+  } else {
+    progress("skipping tray (no session bus or StatusNotifierItem watcher)");
+  }
+
   if (has_capability(capabilities, "secure-storage")) {
     progress("checking Secret Service secure storage");
     std::string const service = "org.rivet.integration.test";
