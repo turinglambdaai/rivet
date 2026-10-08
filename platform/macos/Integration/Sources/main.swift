@@ -183,6 +183,21 @@ struct RivetIntegration {
             throw IntegrationError.unexpected("increment", incremented)
         }
 
+        // Exercise an isolated request after the embedded Racket scheduler has
+        // gone idle. A reader that re-entered its pipe wait before the request
+        // worker ran used to leave this call pending until another frame arrived.
+        try await Task.sleep(nanoseconds: 1_500_000_000)
+        let incrementedAfterIdle = try await backend.client.call(
+            "increment",
+            arguments: [.int64(99)]
+        )
+        guard incrementedAfterIdle == .int64(100) else {
+            throw IntegrationError.unexpected(
+                "increment after idle",
+                incrementedAfterIdle
+            )
+        }
+
         let initialState = try await backend.client.getState("counter")
         guard initialState == .int64(10) else {
             throw IntegrationError.unexpected("initial state", initialState)
