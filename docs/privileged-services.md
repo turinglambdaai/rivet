@@ -18,9 +18,10 @@ native host and call:
 - `privileged-service-stop!`
 - `privileged-service-reload!`
 
-The application chooses the service identifier. Configuration is an opaque byte
-string owned by the application and its native adapter. Rivet never parses,
-logs, stores, or forwards it over RVT1.
+The application chooses a non-empty service identifier of at most 256
+characters. Configuration is an opaque byte string owned by the application and
+its native adapter. Rivet accepts at most 16 MiB, takes an immutable snapshot at
+the adapter boundary, and never parses, logs, stores, or forwards it over RVT1.
 
 A state value contains three application-neutral fields:
 
@@ -28,6 +29,11 @@ A state value contains three application-neutral fields:
 - `detail` — optional bounded diagnostic detail;
 - `revision` — an adapter-owned monotonic revision useful for rejecting stale
   UI observations.
+
+Rivet checks every adapter result before returning it to application code:
+`state` must be a symbol, `detail` must be `#f` or a string of at most 4096
+characters, and `revision` must be an exact non-negative integer. The adapter
+still owns the meaning of lifecycle symbols and monotonicity across calls.
 
 Headless tests can parameterize `current-privileged-service-adapter` with an
 in-memory implementation. With no adapter installed, every lifecycle operation

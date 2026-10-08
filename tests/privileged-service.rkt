@@ -8,6 +8,7 @@
 
 (define states (make-hash))
 (define configs (make-hash))
+(define received-config (box #f))
 (define adapter
   (privileged-service-adapter
    'test
@@ -17,6 +18,7 @@
                service-id
                (privileged-service-state 'stopped #f 0)))
    (lambda (service-id configuration)
+     (set-box! received-config configuration)
      (hash-set! configs service-id configuration)
      (define state (privileged-service-state 'running #f 1))
      (hash-set! states service-id state)
@@ -51,9 +53,12 @@
   (check-equal? (privileged-service-capabilities)
                 '(privileged-service reload))
 
-  (define started (privileged-service-start! 'packet-tunnel #"config-v1"))
+  (define mutable-config (bytes-copy #"config-v1"))
+  (define started (privileged-service-start! 'packet-tunnel mutable-config))
+  (bytes-set! mutable-config 0 (char->integer #\X))
   (check-equal? (privileged-service-state-state started) 'running)
   (check-equal? (hash-ref configs 'packet-tunnel) #"config-v1")
+  (check-true (immutable? (unbox received-config)))
   (check-equal? (privileged-service-status 'packet-tunnel) started)
 
   (define reloaded (privileged-service-reload! 'packet-tunnel #"config-v2"))
@@ -74,3 +79,34 @@
            (lambda ()
              (parameterize ([current-privileged-service-adapter adapter])
                (privileged-service-status ""))))
+
+(check-exn exn:fail?
+           (lambda ()
+             (current-privileged-service-adapter
+              (privileged-service-adapter
+               'bad-capabilities
+               '(valid 42)
+               void void void void))))
+
+(define invalid-state-adapter
+  (privileged-service-adapter
+   'invalid-state
+   '()
+   (lambda (_service-id)
+     (privileged-service-state 'running (make-string 4097 #\x) 0))
+   (lambda (_service-id _configuration) 'not-a-state)
+   (lambda (_service-id) (privileged-service-state 'stopped #f -1))
+   (lambda (_service-id _configuration)
+     (privileged-service-state "running" #f 1))))
+
+(parameterize ([current-privileged-service-adapter invalid-state-adapter])
+  (check-exn #rx"oversized state detail"
+             (lambda () (privileged-service-status 'packet-tunnel)))
+  (check-exn #rx"non-state result"
+             (lambda ()
+               (privileged-service-start! 'packet-tunnel #"config")))
+  (check-exn #rx"invalid state revision"
+             (lambda () (privileged-service-stop! 'packet-tunnel)))
+  (check-exn #rx"non-symbol lifecycle"
+             (lambda ()
+               (privileged-service-reload! 'packet-tunnel #"config"))))
