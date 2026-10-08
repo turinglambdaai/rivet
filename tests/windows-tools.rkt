@@ -41,17 +41,30 @@
     (touch (build-path unexpected "dumpbin.exe"))
     (check-equal? (vc-toolset-in-installation temp-root) expected-vc)
 
-    ;; Prefer Visual Studio's stable Current alias for MSBuild.
+    ;; Prefer the native 64-bit executable under Visual Studio's stable
+    ;; Current alias; the generic executable can select HostX86 tools.
+    (touch (build-path temp-root "MSBuild" "Current" "Bin" "MSBuild.exe"))
     (define current-msbuild
-      (touch (build-path temp-root "MSBuild" "Current" "Bin" "MSBuild.exe")))
+      (touch
+       (build-path temp-root "MSBuild" "Current" "Bin" "amd64" "MSBuild.exe")))
     (touch (build-path temp-root "MSBuild" "18.0" "Bin" "MSBuild.exe"))
     (check-equal? (msbuild-in-installation temp-root) current-msbuild)
+
+    ;; Apply the same upgrade when a generic MSBuild executable is already on
+    ;; PATH, instead of letting PATH bypass installation discovery.
+    (define path-bin (build-path temp-root "path-bin"))
+    (define path-msbuild (touch (build-path path-bin "MSBuild.exe")))
+    (define path-amd64-msbuild
+      (touch (build-path path-bin "amd64" "MSBuild.exe")))
+    (check-equal? (prefer-64-bit-msbuild path-msbuild) path-amd64-msbuild)
 
     ;; Without Current, choose the newest bounded MSBuild directory.
     (define fallback-root (build-path temp-root "fallback"))
     (touch (build-path fallback-root "MSBuild" "17.0" "Bin" "MSBuild.exe"))
+    (touch (build-path fallback-root "MSBuild" "18.0" "Bin" "MSBuild.exe"))
     (define newest-msbuild
-      (touch (build-path fallback-root "MSBuild" "18.0" "Bin" "MSBuild.exe")))
+      (touch
+       (build-path fallback-root "MSBuild" "18.0" "Bin" "amd64" "MSBuild.exe")))
     (check-equal? (msbuild-in-installation fallback-root) newest-msbuild)
 
     (define children

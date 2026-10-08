@@ -29,7 +29,7 @@ jobs:
             -Uri 'https://download.racket-lang.org/installers/9.3/racket-9.3-arm64-win32-cs.exe' `
             -OutFile $installer
           $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($hash -ne 'fcccd112afd3c8fecfdaf56d2a2fc3213fe006d8e4eac525ceaee56f10628a01') {
+          if ($hash -ne '15cd4ace652427465c7c576bad4aede2b8519cb6b59b190c9a22862cf57e7924') {
             throw "Racket 9.3 arm64 installer checksum mismatch: $hash"
           }
           # NSIS silent install; /D must be last and unquoted. On Windows the
