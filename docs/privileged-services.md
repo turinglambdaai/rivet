@@ -10,8 +10,8 @@ protocol, or shared privileged-service implementation.
 
 ## Contract
 
-Applications install a `privileged-service-adapter` through the first-party
-native host and call:
+Applications install a `privileged-service-adapter` from their Racket backend
+and call:
 
 - `privileged-service-status`
 - `privileged-service-start!`
@@ -38,6 +38,13 @@ still owns the meaning of lifecycle symbols and monotonicity across calls.
 Headless tests can parameterize `current-privileged-service-adapter` with an
 in-memory implementation. With no adapter installed, every lifecycle operation
 fails closed.
+
+The adapter fields are Racket procedures. A Swift, C++, or Kotlin host cannot
+install them directly, because Rivet never passes Racket/Chez values across the
+native boundary. A production adapter must therefore demonstrate an
+application-owned Racket FFI or authenticated IPC wrapper, or keep the lifecycle
+entirely in the native host and expose only typed application state/events.
+This draft does not choose or implement that bridge yet.
 
 ## Platform ownership
 

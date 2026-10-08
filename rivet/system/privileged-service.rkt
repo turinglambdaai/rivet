@@ -13,7 +13,9 @@
 ;; a NetworkExtension packet tunnel, Android VpnService, Windows service, or a
 ;; system daemon. This module owns only the lifecycle boundary. The service's
 ;; protocol, configuration schema, permissions, and product behavior stay in
-;; the application/native adapter rather than becoming part of RVT1.
+;; the application adapter rather than becoming part of RVT1. Adapter fields
+;; are Racket procedures; native hosts never install them by passing Racket or
+;; Chez values across the embedding boundary.
 (struct privileged-service-state (state detail revision)
   #:transparent)
 
