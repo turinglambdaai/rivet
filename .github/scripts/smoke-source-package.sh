@@ -22,6 +22,13 @@ unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet
 unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet/runtime/Client.kt$'
 unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet/runtime/State.kt$'
 
+# Code generation is split into internal modules.  A package containing only
+# the public facade installs successfully but fails later when a project is
+# generated, so keep the internal dependency closure explicit in this smoke.
+unzip -Z1 "$archive" | grep -Eq '(^|/)rivet-cli/codegen/model.rkt$'
+unzip -Z1 "$archive" | grep -Eq '(^|/)rivet-cli/codegen/snapshot.rkt$'
+unzip -Z1 "$archive" | grep -Eq '(^|/)rivet-cli/codegen/type-graph.rkt$'
+
 # The canonical learning project and both walkthrough languages are public
 # package content, not files that happen to exist only in the Git checkout.
 unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/app/backend.rkt$'

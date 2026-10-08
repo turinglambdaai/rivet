@@ -6,7 +6,7 @@ Commercial desktop features live in `rivet/system` and native platform adapters,
 
 `rivet/system` exports single-instance acquisition and activation routing, system notifications, tray/menu-bar configuration, login/autostart control, secure binary secret storage, atomic JSON settings, structured logging, and provider-neutral crash-reporting hooks.
 
-Native hosts install a `system-adapter` at startup. Headless tests can install an in-memory adapter. Calling an unavailable capability fails clearly instead of silently using insecure storage or a fake notification.
+Generated native hosts call the first-party Swift/C++ system libraries directly, on the native UI or lifecycle thread that owns the operation. They do not install Racket procedures into the embedded runtime and system services do not extend RVT1. Racket-side providers and headless tests can parameterize `current-system-adapter`; without such a provider, the Racket convenience procedures fail clearly instead of silently using insecure storage or a fake notification.
 
 ## Windows
 

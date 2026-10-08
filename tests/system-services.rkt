@@ -36,6 +36,10 @@
    (lambda (service account) (hash-remove! secrets (cons service account)))
    (lambda (_handler) (void))))
 
+(check-equal? (system-capabilities) '())
+(check-exn #rx"no Racket system-service provider is installed"
+           (lambda () (autostart-enabled?)))
+
 (parameterize ([current-system-adapter adapter])
   (check-true (acquire-single-instance! "dev.rivet.test" '()))
   (show-system-notification! "Ready" "Rivet is ready" #:tag "ready")
