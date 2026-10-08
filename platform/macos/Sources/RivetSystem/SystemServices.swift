@@ -140,35 +140,153 @@ public enum RivetLoginItem {
     }
 }
 
+/// One entry of a status-bar menu. `.separator` renders an `NSMenuItem.separator()`
+/// and never carries an action; `.action` entries dispatch by `identifier`.
+public enum RivetMenuItem {
+    case action(label: String, identifier: String, handler: () -> Void)
+    case separator
+}
+
 @MainActor
 public final class RivetMenuBarController: NSObject {
     private var item: NSStatusItem?
+    private var menu: NSMenu?
     private var actions: [String: () -> Void] = [:]
+    private var currentItems: [RivetMenuItem] = []
+    private var currentToolTip: String?
+    // AppKit does not send the button action while NSStatusItem.menu is set.
+    // Click-action mode therefore detaches (but retains) the menu.
+    private var clickHandler: (() -> Void)?
 
     public func install(title: String, menuItems: [(String, String, () -> Void)]) {
-        let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = title
-        let menu = NSMenu()
-        for (label, identifier, action) in menuItems {
-            actions[identifier] = action
-            let entry = NSMenuItem(title: label, action: #selector(invoke(_:)), keyEquivalent: "")
-            entry.representedObject = identifier
-            entry.target = self
-            menu.addItem(entry)
+        install(
+            title: title,
+            items: menuItems.map {
+                .action(label: $0.0, identifier: $0.1, handler: $0.2)
+            })
+    }
+
+    public func install(title: String, items: [RivetMenuItem]) {
+        installStatusItem { button in
+            button.title = title
         }
-        statusItem.menu = menu
-        item = statusItem
+        rebuild(items: items)
+    }
+
+    /// Template image in place of a text title; rendered as a template so it
+    /// follows the menu bar's light/dark appearance.
+    public func install(icon: NSImage, items: [RivetMenuItem]) {
+        icon.isTemplate = true
+        installStatusItem { button in
+            button.image = icon
+        }
+        rebuild(items: items)
+    }
+
+    /// Replace every menu entry in place (labels, handlers, separators),
+    /// keeping the status item, title/icon, and tooltip.
+    public func update(items: [RivetMenuItem]) {
+        rebuild(items: items)
+    }
+
+    /// Swap one entry's label without rebuilding the whole menu.
+    public func setItem(_ identifier: String, label: String) {
+        guard let menu else { return }
+        for entry in menu.items
+        where entry.representedObject as? String == identifier {
+            entry.title = label
+        }
+        currentItems = currentItems.map { current in
+            guard case let .action(_, currentIdentifier, handler) = current,
+                  currentIdentifier == identifier
+            else { return current }
+            return .action(label: label, identifier: currentIdentifier, handler: handler)
+        }
+    }
+
+    public func setToolTip(_ text: String?) {
+        currentToolTip = text
+        item?.button?.toolTip = text
+    }
+
+    /// Switch between click-action and menu modes. AppKit does not dispatch a
+    /// status-button action while a menu is attached, so a non-nil handler
+    /// temporarily hides the menu. Pass nil to restore menu-at-click.
+    public func setClickAction(_ handler: (() -> Void)?) {
+        clickHandler = handler
+        guard let item, let button = item.button else { return }
+        if handler != nil {
+            item.menu = nil
+            button.target = self
+            button.action = #selector(handleClick(_:))
+        } else {
+            button.target = nil
+            button.action = nil
+            item.menu = menu
+        }
     }
 
     public func remove() {
         if let item { NSStatusBar.system.removeStatusItem(item) }
         item = nil
+        menu = nil
         actions.removeAll()
+        currentItems = []
+        currentToolTip = nil
+        clickHandler = nil
+    }
+
+    /// Test hook: the live NSMenu backing the status item.
+    var menuForTesting: NSMenu? { item?.menu }
+    var retainedMenuForTesting: NSMenu? { menu }
+    var buttonForTesting: NSStatusBarButton? { item?.button }
+
+    // MARK: internals
+
+    private func installStatusItem(_ configure: (NSStatusBarButton) -> Void) {
+        if let existing = item {
+            NSStatusBar.system.removeStatusItem(existing)
+        }
+        let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let button = statusItem.button {
+            configure(button)
+            button.toolTip = currentToolTip
+            if clickHandler != nil {
+                button.action = #selector(handleClick(_:))
+                button.target = self
+            }
+        }
+        item = statusItem
+    }
+
+    private func rebuild(items: [RivetMenuItem]) {
+        let menu = NSMenu()
+        actions.removeAll()
+        for entry in items {
+            switch entry {
+            case let .action(label, identifier, action):
+                actions[identifier] = action
+                let item = NSMenuItem(
+                    title: label, action: #selector(invoke(_:)), keyEquivalent: "")
+                item.representedObject = identifier
+                item.target = self
+                menu.addItem(item)
+            case .separator:
+                menu.addItem(NSMenuItem.separator())
+            }
+        }
+        self.menu = menu
+        item?.menu = clickHandler == nil ? menu : nil
+        currentItems = items
     }
 
     @objc private func invoke(_ sender: NSMenuItem) {
         guard let identifier = sender.representedObject as? String else { return }
         actions[identifier]?()
+    }
+
+    @objc private func handleClick(_ sender: NSStatusBarButton) {
+        clickHandler?()
     }
 }
 
