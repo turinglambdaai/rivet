@@ -50,3 +50,29 @@ import Testing
     // Untouched entries keep their labels.
     #expect(menu.item(at: 2)?.title == "Quit")
 }
+
+@MainActor
+@Test func menuBarClickActionDetachesAndRestoresMenu() {
+    let controller = RivetMenuBarController()
+    var clickCount = 0
+    controller.install(title: "Test", items: [
+        .action(label: "Quit", identifier: "quit", handler: {}),
+    ])
+    defer { controller.remove() }
+
+    let installedMenu = controller.menuForTesting
+    #expect(installedMenu != nil)
+
+    controller.setClickAction { clickCount += 1 }
+    #expect(controller.menuForTesting == nil)
+    #expect(controller.retainedMenuForTesting === installedMenu)
+
+    if let button = controller.buttonForTesting, let action = button.action {
+        _ = button.target?.perform(action, with: button)
+    }
+    #expect(clickCount == 1)
+
+    controller.setClickAction(nil)
+    #expect(controller.menuForTesting === installedMenu)
+    #expect(controller.buttonForTesting?.action == nil)
+}

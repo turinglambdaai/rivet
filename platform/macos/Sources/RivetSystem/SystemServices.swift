@@ -150,13 +150,12 @@ public enum RivetMenuItem {
 @MainActor
 public final class RivetMenuBarController: NSObject {
     private var item: NSStatusItem?
+    private var menu: NSMenu?
     private var actions: [String: () -> Void] = [:]
     private var currentItems: [RivetMenuItem] = []
-    private var currentTitle: String = ""
-    private var currentIcon: NSImage?
     private var currentToolTip: String?
-    // When set, a plain click fires this handler instead of opening the menu;
-    // the menu stays reachable through click-and-hold (NSStatusItem behavior).
+    // AppKit does not send the button action while NSStatusItem.menu is set.
+    // Click-action mode therefore detaches (but retains) the menu.
     private var clickHandler: (() -> Void)?
 
     public func install(title: String, menuItems: [(String, String, () -> Void)]) {
@@ -171,8 +170,6 @@ public final class RivetMenuBarController: NSObject {
         installStatusItem { button in
             button.title = title
         }
-        currentTitle = title
-        currentIcon = nil
         rebuild(items: items)
     }
 
@@ -183,8 +180,6 @@ public final class RivetMenuBarController: NSObject {
         installStatusItem { button in
             button.image = icon
         }
-        currentTitle = ""
-        currentIcon = icon
         rebuild(items: items)
     }
 
@@ -196,7 +191,7 @@ public final class RivetMenuBarController: NSObject {
 
     /// Swap one entry's label without rebuilding the whole menu.
     public func setItem(_ identifier: String, label: String) {
-        guard let menu = item?.menu else { return }
+        guard let menu else { return }
         for entry in menu.items
         where entry.representedObject as? String == identifier {
             entry.title = label
@@ -214,34 +209,37 @@ public final class RivetMenuBarController: NSObject {
         item?.button?.toolTip = text
     }
 
-    /// Fire this handler on a plain click instead of opening the menu. The
-    /// menu remains available through click-and-hold. Pass nil to restore
-    /// menu-at-click.
+    /// Switch between click-action and menu modes. AppKit does not dispatch a
+    /// status-button action while a menu is attached, so a non-nil handler
+    /// temporarily hides the menu. Pass nil to restore menu-at-click.
     public func setClickAction(_ handler: (() -> Void)?) {
         clickHandler = handler
-        guard let button = item?.button else { return }
+        guard let item, let button = item.button else { return }
         if handler != nil {
+            item.menu = nil
             button.target = self
             button.action = #selector(handleClick(_:))
         } else {
             button.target = nil
             button.action = nil
+            item.menu = menu
         }
     }
 
     public func remove() {
         if let item { NSStatusBar.system.removeStatusItem(item) }
         item = nil
+        menu = nil
         actions.removeAll()
         currentItems = []
-        currentTitle = ""
-        currentIcon = nil
         currentToolTip = nil
         clickHandler = nil
     }
 
     /// Test hook: the live NSMenu backing the status item.
     var menuForTesting: NSMenu? { item?.menu }
+    var retainedMenuForTesting: NSMenu? { menu }
+    var buttonForTesting: NSStatusBarButton? { item?.button }
 
     // MARK: internals
 
@@ -277,7 +275,8 @@ public final class RivetMenuBarController: NSObject {
                 menu.addItem(NSMenuItem.separator())
             }
         }
-        item?.menu = menu
+        self.menu = menu
+        item?.menu = clickHandler == nil ? menu : nil
         currentItems = items
     }
 
