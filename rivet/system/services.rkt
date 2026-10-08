@@ -16,10 +16,10 @@
          secure-store-remove!
          install-crash-hook!)
 
-;; Native hosts install an adapter during startup. This keeps AppKit/WinUI
-;; objects on their UI thread and avoids extending RVT1 with application
-;; lifecycle concerns. Tests and headless tools can install deterministic
-;; adapters with the same contract.
+;; Racket-side providers, tests, and headless tools may install an adapter.
+;; Generated native hosts use the first-party Swift/C++ system libraries
+;; directly; they do not move native UI objects or Racket procedures across
+;; the RVT1 boundary.
 (struct system-adapter
   (name capabilities acquire-single-instance register-activation-handler
         show-notification set-tray-menu set-autostart autostart-enabled
@@ -29,7 +29,7 @@
 (define (unsupported operation)
   (lambda args
     (error operation
-           "no native Rivet system adapter is installed; call current-system-adapter from the WinUI/AppKit host startup path")))
+           "no Racket system-service provider is installed; parameterize current-system-adapter or call the native host system API")))
 
 (define unavailable-adapter
   (system-adapter

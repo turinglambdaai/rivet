@@ -227,10 +227,12 @@ hardcoded fallback.
 
 @defmodule[rivet/system]
 
-The generated native host installs a @racket[system-adapter] during startup.
-Headless tools and tests may parameterize @racket[current-system-adapter] with
-a deterministic adapter. The default adapter fails closed instead of silently
-pretending that an operating-system action succeeded.
+Generated native hosts call the first-party Swift/C++ system libraries
+directly; they do not install Racket procedures across the RVT1 boundary.
+Racket-side providers, headless tools, and tests may parameterize
+@racket[current-system-adapter] with a deterministic adapter. The default
+adapter fails closed instead of silently pretending that an operating-system
+action succeeded.
 
 @defstruct*[system-adapter
             ([name symbol?]
@@ -245,7 +247,8 @@ pretending that an operating-system action succeeded.
              [secure-store-ref procedure?]
              [secure-store-remove procedure?]
              [install-crash-hook procedure?])]{
-Defines the operations supplied by a first-party native host or a test double.}
+Defines the operations supplied by a Racket-side provider or a test double.
+Native hosts expose equivalent platform APIs in their native system library.}
 
 @defparam[current-system-adapter adapter system-adapter?]{
 The adapter used by all system-service convenience procedures.}
