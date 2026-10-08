@@ -7,6 +7,9 @@
 - Add an opt-in Linux `InstallShutdownHook` for SIGTERM/SIGINT. Its
   async-signal-safe self-pipe hands graceful state flushing to a normal watcher
   thread, while a repeated signal still terminates a stuck shutdown.
+- Compile the Racket backend dependency graph with `raco make` before creating
+  `core.zo`, so a same-length edit to a transitive source module cannot leave
+  stale bytecode in a successful native build.
 - Add the Linux tray contract: `rivet::system::TrayIcon` hosts an
   org.kde.StatusNotifierItem with a com.canonical.dbusmenu menu over the
   session bus (GDBus), the pairing every desktop watcher serves (GNOME via
