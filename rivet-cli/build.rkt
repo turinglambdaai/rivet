@@ -154,14 +154,7 @@
   (make-directory* runtime-dir)
 
   (define core (build-path res-dir "core.zo"))
-  (define raco (find-executable-path "raco"))
-  (run! 'build-project!
-        raco
-        "ctool"
-        "--runtime" (path->string runtime-dir)
-        "--runtime-access" "runtime"
-        "--mods" (path->string core)
-        (path->string backend))
+  (compile-backend-module-bundle! backend core runtime-dir)
 
   (for ([source (in-list
                  (list (racket-runtime-petite-boot runtime)
@@ -171,6 +164,24 @@
                     source
                     (build-path runtime-dir (file-name-from-path source))))
   core)
+
+(define (compile-backend-module-bundle! backend core [runtime-dir #f])
+  (define raco (find-executable-path "raco"))
+  ;; `raco ctool --mods` can consume an existing compiled entry module without
+  ;; refreshing its transitive dependencies. Compile the dependency graph first
+  ;; so same-length source edits cannot leave stale bytecode in the bundle.
+  (run! 'build-project! raco "make" (path->string backend))
+  (apply run!
+         'build-project!
+         raco
+         "ctool"
+         (append
+          (if runtime-dir
+              (list "--runtime" (path->string runtime-dir)
+                    "--runtime-access" "runtime")
+              '())
+          (list "--mods" (path->string core)
+                (path->string backend)))))
 
 (define (prepare-windows-import-library! project runtime lib-exe)
   (unless lib-exe
@@ -484,4 +495,5 @@
   (provide copy-project-resources!
            write-app-info!
            required-project-icon
-           prepare-windows-icon-resource!))
+           prepare-windows-icon-resource!
+           compile-backend-module-bundle!))
