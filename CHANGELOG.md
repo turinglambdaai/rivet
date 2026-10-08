@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Prefer native 64-bit MSBuild when discovering Visual Studio, preventing the
+  32-bit host compiler from exhausting its address space on WinUI ARM64 builds.
 - Add the Linux tray contract: `rivet::system::TrayIcon` hosts an
   org.kde.StatusNotifierItem with a com.canonical.dbusmenu menu over the
   session bus (GDBus), the pairing every desktop watcher serves (GNOME via

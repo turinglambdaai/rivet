@@ -66,13 +66,25 @@
        #:key path->string)
       '()))
 
+(define (prefer-64-bit-msbuild executable)
+  (and executable
+       (or (existing-file
+            (build-path (path-only executable) "amd64" "MSBuild.exe"))
+           executable)))
+
 (define (msbuild-in-installation root)
   (and root
        (let ([msbuild-root (build-path root "MSBuild")])
-         (or (existing-file
-              (build-path msbuild-root "Current" "Bin" "MSBuild.exe"))
+         (define (in-bin bin)
+           ;; The native 64-bit MSBuild selects Hostx64 compiler tools for
+           ;; cross-targets. The generic executable can select HostX86 even
+           ;; when PreferredToolArchitecture=x64 is passed, exhausting its
+           ;; address space while compiling WinUI generated sources.
+           (or (existing-file (build-path bin "amd64" "MSBuild.exe"))
+               (existing-file (build-path bin "MSBuild.exe"))))
+         (or (in-bin (build-path msbuild-root "Current" "Bin"))
              (for/or ([entry (in-list (sorted-child-directories msbuild-root))])
-               (existing-file (build-path entry "Bin" "MSBuild.exe")))))))
+               (in-bin (build-path entry "Bin")))))))
 
 (define (vc-toolset-in-installation root)
   (and root
@@ -101,7 +113,9 @@
 (define (discover-windows-toolchain)
   (define vswhere (candidate-vswhere))
 
-  (define path-msbuild (existing-file (find-executable-path "MSBuild.exe")))
+  (define path-msbuild
+    (prefer-64-bit-msbuild
+     (existing-file (find-executable-path "MSBuild.exe"))))
   (define path-cl (existing-file (find-executable-path "cl.exe")))
   (define path-lib (existing-file (find-executable-path "lib.exe")))
   (define path-dumpbin (existing-file (find-executable-path "dumpbin.exe")))
@@ -149,5 +163,6 @@
 
 (module+ test-support
   (provide msbuild-in-installation
+           prefer-64-bit-msbuild
            vc-toolset-in-installation
            sorted-child-directories))
