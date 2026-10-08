@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Ensure isolated RPCs sent after an idle interval run immediately in embedded
+  Racket CS hosts instead of waiting for a later frame to wake request dispatch.
 - Prefer native 64-bit MSBuild when discovering Visual Studio, preventing the
   32-bit host compiler from exhausting its address space on WinUI ARM64 builds.
 - Add an opt-in Linux `InstallShutdownHook` for SIGTERM/SIGINT. Its

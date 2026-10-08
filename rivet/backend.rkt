@@ -1196,6 +1196,13 @@
                      (set! stopped? #t)
                      (begin
                        (dispatch! f)
+                       ;; Give a newly admitted request worker a scheduling
+                       ;; opportunity before this reader waits for the next
+                       ;; frame. In an embedded Racket CS runtime, immediately
+                       ;; re-entering an idle file-descriptor read can otherwise
+                       ;; leave the only runnable request behind the sleeping
+                       ;; reader until another frame arrives.
+                       (sleep 0)
                        (loop)))))))))))
   (define reader-dead-evt (thread-dead-evt reader))
 
