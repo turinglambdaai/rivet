@@ -8,6 +8,7 @@
 #include <cerrno>
 #include <cstring>
 #include <exception>
+#include <initializer_list>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -67,13 +68,30 @@ struct SocketEndpoints {
 
 SocketEndpoints create_socket_endpoints() {
   int fds[2]{-1, -1};
-  if (::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, fds) != 0) {
+#if defined(SOCK_CLOEXEC)
+  int const rc = ::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, fds);
+#else
+  int const rc = ::socketpair(AF_UNIX, SOCK_STREAM, 0, fds);
+#endif
+  if (rc != 0) {
     throw std::runtime_error("socketpair failed: " +
                              std::string(std::strerror(errno)));
   }
 
   UniqueFd native(fds[0]);
   UniqueFd server_read(fds[1]);
+#if !defined(SOCK_CLOEXEC)
+  // Platforms without SOCK_CLOEXEC (macOS): set the flag on both ends right
+  // after the pair exists. Own the descriptors first so an fcntl failure
+  // cannot leak either endpoint while the exception unwinds.
+  for (int const fd : {native.get(), server_read.get()}) {
+    int const flags = ::fcntl(fd, F_GETFD, 0);
+    if (flags < 0 || ::fcntl(fd, F_SETFD, flags | FD_CLOEXEC) != 0) {
+      throw std::runtime_error("fcntl(FD_CLOEXEC) failed: " +
+                               std::string(std::strerror(errno)));
+    }
+  }
+#endif
   UniqueFd server_write(::dup(server_read.get()));
   if (server_write.get() < 0) {
     throw std::runtime_error("dup failed: " +
