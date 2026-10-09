@@ -69,8 +69,11 @@
       (fprintf out "~a native desktop app. The application payload and the\n"
                (project-display-name project))
       (display "embedded Racket runtime install self-contained under /opt.\n" out)
-      ;; Empty build stages: the BUILDROOT is staged directly by Rivet.
-      (display "\n%prep\n\n%build\n\n%install\n" out)
+      ;; %install copies Rivet's staged install tree into the buildroot.
+      ;; rpmbuild wipes the buildroot before %install runs, so the payload
+      ;; must be (re)created inside the stage, not staged beforehand.
+      (display "\n%prep\n\n%build\n" out)
+      (display "\n%install\nrm -rf \"%{buildroot}\"\nmkdir -p \"%{buildroot}\"\ncp -a \"%{_topdir}/STAGED/.\" \"%{buildroot}/\"\n" out)
       (display "\n%files\n" out)
       (fprintf out "%dir \"/opt/~a\"\n" name)
       (fprintf out "\"/opt/~a/*\"\n" name)
@@ -89,34 +92,33 @@
   (define name (project-name project))
   (define topdir (project-path project ".rivet" "installer" "rpm"))
   (when (directory-exists? topdir) (delete-directory/files topdir))
-  (define buildroot (build-path topdir "BUILDROOT"))
+  (define staged (build-path topdir "STAGED"))
   (define spec-dir (build-path topdir "SPECS"))
-  (make-directory* (build-path buildroot "opt" name))
+  (make-directory* (build-path staged "opt" name))
   (make-directory* spec-dir)
-  ;; BUILDROOT mirrors the installed filesystem, staged from the verified
-  ;; package directory plus the shared desktop/icon metadata.
+  ;; The staged tree mirrors the installed filesystem, from the verified
+  ;; package directory plus the shared desktop/icon metadata; %install
+  ;; copies it into the buildroot that rpmbuild owns and wipes.
   (for ([entry (in-list (directory-list package))])
     (define source (build-path package entry))
     (if (directory-exists? source)
-        (copy-directory/files source (build-path buildroot "opt" name entry))
-        (copy-file source (build-path buildroot "opt" name entry))))
+        (copy-directory/files source (build-path staged "opt" name entry))
+        (copy-file source (build-path staged "opt" name entry))))
   (write-desktop-entry!
    project
-   (build-path buildroot (installed-share-root) "applications"
+   (build-path staged (installed-share-root) "applications"
                (string-append name ".desktop")))
   (stage-native-icon!
    project
-   (build-path buildroot (installed-share-root) "pixmaps"
+   (build-path staged (installed-share-root) "pixmaps"
                (string-append name ".png")))
   (define spec (build-path spec-dir (string-append name ".spec")))
   (write-rpm-spec! project spec)
   (define output (rpm-installer-path project))
   (make-directory* (path-only output))
-  (when (file-exists? output) (delete-file output))
   (run! 'create-rpm! rpmbuild
         "-bb"
         (string-append "--define=_topdir " (path->string topdir))
-        (string-append "--define=buildroot " (path->string buildroot))
         (string-append "--define=_rpmdir " (path->string (project-path project "dist")))
         (string-append "--define=_build_name_fmt %%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm")
         (path->string spec))
