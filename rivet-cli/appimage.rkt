@@ -117,7 +117,6 @@
     (copy-file library (build-path lib-dir (file-name-from-path library)) #t))
 
   ;; GSettings schemas: copy the XML sources and compile in place.
-  (printf "rivet: appimage: staging glib schemas\n")
   (define schema-source (build-path "/usr" "share" "glib-2.0" "schemas"))
   (when (directory-exists? schema-source)
     (define schema-dir (build-path appdir "usr" "share" "glib-2.0" "schemas"))
@@ -132,7 +131,6 @@
             (path->string schema-dir))))
 
   ;; gdk-pixbuf loaders: stage the loader cache directory when present.
-  (printf "rivet: appimage: staging pixbuf loaders\n")
   (define pixbuf-root
     (for/or ([candidate (in-list (list (build-path "/usr" "lib" (format "~a-linux-gnu" (machine-suffix))
                                                         "gdk-pixbuf-2.0")
@@ -145,18 +143,14 @@
       (for/or ([version-dir (in-list (sort (directory-list pixbuf-root) string<? #:key path->string))]
                #:when (directory-exists? (build-path pixbuf-root version-dir "loaders")))
         (build-path pixbuf-root version-dir "loaders")))
-    (printf "rivet: appimage: pixbuf loaders=~s parent=~s segment=~s
-"
-            loaders
-            (and loaders (path-only loaders))
-            (and loaders (path-only loaders)
-                 (file-name-from-path (path-only loaders))))
     (when (and loaders (absolute-path? loaders) (path-only loaders))
       ;; Keep the loader directory's own version segment in the AppDir path
       ;; so GDK_PIXBUF_MODULEDIR points at a conventional layout.
+      ;; path-only keeps a trailing separator, which file-name-from-path
+      ;; rejects; simplify-path normalizes it away.
       (define destination
         (build-path appdir "usr" "lib" "gdk-pixbuf-2.0"
-                    (file-name-from-path (path-only loaders))
+                    (file-name-from-path (simplify-path (path-only loaders)))
                     "loaders"))
       (make-directory* destination)
       (for ([entry (in-list (directory-list loaders))])
@@ -166,8 +160,6 @@
 
   ;; Minimal hicolor theme so GTK's icon theme initialization always finds
   ;; an index even on minimal window managers.
-  (printf "rivet: appimage: staging hicolor index
-")
   (define hicolor (build-path appdir "usr" "share" "icons" "hicolor"))
   (make-directory* hicolor)
   (call-with-output-file (build-path hicolor "index.theme")
@@ -211,14 +203,11 @@
 
 (define (stage-appdir! project package)
   (define name (project-name project))
-  (printf "rivet: appdir: resolving paths\n")
   (define appdir
     (project-path project ".rivet" "installer"
                   (string-append name ".AppDir")))
-  (printf "rivet: appdir: ~a\n" appdir)
   (when (directory-exists? appdir) (delete-directory/files appdir))
   (make-directory* (build-path appdir "usr" "bin"))
-  (printf "rivet: appdir: copying payload from ~a\n" package)
   ;; Payload keeps its RivetHost-relative layout (runtime/, res/, app/ sit
   ;; beside the executable) because the embedded runtime resolves those
   ;; relative to the binary location.
@@ -228,7 +217,6 @@
         (copy-directory/files source (build-path appdir "usr" "bin" entry))
         (copy-file source (build-path appdir "usr" "bin" entry))))
   (mark-executable! (build-path appdir "usr" "bin" "RivetHost"))
-  (printf "rivet: appdir: writing desktop entry\n")
   (write-desktop-entry! project (build-path appdir (string-append name ".desktop")))
   ;; Fail closed: the AppImage format requires a top-level icon, and a
   ;; placeholder would ship an invisible product tile to users' app grids.
@@ -237,10 +225,8 @@
            (string-append
             "the AppImage format requires a top-level icon PNG; declare"
             " `linux-icon` (a project-relative .png) in rivet.rktd")))
-  (printf "rivet: appdir: staging icon\n")
   (copy-file (project-path project (project-linux-icon project))
              (build-path appdir (string-append name ".png")) #t)
-  (printf "rivet: appdir: writing AppRun\n")
   (write-appimage-apprun! appdir)
   appdir)
 
