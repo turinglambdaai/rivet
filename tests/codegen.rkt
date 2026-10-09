@@ -22,6 +22,8 @@
       (file->string (build-path project-root "windows" "App.xaml.cpp")))
     (define windows-project
       (file->string (build-path project-root "windows" "RivetHost.vcxproj")))
+    (define windows-main-header
+      (file->string (build-path project-root "windows" "MainWindow.xaml.h")))
     (define macos-package
       (file->string (build-path project-root "macos-host" "Package.swift")))
     (define linux-cmake
@@ -39,6 +41,11 @@
      (regexp-match? #rx"Windows::Foundation::IInspectable" app-cpp))
     (check-true (regexp-match? #rx"/utf-8" windows-project))
     (check-true (regexp-match? #rx"RIVET_WINDOWS_MIN_VERSION" windows-project))
+    (check-true
+     (string-contains? windows-project "platform\\windows\\system"))
+    (check-true
+     (regexp-match? #rx"rivet::system::NativeWindowHandle" windows-main-header))
+    (check-true (regexp-match? #rx"HWND WindowHandle" windows-main-header))
     (check-false
      (regexp-match? #rx"<WindowsTargetPlatformMinVersion>10\\.0\\.19041\\.0"
                     windows-project))

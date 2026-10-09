@@ -138,6 +138,11 @@ windows/MainWindow.xaml.cpp
 
 `MainWindow.xaml` 就是普通 WinUI 3 XAML。`MainWindow.xaml.cpp` 已经演示了如何启动 Embedded Racket backend，并用 completion-driven 的方式调用生成的 State API，避免阻塞 UI 线程。
 
+生成的 `MainWindow` 还会提供 `WindowHandle()`，供全局快捷键、剪贴板监听、
+窗口子类化、定位和托盘图标等 Win32 能力使用。它走 Windows App SDK 官方
+interop 桥接；不要再按标题查找自己的窗口。详见
+[Windows 原生窗口 interop](windows-native-window.md)。
+
 ### macOS
 
 先看：

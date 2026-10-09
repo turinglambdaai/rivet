@@ -2,11 +2,18 @@
 
 #include "pch.h"
 #include "MainWindow.g.h"
+#include "system_services.hpp"
 
 namespace winrt::RivetHost::implementation {
 
 struct MainWindow : MainWindowT<MainWindow> {
   MainWindow();
+
+  // Stable HWND access for platform-owned features such as global hotkeys,
+  // clipboard listeners, window subclassing, topmost policy, and tray icons.
+  [[nodiscard]] HWND WindowHandle() {
+    return rivet::system::NativeWindowHandle(*this);
+  }
 
   void Increment_Click(winrt::Windows::Foundation::IInspectable const& sender,
                        Microsoft::UI::Xaml::RoutedEventArgs const& args);

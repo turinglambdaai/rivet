@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a supported WinUI 3-to-`HWND` bridge. Generated Windows hosts expose
+  `WindowHandle()` through the first-party system adapter, centralizing the
+  Windows App SDK `IWindowNative` ABI and removing the need for title-based
+  `FindWindowW` workarounds.
 - Add a first-party plain-GTK4 theme resolver. Linux hosts now reconcile the
   desktop color-scheme signal with the effective `gtk-theme-name` variant
   before creating widgets, preventing application CSS and native controls from
