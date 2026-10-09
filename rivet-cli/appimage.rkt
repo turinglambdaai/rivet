@@ -117,6 +117,7 @@
     (copy-file library (build-path lib-dir (file-name-from-path library)) #t))
 
   ;; GSettings schemas: copy the XML sources and compile in place.
+  (printf "rivet: appimage: staging glib schemas\n")
   (define schema-source (build-path "/usr" "share" "glib-2.0" "schemas"))
   (when (directory-exists? schema-source)
     (define schema-dir (build-path appdir "usr" "share" "glib-2.0" "schemas"))
@@ -131,6 +132,7 @@
             (path->string schema-dir))))
 
   ;; gdk-pixbuf loaders: stage the loader cache directory when present.
+  (printf "rivet: appimage: staging pixbuf loaders\n")
   (define pixbuf-root
     (for/or ([candidate (in-list (list (build-path "/usr" "lib" (format "~a-linux-gnu" (machine-suffix))
                                                         "gdk-pixbuf-2.0")
@@ -158,6 +160,8 @@
 
   ;; Minimal hicolor theme so GTK's icon theme initialization always finds
   ;; an index even on minimal window managers.
+  (printf "rivet: appimage: staging hicolor index
+")
   (define hicolor (build-path appdir "usr" "share" "icons" "hicolor"))
   (make-directory* hicolor)
   (call-with-output-file (build-path hicolor "index.theme")
