@@ -139,8 +139,8 @@ RKT
     (check-true (regexp-match? #rx"func echo_user\\(user: RivetTypes.User\\) async throws -> RivetTypes.User" swift))
     (check-true (regexp-match? #rx"func greet\\(name: String\\)" swift))
     (check-true (regexp-match? #rx"func increment\\(value: Int64\\)" swift))
-    (check-true (regexp-match? #rx"func getCounter\\(\\) async throws -> Int64" swift))
-    (check-true (regexp-match? #rx"func setCounter\\(_ value: Int64\\)" swift))
+    (check-true (regexp-match? #rx"func get_counter\\(\\) async throws -> Int64" swift))
+    (check-true (regexp-match? #rx"func set_counter\\(_ value: Int64\\)" swift))
 
     (check-true (regexp-match? #rx"struct User" cpp))
     (check-true (regexp-match? #rx"kDisplayName\\[\\] = \"demo\"" cpp))
@@ -195,9 +195,9 @@ RKT
     (check-true
      (regexp-match? #rx"suspend fun echo_user\\(user: User\\): User" kotlin))
     (check-true
-     (regexp-match? #rx"suspend fun getCounter\\(\\): Long" kotlin))
+     (regexp-match? #rx"suspend fun get_counter\\(\\): Long" kotlin))
     (check-true
-     (regexp-match? #rx"suspend fun setCounter\\(value: Long\\): Long" kotlin))
+     (regexp-match? #rx"suspend fun set_counter\\(value: Long\\): Long" kotlin))
     (check-true
      (regexp-match? #rx"client\\.getState\\(\"counter\"\\)" kotlin))
     (check-true
@@ -478,7 +478,7 @@ RKT
         (generate-clients! project)
         ""))
     (check-regexp-match
-     #rx"C\\+\\+ API native API name collision: RPC set-config and State setter config both generate set_config"
+     #rx"Swift API native API name collision: RPC set-config and State setter config both generate set_config"
      state-collision-message)
 
     ;; Generated async companions are part of the C++ API namespace too.
