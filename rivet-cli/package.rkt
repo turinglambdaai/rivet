@@ -3,6 +3,7 @@
 (require racket/file
          racket/format
          racket/path
+         racket/string
          racket/system
          "build.rkt"
          "linux-package.rkt"
@@ -239,6 +240,15 @@
         "stapler" "staple"
         (path->string app)))
 
+;; SwiftPM resource bundles (RivetHost_*.bundle) staged beside the built
+;; executable by build-macos!. Detect them at the .app assembly boundary:
+;; Bundle.module resolves them relative to Bundle.main.bundleURL (the .app
+;; root next to Contents/), which codesign rejects as unsealed content.
+(define (staged-swiftpm-bundles stage)
+  (for/list ([entry (in-list (directory-list stage))]
+             #:when (regexp-match? #rx"[.]bundle$" (path->string entry)))
+    (path->string entry)))
+
 (define (package-macos! project stage name production?)
   (define dist (project-path project "dist"))
   (make-directory* dist)
@@ -284,14 +294,24 @@
   (copy-macos-bundle! (build-path stage "Frameworks" "Racket.framework")
                       racket-framework)
 
-  ;; SwiftPM resource bundles are looked up at Bundle.main.bundleURL, i.e.
-  ;; the .app root next to Contents/ — not inside Contents/Resources. They
-  ;; are staged next to the RivetHost executable by build-macos!; without
-  ;; them the host dies on launch ("could not load resource bundle").
-  (for ([entry (in-list (directory-list stage))]
-        #:when (regexp-match? #rx"[.]bundle$" (path->string entry)))
-    (copy-tree! (build-path stage entry)
-                (build-path app (file-name-from-path entry))))
+  ;; SwiftPM resource bundles are looked up by Bundle.module at the .app root
+  ;; next to Contents/, which codesign rejects ("unsealed contents present in
+  ;; the bundle root") and nested signing cannot fix because the generated
+  ;; bundle is not a codesignable bundle. Fail closed instead of producing an
+  ;; app that cannot be signed: declare shared data in rivet.rktd `resources`
+  ;; (staged under Contents/Resources/app, sealable and cross-platform) and
+  ;; read it in native code from that location. See the resources section in
+  ;; docs/configuration.md.
+  (define swiftpm-bundles (staged-swiftpm-bundles stage))
+  (unless (null? swiftpm-bundles)
+    (error 'package-project!
+           (string-append
+            "the macOS host's Swift package declares SwiftPM resources (~a); "
+            "SwiftPM resource bundles cannot ship inside a signed app bundle. "
+            "Move the data to the `resources` declaration in rivet.rktd and "
+            "read it from Contents/Resources/app in native code — see "
+            "docs/configuration.md, \"Application resources and icons\".")
+      (string-join swiftpm-bundles ", ")))
 
   (write-macos-info! (build-path contents "Info.plist")
                      display-name
@@ -361,4 +381,5 @@
   packaged)
 
 (module+ test-support
-  (provide write-macos-info!))
+  (provide staged-swiftpm-bundles
+           write-macos-info!))
