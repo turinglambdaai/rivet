@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a supported WinUI 3-to-`HWND` bridge. Generated Windows hosts expose
+  `WindowHandle()` through the first-party system adapter, centralizing the
+  Windows App SDK `IWindowNative` ABI and removing the need for title-based
+  `FindWindowW` workarounds.
 - Load `raco rivet` subcommand modules lazily. A stale bytecode cache in a
   linked checkout now fails inside the command entry point, which detects the
   `instantiate-linklet` mismatch and prints the working remedy (clear
@@ -21,8 +25,7 @@
   bilingual native-host CI guide. The guide requires WinUI, SwiftUI/AppKit,
   and GTK4 hosts to compile before release on matching runner image classes,
   and the resource guide now shows the verified cross-platform `app/` layout
-  for shared product data.
-- Add a first-party plain-GTK4 theme resolver. Linux hosts now reconcile the
+  for shared product data.- Add a first-party plain-GTK4 theme resolver. Linux hosts now reconcile the
   desktop color-scheme signal with the effective `gtk-theme-name` variant
   before creating widgets, preventing application CSS and native controls from
   landing on opposite light/dark palettes; pure resolution cases run in CI.

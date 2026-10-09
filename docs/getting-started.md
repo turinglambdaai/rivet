@@ -132,6 +132,12 @@ windows/MainWindow.xaml.cpp
 
 `MainWindow.xaml` is ordinary WinUI 3 XAML. `MainWindow.xaml.cpp` shows how the starter host starts the embedded backend and calls generated State methods without blocking the UI thread.
 
+The generated `MainWindow` also exposes `WindowHandle()` for Win32-owned
+features such as global hotkeys, clipboard listeners, window subclassing,
+positioning, and tray icons. It uses the supported Windows App SDK interop
+bridge; do not locate your own window by title. See
+[Windows native window interop](windows-native-window.md).
+
 ### macOS
 
 Start with:

@@ -67,13 +67,10 @@ MainWindow::MainWindow() {
   InitializeComponent();
   Title(L"Rivet Taskboard — Racket + WinUI 3");
   try {
-    HWND window{};
-    auto native = this->try_as<::IWindowNative>();
-    if (native && SUCCEEDED(native->get_WindowHandle(&window)) && window != nullptr) {
-      tray_icon_ = std::make_unique<rivet::system::TrayIcon>(
-          window, 1, WM_APP + 42, L"Rivet Taskboard",
-          ::LoadIconW(nullptr, IDI_APPLICATION));
-    }
+    auto const window = rivet::system::NativeWindowHandle(*this);
+    tray_icon_ = std::make_unique<rivet::system::TrayIcon>(
+        window, 1, WM_APP + 42, L"Rivet Taskboard",
+        ::LoadIconW(nullptr, IDI_APPLICATION));
   } catch (...) {
     // Notification availability is platform policy and never blocks startup.
   }
