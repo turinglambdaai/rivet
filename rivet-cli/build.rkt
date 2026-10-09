@@ -1,6 +1,7 @@
 #lang racket/base
 
 (require racket/file
+         racket/format
          racket/list
          racket/path
          racket/runtime-path
@@ -122,23 +123,87 @@
                                   "link" source))
          source)))
 
+;; Escapes a string for an RC string-table value: RC string literals
+;; escape quotes and backslashes.
+(define (rc-escape value)
+  (string-append "\""
+                 (string-replace (string-replace value "\\" "\\\\")
+                                 "\"" "\\\"")
+                 "\""))
+
+;; Renders the VERSIONINFO block from the project manifest so the shipped
+;; exe carries its identity in Explorer, Task Manager, and installer UX.
+(define (write-windows-version-info! out project)
+  (define name (project-name project))
+  (define display-name (project-display-name project))
+  (define publisher (project-publisher project))
+  (define version (project-version project))
+  (define build-number (project-build project))
+  (define raw-numbers
+    (append (map (lambda (piece) (or (string->number piece) 0))
+                 (string-split version "."))
+            (list build-number)))
+  (define four-tuple
+    (string-join
+     (for/list ([part (in-list
+                       (append raw-numbers
+                               (build-list (max 0 (- 4 (length raw-numbers)))
+                                           (lambda (_) 0))))])
+       (~a part))
+     ", "))
+  (define dotted (format "~a.~a" version build-number))
+  (define version-block
+    (string-append
+     "#include <windows.h>\n\nVS_VERSION_INFO VERSIONINFO\n"
+     " FILEVERSION     " four-tuple "\n"
+     " PRODUCTVERSION  " four-tuple "\n"
+     " FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK\n"
+     " FILEFLAGS       0x0L\n"
+     " FILEOS          VOS_NT_WINDOWS32\n"
+     " FILETYPE        VFT_APP\n"
+     " FILESUBTYPE     VFT2_UNKNOWN\n"
+     "BEGIN\n"
+     "    BLOCK \"StringFileInfo\"\n"
+     "    BEGIN\n"
+     "        BLOCK \"040904B0\"\n"
+     "        BEGIN\n"
+     "            VALUE \"CompanyName\",      " (rc-escape publisher) "\n"
+     "            VALUE \"FileDescription\",  " (rc-escape display-name) "\n"
+     "            VALUE \"FileVersion\",      " (rc-escape dotted) "\n"
+     "            VALUE \"InternalName\",     " (rc-escape name) "\n"
+     "            VALUE \"OriginalFilename\", " (rc-escape (string-append name ".exe")) "\n"
+     "            VALUE \"ProductName\",      " (rc-escape display-name) "\n"
+     "            VALUE \"ProductVersion\",   " (rc-escape dotted) "\n"
+     "        END\n"
+     "    END\n"
+     "    BLOCK \"VarFileInfo\"\n"
+     "    BEGIN\n"
+     "        VALUE \"Translation\", 0x0409, 1200\n"
+     "    END\n"
+     "END\n"))
+  (display version-block out))
+
 (define (prepare-windows-icon-resource! project)
   (define source
     (required-project-icon project (project-windows-icon project) 'windows))
-  (and source
-       (let ([resource-script
-              (project-path project ".rivet" "build" "windows" "app-icon.rc")])
-         (make-parent-directory* resource-script)
-         (call-with-output-file resource-script
-           #:exists 'truncate/replace
-           (lambda (out)
-             ;; Resource Compiler treats backslashes as escapes inside quoted
-             ;; paths. Forward slashes are accepted by Windows tools and keep
-             ;; arbitrary project directory names unambiguous.
-             (define portable
-               (string-replace (path->string source) "\\" "/"))
-             (fprintf out "IDI_RIVET_APP_ICON ICON \"~a\"\n" portable)))
-         resource-script)))
+  ;; The resource script always carries a VERSIONINFO block so the shipped
+  ;; exe has an identity even for projects without an icon; the ICON line
+  ;; rides along when one is declared.
+  (define resource-script
+    (project-path project ".rivet" "build" "windows" "app-icon.rc"))
+  (make-parent-directory* resource-script)
+  (call-with-output-file resource-script
+    #:exists 'truncate/replace
+    (lambda (out)
+      (when source
+        ;; Resource Compiler treats backslashes as escapes inside quoted
+        ;; paths. Forward slashes are accepted by Windows tools and keep
+        ;; arbitrary project directory names unambiguous.
+        (define portable
+          (string-replace (path->string source) "\\" "/"))
+        (fprintf out "IDI_RIVET_APP_ICON ICON \"~a\"\n" portable))
+      (write-windows-version-info! out project)))
+  resource-script)
 
 (define (compile-backend! project runtime stage)
   (define backend-relative (project-ref project 'backend))
