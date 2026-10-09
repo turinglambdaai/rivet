@@ -83,7 +83,7 @@ final class AppModel: ObservableObject {
                     }
                     let api = RivetAPI(client: backend.client)
                     async let loadedTasks = api.list_tasks()
-                    async let selected = api.getSelected_task_id()
+                    async let selected = api.get_selected_task_id()
                     let (items, selectedID) = try await (loadedTasks, selected)
                     await relay.ready(tasks: items, selectedID: selectedID)
                 } catch {

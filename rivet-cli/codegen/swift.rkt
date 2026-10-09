@@ -160,12 +160,15 @@
 
 (define (swift-state-methods state)
   (define raw-name (symbol->string (schema-state-name state)))
-  (define suffix (upper-first (swift-id raw-name)))
+  ;; Match the RPC surface: Swift identifiers stay snake_case end to end, so
+  ;; accessors are get_<state>/set_<state> rather than a camelCase get prefix
+  ;; glued onto a snake body (getRepo_root).
+  (define name (swift-id raw-name))
   (define type (schema-state-type state))
   (format
-   "    public func get~a() async throws -> ~a {\n        let result = try await client.getState(~a)\n        return try decode_~a(result)\n    }\n    @discardableResult\n    public func set~a(_ value: ~a) async throws -> ~a {\n        let result = try await client.setState(~a, value: encode_~a(value))\n        return try decode_~a(result)\n    }\n"
-   suffix (swift-type type) (swift-string-literal raw-name) (type-key type)
-   suffix (swift-type type) (swift-type type) (swift-string-literal raw-name) (type-key type) (type-key type)))
+   "    public func get_~a() async throws -> ~a {\n        let result = try await client.getState(~a)\n        return try decode_~a(result)\n    }\n    @discardableResult\n    public func set_~a(_ value: ~a) async throws -> ~a {\n        let result = try await client.setState(~a, value: encode_~a(value))\n        return try decode_~a(result)\n    }\n"
+   name (swift-type type) (swift-string-literal raw-name) (type-key type)
+   name (swift-type type) (swift-type type) (swift-string-literal raw-name) (type-key type) (type-key type)))
 
 (define (generate-swift-events events)
   (if (null? events)

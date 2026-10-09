@@ -69,7 +69,7 @@ Rivet 刻意不做 WebView 框架，也不做统一跨平台控件层。Windows 
   (serve-fds in-fd out-fd))
 ```
 
-`raco rivet build` 会读取 RPC、Event、State、Record 与 Enum schema，并生成类型化原生客户端。Swift 侧得到 `increment(value:)`、`getCounter()`、`setCounter(_:)` 等方法；C++ 侧得到对应的原生接口；Kotlin 侧在 `.rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt` 得到 `increment(value)` 等 suspend 方法。
+`raco rivet build` 会读取 RPC、Event、State、Record 与 Enum schema，并生成类型化原生客户端。Swift 侧得到 `increment(value:)`、`get_counter()`、`set_counter(_:)` 等方法；C++ 侧得到对应的原生接口；Kotlin 侧在 `.rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt` 得到 `increment(value)` 等 suspend 方法。
 
 ### 横向对比
 
