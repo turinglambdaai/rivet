@@ -230,19 +230,24 @@
   (write-appimage-apprun! appdir)
   appdir)
 
-;; Fetches a checksum-verified appimagetool into .rivet/bin. The digest is
-;; read from the GitHub release API at download time (no hard-coded hash to
-;; rot); RIVET_APPIMAGETOOL_PATH bypasses the download for offline builds.
+;; Fetches a checksum-verified appimagetool into .rivet/bin. The digests
+;; are pinned per architecture for the release above (recorded from the
+;; published 1.9.0 assets); RIVET_APPIMAGETOOL_PATH bypasses the download
+;; for offline builds.
+(define appimagetool-digests
+  '(("x86_64" . "46fdd785094c7f6e545b61afcfb0f3d98d8eab243f644b4b17698c01d06083d1")
+    ("aarch64" . "04f45ea45b5aa07bb2b071aed9dbf7a5185d3953b11b47358c1311f11ea94a96")))
+
 (define (appimagetool-executable project)
   (define override (getenv "RIVET_APPIMAGETOOL_PATH"))
   (cond
     [(and override (file-exists? override)) (string->path override)]
     [else
+     (define arch (appimage-architecture))
      (define tool
        (project-path project ".rivet" "bin"
-                     (format "appimagetool-~a.AppImage" (appimage-architecture))))
+                     (format "appimagetool-~a.AppImage" arch)))
      (unless (file-exists? tool)
-       (define arch (appimage-architecture))
        (define url
          (format "https://github.com/AppImage/appimagetool/releases/download/~a/appimagetool-~a.AppImage"
                  appimagetool-version arch))
@@ -252,18 +257,10 @@
                 "curl was not found; it is required to fetch appimagetool, or set RIVET_APPIMAGETOOL_PATH"))
        (make-directory* (path-only tool))
        (run! 'create-appimage! curl "-fSL" "-o" (path->string tool) url)
-       ;; Verify against the GitHub-published asset digest (sha256:…).
-       (define api
-         (format "https://api.github.com/repos/AppImage/appimagetool/releases/tags/~a"
-                 appimagetool-version))
-       (define metadata
-         (run/capture 'create-appimage! curl (list "-fsSL" api)))
-       (define expected
-         (cond [(regexp-match #px"\"digest\":\\s*\"sha256:([0-9a-f]{64})\"" metadata)
-                => cadr]
-               [else
-                (error 'create-appimage!
-                       "could not read the appimagetool asset digest from the GitHub API")]))
+       ;; Verify against the pinned digest: the download origin is a public
+       ;; CDN, so the archive must bit-for-bit match what Rivet expects
+       ;; regardless of transport.
+       (define expected (cdr (assoc arch appimagetool-digests)))
        (define sha256sum (find-executable-path "sha256sum"))
        (unless sha256sum
          (error 'create-appimage! "sha256sum was not found for appimagetool verification"))
