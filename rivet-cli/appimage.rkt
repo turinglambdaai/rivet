@@ -39,8 +39,14 @@
 (define (run/capture who executable arguments)
   (unless executable
     (raise-arguments-error who "required executable was not found"))
+  ;; process* documents five return values but hands back a five-element
+  ;; list on current Racket CS builds; accept either shape.
   (define-values (stdout stdin pid stderr control)
-    (apply process* executable arguments))
+    (call-with-values
+        (lambda () (apply process* executable arguments))
+      (case-lambda
+        [(result) (apply values result)]
+        [(a b c d e) (values a b c d e)])))
   (define output (port->string stdout))
   (close-input-port stdout)
   (close-input-port stderr)
