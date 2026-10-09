@@ -85,6 +85,8 @@
    [display-name : String]
    [nickname : (Optional String)]))
 
+;; Common domain names must not shadow Swift concurrency/stdlib types in the
+;; application module. Generated schema values live under RivetTypes.
 (define-state counter : Int64 0)
 
 (define-rpc (greet [name String] : String)
@@ -123,7 +125,8 @@ RKT
                    ".rivet" "generated" "kotlin" "dev" "rivet" "generated"
                    "GeneratedBackend.kt")))
 
-    (check-true (regexp-match? #rx"public struct User: Sendable" swift))
+    (check-true (regexp-match? #rx"public enum RivetTypes" swift))
+    (check-true (regexp-match? #rx"    public struct User: Sendable" swift))
     (check-true (regexp-match? #rx"displayName = \"demo\"" swift))
     (check-true (regexp-match? #rx"version = \"0[.]1[.]0\"" swift))
     (check-true (regexp-match? #rx"build: Int64 = 1" swift))
@@ -133,7 +136,7 @@ RKT
     (check-false (regexp-match? #rx"registerGeneratedBackend" swift))
     (check-true (regexp-match? #rx"public let display_name: String" swift))
     (check-true (regexp-match? #rx"public let nickname: String\\?" swift))
-    (check-true (regexp-match? #rx"func echo_user\\(user: User\\) async throws -> User" swift))
+    (check-true (regexp-match? #rx"func echo_user\\(user: RivetTypes.User\\) async throws -> RivetTypes.User" swift))
     (check-true (regexp-match? #rx"func greet\\(name: String\\)" swift))
     (check-true (regexp-match? #rx"func increment\\(value: Int64\\)" swift))
     (check-true (regexp-match? #rx"func getCounter\\(\\) async throws -> Int64" swift))
@@ -340,7 +343,7 @@ RKT
       (file->string (build-path project-root "windows" "GeneratedBackend.hpp")))
     (check-regexp-match #rx"public enum Role: String, Sendable" enum-swift)
     (check-regexp-match #rx"case admin = \"admin\"" enum-swift)
-    (check-regexp-match #rx"func echo_role\\(role: Role\\) async throws -> Role" enum-swift)
+    (check-regexp-match #rx"func echo_role\\(role: RivetTypes.Role\\) async throws -> RivetTypes.Role" enum-swift)
     (check-regexp-match #rx"enum class Role \\{ admin, member \\};" enum-cpp)
     (check-regexp-match #rx"std::future<Role> echo_role\\(Role role\\)" enum-cpp)
     (define enum-kotlin
@@ -374,6 +377,34 @@ RKT
     (check-equal? (hash-ref (first (hash-ref changed-enum-report 'breaking-changes))
                             'name)
                   "Role")
+
+    ;; Schema names live below a generated namespace, so common domain names
+    ;; do not shadow Swift.Task, Swift.Result, or future standard-library types
+    ;; throughout the application module.
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-record Task ([title : String]))
+(define-rpc (lookup-task : Task) (Task "demo"))
+(define (start in-fd out-fd) (serve-fds in-fd out-fd))
+RKT
+     )
+    (generate-clients! project)
+    (define namespaced-swift
+      (file->string
+       (build-path project-root
+                   "macos-host" "Sources" "RivetHost" "GeneratedBackend.swift")))
+    (check-regexp-match #rx"public enum RivetTypes" namespaced-swift)
+    (check-regexp-match #rx"    public struct Task: Sendable" namespaced-swift)
+    (check-false (regexp-match? #px"(?m:^public struct Task:)" namespaced-swift))
+    (check-regexp-match
+     #rx"func lookup_task\\(\\) async throws -> RivetTypes.Task"
+     namespaced-swift)
 
     ;; Distinct Racket identifiers can normalize to the same native API name.
     ;; Codegen must reject these cases instead of emitting uncompilable Swift/C++.

@@ -195,7 +195,7 @@ For publisher-signed output, use `raco rivet package --production` with the plat
   (format "user-~a" id))
 ```
 
-Arguments and results are validated at the Racket boundary. Supported schema values currently include `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, `(Optional T)`, named values declared with `define-record`, and closed cases declared with `define-enum`. Records generate native Swift structs, C++ structs, and Kotlin data classes; Enums generate Swift raw-value enums, C++ `enum class` values, and Kotlin `enum class` values.
+Arguments and results are validated at the Racket boundary. Supported schema values currently include `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, `(Optional T)`, named values declared with `define-record`, and closed cases declared with `define-enum`. Records generate Swift structs under `RivetTypes`, C++ structs, and Kotlin data classes; Enums generate Swift raw-value enums under `RivetTypes`, C++ `enum class` values, and Kotlin `enum class` values. The Swift namespace prevents domain names such as `Task` and `Result` from shadowing standard-library types across the application module.
 
 ### Events
 
