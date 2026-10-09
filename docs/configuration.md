@@ -105,6 +105,19 @@ Packaged resources live under `app/` inside the platform resource root. Racket c
   (call-with-input-file (resource-path "config" "defaults.rktd") read))
 ```
 
+SwiftPM `resources` declarations in the macOS host package are incompatible
+with packaging: `Bundle.module` looks for its bundle at the `.app` root next
+to `Contents/`, which is unsealed content that `codesign` rejects, and the
+generated bundle is not itself a codesignable bundle. `raco rivet package`
+therefore fails closed when the Swift package declares resources. Migrate by
+declaring the same data in `resources` above and reading it in native code
+from `Contents/Resources/app`:
+
+```swift
+let root = Bundle.main.resourceURL   // Contents/Resources (packaged)
+let dataURL = root!.appendingPathComponent("app/locales/en.json")
+```
+
 During `raco rivet dev`, the root is `.rivet/stage/app`. Windows and Linux packages keep it beside the executable as `app/`; macOS packages keep it at `Contents/Resources/app`. Native UI code can use those same platform-native locations. Set `RIVET_RESOURCE_ROOT` or parameterize `current-resource-root` only for tests and specialized hosts.
 
 Projects created before this feature remain valid because all three settings are optional. To embed a Windows icon in an older generated host, add Rivet's conditional `RIVET_WINDOWS_ICON_RC` `ResourceCompile` item from the current host template or regenerate the host project while preserving application UI sources.
