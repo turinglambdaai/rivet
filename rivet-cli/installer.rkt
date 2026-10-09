@@ -6,9 +6,12 @@
          racket/string
          racket/system
          "../rivet/distribution/crypto.rkt"
+         "appimage.rkt"
+         "deb.rkt"
          "linux-package.rkt"
          "package.rkt"
          "project.rkt"
+         "rpm.rkt"
          "signing-options.rkt"
          "tar.rkt")
 
@@ -203,6 +206,15 @@
       #:exists 'truncate/replace
       (lambda (out)
         (displayln (bytes->base64-string signature) out))))
+  ;; Native system installer formats ride along with the signed tar.gz
+  ;; payload: deb and rpm integrate with the distribution package manager,
+  ;; AppImage carries its own GTK4 dependency closure. The tar.gz remains
+  ;; the update-channel artifact for every format choice.
+  (for ([format (in-list (project-linux-formats project))])
+    (case format
+      [("deb") (create-deb! project package)]
+      [("rpm") (create-rpm! project package)]
+      [("appimage") (create-appimage! project package)]))
   output)
 
 (define (create-installer! project package #:production? [production? #f])
