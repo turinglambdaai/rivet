@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Document the large-payload conventions (docs/large-payloads.md): cursor
+  pagination with fail-closed limit caps for report-shaped RPCs, stable-id
+  tree nodes with windowed children for virtualized trees, and typed
+  progress records instead of stringly-typed events, including the current
+  scope of cancellation. Fixes #133; covers the convention layer of #131
+  and #132.
+- Add rivet/testing: an ephemeral-port HTTP listener (racket/tcp cannot
+  report the bound port; this probes once and returns both the port and
+  the listener) plus a sequential request-capture fake server with
+  loopback close-race handling. Test suites only; never enters an embedded
+  payload. Fixes #98.
 - Linux hosts now terminate on SIGTERM/SIGINT. The host scaffold and the
   Taskboard example install Rivet's shutdown hook so a termination signal
   runs the same orderly backend shutdown as the GTK shutdown signal and
