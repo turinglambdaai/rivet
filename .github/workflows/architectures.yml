@@ -226,6 +226,8 @@ jobs:
             tool=".rivet/bin/appimagetool-aarch64.AppImage"
             if [ -f "$tool" ]; then
               APPIMAGE_EXTRACT_AND_RUN=1 "$tool" --version || echo "appimagetool --version exited $?"
+              echo "retrying the real packaging command for diagnostics:"
+              APPIMAGE_EXTRACT_AND_RUN=1 "$tool" .rivet/installer/Smoke.AppDir dist/diagnostics.AppImage || echo "appimagetool packaging exited $?"
             fi
             exit "$release_rc"
           fi
