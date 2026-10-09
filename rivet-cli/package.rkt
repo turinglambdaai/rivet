@@ -151,6 +151,36 @@
                   "Windows Authenticode signing"
                   args))
 
+;; Files the MSBuild stage produces that never belong in a distributable:
+;; debug symbols (60+ MB even in Release), and the ONNX/DirectML inference
+;; runtimes that Windows App SDK self-contained deployment drags alongside
+;; every app. Rivet hosts link no Windows AI APIs — launch smoke confirmed
+;; the app runs without them — so shipping 40 MB of unused AI runtime only
+;; bloats every download. Listed explicitly (no wildcards beyond pdb) so a
+;; future App SDK that actually requires one fails loudly at startup rather
+;; than silently shipping a gap.
+(define windows-release-excluded
+  '(#px"[.]pdb$"
+    "onnxruntime.dll"
+    "DirectML.dll"))
+
+(define (windows-release-excluded? path)
+  (define entry (path->string (file-name-from-path path)))
+  (for/or ([pattern (in-list windows-release-excluded)])
+    (if (string? pattern)
+        (string-ci=? entry pattern)
+        (regexp-match? pattern entry))))
+
+(define (copy-windows-release! stage destination)
+  (make-directory* destination)
+  (for ([entry (in-list (directory-list stage))])
+    (define source (build-path stage entry))
+    (cond
+      [(windows-release-excluded? source) (void)]
+      [(directory-exists? source)
+       (copy-directory/files source (build-path destination entry))]
+      [else (copy-file source (build-path destination entry))])))
+
 (define (package-windows! project stage name production?)
   (define architecture
     (case (system-type 'arch)
@@ -159,7 +189,7 @@
   (define destination
     (project-path project "dist" (string-append name "-windows-" architecture)))
   (make-directory* (path-only destination))
-  (copy-tree! stage destination)
+  (copy-windows-release! stage destination)
   (when production?
     (define settings (load-windows-production-signing))
     ;; Sign Rivet's application executable. Bundled Windows App SDK/Racket DLLs
@@ -383,4 +413,5 @@
 
 (module+ test-support
   (provide staged-swiftpm-bundles
+           windows-release-excluded?
            write-macos-info!))
