@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add `raco rivet release --without-updates` for products that deliberately
+  ship without an online update channel. The release still produces and
+  verifies its platform installer, SBOM, and third-party notices while update
+  credentials and the signed channel manifest are omitted explicitly.
 - Follow HTTP redirections (10 hops) in `fetch-update-manifest` and
   `download-update`. GitHub release assets — the dominant update origin —
   answer with a 302 to their CDN, so an updater pointing at

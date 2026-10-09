@@ -13,13 +13,23 @@
          "project.rkt"
          "verify.rkt")
 
-(provide release-project!)
+(provide release-project!
+         release-update-environment)
 
 (define (required-environment name)
   (define value (getenv name))
   (unless (and value (not (string=? (string-trim value) "")))
     (error 'release-project! "required environment variable ~a is not set" name))
   (string-trim value))
+
+(struct update-environment (base-url private-key key-id) #:transparent)
+
+(define (release-update-environment updates?)
+  (and updates?
+       (update-environment
+        (required-environment "RIVET_UPDATE_BASE_URL")
+        (string->path (required-environment "RIVET_UPDATE_PRIVATE_KEY"))
+        (required-environment "RIVET_UPDATE_KEY_ID"))))
 
 (define (rfc3339-now)
   (define d (seconds->date (current-seconds) #t))
@@ -48,7 +58,9 @@
     [(macosx) 'dmg]
     [(unix) 'targz]))
 
-(define (release-project! project #:production? [production? #t])
+(define (release-project! project
+                          #:production? [production? #t]
+                          #:updates? [updates? #t])
   ;; Linux production trust lives in the signed installer rather than
   ;; OS-level code signing, so the package itself is verified at development
   ;; strength and the released installer is production-verified below.
@@ -64,40 +76,48 @@
                      #:production? #t
                      #:launch-smoke? #f))
   (define-values (sbom notices) (generate-compliance-artifacts! project))
-  (define base-url (required-environment "RIVET_UPDATE_BASE_URL"))
-  (define key-path (string->path (required-environment "RIVET_UPDATE_PRIVATE_KEY")))
-  (define key-id (required-environment "RIVET_UPDATE_KEY_ID"))
-  (define previous (getenv "RIVET_PREVIOUS_VERSION"))
-  (define artifact
-    (update-artifact
-     (release-platform)
-     (release-architecture)
-     (string-append (string-trim base-url "/") "/"
-                    (path->string (file-name-from-path installer)))
-     (sha256-file/hex installer)
-     (file-size installer)
-     (installer-kind)
-     '()))
-  (define manifest
-    (update-manifest
-     (project-identifier project)
-     (project-version project)
-     (project-build project)
-     (project-release-channel project)
-     (rfc3339-now)
-     (or (getenv "RIVET_MINIMUM_UPDATABLE_VERSION") "0.0.0")
-     (and previous (not (string=? previous "")) previous)
-     #t
-     (let ([configured (getenv "RIVET_UPDATE_ROLLOUT")])
-       (if configured (string->number configured) 100))
-     (list artifact)))
+  (define update-config (release-update-environment updates?))
   (define manifest-path
-    (project-path project "dist"
-                  (format "update-~a.json" (project-release-channel project))))
-  (call-with-output-file manifest-path
-    #:exists 'truncate/replace
-    (lambda (out)
-      (write-signed-manifest manifest
-                             (read-ed25519-private-key key-path)
-                             key-id out)))
+    (and
+     update-config
+     (let* ([previous (getenv "RIVET_PREVIOUS_VERSION")]
+            [artifact
+             (update-artifact
+              (release-platform)
+              (release-architecture)
+              (string-append
+               (string-trim (update-environment-base-url update-config) "/")
+               "/"
+               (path->string (file-name-from-path installer)))
+              (sha256-file/hex installer)
+              (file-size installer)
+              (installer-kind)
+              '())]
+            [manifest
+             (update-manifest
+              (project-identifier project)
+              (project-version project)
+              (project-build project)
+              (project-release-channel project)
+              (rfc3339-now)
+              (or (getenv "RIVET_MINIMUM_UPDATABLE_VERSION") "0.0.0")
+              (and previous (not (string=? previous "")) previous)
+              #t
+              (let ([configured (getenv "RIVET_UPDATE_ROLLOUT")])
+                (if configured (string->number configured) 100))
+              (list artifact))]
+            [path
+             (project-path
+              project "dist"
+              (format "update-~a.json" (project-release-channel project)))])
+       (call-with-output-file path
+         #:exists 'truncate/replace
+         (lambda (out)
+           (write-signed-manifest
+            manifest
+            (read-ed25519-private-key
+             (update-environment-private-key update-config))
+            (update-environment-key-id update-config)
+            out)))
+       path)))
   (values installer manifest-path sbom notices))
