@@ -284,6 +284,15 @@
   (copy-macos-bundle! (build-path stage "Frameworks" "Racket.framework")
                       racket-framework)
 
+  ;; SwiftPM resource bundles are looked up at Bundle.main.bundleURL, i.e.
+  ;; the .app root next to Contents/ — not inside Contents/Resources. They
+  ;; are staged next to the RivetHost executable by build-macos!; without
+  ;; them the host dies on launch ("could not load resource bundle").
+  (for ([entry (in-list (directory-list stage))]
+        #:when (regexp-match? #rx"[.]bundle$" (path->string entry)))
+    (copy-tree! (build-path stage entry)
+                (build-path app (file-name-from-path entry))))
+
   (write-macos-info! (build-path contents "Info.plist")
                      display-name
                      executable-name
