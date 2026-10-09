@@ -108,7 +108,19 @@
     (check-exn #rx"symbolic links or junctions"
                (lambda ()
                  (copy-project-resources! linked-project
-                                          (build-path temp-root "linked-stage")))))
+                                          (build-path temp-root "linked-stage"))))
+
+    ;; SwiftPM resource bundles cannot ship in a signed .app: Bundle.module
+    ;; looks them up at the unsealed .app root, so packaging fails closed.
+    (define bundle-stage (build-path temp-root "bundle-stage"))
+    (make-directory* (build-path bundle-stage "RivetHost_RivetHost.bundle"))
+    (write-text (build-path bundle-stage "RivetHost") "exe")
+    (write-text (build-path bundle-stage "notes.txt") "not a bundle")
+    (check-equal? (staged-swiftpm-bundles bundle-stage)
+                  '("RivetHost_RivetHost.bundle"))
+    (check-equal? (staged-swiftpm-bundles
+                   (build-path temp-root "missing-stage"))
+                  '()))
   (lambda ()
     (when (directory-exists? temp-root)
       (delete-directory/files temp-root))
