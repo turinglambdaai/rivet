@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Linux hosts now terminate on SIGTERM/SIGINT. The host scaffold and the
+  Taskboard example install Rivet's shutdown hook so a termination signal
+  runs the same orderly backend shutdown as the GTK shutdown signal and
+  then exits; previously the embedded backend died on the signal while the
+  GTK process stayed up, leaving a window that could not search or run
+  anything (observed on Fulcrum 0.4.1: `kill` left a half-dead app that
+  only SIGKILL would remove).
 - Add a supported WinUI 3-to-`HWND` bridge. Generated Windows hosts expose
   `WindowHandle()` through the first-party system adapter, centralizing the
   Windows App SDK `IWindowNative` ABI and removing the need for title-based

@@ -6,7 +6,9 @@
 
 #include <atomic>
 #include <cstdint>
+#include <cstdio>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -14,6 +16,7 @@
 #include <thread>
 
 #include "GeneratedBackend.hpp"
+#include "system_services.hpp"
 #include "theme.hpp"
 
 namespace {
@@ -264,6 +267,12 @@ void on_shutdown(GApplication*, gpointer) {
   }
 }
 
+// SIGTERM/SIGINT bypass the GTK main loop, so the shutdown signal handler
+// alone would leave the window alive over a dead backend. The watcher
+// thread runs this same cleanup and then hard-exits; keep it synchronous
+// and allocation-light.
+void perform_orderly_shutdown() { on_shutdown(nullptr, nullptr); }
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -271,6 +280,13 @@ int main(int argc, char** argv) {
                                   G_APPLICATION_DEFAULT_FLAGS);
   g_signal_connect(app, "activate", G_CALLBACK(on_activate), nullptr);
   g_signal_connect(app, "shutdown", G_CALLBACK(on_shutdown), nullptr);
+  try {
+    rivet::system::InstallShutdownHook(perform_orderly_shutdown);
+  } catch (std::exception const& error) {
+    std::fputs((std::string{"shutdown hook unavailable: "} + error.what() +
+                "\n").c_str(),
+               stderr);
+  }
   int const status = g_application_run(G_APPLICATION(app), argc, argv);
   g_object_unref(app);
   return status;
