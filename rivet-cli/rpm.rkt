@@ -63,7 +63,7 @@
       ;; Rivet apps carry their own licensing; products set their terms.
       (tag "License" "Proprietary")
       (tag "URL" "https://github.com/turinglambdaai/rivet")
-      (tag "Architecture" (rpm-architecture))
+      (tag "BuildArch" (rpm-architecture))
       (tag "Requires" "gtk4")
       (display "\n%description\n" out)
       (fprintf out "~a native desktop app. The application payload and the\n"
