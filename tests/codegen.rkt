@@ -24,6 +24,10 @@
       (file->string (build-path project-root "windows" "RivetHost.vcxproj")))
     (define windows-main-header
       (file->string (build-path project-root "windows" "MainWindow.xaml.h")))
+    (define windows-main-source
+      (file->string (build-path project-root "windows" "MainWindow.xaml.cpp")))
+    (define macos-app-source
+      (file->string (build-path project-root "macos-host" "Sources" "RivetHost" "RivetHostApp.swift")))
     (define macos-package
       (file->string (build-path project-root "macos-host" "Package.swift")))
     (define linux-cmake
@@ -46,6 +50,13 @@
     (check-true
      (regexp-match? #rx"rivet::system::NativeWindowHandle" windows-main-header))
     (check-true (regexp-match? #rx"HWND WindowHandle" windows-main-header))
+    (check-true
+     (regexp-match? #rx"rivet::system::InstallShutdownHook" windows-main-source))
+    (check-true (regexp-match? #rx"StopBackendOrderly" windows-main-header))
+    (check-true
+     (regexp-match? #rx"applicationShouldTerminate" macos-app-source))
+    (check-true
+     (regexp-match? #rx"orderlyShutdown" macos-app-source))
     (check-false
      (regexp-match? #rx"<WindowsTargetPlatformMinVersion>10\\.0\\.19041\\.0"
                     windows-project))

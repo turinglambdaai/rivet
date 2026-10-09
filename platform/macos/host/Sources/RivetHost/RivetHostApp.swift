@@ -5,6 +5,8 @@ import RivetSystem
 
 @main
 struct RivetHostApp: App {
+    @NSApplicationDelegateAdaptor(ApplicationDelegate.self)
+    private var applicationDelegate
     @StateObject private var model = AppModel()
     private let activationRouter = RivetActivationRouter()
 
@@ -20,6 +22,19 @@ struct RivetHostApp: App {
                 // Racket backend when the app actually needs it.
                 .onOpenURL { url in activationRouter.handle([url]) }
         }
+    }
+}
+
+/// Every termination path — Cmd-Q, window close, logout, and OS shutdown —
+/// passes through applicationShouldTerminate before the process exits, so
+/// the embedded backend gets one orderly stop hook. The AppModel registers
+/// its backend shutdown once startup succeeds.
+final class ApplicationDelegate: NSObject, NSApplicationDelegate {
+    static var orderlyShutdown: (() -> Void)?
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        Self.orderlyShutdown?()
+        return .terminateNow
     }
 }
 
@@ -41,6 +56,9 @@ final class AppModel: ObservableObject {
             )
             let backend = EmbeddedRacketBackend(configuration: config)
             self.backend = backend
+            ApplicationDelegate.orderlyShutdown = { [weak backend] in
+                backend?.stop()
+            }
 
             Task.detached { [backend] in
                 do {

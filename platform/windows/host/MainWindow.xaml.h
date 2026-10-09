@@ -15,6 +15,10 @@ struct MainWindow : MainWindowT<MainWindow> {
     return rivet::system::NativeWindowHandle(*this);
   }
 
+  // Thread-safe orderly backend stop shared by the window-close path and
+  // the console-control shutdown hook (logoff/CTRL events).
+  void StopBackendOrderly();
+
   void Increment_Click(winrt::Windows::Foundation::IInspectable const& sender,
                        Microsoft::UI::Xaml::RoutedEventArgs const& args);
 

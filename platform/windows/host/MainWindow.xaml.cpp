@@ -64,7 +64,24 @@ rivet::windows::RacketRuntimeConfig runtime_config() {
 MainWindow::MainWindow() {
   InitializeComponent();
   Title(L"Rivet — Racket + WinUI 3");
+  // Ordinary window close and OS session end (logoff/shutdown) both funnel
+  // into the same orderly backend stop. The console-control callback runs
+  // on its own thread, so it only touches the thread-safe stop() — never
+  // XAML state.
+  Closed([this](auto const&, auto const&) { StopBackendOrderly(); });
+  try {
+    rivet::system::InstallShutdownHook([this] { StopBackendOrderly(); });
+  } catch (std::exception const&) {
+    // Signal coverage is platform policy and never blocks startup; the
+    // window-close path above still runs the orderly shutdown.
+  }
   InitializeBackendAsync();
+}
+
+void MainWindow::StopBackendOrderly() {
+  if (auto backend = std::atomic_load(&backend_); backend != nullptr) {
+    backend->stop();
+  }
 }
 
 winrt::fire_and_forget MainWindow::InitializeBackendAsync() {

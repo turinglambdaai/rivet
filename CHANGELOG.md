@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Windows and macOS hosts now shut the embedded backend down orderly on
+  session end. The Windows system adapter gains InstallShutdownHook
+  (SetConsoleCtrlHandler: CTRL_C/CLOSE/LOGOFF/SHUTDOWN) and the scaffold
+  wires it plus the window-close path to a thread-safe backend stop; the
+  macOS scaffold installs an NSApplicationDelegate whose
+  applicationShouldTerminate stops the backend for Cmd-Q, logout, and OS
+  shutdown. Mirrors the Linux InstallShutdownHook shipped by #128 and
+  wired into the scaffold by #168. Fixes #120.
 - Linux hosts now terminate on SIGTERM/SIGINT. The host scaffold and the
   Taskboard example install Rivet's shutdown hook so a termination signal
   runs the same orderly backend shutdown as the GTK shutdown signal and
