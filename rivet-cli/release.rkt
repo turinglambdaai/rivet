@@ -1,6 +1,7 @@
 #lang racket/base
 
 (require racket/date
+         file/zip
          racket/file
          racket/format
          racket/path
@@ -14,7 +15,8 @@
          "verify.rkt")
 
 (provide release-project!
-         release-update-environment)
+         release-update-environment
+         create-portable-zip!)
 
 (define (required-environment name)
   (define value (getenv name))
@@ -58,6 +60,24 @@
     [(macosx) 'dmg]
     [(unix) 'targz]))
 
+;; Portable zip beside the installer: the family update feed consumes
+;; it and it runs on locked-down machines. Deterministic input tree,
+;; family naming <name>-<version>-<os>-<arch>.zip, sha256 alongside.
+(define (create-portable-zip! project package)
+  (define zip-path
+    (project-path project "dist"
+                  (string-append (path->string (file-name-from-path package)) ".zip")))
+  (when (file-exists? zip-path) (delete-file zip-path))
+  (parameterize ([current-directory (path-only package)])
+    (zip zip-path (path->string (file-name-from-path package))))
+  (call-with-output-file (string-append (path->string zip-path) ".sha256")
+    #:exists 'truncate/replace
+    (lambda (out)
+      (fprintf out "~a  ~a~n"
+              (sha256-file/hex zip-path)
+              (path->string (file-name-from-path zip-path)))))
+  zip-path)
+
 (define (release-project! project
                           #:production? [production? #t]
                           #:updates? [updates? #t])
@@ -69,6 +89,10 @@
     (package-project! project
                       #:production? (and production? (not linux-release?))))
   (define installer (create-installer! project package #:production? production?))
+  ;; The portable zip rides beside every installer: the family update feed
+  ;; consumes it, and it is the artifact users on locked-down machines can
+  ;; still run. Same family naming as the installer, sha256 next to it.
+  (define portable-zip (create-portable-zip! project package))
   (when (and production? linux-release?)
     ;; package-project! already performed the launch smoke. This second pass
     ;; adds Linux installer trust verification without opening the app twice.
@@ -120,4 +144,4 @@
             (update-environment-key-id update-config)
             out)))
        path)))
-  (values installer manifest-path sbom notices))
+  (values installer manifest-path sbom notices portable-zip))
