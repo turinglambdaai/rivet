@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a reusable checksum-pinned Linux embeddable-Racket setup action and a
+  bilingual native-host CI guide. The guide requires WinUI, SwiftUI/AppKit,
+  and GTK4 hosts to compile before release on matching runner image classes,
+  and the resource guide now shows the verified cross-platform `app/` layout
+  for shared product data.
 - Follow HTTP redirections (10 hops) in `fetch-update-manifest` and
   `download-update`. GitHub release assets — the dominant update origin —
   answer with a 302 to their CDN, so an updater pointing at
