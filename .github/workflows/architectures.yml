@@ -196,7 +196,7 @@ jobs:
           path = Path("rivet.rktd")
           original = path.read_text(encoding="utf-8")
           updated = original.replace('(resources . ())',
-                                     '(resources . ("assets")) (linux-icon . "assets/icon.png"))')
+                                     '(resources . ("assets")) (linux-icon . "assets/icon.png")')
           if updated == original:
               raise SystemExit("failed to configure Linux ARM64 smoke resource")
           path.write_text(updated, encoding="utf-8")
