@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Cut ~100 MB (48%) from Windows release payloads. The packaged app no
+  longer ships MSBuild debug symbols (*.pdb, 60+ MB) or the ONNX and
+  DirectML inference runtimes (~40 MB) that Windows App SDK
+  self-contained deployment drags beside every app; Rivet hosts link no
+  Windows AI APIs, and the exclusion is pinned by an explicit list plus
+  a launch smoke on every package. Fixes #144.
 - Linux hosts now terminate on SIGTERM/SIGINT. The host scaffold and the
   Taskboard example install Rivet's shutdown hook so a termination signal
   runs the same orderly backend shutdown as the GTK shutdown signal and
