@@ -14,12 +14,11 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
-#include <unordered_map>
 #include <utility>
 
 #include "chezscheme.h"
 #include "racketcs.h"
-#include "rivet/detail/request_id_allocator.hpp"
+#include "rivet/detail/pending_request_registry.hpp"
 
 namespace rivet::windows {
 namespace {
@@ -68,7 +67,6 @@ struct PipePair {
 struct PendingRequest {
   std::unique_ptr<std::promise<Value>> promise;
   CompletionHandler completion;
-  detail::RequestCancellationGate cancellation;
 };
 
 PipePair create_pipe() {
@@ -106,12 +104,9 @@ ptr quoted_symbol(std::string const& name) {
 
 class Backend::Impl {
  public:
-  explicit Impl(RacketRuntimeConfig config) : config_(std::move(config)) {
-    if (config_.max_pending_requests == 0) {
-      throw std::invalid_argument(
-          "Rivet native pending request limit must be positive");
-    }
-  }
+  explicit Impl(RacketRuntimeConfig config)
+      : config_(std::move(config)),
+        pending_(config_.max_pending_requests) {}
 
   ~Impl() {
     try {
@@ -266,20 +261,15 @@ class Backend::Impl {
     if (!running()) {
       return;
     }
-    std::lock_guard pending_lock(pending_mutex_);
-    auto it = pending_.find(request_id);
-    if (it == pending_.end() ||
-        !it->second.cancellation.request_cancel()) {
-      return;
-    }
-
-    auto* transport = transport_.get();
-    if (transport != nullptr) {
-      note_protocol_event("cancel");
-      emit_diagnostic("native-client", "request-cancel", "begin", "",
-                      request_id);
-      write_frame(*transport, Frame{MessageType::Cancel, request_id, {}});
-    }
+    (void)pending_.request_cancel(request_id, [&] {
+      auto* transport = transport_.get();
+      if (transport != nullptr) {
+        note_protocol_event("cancel");
+        emit_diagnostic("native-client", "request-cancel", "begin", "",
+                        request_id);
+        write_frame(*transport, Frame{MessageType::Cancel, request_id, {}});
+      }
+    });
   }
 
   void set_event_handler(EventHandler handler) {
@@ -320,27 +310,7 @@ class Backend::Impl {
       throw std::runtime_error("Rivet backend is not running");
     }
 
-    std::uint64_t id = 0;
-    {
-      // Selection and insertion share one lock. A wrapped allocator therefore
-      // cannot hand the same still-pending id to two concurrent submitters.
-      std::lock_guard pending_lock(pending_mutex_);
-      if (pending_.size() >= config_.max_pending_requests) {
-        throw std::runtime_error(
-            "too many native pending requests (limit " +
-            std::to_string(config_.max_pending_requests) + ")");
-      }
-      id = request_ids_.allocate(
-          pending_.size(),
-          [this](std::uint64_t candidate) {
-            return pending_.find(candidate) != pending_.end();
-          });
-      auto const [it, inserted] = pending_.emplace(id, std::move(pending));
-      (void)it;
-      if (!inserted) {
-        throw std::logic_error("Rivet request id collision");
-      }
-    }
+    auto const id = pending_.insert(std::move(pending));
 
     note_protocol_event("request");
     emit_diagnostic("native-client", "rpc-dispatch", "begin", rpc_name, id);
@@ -368,14 +338,7 @@ class Backend::Impl {
                   Frame{MessageType::Request, id,
                         encode_value(Value(std::move(request)))});
 
-      bool send_deferred_cancel = false;
-      {
-        std::lock_guard pending_lock(pending_mutex_);
-        auto it = pending_.find(id);
-        if (it != pending_.end()) {
-          send_deferred_cancel = it->second.cancellation.mark_request_sent();
-        }
-      }
+      bool const send_deferred_cancel = pending_.mark_request_sent(id);
       // Keep write_mutex_ while emitting a latched cancellation so no other
       // frame can interleave between this Request and its deferred Cancel. If
       // stop began after the running check above, it is waiting for this mutex,
@@ -589,14 +552,7 @@ class Backend::Impl {
   }
 
   std::optional<PendingRequest> take_request(std::uint64_t id) {
-    std::lock_guard lock(pending_mutex_);
-    auto it = pending_.find(id);
-    if (it == pending_.end()) {
-      return std::nullopt;
-    }
-    auto pending = std::move(it->second);
-    pending_.erase(it);
-    return pending;
+    return pending_.take(id);
   }
 
   void resolve_request(std::uint64_t id, Value value) noexcept {
@@ -646,13 +602,7 @@ class Backend::Impl {
   }
 
   void reject_all(std::exception_ptr error) noexcept {
-    std::unordered_map<std::uint64_t, PendingRequest> pending;
-    {
-      std::lock_guard lock(pending_mutex_);
-      pending.swap(pending_);
-    }
-    for (auto& [id, request] : pending) {
-      (void)id;
+    pending_.drain([&](PendingRequest request) {
       if (request.promise != nullptr) {
         try {
           request.promise->set_exception(error);
@@ -665,22 +615,20 @@ class Backend::Impl {
           // Application completions must not interrupt shutdown.
         }
       }
-    }
+    });
   }
 
   RacketRuntimeConfig config_;
   mutable std::mutex state_mutex_;
   std::mutex stop_mutex_;
   std::mutex write_mutex_;
-  std::mutex pending_mutex_;
   std::mutex event_mutex_;
   std::mutex diagnostic_mutex_;
   std::unique_ptr<Win32PipeTransport> transport_;
   std::thread racket_thread_;
   std::thread reader_thread_;
-  std::unordered_map<std::uint64_t, PendingRequest> pending_;
+  detail::PendingRequestRegistry<PendingRequest> pending_;
   EventHandler event_handler_;
-  detail::RequestIdAllocator request_ids_;
   std::atomic<bool> running_{false};
   std::atomic<bool> hello_seen_{false};
   std::atomic<bool> stopping_{false};

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Follow HTTP redirections (10 hops) in `fetch-update-manifest` and
+  `download-update`. GitHub release assets — the dominant update origin —
+  answer with a 302 to their CDN, so an updater pointing at
+  `releases/latest/download/…` previously verified an empty body and every
+  check failed.
 - Ensure isolated RPCs sent after an idle interval run immediately in embedded
   Racket CS hosts instead of waiting for a later frame to wake request dispatch.
 - Prefer native 64-bit MSBuild when discovering Visual Studio, preventing the

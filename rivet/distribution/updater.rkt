@@ -41,6 +41,11 @@
        (write-bytes buffer out 0 count)
        (loop next)])))
 
+;; GitHub release assets — the dominant update origin — answer with a 302
+;; to their CDN, so every fetch must follow redirections or the updater
+;; verifies an empty body and fails.
+(define update-fetch-redirections 10)
+
 (define (fetch-update-manifest manifest-url public-key
                                #:key-id [key-id #f]
                                #:maximum-bytes [maximum-bytes (* 1024 1024)])
@@ -48,7 +53,8 @@
                (regexp-match? #px"^https://" manifest-url))
     (raise-argument-error 'fetch-update-manifest "HTTPS URL string" manifest-url))
   (define in (get-pure-port (string->url manifest-url)
-                            '("User-Agent: Rivet-Updater/1")))
+                            '("User-Agent: Rivet-Updater/1")
+                            #:redirections update-fetch-redirections))
   (dynamic-wind
     void
     (lambda ()
@@ -111,7 +117,8 @@
                      (raise e))])
     (define in
       (get-pure-port (string->url (update-artifact-url artifact))
-                     '("User-Agent: Rivet-Updater/1")))
+                     '("User-Agent: Rivet-Updater/1")
+                     #:redirections update-fetch-redirections))
     (dynamic-wind
       void
       (lambda ()

@@ -54,7 +54,7 @@ final class AppModel: ObservableObject {
     @Published var generating = false
 
     private var backend: EmbeddedRacketBackend?
-    private var generationTask: Swift.Task<Void, Never>?
+    private var generationTask: Task<Void, Never>?
 
     var selectedTask: BoardTask? {
         guard let selectedID else { return nil }
@@ -73,13 +73,13 @@ final class AppModel: ObservableObject {
             let relay = EventRelay(self)
             self.backend = backend
 
-            Swift.Task.detached { [backend, relay] in
+            Task.detached { [backend, relay] in
                 do {
                     try backend.start { name, value in
                         guard let event = try? RivetEvent.decode(name: name, value: value) else {
                             return
                         }
-                        Swift.Task { @MainActor in relay.receive(event) }
+                        Task { @MainActor in relay.receive(event) }
                     }
                     let api = RivetAPI(client: backend.client)
                     async let loadedTasks = api.list_tasks()
@@ -154,7 +154,7 @@ final class AppModel: ObservableObject {
         guard let backend, ready, generationTask == nil else { return }
         generating = true
         status = "Preparing the bounded 1,000-row workload…"
-        generationTask = Swift.Task { [weak self] in
+        generationTask = Task { [weak self] in
             do {
                 let items = try await RivetAPI(client: backend.client)
                     .generate_demo_tasks(count: 1_000)
@@ -178,7 +178,7 @@ final class AppModel: ObservableObject {
 
     func persistSelection(_ id: Int64?) {
         guard let id, let backend, ready else { return }
-        Swift.Task {
+        Task {
             do {
                 _ = try await RivetAPI(client: backend.client).select_task(id: id)
             } catch {
@@ -204,7 +204,7 @@ final class AppModel: ObservableObject {
         operation: @escaping (RivetAPI) async throws -> Void
     ) {
         guard let backend, ready else { return }
-        Swift.Task {
+        Task {
             do {
                 try await operation(RivetAPI(client: backend.client))
                 status = "Saved by the Racket backend"
