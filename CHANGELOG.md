@@ -10,6 +10,13 @@
   applicationShouldTerminate stops the backend for Cmd-Q, logout, and OS
   shutdown. Mirrors the Linux InstallShutdownHook shipped by #128 and
   wired into the scaffold by #168. Fixes #120.
+- Cut ~100 MB (48%) from Windows release payloads. The packaged app no
+  longer ships MSBuild debug symbols (*.pdb, 60+ MB) or the ONNX and
+  DirectML inference runtimes (~40 MB) that Windows App SDK
+  self-contained deployment drags beside every app; Rivet hosts link no
+  Windows AI APIs, and the exclusion is pinned by an explicit list plus
+  a launch smoke on every package. Fixes #144.
+
 - Windows hosts now compile a VERSIONINFO resource into the exe. The
   generated app-icon.rc always carries the project identity
   (ProductName/FileDescription/Company from rivet.rktd, versions as
