@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.0
+
 - Add `raco rivet manifest-compose`: folds the per-platform signed
   update manifests from a multi-platform release into ONE family-wide
   signed manifest (one artifact per platform/architecture, identity
