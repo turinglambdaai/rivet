@@ -33,7 +33,7 @@ final class AppModel: ObservableObject {
             model?.receive(event)
         }
 
-        func ready(tasks: [BoardTask], selectedID: Int64?) {
+        func ready(tasks: [RivetTypes.BoardTask], selectedID: Int64?) {
             guard let model else { return }
             model.tasks = tasks
             model.selectedID = selectedID ?? tasks.first?.id
@@ -48,7 +48,7 @@ final class AppModel: ObservableObject {
     }
 
     @Published var status = "Starting embedded Racket CS…"
-    @Published var tasks: [BoardTask] = []
+    @Published var tasks: [RivetTypes.BoardTask] = []
     @Published var selectedID: Int64?
     @Published var ready = false
     @Published var generating = false
@@ -56,7 +56,7 @@ final class AppModel: ObservableObject {
     private var backend: EmbeddedRacketBackend?
     private var generationTask: Task<Void, Never>?
 
-    var selectedTask: BoardTask? {
+    var selectedTask: RivetTypes.BoardTask? {
         guard let selectedID else { return nil }
         return tasks.first { $0.id == selectedID }
     }
@@ -108,7 +108,7 @@ final class AppModel: ObservableObject {
 
     func advanceSelectedTask() {
         guard let task = selectedTask else { return }
-        let next: TaskStatus = task.status == .backlog ? .active : .done
+        let next: RivetTypes.TaskStatus = task.status == .backlog ? .active : .done
         perform("Update failed") { api in
             let updated = try await api.update_task(
                 id: task.id,
@@ -187,7 +187,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func label(for status: TaskStatus) -> String {
+    func label(for status: RivetTypes.TaskStatus) -> String {
         switch status {
         case .backlog: "Backlog"
         case .active: "In progress"
@@ -195,7 +195,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func nextActionLabel(for status: TaskStatus) -> String {
+    func nextActionLabel(for status: RivetTypes.TaskStatus) -> String {
         status == .backlog ? "Start Task" : "Mark Done"
     }
 
@@ -214,7 +214,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func replace(_ updated: BoardTask) {
+    private func replace(_ updated: RivetTypes.BoardTask) {
         if let index = tasks.firstIndex(where: { $0.id == updated.id }) {
             tasks[index] = updated
         }
