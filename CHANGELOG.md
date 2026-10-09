@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Align Swift and Kotlin state accessors with the generated RPC naming: they
+  are now `get_<state>`/`set_<state>` instead of a camelCase prefix glued to a
+  snake body (`getRepo_root`). This is a breaking rename for Swift/Kotlin call
+  sites; C++ was already snake_case and is unchanged.
 - Add a reusable checksum-pinned Linux embeddable-Racket setup action and a
   bilingual native-host CI guide. The guide requires WinUI, SwiftUI/AppKit,
   and GTK4 hosts to compile before release on matching runner image classes,

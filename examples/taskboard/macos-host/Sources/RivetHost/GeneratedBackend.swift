@@ -115,21 +115,21 @@ public struct RivetAPI: Sendable {
     }
 
     // Shared state
-    public func getSelected_task_id() async throws -> Int64? {
+    public func get_selected_task_id() async throws -> Int64? {
         let result = try await client.getState("selected-task-id")
         return try decode__Optional_Int64_(result)
     }
     @discardableResult
-    public func setSelected_task_id(_ value: Int64?) async throws -> Int64? {
+    public func set_selected_task_id(_ value: Int64?) async throws -> Int64? {
         let result = try await client.setState("selected-task-id", value: encode__Optional_Int64_(value))
         return try decode__Optional_Int64_(result)
     }
-    public func getTasks() async throws -> [BoardTask] {
+    public func get_tasks() async throws -> [BoardTask] {
         let result = try await client.getState("tasks")
         return try decode__List_BoardTask_(result)
     }
     @discardableResult
-    public func setTasks(_ value: [BoardTask]) async throws -> [BoardTask] {
+    public func set_tasks(_ value: [BoardTask]) async throws -> [BoardTask] {
         let result = try await client.setState("tasks", value: encode__List_BoardTask_(value))
         return try decode__List_BoardTask_(result)
     }

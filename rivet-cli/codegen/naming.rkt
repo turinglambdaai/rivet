@@ -235,14 +235,15 @@
             (format "RPC ~a" (schema-rpc-name info))))
     (append*
      (for/list ([state (in-list states)])
-       (define suffix (upper-first (swift-id (schema-state-name state))))
-       (list (cons (string-append "get" suffix)
+       (define name (swift-id (schema-state-name state)))
+       (list (cons (string-append "get_" name)
                    (format "State getter ~a" (schema-state-name state)))
-             (cons (string-append "set" suffix)
+             (cons (string-append "set_" name)
                    (format "State setter ~a" (schema-state-name state))))))))
 
-  ;; Kotlin mirrors the Swift member surface: RPC methods plus get/set accessors
-  ;; with an UpperFirst state suffix. RivetAPI also owns a `client` property.
+  ;; Kotlin mirrors the Swift member surface: RPC methods plus get_/set_
+  ;; accessors sharing the RPC snake_case convention. RivetAPI also owns a
+  ;; `client` property.
   (check-unique-native-names!
    "Kotlin API"
    (append
@@ -252,10 +253,10 @@
             (format "RPC ~a" (schema-rpc-name info))))
     (append*
      (for/list ([state (in-list states)])
-       (define suffix (upper-first (kotlin-id (schema-state-name state))))
-       (list (cons (string-append "get" suffix)
+       (define name (kotlin-id (schema-state-name state)))
+       (list (cons (string-append "get_" name)
                    (format "State getter ~a" (schema-state-name state)))
-             (cons (string-append "set" suffix)
+             (cons (string-append "set_" name)
                    (format "State setter ~a" (schema-state-name state))))))))
 
   ;; Event payloads become nested data classes named with UpperFirst, so two
