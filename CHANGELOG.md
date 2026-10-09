@@ -2,12 +2,24 @@
 
 ## Unreleased
 
+- Document the large-payload conventions (docs/large-payloads.md): cursor
+  pagination with fail-closed limit caps for report-shaped RPCs, stable-id
+  tree nodes with windowed children for virtualized trees, and typed
+  progress records instead of stringly-typed events, including the current
+  scope of cancellation. Fixes #133; covers the convention layer of #131
+  and #132.
+- Add rivet/testing: an ephemeral-port HTTP listener (racket/tcp cannot
+  report the bound port; this probes once and returns both the port and
+  the listener) plus a sequential request-capture fake server with
+  loopback close-race handling. Test suites only; never enters an embedded
+  payload. Fixes #98.
 - Cut ~100 MB (48%) from Windows release payloads. The packaged app no
   longer ships MSBuild debug symbols (*.pdb, 60+ MB) or the ONNX and
   DirectML inference runtimes (~40 MB) that Windows App SDK
   self-contained deployment drags beside every app; Rivet hosts link no
   Windows AI APIs, and the exclusion is pinned by an explicit list plus
   a launch smoke on every package. Fixes #144.
+
 - Windows hosts now compile a VERSIONINFO resource into the exe. The
   generated app-icon.rc always carries the project identity
   (ProductName/FileDescription/Company from rivet.rktd, versions as
