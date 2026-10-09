@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Honor `linux-binary-name` in `rivet.rktd`: the Linux build stage, package
+  staging, verification, and launch smoke now use the configured executable
+  name instead of the hardcoded scaffold name `RivetHost` (default
+  unchanged). Apps ship as their product name — `fulcrum`, not a generic
+  host binary — matching what the docs and desktop entries already say.
+  Partially addresses #169.
 - Build native Linux system installers from `raco rivet release`: a deb
   (dpkg-deb, unprivileged, installs under /opt with a desktop entry and
   pixmaps icon), an rpm (rpmbuild BUILDROOT, no distro-specific macros), and
@@ -11,6 +17,7 @@
   remains unchanged. Production verification validates each format with
   its own tooling (dpkg-deb -x, rpm -qpl, --appimage-extract), and the
   Linux CI matrix smoke-builds and verifies all three end to end.
+
 - Add a supported WinUI 3-to-`HWND` bridge. Generated Windows hosts expose
   `WindowHandle()` through the first-party system adapter, centralizing the
   Windows App SDK `IWindowNative` ABI and removing the need for title-based
