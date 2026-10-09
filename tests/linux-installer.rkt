@@ -194,7 +194,7 @@
 ;; Installer creation and production verification (Linux host required)
 
 (when (eq? (system-type 'os) 'unix)
-  (define project (rivet-project package-root (hasheq 'name "Smoke")))
+  (define project (rivet-project package-root (hasheq 'name "Smoke" 'linux-formats '())))
   (define installer (create-installer! project package))
   (check-equal?
    (file-name-from-path installer)

@@ -28,6 +28,8 @@
          project-device-rpcs
          project-windows-icon
          project-macos-icon
+         project-linux-icon
+         project-linux-formats
          project-macos-min-version
          project-windows-min-version)
 
@@ -196,6 +198,16 @@
   (optional 'macos-icon
             (lambda (v) (path-string-has-extension? v ".icns"))
             "project-relative .icns path")
+  (optional 'linux-icon
+            (lambda (v) (path-string-has-extension? v ".png"))
+            "project-relative .png path")
+  (optional 'linux-formats
+            (lambda (v)
+              (and (list? v)
+                   (andmap (lambda (item)
+                             (member item '("deb" "rpm" "appimage")))
+                           v)))
+            "subset of (\"deb\" \"rpm\" \"appimage\") selecting the native Linux installer formats; the signed tar.gz update payload is always produced")
   value)
 
 (define (load-config path)
@@ -290,6 +302,12 @@
 
 (define (project-macos-icon project)
   (project-ref project 'macos-icon (lambda () #f)))
+
+(define (project-linux-icon project)
+  (project-ref project 'linux-icon (lambda () #f)))
+
+(define (project-linux-formats project)
+  (project-ref project 'linux-formats (lambda () '("deb" "rpm" "appimage"))))
 
 (define (project-macos-min-version project)
   (project-ref project
