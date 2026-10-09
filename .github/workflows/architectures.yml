@@ -136,6 +136,14 @@ jobs:
           path.write_text(updated, encoding="utf-8")
           PY
           raco rivet build
+          # Canary for downstream codegen shape: every schema-matrix record
+          # and enum must surface under the RivetTypes namespace in the
+          # generated Swift client - a shape change breaks this first, not
+          # product CI (the failure mode reported in #176).
+          grep -q 'struct MatrixUser' macos-host/Sources/RivetHost/GeneratedBackend.swift
+          grep -q 'RivetTypes.MatrixUser' macos-host/Sources/RivetHost/GeneratedBackend.swift
+          grep -q 'enum AccessLevel' macos-host/Sources/RivetHost/GeneratedBackend.swift
+          grep -q 'RivetTypes.AccessLevel' macos-host/Sources/RivetHost/GeneratedBackend.swift
           raco rivet package
           raco rivet verify
           test -x dist/Smoke.app/Contents/MacOS/Smoke
