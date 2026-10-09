@@ -201,11 +201,14 @@
 
 (define (stage-appdir! project package)
   (define name (project-name project))
+  (printf "rivet: appdir: resolving paths\n")
   (define appdir
     (project-path project ".rivet" "installer"
                   (string-append name ".AppDir")))
+  (printf "rivet: appdir: ~a\n" appdir)
   (when (directory-exists? appdir) (delete-directory/files appdir))
   (make-directory* (build-path appdir "usr" "bin"))
+  (printf "rivet: appdir: copying payload from ~a\n" package)
   ;; Payload keeps its RivetHost-relative layout (runtime/, res/, app/ sit
   ;; beside the executable) because the embedded runtime resolves those
   ;; relative to the binary location.
@@ -215,6 +218,7 @@
         (copy-directory/files source (build-path appdir "usr" "bin" entry))
         (copy-file source (build-path appdir "usr" "bin" entry))))
   (mark-executable! (build-path appdir "usr" "bin" "RivetHost"))
+  (printf "rivet: appdir: writing desktop entry\n")
   (write-desktop-entry! project (build-path appdir (string-append name ".desktop")))
   ;; Fail closed: the AppImage format requires a top-level icon, and a
   ;; placeholder would ship an invisible product tile to users' app grids.
@@ -223,8 +227,10 @@
            (string-append
             "the AppImage format requires a top-level icon PNG; declare"
             " `linux-icon` (a project-relative .png) in rivet.rktd")))
+  (printf "rivet: appdir: staging icon\n")
   (copy-file (project-path project (project-linux-icon project))
              (build-path appdir (string-append name ".png")) #t)
+  (printf "rivet: appdir: writing AppRun\n")
   (write-appimage-apprun! appdir)
   appdir)
 
