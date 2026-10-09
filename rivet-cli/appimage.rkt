@@ -142,8 +142,10 @@
     (define loaders
       (for/or ([version-dir (in-list (sort (directory-list pixbuf-root) string<? #:key path->string))]
                #:when (directory-exists? (build-path pixbuf-root version-dir "loaders")))
-        (build-path pixbuf-root version-dir)))
-    (when loaders
+        (build-path pixbuf-root version-dir "loaders")))
+    (when (and loaders (absolute-path? loaders) (path-only loaders))
+      ;; Keep the loader directory's own version segment in the AppDir path
+      ;; so GDK_PIXBUF_MODULEDIR points at a conventional layout.
       (define destination
         (build-path appdir "usr" "lib" "gdk-pixbuf-2.0"
                     (file-name-from-path (path-only loaders))
@@ -162,6 +164,8 @@
     #:exists 'truncate/replace
     (lambda (out)
       (display "[Icon Theme]\nName=Hicolor\n" out)))
+  (printf "rivet: AppImage dependency closure: ~a libraries bundled\n"
+          (length libraries))
   libraries)
 
 (define (machine-suffix)
@@ -274,8 +278,10 @@
      tool]))
 
 (define (create-appimage! project package)
+  (printf "rivet: staging AppDir for the AppImage installer\n")
   (define appdir (stage-appdir! project package))
   (stage-appimage-dependencies! appdir)
+  (printf "rivet: packaging the AppImage with appimagetool\n")
   (define tool (appimagetool-executable project))
   (define output (appimage-installer-path project))
   (make-directory* (path-only output))
