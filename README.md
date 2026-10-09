@@ -249,6 +249,7 @@ raco rivet package                 Create and verify a development distributable
 raco rivet package --production    Create, sign, and verify a production distributable
 raco rivet release                 Build installer, signed update manifest, SBOM, and notices
 raco rivet release --development   Exercise release flow without platform production signing
+raco rivet release --without-updates  Build the release set without an update manifest
 raco rivet compliance              Generate SBOM/notices and run the license audit
 raco rivet verify                  Re-verify the current packaged artifact
 raco rivet verify --production     Verify production trust/notarization requirements
