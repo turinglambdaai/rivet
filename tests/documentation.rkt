@@ -110,3 +110,43 @@
 
 (check-completed-parent-boxes (build-path repository-root "README.md"))
 (check-completed-parent-boxes (build-path repository-root "README.zh-CN.md"))
+
+(define (check-file-contains path expected [message #f])
+  (check-true
+   (string-contains? (file->string path) expected)
+   (or message
+       (format "~a must contain ~s"
+               (find-relative-path repository-root path)
+               expected))))
+
+(define ci-guide (build-path repository-root "docs" "ci.md"))
+(define ci-guide-zh (build-path repository-root "docs" "ci.zh-CN.md"))
+(for ([expected (in-list '("windows-latest"
+                           "macos-latest"
+                           "macos-15"
+                           "ubuntu-latest"
+                           "setup-embed-racket"
+                           "raco rivet build"))])
+  (check-file-contains ci-guide expected))
+(check-file-contains ci-guide-zh "raco rivet build")
+
+(define embed-action
+  (build-path repository-root ".github" "actions" "setup-embed-racket" "action.yml"))
+(for ([expected (in-list '("actions/cache/restore@v5"
+                           "actions/cache/save@v5"
+                           "sha256sum --check"
+                           "RIVET_RACKET_INCLUDE"
+                           "RIVET_RACKET_LIBRARY"
+                           "RIVET_RACKET_BOOT_DIR"))])
+  (check-file-contains embed-action expected))
+
+(define configuration-guide
+  (build-path repository-root "docs" "configuration.md"))
+(check-file-contains configuration-guide
+                     "(resources . (\"shared/i18n\" \"shared/emoji.json\"))")
+(check-file-contains configuration-guide "stage/res")
+(check-file-contains configuration-guide "stage/app")
+
+(define runtime-limits-guide
+  (build-path repository-root "docs" "runtime-limits.md"))
+(check-file-contains runtime-limits-guide "Windows, macOS, and Linux")

@@ -71,6 +71,7 @@ RKT
     "```\n\n"
     "Full tutorial: https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.md\n"
     "中文教程: https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.zh-CN.md\n"
+    "Native-host CI: https://github.com/turinglambdaai/rivet/blob/main/docs/ci.md\n"
     "Rivet website: https://rivet.jrtx.site\n")
    name))
 
@@ -184,6 +185,11 @@ raco rivet dev
 raco rivet package
 raco rivet verify
 ```
+
+Pull-request CI must run `raco rivet build` for the Windows, macOS, and Linux
+hosts on the same runner image classes used for release. A release job must not
+be the first place native source is compiled. Follow Rivet's native-host CI
+guide: https://github.com/turinglambdaai/rivet/blob/main/docs/ci.md
 
 After changing RPC, Event, State, Record, or Enum declarations, run the
 compatibility gate and rebuild before editing code that consumes generated native APIs.

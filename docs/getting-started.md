@@ -147,6 +147,14 @@ macos-host/Sources/RivetHost/RivetHostApp.swift
 
 Start with `linux/src/main.cpp`. It is an ordinary GTK4 application and uses the same generated, completion-driven C++ API as the Windows host, bound to Rivet's Linux embedded runtime.
 
+The scaffold calls `rivet::linux_ui::ApplyTheme()` before creating widgets.
+Plain GTK4 desktops can report a portal/GSettings color scheme that disagrees
+with the effective `gtk-theme-name` variant; the helper resolves both signals,
+pins the GTK light/dark variant, and returns the palette application CSS should
+use. Applications with a theme setting can pass `ThemePreference::light`,
+`ThemePreference::dark`, or `ThemePreference::system` and reapply their CSS
+from the returned `ColorScheme`. Keep this call on GTK's main thread.
+
 Rivet intentionally does **not** introduce a cross-platform UI DSL. Use the first-party UI framework normally and keep reusable application/domain logic in Racket.
 
 Application data such as images, templates, and localization files can be declared once in `rivet.rktd` and read from Racket with `resource-path`. Rivet preserves relative paths across development and packaged layouts; see [project configuration](configuration.md#application-resources-and-icons).
@@ -193,7 +201,7 @@ raco rivet verify --production
 
 Production mode uses application-owned signing credentials. See [production signing](production-signing.md) before configuring secrets in CI.
 
-For a complete product release, configure a separate Ed25519 update key and run `raco rivet release`. It adds installer creation (MSI, DMG, or the Ed25519-signed Linux tarball), the signed channel manifest, SBOM, and third-party notices. See [release and updates](release-and-updates.md).
+For a complete product release, configure a separate Ed25519 update key and run `raco rivet release`. It adds installer creation (MSI, DMG, or the Ed25519-signed Linux tarball), the signed channel manifest, SBOM, and third-party notices. A product that intentionally has no update channel uses `raco rivet release --without-updates`; installer signing and compliance artifacts are still produced. See [release and updates](release-and-updates.md).
 
 ## 9. The normal Rivet workflow
 
@@ -210,6 +218,7 @@ raco rivet release    # create the full signed release set
 Then read the deeper documentation only when you need it:
 
 - [Architecture](architecture.md)
+- [Continuous integration](ci.md)
 - [Project configuration](configuration.md)
 - [Diagnostics](diagnostics.md)
 - [Protocol](protocol.md)

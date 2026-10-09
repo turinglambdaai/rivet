@@ -155,39 +155,12 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
-      - name: Cache embeddable Racket CS
-        id: cache-racket-embed
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/racket-embed
-          key: racket-embed-9.3-${{ runner.os }}-${{ runner.arch }}-v1
-      - name: Build full Racket CS 9.3 from pinned source
-        if: steps.cache-racket-embed.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          archive="$RUNNER_TEMP/racket-minimal-9.3-src-builtpkgs.tgz"
-          source_root="$RUNNER_TEMP/racket-9.3"
-          build_root="$RUNNER_TEMP/racket-embed-build"
-          embed_prefix="$RUNNER_TEMP/racket-embed"
-
-          curl --fail --location --retry 3 \
-            --output "$archive" \
-            https://download.racket-lang.org/releases/9.3/installers/racket-minimal-9.3-src-builtpkgs.tgz
-          echo "3a01324d559a15e3f1f58b0c57a92bb344dce534e72e564e0d8b75e3b9c65295  $archive" |
-            sha256sum --check
-          tar -xzf "$archive" -C "$RUNNER_TEMP"
-          mkdir -p "$build_root"
-          cd "$build_root"
-          "$source_root/src/configure" --prefix="$embed_prefix"
-          make -j2
-          make install
+      - name: Set up embeddable Racket CS
+        uses: ./.github/actions/setup-embed-racket
       - name: Install Rivet
         shell: bash
         run: |
           set -euo pipefail
-          echo "$RUNNER_TEMP/racket-embed/bin" >> "$GITHUB_PATH"
-          export PATH="$RUNNER_TEMP/racket-embed/bin:$PATH"
           raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Install GTK4 development files
         run: |
@@ -197,33 +170,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export PATH="$RUNNER_TEMP/racket-embed/bin:$PATH"
-          embed_prefix="$RUNNER_TEMP/racket-embed"
-
-          # Unix-style source installs place the embed headers under
-          # include/racket (includepltdir), not include/ directly. Locate the
-          # directory that actually holds chezscheme.h.
-          racket_include="$(dirname "$(find "$embed_prefix" -name chezscheme.h -print -quit)")"
-          if [[ -z "$racket_include" || "$racket_include" = "." ]]; then
-            echo "chezscheme.h was not found under $embed_prefix" >&2
-            exit 1
-          fi
-          petite_source="$(find "$embed_prefix" -name petite.boot -print -quit)"
-          scheme_source="$(find "$embed_prefix" -name scheme.boot -print -quit)"
-          racket_boot_source="$(find "$embed_prefix" -name racket.boot -print -quit)"
-          racket_library="$(find "$embed_prefix" -name 'libracketcs*.a' -print -quit)"
-          for artifact in "$petite_source" "$scheme_source" "$racket_boot_source" "$racket_library"; do
-            if [[ -z "$artifact" ]]; then
-              echo "Racket CS embedded artifact was not found under $embed_prefix" >&2
-              exit 1
-            fi
-          done
-
           export RIVET_ROOT="$GITHUB_WORKSPACE"
-          export RIVET_RACKET_INCLUDE="$racket_include"
-          export RIVET_RACKET_LIB_DIR="$(dirname "$racket_library")"
-          export RIVET_RACKET_LIBRARY="$racket_library"
-          export RIVET_RACKET_BOOT_DIR="$(dirname "$petite_source")"
 
           raco rivet doctor
           root="$(mktemp -d)"

@@ -17,59 +17,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Set up Racket CS
-        uses: Bogdanp/setup-racket@v1.15
-        with:
-          architecture: x64
-          distribution: full
-          variant: CS
-          version: '9.3'
+      - name: Set up embeddable Racket CS
+        uses: ./.github/actions/setup-embed-racket
       - name: Install Rivet
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Install Linux development files
         run: |
           sudo apt-get update
           sudo apt-get install --yes libglib2.0-dev libsecret-1-dev libgtk-4-dev
-      - name: Cache embeddable Racket CS
-        id: cache-racket-embed
-        uses: actions/cache/restore@v5
-        with:
-          path: ${{ runner.temp }}/racket-embed
-          key: racket-embed-9.3-${{ runner.os }}-${{ runner.arch }}-v1
-      - name: Build embeddable Racket CS
-        if: steps.cache-racket-embed.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          archive="$RUNNER_TEMP/racket-minimal-9.3-src-builtpkgs.tgz"
-          source_root="$RUNNER_TEMP/racket-9.3"
-          build_root="$RUNNER_TEMP/racket-embed-build"
-          embed_prefix="$RUNNER_TEMP/racket-embed"
-
-          curl --fail --location --retry 3 \
-            --output "$archive" \
-            https://download.racket-lang.org/releases/9.3/installers/racket-minimal-9.3-src-builtpkgs.tgz
-          echo "3a01324d559a15e3f1f58b0c57a92bb344dce534e72e564e0d8b75e3b9c65295  $archive" |
-            sha256sum --check
-          tar -xzf "$archive" -C "$RUNNER_TEMP"
-          mkdir -p "$build_root"
-          cd "$build_root"
-          "$source_root/src/configure" --prefix="$embed_prefix"
-          make -j2
-          make install
-      - name: Save embeddable Racket CS cache
-        if: steps.cache-racket-embed.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ runner.temp }}/racket-embed
-          key: racket-embed-9.3-${{ runner.os }}-${{ runner.arch }}-v1
       - name: Build backend and integration runner
         shell: bash
         run: |
           set -euo pipefail
           stage="$RUNNER_TEMP/rivet-linux-roundtrip"
           native_build="$RUNNER_TEMP/rivet-linux-native-integration"
-          embed_prefix="$RUNNER_TEMP/racket-embed"
           mkdir -p "$stage/res" "$stage/runtime"
 
           raco ctool \
@@ -78,44 +39,22 @@ jobs:
             --mods "$stage/res/core.zo" \
             platform/linux/Integration/backend.rkt
 
-          racket_include="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
-          runtime_roots=("$embed_prefix")
-          petite_source="$(find "${runtime_roots[@]}" -maxdepth 6 -name petite.boot -print -quit)"
-          scheme_source="$(find "${runtime_roots[@]}" -maxdepth 6 -name scheme.boot -print -quit)"
-          racket_boot_source="$(find "${runtime_roots[@]}" -maxdepth 6 -name racket.boot -print -quit)"
-          if [[ -z "$petite_source" || -z "$scheme_source" || -z "$racket_boot_source" ]]; then
-            echo "Racket CS boot files were not found" >&2
-            find "${runtime_roots[@]}" -maxdepth 6 \
-              \( -name '*.boot' -o -name '*racketcs*' \) -print >&2
-            exit 1
-          fi
-          cp "$petite_source" "$stage/runtime/petite.boot"
-          cp "$scheme_source" "$stage/runtime/scheme.boot"
-          cp "$racket_boot_source" "$stage/runtime/racket.boot"
-
-          racket_library="$(find "${runtime_roots[@]}" -maxdepth 6 \
-            -name 'libracketcs*.a' \
-            -print -quit)"
-          if [[ -z "$racket_library" ]]; then
-            echo "No embeddable Racket CS library found" >&2
-            find "${runtime_roots[@]}" -maxdepth 6 -name '*racketcs*' -print >&2
-            exit 1
-          fi
+          cp "$RIVET_RACKET_BOOT_DIR/petite.boot" "$stage/runtime/petite.boot"
+          cp "$RIVET_RACKET_BOOT_DIR/scheme.boot" "$stage/runtime/scheme.boot"
+          cp "$RIVET_RACKET_BOOT_DIR/racket.boot" "$stage/runtime/racket.boot"
 
           cmake -S platform/linux/Integration -B "$native_build" \
             -DCMAKE_BUILD_TYPE=Release \
             -DRIVET_ROOT="$GITHUB_WORKSPACE" \
-            -DRIVET_RACKET_INCLUDE="$racket_include" \
-            -DRIVET_RACKET_LIBRARY="$racket_library"
+            -DRIVET_RACKET_INCLUDE="$RIVET_RACKET_INCLUDE" \
+            -DRIVET_RACKET_LIBRARY="$RIVET_RACKET_LIBRARY"
           cmake --build "$native_build" --config Release
+          "$native_build/RivetThemeTest"
           cp "$native_build/RivetIntegration" "$stage/RivetIntegration"
           chmod +x "$stage/RivetIntegration"
 
           echo "RIVET_LINUX_ROUNDTRIP_STAGE=$stage" >> "$GITHUB_ENV"
           echo "RIVET_ROOT=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
-          echo "RIVET_RACKET_INCLUDE=$racket_include" >> "$GITHUB_ENV"
-          echo "RIVET_RACKET_LIB_DIR=$(dirname "$racket_library")" >> "$GITHUB_ENV"
-          echo "RIVET_RACKET_LIBRARY=$racket_library" >> "$GITHUB_ENV"
           echo "RIVET_RACKET_BOOT_DIR=$stage/runtime" >> "$GITHUB_ENV"
       - name: Exercise embedded runtime
         timeout-minutes: 2

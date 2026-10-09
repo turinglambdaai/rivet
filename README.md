@@ -25,7 +25,7 @@ That is the normal first-run path. `doctor` checks the native toolchain and prin
 
 Every generated app includes an `AGENTS.md` and an initial `rivet-schema.json` compatibility baseline. `inspect --json` exposes a versioned machine-readable map of project identity, backend/native UI edit points, schema checks, target maturity, generated paths, and safe lifecycle commands. See [agent-native development](docs/agent-native.md).
 
-For a guided walkthrough, read **[Getting Started with Rivet](docs/getting-started.md)**. The installed package also includes searchable Scribble documentation. If you are developing Rivet itself, use the linked-checkout workflow in that guide instead of installing from the catalog.
+For a guided walkthrough, read **[Getting Started with Rivet](docs/getting-started.md)**. Before shipping a product, adopt the [native-host CI contract](docs/ci.md). The installed package also includes searchable Scribble documentation. If you are developing Rivet itself, use the linked-checkout workflow in that guide instead of installing from the catalog.
 
 After the counter, study **[Rivet Taskboard](examples/taskboard/README.md)**: a maintained list/detail application with independent WinUI 3, SwiftUI, and GTK4 interfaces over one tested Racket contract.
 
@@ -249,6 +249,7 @@ raco rivet package                 Create and verify a development distributable
 raco rivet package --production    Create, sign, and verify a production distributable
 raco rivet release                 Build installer, signed update manifest, SBOM, and notices
 raco rivet release --development   Exercise release flow without platform production signing
+raco rivet release --without-updates  Build the release set without an update manifest
 raco rivet compliance              Generate SBOM/notices and run the license audit
 raco rivet verify                  Re-verify the current packaged artifact
 raco rivet verify --production     Verify production trust/notarization requirements
