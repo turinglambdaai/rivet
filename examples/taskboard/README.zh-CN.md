@@ -41,12 +41,15 @@ raco rivet dev
    State/Event、打包资源、输入上限、取消以及宽松的启动/1000 行性能回归预算，
    而不是模拟传输层。
 
-公开记录使用 `BoardTask` 而不是 `Task`，是为了避免生成的 Swift 类型与并发
-`Task` 冲突。公共 schema 命名是跨语言 API 设计，不只是 Racket 内部命名。
+生成的 Swift Record 与 Enum 统一位于 `RivetTypes` 下，因此 `Task`、`Result`
+等普通领域名称不会在整个模块中遮蔽 Swift 并发或标准库类型。本例仍使用语义
+更明确的 `BoardTask`，macOS 宿主通过 `RivetTypes.BoardTask` 引用它。公共
+schema 命名仍是跨语言 API 设计，不只是 Racket 内部命名。
 
 本项目也展示 Apple companion 的最小权限边界。`rivet.rktd` 只通过
 `device-rpcs` 导出 `list-tasks`、`get-task` 与 `select-task`，所有修改操作仍由
-手机端掌控。生成的 Swift 文件因此包含 Codable 的 `BoardTask`/`TaskStatus`、
+手机端掌控。生成的 Swift 文件因此包含 Codable 的
+`RivetTypes.BoardTask`/`RivetTypes.TaskStatus`、
 手表端类型化 client 方法，以及手机端的
 `RivetDeviceRouter.registerGeneratedBackend`。
 

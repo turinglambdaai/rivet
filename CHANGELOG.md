@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Scope generated Swift Records and Enums under `RivetTypes`. Common domain
+  names such as `Task` and `Result` no longer shadow Swift concurrency or
+  standard-library types across the application module; native Swift call
+  sites now use `RivetTypes.<SchemaName>`.
 - Follow HTTP redirections (10 hops) in `fetch-update-manifest` and
   `download-update`. GitHub release assets — the dominant update origin —
   answer with a 302 to their CDN, so an updater pointing at

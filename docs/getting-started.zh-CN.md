@@ -114,7 +114,7 @@ app/backend.rkt
 raco rivet dev
 ```
 
-构建阶段 Rivet 会读取后端 schema，并重新生成 Swift/C++/Kotlin 类型化 API。Kotlin 客户端位于 `.rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt`，供 Android 应用接入。你不需要自己拼 RVT1 帧，也不需要把 Racket/Chez 对象跨 UI 线程传递。
+构建阶段 Rivet 会读取后端 schema，并重新生成 Swift/C++/Kotlin 类型化 API。Swift Record/Enum 位于 `RivetTypes` 下（例如 `RivetTypes.Task`）；Kotlin 客户端位于 `.rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt`，供 Android 应用接入。你不需要自己拼 RVT1 帧，也不需要把 Racket/Chez 对象跨 UI 线程传递。
 
 生成的项目已经包含 `rivet-schema.json`。把这份兼容性基线提交到版本库，并让 CI 检查它；只有 API 变化是明确、有意的，才刷新基线：
 
