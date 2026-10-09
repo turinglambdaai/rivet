@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Honor `linux-binary-name` in `rivet.rktd`: the Linux build stage, package
+  staging, verification, and launch smoke now use the configured executable
+  name instead of the hardcoded scaffold name `RivetHost` (default
+  unchanged). Apps ship as their product name — `fulcrum`, not a generic
+  host binary — matching what the docs and desktop entries already say.
+  Partially addresses #169.
 - Add a supported WinUI 3-to-`HWND` bridge. Generated Windows hosts expose
   `WindowHandle()` through the first-party system adapter, centralizing the
   Windows App SDK `IWindowNative` ABI and removing the need for title-based

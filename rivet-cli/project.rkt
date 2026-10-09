@@ -28,6 +28,7 @@
          project-device-rpcs
          project-windows-icon
          project-macos-icon
+         project-linux-binary-name
          project-macos-min-version
          project-windows-min-version)
 
@@ -196,6 +197,12 @@
   (optional 'macos-icon
             (lambda (v) (path-string-has-extension? v ".icns"))
             "project-relative .icns path")
+  (optional 'linux-binary-name
+            (lambda (v)
+              (and (string? v)
+                   (positive? (string-length v))
+                   (regexp-match? #px"^[A-Za-z0-9][A-Za-z0-9._-]*$" v)))
+            "executable file name such as \"fulcrum\" (letters, digits, '.', '_', '-')")
   value)
 
 (define (load-config path)
@@ -290,6 +297,13 @@
 
 (define (project-macos-icon project)
   (project-ref project 'macos-icon (lambda () #f)))
+
+;; The staged Linux executable name. Defaults to the scaffold binary name
+;; so existing projects build unchanged; apps that want the product name
+;; on disk set it in rivet.rktd and it flows through build, package,
+;; verify, and the launch smoke.
+(define (project-linux-binary-name project)
+  (project-ref project 'linux-binary-name (lambda () "RivetHost")))
 
 (define (project-macos-min-version project)
   (project-ref project

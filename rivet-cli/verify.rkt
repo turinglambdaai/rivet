@@ -213,7 +213,7 @@
 (define (verify-linux-package! project package production?)
   (define who 'verify-package!)
   (required-directory! who package "Linux application package")
-  (define executable (build-path package "RivetHost"))
+  (define executable (build-path package (project-linux-binary-name project)))
   (required-file! who executable "GTK4 executable")
   (define permissions (file-or-directory-permissions executable))
   (unless (if (list? permissions)
@@ -356,14 +356,14 @@
                   (path->string app)))
   app)
 
-(define (packaged-executable package)
+(define (packaged-executable package #:binary-name [binary-name "RivetHost"])
   (case (system-type 'os)
     [(windows) (build-path package "RivetHost.exe")]
     [(macosx)
      (define executable-name
        (path->string (path-replace-extension (file-name-from-path package) #"")))
      (build-path package "Contents" "MacOS" executable-name)]
-    [(unix) (build-path package "RivetHost")]))
+    [(unix) (build-path package binary-name)]))
 
 (define (verify-package! project package
                          #:production? [production? #f]
@@ -379,7 +379,8 @@
   (when launch-smoke?
     (cond
       [(gui-session-available?)
-       (define executable (packaged-executable package))
+       (define executable
+         (packaged-executable package #:binary-name (project-linux-binary-name project)))
        (launch-smoke! executable)
        (printf "rivet: launch smoke passed: ~a\n" executable)]
       [else
