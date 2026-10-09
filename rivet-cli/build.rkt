@@ -411,11 +411,13 @@
   (copy-required! 'build-project! built staged-executable)
   (file-or-directory-permissions staged-executable #o755)
   ;; SwiftPM emits resource bundles (RivetHost_*.bundle) next to the built
-  ;; executable. Stage them beside RivetHost: `raco rivet dev` runs the
-  ;; stage directly, where the host's resource_bundle_accessor looks at
-  ;; Bundle.main.bundleURL, and package-macos! ships them inside the .app.
-  ;; Without this the host dies on launch with "could not load resource
-  ;; bundle".
+  ;; executable. Stage them beside RivetHost so `raco rivet dev`, which runs
+  ;; the stage directly, finds them through resource_bundle_accessor's
+  ;; Bundle.main.bundleURL lookup. Packaging refuses them instead of copying
+  ;; them into the .app: the accessor's .app-root location is unsealed
+  ;; content that codesign rejects, so SwiftPM-declared resources cannot
+  ;; ship in signed packages (package-macos! fails closed with a migration
+  ;; message; declare shared data in rivet.rktd `resources` instead).
   (define built-dir (path-only built))
   (for ([entry (in-list (directory-list built-dir))]
         #:when (regexp-match? #rx"[.]bundle$" (path->string entry)))
