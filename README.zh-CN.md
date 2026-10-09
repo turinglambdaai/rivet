@@ -249,6 +249,7 @@ raco rivet package                 创建并验证开发发布物
 raco rivet package --production    创建、签名并验证正式发布物
 raco rivet release                 构建 installer、签名更新 manifest、SBOM 与许可声明
 raco rivet release --development   不做平台正式签名，演练完整 release 流程
+raco rivet release --without-updates  构建不含更新 manifest 的完整发布物
 raco rivet compliance              生成 SBOM/许可声明并执行 license audit
 raco rivet verify                  重新验证当前发布物
 raco rivet verify --production     验证生产签名/公证信任状态

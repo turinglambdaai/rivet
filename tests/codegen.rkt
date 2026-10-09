@@ -26,6 +26,8 @@
       (file->string (build-path project-root "macos-host" "Package.swift")))
     (define linux-cmake
       (file->string (build-path project-root "linux" "CMakeLists.txt")))
+    (define linux-main
+      (file->string (build-path project-root "linux" "src" "main.cpp")))
     (define project-config
       (file->string (build-path project-root "rivet.rktd")))
     (define generated-ignore
@@ -43,6 +45,8 @@
     (check-true (regexp-match? #rx"RIVET_MACOS_MIN_VERSION" macos-package))
     (check-true (regexp-match? #rx"RivetDevice" macos-package))
     (check-true (regexp-match? #rx"platform/linux/runtime" linux-cmake))
+    (check-true (regexp-match? #rx"platform/linux/theme/theme[.]cpp" linux-cmake))
+    (check-true (regexp-match? #rx"rivet::linux_ui::ApplyTheme" linux-main))
     (for ([generated-path (in-list '("windows/Generated Files/"
                                      "windows/obj/"
                                      "windows/RivetHost/"

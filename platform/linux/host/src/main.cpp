@@ -14,6 +14,7 @@
 #include <thread>
 
 #include "GeneratedBackend.hpp"
+#include "theme.hpp"
 
 namespace {
 
@@ -198,6 +199,11 @@ void on_activate(GtkApplication* app, gpointer) {
     gtk_window_present(g_state.window);
     return;
   }
+
+  // Plain GTK4 can receive a portal color scheme that disagrees with the
+  // selected theme-name variant. Pin both before creating widgets so native
+  // controls and application CSS cannot render on opposite palettes.
+  (void)rivet::linux_ui::ApplyTheme();
 
   auto* window = gtk_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(window), "Rivet — Racket + GTK4");

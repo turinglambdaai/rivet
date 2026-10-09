@@ -43,6 +43,7 @@
     "  raco rivet package --skip-launch-smoke  package without starting the GUI artifact\n"
     "  raco rivet release                 build signed installer, update manifest, SBOM, and notices\n"
     "  raco rivet release --development   exercise release flow without platform production signing\n"
+    "  raco rivet release --without-updates  release without an update manifest or update key\n"
     "  raco rivet compliance              generate SBOM/notices and run the license audit\n"
     "  raco rivet verify                  re-verify the current packaged artifact\n"
     "  raco rivet verify --production     verify production trust/notarization requirements\n"
@@ -143,12 +144,21 @@
      (say "production packaged, signed, and verified ~a~a"
           output
           (if launch-smoke? "" " (launch smoke skipped)"))]
-    [(or (list "release") (list "release" "--development"))
-     (define production? (equal? args '("release")))
+    [(or (list "release")
+         (list "release" "--development")
+         (list "release" "--without-updates")
+         (list "release" "--development" "--without-updates")
+         (list "release" "--without-updates" "--development"))
+     (define production? (not (member "--development" args)))
+     (define updates? (not (member "--without-updates" args)))
      (define-values (installer manifest sbom notices)
-       (release-project! (current-project!) #:production? production?))
+       (release-project! (current-project!)
+                         #:production? production?
+                         #:updates? updates?))
      (say "release installer: ~a" installer)
-     (say "signed update manifest: ~a" manifest)
+     (if manifest
+         (say "signed update manifest: ~a" manifest)
+         (say "update manifest: skipped (--without-updates)"))
      (say "SBOM: ~a" sbom)
      (say "third-party notices: ~a" notices)]
     [(list "verify")
