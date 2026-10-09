@@ -79,6 +79,16 @@
      (regexp-match? #rx"IDI_RIVET_APP_ICON ICON"
                     (file->string rc)))
     (check-false (regexp-match? #rx"\\\\" (file->string rc)))
+    ;; The version block always ships, icon or not: identity in Explorer,
+    ;; Task Manager, and installer UX is not optional for packaged apps.
+    (define rc-text (file->string rc))
+    (check-true (regexp-match? #rx"#include <windows\\.h>" rc-text))
+    (check-true (regexp-match? #rx"VS_VERSION_INFO VERSIONINFO" rc-text))
+    (check-true (regexp-match? #rx"FILEVERSION     0, 1, 0, 1" rc-text))
+    (check-true
+     (regexp-match? #rx"VALUE \"ProductName\",      \"Demo_App\"" rc-text))
+    (check-true
+     (regexp-match? #rx"VALUE \"OriginalFilename\", \"Demo_App\\.exe\"" rc-text))
 
     (define plist (build-path temp-root "Info.plist"))
     (write-macos-info! plist

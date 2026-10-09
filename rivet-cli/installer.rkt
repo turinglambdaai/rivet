@@ -138,7 +138,7 @@
                   (find-executable-path "wix.exe")))
   (unless wix
     (error 'create-installer!
-           "WiX Toolset v4+ was not found; install `wix tool install --global wix` before creating an MSI"))
+           "WiX Toolset was not found; install it with `dotnet tool install --global wix --version 5.*` (WiX 7 aborts with WIX7015 unless the Open Source Maintenance Fee EULA is accepted, so pin the 5.x line)"))
   (define dist (project-path project "dist"))
   (define source (project-path project ".rivet" "installer" "product.wxs"))
   (make-parent-directory* source)

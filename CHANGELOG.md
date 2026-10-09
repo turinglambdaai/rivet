@@ -8,6 +8,15 @@
   self-contained deployment drags beside every app; Rivet hosts link no
   Windows AI APIs, and the exclusion is pinned by an explicit list plus
   a launch smoke on every package. Fixes #144.
+- Windows hosts now compile a VERSIONINFO resource into the exe. The
+  generated app-icon.rc always carries the project identity
+  (ProductName/FileDescription/Company from rivet.rktd, versions as
+  version.build) so Explorer, Task Manager, and installer UX show the
+  product instead of a bare framework binary; the icon line still rides
+  along when windows-icon is declared. The WiX missing-tool hint now
+  points at dotnet tool install with a 5.x pin (WiX 7 aborts on the
+  Open Source Maintenance Fee EULA). Closes the identity half of #166.
+
 - Linux hosts now terminate on SIGTERM/SIGINT. The host scaffold and the
   Taskboard example install Rivet's shutdown hook so a termination signal
   runs the same orderly backend shutdown as the GTK shutdown signal and
