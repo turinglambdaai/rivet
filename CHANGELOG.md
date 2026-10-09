@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Linux hosts now terminate on SIGTERM/SIGINT. The host scaffold and the
+  Taskboard example install Rivet's shutdown hook so a termination signal
+  runs the same orderly backend shutdown as the GTK shutdown signal and
+  then exits; previously the embedded backend died on the signal while the
+  GTK process stayed up, leaving a window that could not search or run
+  anything (observed on Fulcrum 0.4.1: `kill` left a half-dead app that
+  only SIGKILL would remove).
 - Honor `linux-binary-name` in `rivet.rktd`: the Linux build stage, package
   staging, verification, and launch smoke now use the configured executable
   name instead of the hardcoded scaffold name `RivetHost` (default
