@@ -25,7 +25,7 @@ raco rivet dev
 
 每个新项目都会生成 `AGENTS.md` 和初始 `rivet-schema.json` 兼容性基线；`inspect --json` 则提供带版本号的机器可读项目地图，包括项目身份、Racket 后端与各端原生 UI 编辑入口、schema 检查、目标成熟度、生成目录和安全生命周期命令。详见 [Agent-native 开发](docs/agent-native.md)。
 
-需要完整引导时直接看 **[Rivet 快速上手教程](docs/getting-started.zh-CN.md)**；安装后的包也提供可搜索的 Scribble 文档。只有开发 Rivet 框架本身时，才需要使用教程里的源码 link 安装方式。
+需要完整引导时直接看 **[Rivet 快速上手教程](docs/getting-started.zh-CN.md)**；产品发布前请采用[原生宿主 CI 契约](docs/ci.zh-CN.md)。安装后的包也提供可搜索的 Scribble 文档。只有开发 Rivet 框架本身时，才需要使用教程里的源码 link 安装方式。
 
 跑通 counter 后，继续学习长期维护的 **[Rivet Taskboard 参考应用](examples/taskboard/README.zh-CN.md)**：三个平台分别使用 WinUI 3、SwiftUI、GTK4，在同一份经过测试的 Racket 契约之上实现列表/详情工作流。
 

@@ -107,6 +107,23 @@ Packaged resources live under `app/` inside the platform resource root. Racket c
 
 During `raco rivet dev`, the root is `.rivet/stage/app`. Windows and Linux packages keep it beside the executable as `app/`; macOS packages keep it at `Contents/Resources/app`. Native UI code can use those same platform-native locations. Set `RIVET_RESOURCE_ROOT` or parameterize `current-resource-root` only for tests and specialized hosts.
 
+Product resources must be declared explicitly; Rivet does not infer a resource
+contract from directory names. For example, a product that shares translations
+and an emoji catalog across its native hosts should configure:
+
+```racket
+(resources . ("shared/i18n" "shared/emoji.json"))
+```
+
+The preserved paths are then `.rivet/stage/app/shared/i18n/...` during a build,
+`app/shared/i18n/...` in Windows and Linux packages, and
+`Contents/Resources/app/shared/i18n/...` in a macOS application. Native host
+code should resolve that platform resource root and append the same
+`shared/...` relative path. Do not copy product files into `stage/res`: `res`
+is Rivet's embedded-backend area and contains `core.zo`, while `app` is the
+verified application-resource contract. This explicit declaration keeps build,
+package, and `raco rivet verify` behavior identical on all three platforms.
+
 Projects created before this feature remain valid because all three settings are optional. To embed a Windows icon in an older generated host, add Rivet's conditional `RIVET_WINDOWS_ICON_RC` `ResourceCompile` item from the current host template or regenerate the host project while preserving application UI sources.
 
 ## Deployment targets

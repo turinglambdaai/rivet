@@ -223,6 +223,7 @@ raco rivet release    # 生成完整签名发布物
 其他文档按需阅读：
 
 - [架构](architecture.md)
+- [持续集成](ci.zh-CN.md)
 - [项目配置](configuration.md)
 - [诊断](diagnostics.md)
 - [协议](protocol.md)

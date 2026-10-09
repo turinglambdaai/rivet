@@ -1,0 +1,126 @@
+name: Set up embeddable Racket CS
+description: Build and cache the pinned Racket CS runtime used by Rivet Linux hosts
+
+inputs:
+  racket-version:
+    description: Racket CS release version
+    required: false
+    default: '9.3'
+  archive-sha256:
+    description: SHA-256 of the official minimal source builtpkgs archive
+    required: false
+    default: 3a01324d559a15e3f1f58b0c57a92bb344dce534e72e564e0d8b75e3b9c65295
+  cache-version:
+    description: Increment to invalidate previously built runtime caches
+    required: false
+    default: v1
+  build-jobs:
+    description: Parallel jobs used while building Racket
+    required: false
+    default: '2'
+
+outputs:
+  prefix:
+    description: Installed Racket CS prefix
+    value: ${{ steps.locate.outputs.prefix }}
+  include-dir:
+    description: Directory containing chezscheme.h and racketcs.h
+    value: ${{ steps.locate.outputs.include-dir }}
+  library:
+    description: Static libracketcs archive
+    value: ${{ steps.locate.outputs.library }}
+  boot-dir:
+    description: Directory containing petite.boot, scheme.boot, and racket.boot
+    value: ${{ steps.locate.outputs.boot-dir }}
+
+runs:
+  using: composite
+  steps:
+    - name: Restore embeddable runtime cache
+      id: cache
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ runner.temp }}/racket-embed-${{ inputs.racket-version }}
+        key: racket-embed-${{ inputs.racket-version }}-${{ inputs.archive-sha256 }}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-version }}
+
+    - name: Build checksum-pinned Racket CS
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        RIVET_ACTION_RACKET_VERSION: ${{ inputs.racket-version }}
+        RIVET_ACTION_ARCHIVE_SHA256: ${{ inputs.archive-sha256 }}
+        RIVET_ACTION_BUILD_JOBS: ${{ inputs.build-jobs }}
+      run: |
+        set -euo pipefail
+        if [[ ! "$RIVET_ACTION_RACKET_VERSION" =~ ^[0-9]+([.][0-9]+){1,2}$ ]]; then
+          echo "invalid Racket version: $RIVET_ACTION_RACKET_VERSION" >&2
+          exit 1
+        fi
+        if [[ ! "$RIVET_ACTION_ARCHIVE_SHA256" =~ ^[0-9a-fA-F]{64}$ ]]; then
+          echo "invalid archive SHA-256" >&2
+          exit 1
+        fi
+        if [[ ! "$RIVET_ACTION_BUILD_JOBS" =~ ^[1-9][0-9]*$ ]]; then
+          echo "invalid build job count" >&2
+          exit 1
+        fi
+
+        archive="$RUNNER_TEMP/racket-minimal-$RIVET_ACTION_RACKET_VERSION-src-builtpkgs.tgz"
+        source_root="$RUNNER_TEMP/racket-$RIVET_ACTION_RACKET_VERSION"
+        build_root="$RUNNER_TEMP/racket-embed-build-$RIVET_ACTION_RACKET_VERSION"
+        prefix="$RUNNER_TEMP/racket-embed-$RIVET_ACTION_RACKET_VERSION"
+        rm -rf "$source_root" "$build_root" "$prefix"
+
+        curl --fail --location --retry 3 \
+          --output "$archive" \
+          "https://download.racket-lang.org/releases/$RIVET_ACTION_RACKET_VERSION/installers/racket-minimal-$RIVET_ACTION_RACKET_VERSION-src-builtpkgs.tgz"
+        echo "$RIVET_ACTION_ARCHIVE_SHA256  $archive" | sha256sum --check
+        tar -xzf "$archive" -C "$RUNNER_TEMP"
+        mkdir -p "$build_root"
+        cd "$build_root"
+        "$source_root/src/configure" --prefix="$prefix"
+        make -j"$RIVET_ACTION_BUILD_JOBS"
+        make install
+
+    - name: Locate and export embedding artifacts
+      id: locate
+      shell: bash
+      env:
+        RIVET_ACTION_RACKET_VERSION: ${{ inputs.racket-version }}
+      run: |
+        set -euo pipefail
+        prefix="$RUNNER_TEMP/racket-embed-$RIVET_ACTION_RACKET_VERSION"
+        include_dir="$(dirname "$(find "$prefix" -name chezscheme.h -print -quit)")"
+        library="$(find "$prefix" -name 'libracketcs*.a' -print -quit)"
+        petite="$(find "$prefix" -name petite.boot -print -quit)"
+        scheme="$(find "$prefix" -name scheme.boot -print -quit)"
+        racket_boot="$(find "$prefix" -name racket.boot -print -quit)"
+        for artifact in "$include_dir/chezscheme.h" "$include_dir/racketcs.h" "$library" "$petite" "$scheme" "$racket_boot"; do
+          if [[ ! -e "$artifact" ]]; then
+            echo "required embeddable Racket artifact was not found: $artifact" >&2
+            find "$prefix" -maxdepth 6 \( -name '*.boot' -o -name '*racketcs*' \) -print >&2
+            exit 1
+          fi
+        done
+        boot_dir="$(dirname "$petite")"
+        if [[ "$(dirname "$scheme")" != "$boot_dir" || "$(dirname "$racket_boot")" != "$boot_dir" ]]; then
+          echo "Racket boot files do not share one directory" >&2
+          exit 1
+        fi
+
+        echo "$prefix/bin" >> "$GITHUB_PATH"
+        echo "RIVET_RACKET_INCLUDE=$include_dir" >> "$GITHUB_ENV"
+        echo "RIVET_RACKET_LIB_DIR=$(dirname "$library")" >> "$GITHUB_ENV"
+        echo "RIVET_RACKET_LIBRARY=$library" >> "$GITHUB_ENV"
+        echo "RIVET_RACKET_BOOT_DIR=$boot_dir" >> "$GITHUB_ENV"
+        echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+        echo "include-dir=$include_dir" >> "$GITHUB_OUTPUT"
+        echo "library=$library" >> "$GITHUB_OUTPUT"
+        echo "boot-dir=$boot_dir" >> "$GITHUB_OUTPUT"
+
+    - name: Save validated embeddable runtime cache
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ runner.temp }}/racket-embed-${{ inputs.racket-version }}
+        key: racket-embed-${{ inputs.racket-version }}-${{ inputs.archive-sha256 }}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-version }}
