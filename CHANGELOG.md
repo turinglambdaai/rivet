@@ -2,10 +2,16 @@
 
 ## Unreleased
 
+- Load `raco rivet` subcommand modules lazily. A stale bytecode cache in a
+  linked checkout now fails inside the command entry point, which detects the
+  `instantiate-linklet` mismatch and prints the working remedy (clear
+  `compiled/` + `raco setup rivet`) instead of crashing raco dispatch with a
+  raw linklet dump. Partially addresses #145.
 - Align Swift and Kotlin state accessors with the generated RPC naming: they
   are now `get_<state>`/`set_<state>` instead of a camelCase prefix glued to a
   snake body (`getRepo_root`). This is a breaking rename for Swift/Kotlin call
   sites; C++ was already snake_case and is unchanged.
+
 - Scope generated Swift Records and Enums under `RivetTypes`. Common domain
   names such as `Task` and `Result` no longer shadow Swift concurrency or
   standard-library types across the application module; native Swift call
