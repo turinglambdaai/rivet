@@ -76,7 +76,17 @@
                   sample-manifest))
   (check-false
    (select-update (struct-copy updater-config config [rollout-bucket 75])
-                  (struct-copy update-manifest sample-manifest [rollout 50]))))
+                  (struct-copy update-manifest sample-manifest [rollout 50])))
+
+;; The DER SPKI bytes a release build embeds as hex in app source parse
+;; into a verifying key without a round-trip through a temp file.
+  (define embedded-der (pk-key->datum private-key 'SubjectPublicKeyInfo))
+  (define embedded-public (bytes->ed25519-public-key embedded-der))
+  (check-true (pk-key? embedded-public))
+  (check-true (ed25519-verify embedded-public #"payload"
+                              (ed25519-sign private-key #"payload")))
+  (check-exn #rx"could not decode Ed25519 key"
+             (lambda () (bytes->ed25519-public-key #"not a key"))))
 
 (define artifact-file (make-temporary-file "rivet-artifact-~a.bin"))
 (dynamic-wind

@@ -6,9 +6,13 @@
          racket/string
          racket/system
          "../rivet/distribution/crypto.rkt"
+         "appimage.rkt"
+         "deb.rkt"
          "launch-smoke.rkt"
+         "linux-native-package.rkt"
          "linux-package.rkt"
          "project.rkt"
+         "rpm.rkt"
          "signing-options.rkt"
          "tar.rkt"
          "windows-tools.rkt")
@@ -210,6 +214,85 @@
                            "signature" signature-path
                            "public-key" public-key-path)))
 
+;; Native Linux installer formats are verified when a production release is
+;; being checked (the artifacts exist by then): structural metadata and the
+;; staged payload are validated with the same tooling that built them, so a
+;; broken installer cannot pass a release gate.
+(define (verify-linux-native-installers! project)
+  (define who 'verify-package!)
+  (for ([format (in-list (project-linux-formats project))])
+    (case format
+      [("deb")
+       (define installer (deb-installer-path project))
+       (required-file! who installer "deb installer")
+       (define dpkg-deb (find-executable-path "dpkg-deb"))
+       (define info (capture-command! who dpkg-deb "--info" (path->string installer)))
+       (define name (project-name project))
+       (for ([pattern (in-list
+                       (list (format "Package: ~a" (deb-package-name project))
+                             (format "Architecture: ~a" (deb-architecture))
+                             "Depends: libgtk-4-1"))])
+         (unless (regexp-match? (regexp (regexp-quote pattern)) info)
+           (raise-arguments-error who
+                                  "deb installer metadata is missing an expected control field"
+                                  "field" pattern
+                                  "installer" installer)))
+       ;; Extracting proves the payload and desktop entry round-trip through
+       ;; the real deb container.
+       (define extraction (make-temporary-file "rivet-deb-verify-~a" 'directory))
+       (dynamic-wind
+         void
+         (lambda ()
+           (capture-command! who dpkg-deb "-x" (path->string installer)
+                             (path->string extraction))
+           (required-file! who (build-path extraction "opt" name "RivetHost")
+                           "deb-installed executable")
+           (required-file! who
+                           (build-path extraction "usr" "share" "applications"
+                                       (string-append name ".desktop"))
+                           "deb-installed desktop entry"))
+         (lambda () (delete-directory/files extraction)))]
+      [("rpm")
+       (define installer (rpm-installer-path project))
+       (required-file! who installer "rpm installer")
+       (define rpm (find-executable-path "rpm"))
+       (define listing (capture-command! who rpm
+                                         "-qpl" "--nosignature"
+                                         (path->string installer)))
+       (for ([required (in-list
+                       (list (format "/opt/~a/RivetHost" (project-name project))
+                             (format "/usr/share/applications/~a.desktop"
+                                     (project-name project))))])
+         (unless (regexp-match? (regexp (regexp-quote required)) listing)
+           (raise-arguments-error who
+                                  "rpm installer does not contain a required path"
+                                  "path" required
+                                  "installer" installer)))]
+      [("appimage")
+       (define installer (appimage-installer-path project))
+       (required-file! who installer "AppImage installer")
+       ;; The AppImage runtime supports --appimage-extract without FUSE;
+       ;; validate the entry chain (AppRun, payload, desktop, icon) that the
+       ;; desktop environment will rely on.
+       (define extraction (make-temporary-file "rivet-appimage-verify-~a" 'directory))
+       (dynamic-wind
+         void
+         (lambda ()
+           (parameterize ([current-directory extraction])
+             (capture-command! who installer "--appimage-extract"))
+           (define name (project-name project))
+           (define squashfs-root (build-path extraction "squashfs-root"))
+           (required-file! who (build-path squashfs-root "AppRun") "AppImage entry point")
+           (required-file! who (build-path squashfs-root "usr" "bin" "RivetHost")
+                           "AppImage payload executable")
+           (required-file! who (build-path squashfs-root
+                                           (string-append name ".desktop"))
+                           "AppImage desktop entry")
+           (required-file! who (build-path squashfs-root (string-append name ".png"))
+                           "AppImage icon"))
+         (lambda ()
+           (delete-directory/files extraction)))])))
+
 (define (verify-linux-package! project package production?)
   (define who 'verify-package!)
   (required-directory! who package "Linux application package")
@@ -237,7 +320,8 @@
                            "ldd" dependencies))
 
   (when production?
-    (verify-linux-production-installer! project package))
+    (verify-linux-production-installer! project package)
+    (verify-linux-native-installers! project))
   package)
 
 (define (verify-macos-package! project app production?)
