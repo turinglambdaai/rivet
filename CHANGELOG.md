@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Load `raco rivet` subcommand modules lazily. A stale bytecode cache in a
+  linked checkout now fails inside the command entry point, which detects the
+  `instantiate-linklet` mismatch and prints the working remedy (clear
+  `compiled/` + `raco setup rivet`) instead of crashing raco dispatch with a
+  raw linklet dump. Partially addresses #145.
 - Add a reusable checksum-pinned Linux embeddable-Racket setup action and a
   bilingual native-host CI guide. The guide requires WinUI, SwiftUI/AppKit,
   and GTK4 hosts to compile before release on matching runner image classes,
