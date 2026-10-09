@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add `raco rivet manifest-compose`: folds the per-platform signed
+  update manifests from a multi-platform release into ONE family-wide
+  signed manifest (one artifact per platform/architecture, identity
+  fields verified identical across legs, Ed25519 wrapper unchanged) —
+  replacing the per-product hand-rolled merge scripts. Fixes #175.
+- `raco rivet release` now emits a portable zip beside every installer
+  (family naming, sha256 alongside) — the family update feed and
+  locked-down machines consume it directly.
+- Document the multi-platform release matrix convention (runner labels,
+  per-arch Racket installs, family artifact naming, the compose step) in
+  docs/release-and-updates.md.
 - Windows and macOS hosts now shut the embedded backend down orderly on
   session end. The Windows system adapter gains InstallShutdownHook
   (SetConsoleCtrlHandler: CTRL_C/CLOSE/LOGOFF/SHUTDOWN) and the scaffold

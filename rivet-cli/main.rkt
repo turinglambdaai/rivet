@@ -169,11 +169,12 @@
      (define release-project! (command "release" 'release-project!))
      (define production? (not (member "--development" args)))
      (define updates? (not (member "--without-updates" args)))
-     (define-values (installer manifest sbom notices)
+     (define-values (installer manifest sbom notices portable-zip)
        (release-project! (current-project!)
                          #:production? production?
                          #:updates? updates?))
      (say "release installer: ~a" installer)
+     (say "portable zip: ~a" portable-zip)
      (when (eq? (system-type 'os) 'unix)
        (for ([format (in-list ((command "project" 'project-linux-formats)
                                (current-project!)))])
@@ -188,6 +189,32 @@
          (say "update manifest: skipped (--without-updates)"))
      (say "SBOM: ~a" sbom)
      (say "third-party notices: ~a" notices)]
+    [(cons "manifest-compose" rest)
+     ;; Fold the per-platform release manifests into the one family-wide
+     ;; signed manifest. Runs once on the aggregation host after every
+     ;; platform leg published its own update-<channel>.json.
+     (define inputs
+       (for/list ([argument (in-list rest)]
+                  #:unless (regexp-match? #rx"^--" argument))
+         (string->path argument)))
+     (define output
+       (cond
+         [(member "--output" rest)
+          (for/or ([argument (in-list rest)] [next (in-list (cdr rest))])
+            (and (string=? argument "--output") (string->path next)))]
+         [else (build-path "dist" "update-family.json")]))
+     (define private-key-path
+       (or (getenv "RIVET_UPDATE_PRIVATE_KEY")
+           (error 'rivet "RIVET_UPDATE_PRIVATE_KEY is required to sign the family manifest")))
+     (define key-id
+       (or (getenv "RIVET_UPDATE_KEY_ID")
+           (error 'rivet "RIVET_UPDATE_KEY_ID is required to sign the family manifest")))
+     (define compose-manifests! (command "manifest-compose" 'compose-manifests!))
+     (define compose-output
+       (compose-manifests! inputs output
+                           #:private-key-path private-key-path
+                           #:key-id key-id))
+     (say "family update manifest: ~a" compose-output)]
     [(list "verify")
      (define verify-project-package! (command "verify" 'verify-project-package!))
      (define output (verify-project-package! (current-project!)))

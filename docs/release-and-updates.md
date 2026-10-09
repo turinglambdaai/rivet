@@ -23,6 +23,43 @@ Applications that deliberately ship without an online update channel can run `ra
 
 WiX Toolset v4 or later is required to build the Windows MSI. macOS uses the system `hdiutil`. Rivet signs the final MSI/DMG as well as the contained application. On Linux the final tarball is signed and, because the archive is deterministic, `raco rivet verify --production` re-derives it from the package and checks the detached signature.
 
+## Multi-platform release matrices
+
+Every installer format builds natively on its platform, so a family
+release is a per-platform matrix plus one aggregation step:
+
+| Leg | Runner | Produces |
+| --- | ------ | -------- |
+| Windows x64 / ARM64 | `windows-latest` / `windows-11-arm` | MSI + portable zip + per-platform manifest |
+| macOS arm64 | `macos-latest` | DMG + zip + manifest |
+| macOS x64 | `macos-15-intel` | DMG + zip + manifest |
+| Linux x64 / ARM64 | `ubuntu-latest` / `ubuntu-24.04-arm` | deb + rpm + AppImage + tar.gz + manifest |
+
+Conventions that keep the legs composable:
+
+- Every leg runs `raco rivet release` in the checkout of the same tag, so
+  version/build/identifier are identical by construction — the family
+  compose step below rejects any disagreement.
+- Artifacts follow the family naming (`<product>-<version>-<os>-<arch>`
+  plus extension), so the update base URL is one flat directory.
+- Install the Racket CS runtime matching the runner architecture (the
+  same matrix Rivet's own `architectures.yml` exercises; the checksum-
+  pinned `setup-embed-racket` action covers the Linux legs).
+- After every leg uploaded its `update-<channel>.json`, one aggregation
+  job runs:
+
+  ```bash
+  raco rivet manifest-compose     windows/update-stable.json macos-arm64/update-stable.json     macos-x64/update-stable.json linux/update-stable.json     --output update-stable.json
+  ```
+
+  with `RIVET_UPDATE_PRIVATE_KEY` and `RIVET_UPDATE_KEY_ID` set. It folds
+  the per-platform manifests into one signed family manifest (one
+  artifact per platform/architecture, all metadata fields verified
+  identical) — replacing the per-product hand-rolled merge scripts.
+
+The portable zip beside every installer is produced by the same `release`
+run; the family update feed and locked-down machines consume it directly.
+
 ## Update trust model
 
 HTTPS protects transport, but it is not the root of update trust. A manifest contains an exact byte payload and an Ed25519 signature. The signed payload identifies the application, version, build, stable/beta/dev channel, staged rollout percentage, minimum updatable version, rollback predecessor, and every platform artifact's URL, byte size, SHA-256, installer kind, and arguments.
