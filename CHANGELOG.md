@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a reusable checksum-pinned Linux embeddable-Racket setup action and a
+  bilingual native-host CI guide. The guide requires WinUI, SwiftUI/AppKit,
+  and GTK4 hosts to compile before release on matching runner image classes,
+  and the resource guide now shows the verified cross-platform `app/` layout
+  for shared product data.
 - Add a first-party plain-GTK4 theme resolver. Linux hosts now reconcile the
   desktop color-scheme signal with the effective `gtk-theme-name` variant
   before creating widgets, preventing application CSS and native controls from

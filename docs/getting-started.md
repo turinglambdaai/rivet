@@ -218,6 +218,7 @@ raco rivet release    # create the full signed release set
 Then read the deeper documentation only when you need it:
 
 - [Architecture](architecture.md)
+- [Continuous integration](ci.md)
 - [Project configuration](configuration.md)
 - [Diagnostics](diagnostics.md)
 - [Protocol](protocol.md)
