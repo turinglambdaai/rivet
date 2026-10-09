@@ -48,14 +48,17 @@ behavior are not shared.
    cancellation, and generous startup/1,000-row regression budgets without
    mocking the transport.
 
-The public record is named `BoardTask` rather than `Task` because generated
-types must coexist cleanly with Swift concurrency's `Task`. Public schema names
-are cross-language API design, not just Racket implementation details.
+Generated Swift Records and Enums live under `RivetTypes`, so ordinary domain
+names such as `Task` and `Result` do not shadow Swift concurrency or standard
+library types module-wide. This example keeps the more descriptive `BoardTask`
+schema name and refers to it as `RivetTypes.BoardTask` from the macOS host.
+Public schema names remain cross-language API design, not just Racket
+implementation details.
 
 The project also demonstrates the least-privilege Apple companion boundary.
 `rivet.rktd` exports only `list-tasks`, `get-task`, and `select-task` through
 `device-rpcs`; mutations remain phone-owned. The generated Swift file therefore
-contains Codable `BoardTask`/`TaskStatus` values, typed watch-side client
+contains Codable `RivetTypes.BoardTask`/`RivetTypes.TaskStatus` values, typed watch-side client
 methods, and `RivetDeviceRouter.registerGeneratedBackend` for the phone.
 
 ## Make the first change

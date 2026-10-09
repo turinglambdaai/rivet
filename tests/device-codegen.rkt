@@ -67,12 +67,13 @@ RKT
                    "GeneratedBackend.swift")))
     (for ([fragment (in-list
                      '("import RivetDevice"
+                       "public enum RivetTypes"
                        "public enum AccessLevel: String, Codable, Sendable"
                        "public struct Profile: Codable, Sendable"
                        "public struct FetchProfile: RivetDeviceRequest"
-                       "public typealias Response = Profile?"
+                       "public typealias Response = RivetTypes.Profile?"
                        "public static let route = \"rpc.fetch-profile\""
-                       "func fetch_profile(id: Int64) async throws -> Profile?"
+                       "func fetch_profile(id: Int64) async throws -> RivetTypes.Profile?"
                        "func refresh() async throws"
                        "func registerGeneratedBackend(_ api: RivetAPI) throws"
                        "return RivetDeviceUnit()"))])

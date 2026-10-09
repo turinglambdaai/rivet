@@ -9,6 +9,13 @@
 
 (provide generate-swift)
 
+(define swift-schema-namespace "RivetTypes")
+
+(define (swift-schema-type-name name)
+  (format "~a.~a"
+          swift-schema-namespace
+          (record-native-name name swift-id)))
+
 (define (swift-type type)
   (match type
     ['String "String"]
@@ -21,7 +28,7 @@
     [(list 'Optional inner) (format "~a?" (swift-type inner))]
     [_
      (if (or (schema-record-for type) (schema-enum-for type))
-         (record-native-name type swift-id)
+         (swift-schema-type-name type)
          (error 'generate-clients! "unsupported Swift type: ~e" type))]))
 
 (define (swift-record-definition record)
@@ -31,7 +38,7 @@
   (define declarations
     (apply string-append
            (for/list ([field (in-list fields)] [type (in-list types)])
-             (format "    public let ~a: ~a\n" field (swift-type type)))))
+             (format "        public let ~a: ~a\n" field (swift-type type)))))
   (define params
     (string-join
      (for/list ([field (in-list fields)] [type (in-list types)])
@@ -40,12 +47,12 @@
   (define assignments
     (apply string-append
            (for/list ([field (in-list fields)])
-             (format "        self.~a = ~a\n" field field))))
+             (format "            self.~a = ~a\n" field field))))
   (define conformances
     (if (memq (schema-record-name record) (current-swift-codable-types))
         "Codable, Sendable"
         "Sendable"))
-  (format "public struct ~a: ~a {\n~a    public init(~a) {\n~a    }\n}\n\n"
+  (format "    public struct ~a: ~a {\n~a        public init(~a) {\n~a        }\n    }\n\n"
           name conformances declarations params assignments))
 
 (define (swift-enum-definition enum)
@@ -55,13 +62,13 @@
         "String, Codable, Sendable"
         "String, Sendable"))
   (string-append
-   (format "public enum ~a: ~a {\n" name conformances)
+   (format "    public enum ~a: ~a {\n" name conformances)
    (apply string-append
           (for/list ([case (in-list (schema-enum-cases enum))])
-            (format "    case ~a = ~a\n"
+            (format "        case ~a = ~a\n"
                     (swift-id case)
                     (swift-string-literal (symbol->string case)))))
-   "}\n\n"))
+   "    }\n\n"))
 
 (define (swift-encoder type)
   (define key (type-key type))
@@ -288,8 +295,13 @@
            build
            (swift-string-literal identifier)
            (swift-string-literal release-channel))
-   (apply string-append (map swift-enum-definition enums))
-   (apply string-append (map swift-record-definition (order-records records)))
+   (if (and (null? records) (null? enums))
+       ""
+       (string-append
+        "public enum RivetTypes {\n"
+        (apply string-append (map swift-enum-definition enums))
+        (apply string-append (map swift-record-definition (order-records records)))
+        "}\n\n"))
    (apply string-append (map swift-encoder types))
    "\n"
    (apply string-append (map swift-decoder types))

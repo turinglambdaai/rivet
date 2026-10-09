@@ -154,6 +154,7 @@
   (check-unique-native-names!
    "Swift schema types"
    (append
+    (list (cons "RivetTypes" "generated Swift schema namespace"))
     (for/list ([record (in-list records)])
       (cons (record-native-name (schema-record-name record) swift-id)
             (format "Record ~a" (schema-record-name record))))
