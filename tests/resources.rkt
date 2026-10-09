@@ -68,6 +68,11 @@
     (check-exn #rx"does not match rivet.rktd"
                (lambda () (verify-configured-resources! 'test project stage)))
 
+    (check-true (windows-release-excluded? (string->path "x64/RivetHost.pdb")))
+    (check-true (windows-release-excluded? (string->path "x64/onnxruntime.dll")))
+    (check-true (windows-release-excluded? (string->path "x64/DirectML.dll")))
+    (check-false (windows-release-excluded? (string->path "x64/RivetHost.exe")))
+    (check-false (windows-release-excluded? (string->path "x64/libracketcs_ex0znk.dll")))
     (define rc (prepare-windows-icon-resource! project))
     (check-true (file-exists? rc))
     (check-true
