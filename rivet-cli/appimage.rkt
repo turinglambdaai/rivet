@@ -277,6 +277,15 @@
      tool]))
 
 (define (create-appimage! project package)
+  ;; appimagetool validates the desktop entry through desktop-file-validate
+  ;; and exits with a bare code when the helper is absent, hiding the cause.
+  (unless (find-executable-path "desktop-file-validate")
+    (error 'create-appimage!
+           (string-append
+            "desktop-file-validate was not found; appimagetool requires it"
+            " to validate the desktop entry (apt-get install"
+            " desktop-file-utils or dnf install desktop-file-utils) before"
+            " building the AppImage")))
   (printf "rivet: staging AppDir for the AppImage installer\n")
   (define appdir (stage-appdir! project package))
   (stage-appimage-dependencies! appdir)
