@@ -145,6 +145,12 @@
       (for/or ([version-dir (in-list (sort (directory-list pixbuf-root) string<? #:key path->string))]
                #:when (directory-exists? (build-path pixbuf-root version-dir "loaders")))
         (build-path pixbuf-root version-dir "loaders")))
+    (printf "rivet: appimage: pixbuf loaders=~s parent=~s segment=~s
+"
+            loaders
+            (and loaders (path-only loaders))
+            (and loaders (path-only loaders)
+                 (file-name-from-path (path-only loaders))))
     (when (and loaders (absolute-path? loaders) (path-only loaders))
       ;; Keep the loader directory's own version segment in the AppDir path
       ;; so GDK_PIXBUF_MODULEDIR points at a conventional layout.
