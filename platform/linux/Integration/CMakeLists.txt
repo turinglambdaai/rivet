@@ -21,6 +21,7 @@ find_package(ZLIB REQUIRED)
 find_library(LZ4_LIBRARY NAMES lz4 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET gio-2.0)
+pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
 # The Secret Service adapter is compiled whenever libsecret is present; the
 # capability then reports itself at runtime based on service availability.
 pkg_check_modules(LIBSECRET IMPORTED_TARGET libsecret-1)
@@ -31,6 +32,15 @@ add_executable(RivetIntegration
   ../system/system_services.cpp
   ${RIVET_ROOT}/runtime/src/protocol.cpp
 )
+
+add_executable(RivetThemeTest
+  ../theme/theme.cpp
+  ../theme/theme_test.cpp
+)
+target_compile_features(RivetThemeTest PRIVATE cxx_std_17)
+target_include_directories(RivetThemeTest PRIVATE ../theme)
+target_compile_options(RivetThemeTest PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(RivetThemeTest PRIVATE PkgConfig::GTK4)
 
 if(LIBSECRET_FOUND)
   target_compile_definitions(RivetIntegration PRIVATE RIVET_HAVE_LIBSECRET=1)

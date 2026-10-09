@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a first-party plain-GTK4 theme resolver. Linux hosts now reconcile the
+  desktop color-scheme signal with the effective `gtk-theme-name` variant
+  before creating widgets, preventing application CSS and native controls from
+  landing on opposite light/dark palettes; pure resolution cases run in CI.
 - Add `raco rivet release --without-updates` for products that deliberately
   ship without an online update channel. The release still produces and
   verifies its platform installer, SBOM, and third-party notices while update
