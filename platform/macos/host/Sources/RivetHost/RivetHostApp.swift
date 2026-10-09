@@ -29,11 +29,14 @@ struct RivetHostApp: App {
 /// passes through applicationShouldTerminate before the process exits, so
 /// the embedded backend gets one orderly stop hook. The AppModel registers
 /// its backend shutdown once startup succeeds.
+@MainActor
 final class ApplicationDelegate: NSObject, NSApplicationDelegate {
     static var orderlyShutdown: (() -> Void)?
 
-    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        Self.orderlyShutdown?()
+    nonisolated func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // AppKit delivers this callback on the main thread, where the
+        // registered shutdown closure lives.
+        MainActor.assumeIsolated { Self.orderlyShutdown?() }
         return .terminateNow
     }
 }
