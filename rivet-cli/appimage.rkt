@@ -139,22 +139,22 @@
              #:when (directory-exists? candidate))
       candidate))
   (when pixbuf-root
+    ;; Carry the version segment alongside the loaders path: deriving it
+    ;; back from the path fails because path-only keeps a trailing
+    ;; separator, which file-name-from-path rejects.
     (define loaders
       (for/or ([version-dir (in-list (sort (directory-list pixbuf-root) string<? #:key path->string))]
                #:when (directory-exists? (build-path pixbuf-root version-dir "loaders")))
-        (build-path pixbuf-root version-dir "loaders")))
-    (when (and loaders (absolute-path? loaders) (path-only loaders))
+        (cons (path->string version-dir)
+              (build-path pixbuf-root version-dir "loaders"))))
+    (when (and loaders (absolute-path? (cdr loaders)))
       ;; Keep the loader directory's own version segment in the AppDir path
       ;; so GDK_PIXBUF_MODULEDIR points at a conventional layout.
-      ;; path-only keeps a trailing separator, which file-name-from-path
-      ;; rejects; simplify-path normalizes it away.
       (define destination
-        (build-path appdir "usr" "lib" "gdk-pixbuf-2.0"
-                    (file-name-from-path (simplify-path (path-only loaders)))
-                    "loaders"))
+        (build-path appdir "usr" "lib" "gdk-pixbuf-2.0" (car loaders) "loaders"))
       (make-directory* destination)
-      (for ([entry (in-list (directory-list loaders))])
-        (define source (build-path loaders entry))
+      (for ([entry (in-list (directory-list (cdr loaders)))])
+        (define source (build-path (cdr loaders) entry))
         (when (file-exists? source)
           (copy-file source (build-path destination entry) #t)))))
 
