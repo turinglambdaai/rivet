@@ -46,7 +46,7 @@ final class AppModel: ObservableObject {
                 do {
                     try backend.start()
                     let api = RivetAPI(client: backend.client)
-                    let initialCount = try await api.getCounter()
+                    let initialCount = try await api.get_counter()
                     await MainActor.run {
                         self.count = initialCount
                         self.ready = true
@@ -71,7 +71,7 @@ final class AppModel: ObservableObject {
         Task {
             do {
                 let api = RivetAPI(client: backend.client)
-                count = try await api.setCounter(next)
+                count = try await api.set_counter(next)
             } catch {
                 status = "State error: \(error)"
             }

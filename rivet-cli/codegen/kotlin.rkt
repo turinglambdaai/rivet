@@ -146,12 +146,15 @@
 
 (define (kotlin-state-methods state)
   (define raw-name (symbol->string (schema-state-name state)))
-  (define suffix (upper-first (kotlin-id raw-name)))
+  ;; Match the RPC surface: Kotlin identifiers stay snake_case end to end, so
+  ;; accessors are get_<state>/set_<state> rather than a camelCase get prefix
+  ;; glued onto a snake body (getRepo_root).
+  (define name (kotlin-id raw-name))
   (define type (schema-state-type state))
   (format
-   "    suspend fun get~a(): ~a {\n        val result = client.getState(~a)\n        return decode_~a(result)\n    }\n\n    suspend fun set~a(value: ~a): ~a {\n        val result = client.setState(~a, encode_~a(value))\n        return decode_~a(result)\n    }\n"
-   suffix (kotlin-type type) (kotlin-string-literal raw-name) (type-key type)
-   suffix (kotlin-type type) (kotlin-type type)
+   "    suspend fun get_~a(): ~a {\n        val result = client.getState(~a)\n        return decode_~a(result)\n    }\n\n    suspend fun set_~a(value: ~a): ~a {\n        val result = client.setState(~a, encode_~a(value))\n        return decode_~a(result)\n    }\n"
+   name (kotlin-type type) (kotlin-string-literal raw-name) (type-key type)
+   name (kotlin-type type) (kotlin-type type)
    (kotlin-string-literal raw-name) (type-key type) (type-key type)))
 
 (define (generate-kotlin-events events)
