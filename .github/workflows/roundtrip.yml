@@ -108,6 +108,7 @@ jobs:
             -DRIVET_RACKET_INCLUDE="$racket_include" \
             -DRIVET_RACKET_LIBRARY="$racket_library"
           cmake --build "$native_build" --config Release
+          "$native_build/RivetThemeTest"
           cp "$native_build/RivetIntegration" "$stage/RivetIntegration"
           chmod +x "$stage/RivetIntegration"
 

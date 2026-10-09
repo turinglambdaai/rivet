@@ -50,6 +50,7 @@ add_executable(RivetHost
   src/main.cpp
   "${RIVET_ROOT}/platform/linux/runtime/backend.cpp"
   "${RIVET_ROOT}/platform/linux/system/system_services.cpp"
+  "${RIVET_ROOT}/platform/linux/theme/theme.cpp"
   "${RIVET_ROOT}/runtime/src/protocol.cpp"
 )
 
@@ -61,6 +62,7 @@ target_include_directories(RivetHost PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}"
   "${RIVET_ROOT}/platform/linux/runtime"
   "${RIVET_ROOT}/platform/linux/system"
+  "${RIVET_ROOT}/platform/linux/theme"
   "${RIVET_ROOT}/runtime/include"
   "$ENV{RIVET_RACKET_INCLUDE}"
 )

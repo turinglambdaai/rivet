@@ -16,6 +16,7 @@
 
 #include "GeneratedBackend.hpp"
 #include "system_services.hpp"
+#include "theme.hpp"
 
 namespace {
 
@@ -404,6 +405,7 @@ void on_delete_clicked(GtkButton*, gpointer) {
 
 void on_activate(GtkApplication* app, gpointer) {
   if (g_state.window) return gtk_window_present(g_state.window);
+  (void)rivet::linux_ui::ApplyTheme();
   auto* window = gtk_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(window), "Rivet Taskboard — Racket + GTK4");
   gtk_window_set_default_size(GTK_WINDOW(window), 820, 520);

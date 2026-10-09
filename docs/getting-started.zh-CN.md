@@ -153,6 +153,13 @@ macos-host/Sources/RivetHost/RivetHostApp.swift
 
 先看 `linux/src/main.cpp`。它是普通 GTK4 应用，使用与 Windows 相同风格的 completion-driven C++ 类型化 API，但绑定到 Rivet 的 Linux 嵌入运行时。
 
+脚手架会在创建控件前调用 `rivet::linux_ui::ApplyTheme()`。纯 GTK4 桌面
+可能出现 portal/GSettings 色彩方案与实际 `gtk-theme-name` 变体不一致的情况；
+该辅助函数会综合两个信号、固定 GTK 明暗变体，并返回应用 CSS 应使用的
+`ColorScheme`。带主题设置的应用可传入 `ThemePreference::light`、
+`ThemePreference::dark` 或 `ThemePreference::system`，再按返回值重载 CSS。
+该调用必须留在 GTK 主线程。
+
 Rivet **不会**再定义一套跨平台 UI DSL。WinUI 3 和 SwiftUI 按各自平台的正常方式开发，真正需要共享的业务逻辑放在 Racket 中。
 
 图片、模板、本地化文件等应用数据可以统一声明在 `rivet.rktd` 中，并由 Racket 通过 `resource-path` 读取。Rivet 会在开发和打包布局之间保持相同的相对路径，详见[项目配置](configuration.md#application-resources-and-icons)。
