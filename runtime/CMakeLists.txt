@@ -42,6 +42,11 @@ if(RIVET_BUILD_TESTS)
   target_link_libraries(rivet_request_id_allocator_test PRIVATE rivet_protocol)
   target_compile_features(rivet_request_id_allocator_test PRIVATE cxx_std_17)
   add_test(NAME rivet_request_id_allocator_test COMMAND rivet_request_id_allocator_test)
+
+  add_executable(rivet_pending_request_registry_test tests/pending_request_registry_test.cpp)
+  target_link_libraries(rivet_pending_request_registry_test PRIVATE rivet_protocol)
+  target_compile_features(rivet_pending_request_registry_test PRIVATE cxx_std_17)
+  add_test(NAME rivet_pending_request_registry_test COMMAND rivet_pending_request_registry_test)
 endif()
 
 if(RIVET_BUILD_FUZZERS)
