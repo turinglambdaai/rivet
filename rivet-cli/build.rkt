@@ -464,8 +464,12 @@
            cmake
            "--build" (path->string build-dir)
            "--config" configuration)))
-  (define built (build-path build-dir "RivetHost"))
-  (define staged-executable (build-path stage "RivetHost"))
+  ;; The app's CMake must produce the configured binary name
+  ;; (linux-binary-name, default RivetHost) — set_target_properties
+  ;; OUTPUT_NAME in the host CMakeLists when it is not the default.
+  (define binary-name (project-linux-binary-name project))
+  (define built (build-path build-dir binary-name))
+  (define staged-executable (build-path stage binary-name))
   (copy-required! 'build-project! built staged-executable)
   (file-or-directory-permissions staged-executable #o755)
   staged-executable)

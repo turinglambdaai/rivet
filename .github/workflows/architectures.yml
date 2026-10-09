@@ -162,10 +162,10 @@ jobs:
         run: |
           set -euo pipefail
           raco pkg install --auto --no-docs --name rivet --link "$PWD"
-      - name: Install GTK4 development files
+      - name: Install GTK4 development files and rpm tooling
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libgtk-4-dev
+          sudo apt-get install --yes libgtk-4-dev rpm desktop-file-utils
       - name: Compile full schema matrix, package, and verify a GTK4 app
         shell: bash
         run: |
@@ -181,10 +181,22 @@ jobs:
           mkdir -p assets/nested
           printf %s packaged-resource > assets/nested/product.txt
           python3 - <<'PY'
+          import struct, zlib
           from pathlib import Path
+
+          def chunk(tag, data):
+              crc = zlib.crc32(tag + data) & 0xFFFFFFFF
+              return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", crc)
+
+          ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0)
+          idat = zlib.compress(b"\x00\x00\x00\x00\xff")
+          Path("assets/icon.png").write_bytes(
+              b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b""))
+
           path = Path("rivet.rktd")
           original = path.read_text(encoding="utf-8")
-          updated = original.replace('(resources . ())', '(resources . ("assets"))')
+          updated = original.replace('(resources . ())',
+                                     '(resources . ("assets")) (linux-icon . "assets/icon.png")')
           if updated == original:
               raise SystemExit("failed to configure Linux ARM64 smoke resource")
           path.write_text(updated, encoding="utf-8")
@@ -196,3 +208,26 @@ jobs:
           test -x dist/Smoke-linux-arm64/RivetHost
           test "$(cat dist/Smoke-linux-arm64/app/assets/nested/product.txt)" = packaged-resource
           file dist/Smoke-linux-arm64/RivetHost | grep -q aarch64
+          echo "SMOKE_ROOT=$root" >> "$GITHUB_ENV"
+      - name: Build and verify native Linux installer formats
+        shell: bash
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          set -euo pipefail
+          cd "$SMOKE_ROOT/Smoke"
+          raco rivet release --development --without-updates
+          deb="$(ls dist/*.deb)"
+          appimage="$(ls dist/*.AppImage)"
+          rpm_artifact="$(ls dist/*.rpm)"
+          dpkg-deb --info "$deb" | grep -q 'Depends: libgtk-4-1'
+          dpkg-deb --info "$deb" | grep -q 'Architecture: arm64'
+          rm -rf deb-extract && dpkg-deb -x "$deb" deb-extract
+          test -x deb-extract/opt/Smoke/RivetHost
+          test -f deb-extract/usr/share/applications/Smoke.desktop
+          rpm -qpl --nosignature "$rpm_artifact" | grep -q '/opt/Smoke/RivetHost'
+          chmod +x "$appimage"
+          rm -rf appimage-extract && "$appimage" --appimage-extract >/dev/null
+          test -x squashfs-root/AppRun
+          test -x squashfs-root/usr/bin/RivetHost
+          test -f squashfs-root/Smoke.desktop

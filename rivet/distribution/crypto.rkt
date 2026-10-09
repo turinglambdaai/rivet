@@ -12,6 +12,7 @@
          sha256-file/hex
          read-ed25519-public-key
          read-ed25519-private-key
+         bytes->ed25519-public-key
          ed25519-sign
          ed25519-verify
          bytes->base64-string
@@ -60,15 +61,17 @@
 (define (sha256-file/hex path)
   (bytes->hex-string (sha256-file path)))
 
-(define (read-key who path formats)
-  (define raw (file->bytes path))
+(define (decode-key who raw formats #:origin [origin #f])
   (or (for/or ([format (in-list formats)])
         (with-handlers ([exn:fail? (lambda (_) #f)])
           (datum->pk-key raw format ed25519-factories)))
-      (raise-arguments-error who
-                             "could not decode Ed25519 key"
-                             "path" path
-                             "accepted formats" formats)))
+      (apply raise-arguments-error who
+             "could not decode Ed25519 key"
+             (append (list "accepted formats" formats)
+                     (if origin (list "path" origin) (list))))))
+
+(define (read-key who path formats)
+  (decode-key who (file->bytes path) formats #:origin path))
 
 (define (ensure-ed25519 who key private?)
   (unless (pk-key? key)
@@ -86,6 +89,16 @@
    'read-ed25519-public-key
    (read-key 'read-ed25519-public-key path
              '(SubjectPublicKeyInfo rkt-public openssh-public))
+   #f))
+
+;; Release builds embed the channel's public key as DER hex in app source
+;; (the runbook pattern: the private half never lives in a checkout), so
+;; the parsed key must be reachable from bytes and not only from a file.
+(define (bytes->ed25519-public-key raw)
+  (ensure-ed25519
+   'bytes->ed25519-public-key
+   (decode-key 'bytes->ed25519-public-key raw
+               '(SubjectPublicKeyInfo rkt-public openssh-public))
    #f))
 
 (define (read-ed25519-private-key path)

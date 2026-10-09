@@ -172,7 +172,8 @@
     (project-path project "dist" (linux-package-directory-name project)))
   (make-directory* (path-only destination))
   (copy-tree! stage destination)
-  (file-or-directory-permissions (build-path destination "RivetHost") #o755)
+  (file-or-directory-permissions
+   (build-path destination (project-linux-binary-name project)) #o755)
   destination)
 
 (define (sign-macos! codesign identity entitlements racket-framework app production?)
