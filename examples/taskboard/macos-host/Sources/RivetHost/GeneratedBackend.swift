@@ -14,59 +14,62 @@ public enum RivetGeneratedConfig {
     public static let releaseChannel = "stable"
 }
 
-public enum TaskStatus: String, Codable, Sendable {
-    case backlog = "backlog"
-    case active = "active"
-    case done = "done"
-}
-
-public struct BoardTask: Codable, Sendable {
-    public let id: Int64
-    public let title: String
-    public let notes: String
-    public let status: TaskStatus
-    public init(id: Int64, title: String, notes: String, status: TaskStatus) {
-        self.id = id
-        self.title = title
-        self.notes = notes
-        self.status = status
+public enum RivetTypes {
+    public enum TaskStatus: String, Codable, Sendable {
+        case backlog = "backlog"
+        case active = "active"
+        case done = "done"
     }
-}
 
-public struct ImportProgress: Sendable {
-    public let completed: Int64
-    public let total: Int64
-    public let message: String
-    public init(completed: Int64, total: Int64, message: String) {
-        self.completed = completed
-        self.total = total
-        self.message = message
+    public struct BoardTask: Codable, Sendable {
+        public let id: Int64
+        public let title: String
+        public let notes: String
+        public let status: RivetTypes.TaskStatus
+        public init(id: Int64, title: String, notes: String, status: RivetTypes.TaskStatus) {
+            self.id = id
+            self.title = title
+            self.notes = notes
+            self.status = status
+        }
     }
+
+    public struct ImportProgress: Sendable {
+        public let completed: Int64
+        public let total: Int64
+        public let message: String
+        public init(completed: Int64, total: Int64, message: String) {
+            self.completed = completed
+            self.total = total
+            self.message = message
+        }
+    }
+
 }
 
 private func encode_String(_ v: String) -> RivetValue { .string(v) }
 private func encode_Int64(_ v: Int64) -> RivetValue { .int64(v) }
-private func encode_TaskStatus(_ v: TaskStatus) -> RivetValue { .string(v.rawValue) }
-private func encode_BoardTask(_ v: BoardTask) -> RivetValue { .list([encode_Int64(v.id), encode_String(v.title), encode_String(v.notes), encode_TaskStatus(v.status)]) }
+private func encode_TaskStatus(_ v: RivetTypes.TaskStatus) -> RivetValue { .string(v.rawValue) }
+private func encode_BoardTask(_ v: RivetTypes.BoardTask) -> RivetValue { .list([encode_Int64(v.id), encode_String(v.title), encode_String(v.notes), encode_TaskStatus(v.status)]) }
 private func encode_Bool(_ v: Bool) -> RivetValue { .bool(v) }
-private func encode__List_BoardTask_(_ v: [BoardTask]) -> RivetValue { .list(v.map(encode_BoardTask)) }
-private func encode__Optional_BoardTask_(_ v: BoardTask?) -> RivetValue { v.map(encode_BoardTask) ?? .null }
-private func encode_ImportProgress(_ v: ImportProgress) -> RivetValue { .list([encode_Int64(v.completed), encode_Int64(v.total), encode_String(v.message)]) }
+private func encode__List_BoardTask_(_ v: [RivetTypes.BoardTask]) -> RivetValue { .list(v.map(encode_BoardTask)) }
+private func encode__Optional_BoardTask_(_ v: RivetTypes.BoardTask?) -> RivetValue { v.map(encode_BoardTask) ?? .null }
+private func encode_ImportProgress(_ v: RivetTypes.ImportProgress) -> RivetValue { .list([encode_Int64(v.completed), encode_Int64(v.total), encode_String(v.message)]) }
 private func encode__Optional_Int64_(_ v: Int64?) -> RivetValue { v.map(encode_Int64) ?? .null }
 
 private func decode_String(_ v: RivetValue) throws -> String { guard case .string(let x) = v else { throw RivetGeneratedError.typeMismatch("String") }; return x }
 private func decode_Int64(_ v: RivetValue) throws -> Int64 { guard case .int64(let x) = v else { throw RivetGeneratedError.typeMismatch("Int64") }; return x }
-private func decode_TaskStatus(_ v: RivetValue) throws -> TaskStatus { guard case .string(let x) = v, let result = TaskStatus(rawValue: x) else { throw RivetGeneratedError.typeMismatch("TaskStatus") }; return result }
-private func decode_BoardTask(_ v: RivetValue) throws -> BoardTask { guard case .list(let xs) = v, xs.count == 4 else { throw RivetGeneratedError.typeMismatch("BoardTask") }; return BoardTask(id: try decode_Int64(xs[0]), title: try decode_String(xs[1]), notes: try decode_String(xs[2]), status: try decode_TaskStatus(xs[3])) }
+private func decode_TaskStatus(_ v: RivetValue) throws -> RivetTypes.TaskStatus { guard case .string(let x) = v, let result = RivetTypes.TaskStatus(rawValue: x) else { throw RivetGeneratedError.typeMismatch("TaskStatus") }; return result }
+private func decode_BoardTask(_ v: RivetValue) throws -> RivetTypes.BoardTask { guard case .list(let xs) = v, xs.count == 4 else { throw RivetGeneratedError.typeMismatch("BoardTask") }; return RivetTypes.BoardTask(id: try decode_Int64(xs[0]), title: try decode_String(xs[1]), notes: try decode_String(xs[2]), status: try decode_TaskStatus(xs[3])) }
 private func decode_Bool(_ v: RivetValue) throws -> Bool { guard case .bool(let x) = v else { throw RivetGeneratedError.typeMismatch("Bool") }; return x }
-private func decode__List_BoardTask_(_ v: RivetValue) throws -> [BoardTask] { guard case .list(let xs) = v else { throw RivetGeneratedError.typeMismatch("(List BoardTask)") }; return try xs.map(decode_BoardTask) }
-private func decode__Optional_BoardTask_(_ v: RivetValue) throws -> BoardTask? { if case .null = v { return nil }; return try decode_BoardTask(v) }
-private func decode_ImportProgress(_ v: RivetValue) throws -> ImportProgress { guard case .list(let xs) = v, xs.count == 3 else { throw RivetGeneratedError.typeMismatch("ImportProgress") }; return ImportProgress(completed: try decode_Int64(xs[0]), total: try decode_Int64(xs[1]), message: try decode_String(xs[2])) }
+private func decode__List_BoardTask_(_ v: RivetValue) throws -> [RivetTypes.BoardTask] { guard case .list(let xs) = v else { throw RivetGeneratedError.typeMismatch("(List BoardTask)") }; return try xs.map(decode_BoardTask) }
+private func decode__Optional_BoardTask_(_ v: RivetValue) throws -> RivetTypes.BoardTask? { if case .null = v { return nil }; return try decode_BoardTask(v) }
+private func decode_ImportProgress(_ v: RivetValue) throws -> RivetTypes.ImportProgress { guard case .list(let xs) = v, xs.count == 3 else { throw RivetGeneratedError.typeMismatch("ImportProgress") }; return RivetTypes.ImportProgress(completed: try decode_Int64(xs[0]), total: try decode_Int64(xs[1]), message: try decode_String(xs[2])) }
 private func decode__Optional_Int64_(_ v: RivetValue) throws -> Int64? { if case .null = v { return nil }; return try decode_Int64(v) }
 
 public enum RivetEvent: Sendable {
-    case operation_progress(ImportProgress)
-    case task_saved(BoardTask)
+    case operation_progress(RivetTypes.ImportProgress)
+    case task_saved(RivetTypes.BoardTask)
 
     public static func decode(name: String, value: RivetValue) throws -> RivetEvent {
         switch name {
@@ -81,7 +84,7 @@ public struct RivetAPI: Sendable {
     public let client: RivetClient
     public init(client: RivetClient) { self.client = client }
 
-    public func create_task(title: String, notes: String) async throws -> BoardTask {
+    public func create_task(title: String, notes: String) async throws -> RivetTypes.BoardTask {
         let result = try await client.call("create-task", arguments: [encode_String(title), encode_String(notes)])
         return try decode_BoardTask(result)
     }
@@ -89,27 +92,27 @@ public struct RivetAPI: Sendable {
         let result = try await client.call("delete-task", arguments: [encode_Int64(id)])
         return try decode_Bool(result)
     }
-    public func generate_demo_tasks(count: Int64) async throws -> [BoardTask] {
+    public func generate_demo_tasks(count: Int64) async throws -> [RivetTypes.BoardTask] {
         let result = try await client.call("generate-demo-tasks", arguments: [encode_Int64(count)])
         return try decode__List_BoardTask_(result)
     }
-    public func get_task(id: Int64) async throws -> BoardTask? {
+    public func get_task(id: Int64) async throws -> RivetTypes.BoardTask? {
         let result = try await client.call("get-task", arguments: [encode_Int64(id)])
         return try decode__Optional_BoardTask_(result)
     }
-    public func list_tasks() async throws -> [BoardTask] {
+    public func list_tasks() async throws -> [RivetTypes.BoardTask] {
         let result = try await client.call("list-tasks", arguments: [])
         return try decode__List_BoardTask_(result)
     }
-    public func reload_sample_tasks() async throws -> [BoardTask] {
+    public func reload_sample_tasks() async throws -> [RivetTypes.BoardTask] {
         let result = try await client.call("reload-sample-tasks", arguments: [])
         return try decode__List_BoardTask_(result)
     }
-    public func select_task(id: Int64) async throws -> BoardTask? {
+    public func select_task(id: Int64) async throws -> RivetTypes.BoardTask? {
         let result = try await client.call("select-task", arguments: [encode_Int64(id)])
         return try decode__Optional_BoardTask_(result)
     }
-    public func update_task(id: Int64, title: String, notes: String, status: TaskStatus) async throws -> BoardTask {
+    public func update_task(id: Int64, title: String, notes: String, status: RivetTypes.TaskStatus) async throws -> RivetTypes.BoardTask {
         let result = try await client.call("update-task", arguments: [encode_Int64(id), encode_String(title), encode_String(notes), encode_TaskStatus(status)])
         return try decode_BoardTask(result)
     }
@@ -124,12 +127,12 @@ public struct RivetAPI: Sendable {
         let result = try await client.setState("selected-task-id", value: encode__Optional_Int64_(value))
         return try decode__Optional_Int64_(result)
     }
-    public func getTasks() async throws -> [BoardTask] {
+    public func getTasks() async throws -> [RivetTypes.BoardTask] {
         let result = try await client.getState("tasks")
         return try decode__List_BoardTask_(result)
     }
     @discardableResult
-    public func setTasks(_ value: [BoardTask]) async throws -> [BoardTask] {
+    public func setTasks(_ value: [RivetTypes.BoardTask]) async throws -> [RivetTypes.BoardTask] {
         let result = try await client.setState("tasks", value: encode__List_BoardTask_(value))
         return try decode__List_BoardTask_(result)
     }
@@ -137,13 +140,13 @@ public struct RivetAPI: Sendable {
 
 public enum RivetDeviceRequests {
     public struct ListTasks: RivetDeviceRequest {
-        public typealias Response = [BoardTask]
+        public typealias Response = [RivetTypes.BoardTask]
         public static let route = "rpc.list-tasks"
         public init() {
         }
     }
     public struct GetTask: RivetDeviceRequest {
-        public typealias Response = BoardTask?
+        public typealias Response = RivetTypes.BoardTask?
         public static let route = "rpc.get-task"
         public let id: Int64
         public init(id: Int64) {
@@ -151,7 +154,7 @@ public enum RivetDeviceRequests {
         }
     }
     public struct SelectTask: RivetDeviceRequest {
-        public typealias Response = BoardTask?
+        public typealias Response = RivetTypes.BoardTask?
         public static let route = "rpc.select-task"
         public let id: Int64
         public init(id: Int64) {
@@ -161,13 +164,13 @@ public enum RivetDeviceRequests {
 }
 
 public extension RivetDeviceClient {
-    func list_tasks() async throws -> [BoardTask] {
+    func list_tasks() async throws -> [RivetTypes.BoardTask] {
         try await send(RivetDeviceRequests.ListTasks())
     }
-    func get_task(id: Int64) async throws -> BoardTask? {
+    func get_task(id: Int64) async throws -> RivetTypes.BoardTask? {
         try await send(RivetDeviceRequests.GetTask(id: id))
     }
-    func select_task(id: Int64) async throws -> BoardTask? {
+    func select_task(id: Int64) async throws -> RivetTypes.BoardTask? {
         try await send(RivetDeviceRequests.SelectTask(id: id))
     }
 }

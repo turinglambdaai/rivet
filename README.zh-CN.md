@@ -195,7 +195,7 @@ raco rivet release
   (format "user-~a" id))
 ```
 
-参数与返回值都会在 Racket 边界做类型校验。目前支持 `String`、`Int64`、`Bool`、`Bytes`、`Void`、`Any`、`(List T)`、`(Optional T)`、通过 `define-record` 声明的具名 Record，以及通过 `define-enum` 声明的封闭取值。Record 会生成 Swift struct、C++ struct 与 Kotlin data class；Enum 会生成 Swift raw-value enum、C++ `enum class` 与 Kotlin `enum class`。
+参数与返回值都会在 Racket 边界做类型校验。目前支持 `String`、`Int64`、`Bool`、`Bytes`、`Void`、`Any`、`(List T)`、`(Optional T)`、通过 `define-record` 声明的具名 Record，以及通过 `define-enum` 声明的封闭取值。Record 会生成位于 `RivetTypes` 下的 Swift struct、C++ struct 与 Kotlin data class；Enum 会生成位于 `RivetTypes` 下的 Swift raw-value enum、C++ `enum class` 与 Kotlin `enum class`。Swift 命名空间可避免 `Task`、`Result` 等领域名称在整个应用模块中遮蔽标准库类型。
 
 ### Event
 
