@@ -78,6 +78,16 @@ using CrashCallback = void (*)(EXCEPTION_POINTERS const*) noexcept;
 void InstallCrashHook(CrashCallback callback,
                       std::wstring const& restart_arguments = L"");
 
+// Mirrors the Linux adapter's InstallShutdownHook: the callback runs on a
+// console-control thread for CTRL_C_EVENT, CTRL_CLOSE_EVENT, CTRL_LOGOFF_
+// EVENT, and CTRL_SHUTDOWN_EVENT (session logoff and OS shutdown reach GUI
+// processes without a console through the last two). Keep it synchronous
+// and allocation-light — the OS terminates the process shortly after the
+// handler returns TRUE — and touch only thread-safe state such as the
+// backend's stop(). Throws std::system_error when the handler cannot be
+// registered.
+void InstallShutdownHook(std::function<void()> callback);
+
 // Windows delivers URL scheme and file-association activations through the
 // process command line for unpackaged/MSI apps. Registration belongs to the
 // installer; this helper normalizes the received payload for application code.

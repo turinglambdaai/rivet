@@ -3,6 +3,7 @@
 #include <shellapi.h>
 #include <wincred.h>
 
+#include <functional>
 #include <stdexcept>
 #include <system_error>
 #include <utility>
@@ -176,6 +177,33 @@ std::vector<std::wstring> ActivationArguments() {
   for (int index = 1; index < count; ++index) result.emplace_back(arguments[index]);
   ::LocalFree(arguments);
   return result;
+}
+
+namespace {
+
+std::function<void()> g_shutdown_callback;
+
+BOOL WINAPI ConsoleCtrlHandler(DWORD event_type) {
+  switch (event_type) {
+    case CTRL_C_EVENT:
+    case CTRL_CLOSE_EVENT:
+    case CTRL_LOGOFF_EVENT:
+    case CTRL_SHUTDOWN_EVENT:
+      if (g_shutdown_callback != nullptr) g_shutdown_callback();
+      return TRUE;
+    default:
+      return FALSE;
+  }
+}
+
+}  // namespace
+
+void InstallShutdownHook(std::function<void()> callback) {
+  g_shutdown_callback = std::move(callback);
+  if (::SetConsoleCtrlHandler(&ConsoleCtrlHandler, TRUE) == 0) {
+    g_shutdown_callback = nullptr;
+    ThrowLastError("SetConsoleCtrlHandler");
+  }
 }
 
 }  // namespace rivet::system

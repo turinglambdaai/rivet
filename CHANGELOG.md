@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Windows and macOS hosts now shut the embedded backend down orderly on
+  session end. The Windows system adapter gains InstallShutdownHook
+  (SetConsoleCtrlHandler: CTRL_C/CLOSE/LOGOFF/SHUTDOWN) and the scaffold
+  wires it plus the window-close path to a thread-safe backend stop; the
+  macOS scaffold installs an NSApplicationDelegate whose
+  applicationShouldTerminate stops the backend for Cmd-Q, logout, and OS
+  shutdown. Mirrors the Linux InstallShutdownHook shipped by #128 and
+  wired into the scaffold by #168. Fixes #120.
 - Document the large-payload conventions (docs/large-payloads.md): cursor
   pagination with fail-closed limit caps for report-shaped RPCs, stable-id
   tree nodes with windowed children for virtualized trees, and typed
@@ -13,6 +21,7 @@
   the listener) plus a sequential request-capture fake server with
   loopback close-race handling. Test suites only; never enters an embedded
   payload. Fixes #98.
+
 - Cut ~100 MB (48%) from Windows release payloads. The packaged app no
   longer ships MSBuild debug symbols (*.pdb, 60+ MB) or the ONNX and
   DirectML inference runtimes (~40 MB) that Windows App SDK
