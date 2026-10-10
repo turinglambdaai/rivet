@@ -203,8 +203,10 @@ jobs:
           mkdir -p "$diagnostics"
           rpm_artifact="$(find /tmp/rivet-installers -type f -name '*.rpm' -print -quit)"
           test -n "$rpm_artifact"
+          rpm_package="$(rpm -qp --qf '%{NAME}' "$rpm_artifact")"
+          test -n "$rpm_package"
           dnf install --assumeyes "$rpm_artifact" >"$diagnostics/dnf-install.log" 2>&1
-          rpm -q --qf '%{NAME} %{VERSION}-%{RELEASE} %{ARCH}\n' smoke \
+          rpm -q --qf '%{NAME} %{VERSION}-%{RELEASE} %{ARCH}\n' "$rpm_package" \
             >"$diagnostics/installed-version.txt"
           test -x /opt/Smoke/RivetHost
           test -f /usr/share/applications/Smoke.desktop
@@ -243,7 +245,7 @@ jobs:
             fi
             kill "$weston_pid" 2>/dev/null || true
             wait "$weston_pid" 2>/dev/null || true
-            dnf remove --assumeyes smoke >>"$diagnostics/dnf-remove.log" 2>&1 || true
+            dnf remove --assumeyes "$rpm_package" >>"$diagnostics/dnf-remove.log" 2>&1 || true
             exit "$status"
           }
           trap cleanup EXIT
@@ -271,7 +273,7 @@ jobs:
           app_pid=""
           kill "$weston_pid" 2>/dev/null || true
           wait "$weston_pid" 2>/dev/null || true
-          dnf remove --assumeyes smoke >"$diagnostics/dnf-remove.log" 2>&1
+          dnf remove --assumeyes "$rpm_package" >"$diagnostics/dnf-remove.log" 2>&1
           test ! -e /opt/Smoke/RivetHost
           test ! -e /usr/share/applications/Smoke.desktop
           trap - EXIT
