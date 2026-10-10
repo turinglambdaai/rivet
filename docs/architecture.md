@@ -143,6 +143,13 @@ reflection boundary; generators do not reach into runtime structs. This keeps
 code generation deterministic and lets the server's concurrency machinery
 evolve without turning internal representation into an accidental API.
 
+The terminal-ownership state machine for active requests lives in the private
+`backend-pending` module. It owns admission capacity, exactly-once terminal
+claims, cancellation, and the short State-commit barrier. The transport server
+owns frames, custodians, and the bounded writer queue. Direct characterization
+tests cover the private state machine so lifecycle changes do not require
+reaching through the public API or growing `backend.rkt` further.
+
 Before 1.0, callers that used `registered-*` or `*-info-*` should migrate to
 the corresponding `backend-schema` entry. Application State access should use
 `state-ref` and `state-set!`; `state?` is available when a predicate is needed.
