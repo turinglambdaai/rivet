@@ -49,6 +49,8 @@
     "  raco rivet release                 build signed installer, update manifest, SBOM, and notices\n"
     "  raco rivet release --development   exercise release flow without platform production signing\n"
     "  raco rivet release --without-updates  release without an update manifest or update key\n"
+    "  raco rivet manifest-compose <inputs...> [--output <file>]\n"
+    "                                      compose a verified family update manifest\n"
     "  raco rivet compliance              generate SBOM/notices and run the license audit\n"
     "  raco rivet verify                  re-verify the current packaged artifact\n"
     "  raco rivet verify --production     verify production trust/notarization requirements\n"
@@ -193,16 +195,10 @@
      ;; Fold the per-platform release manifests into the one family-wide
      ;; signed manifest. Runs once on the aggregation host after every
      ;; platform leg published its own update-<channel>.json.
-     (define inputs
-       (for/list ([argument (in-list rest)]
-                  #:unless (regexp-match? #rx"^--" argument))
-         (string->path argument)))
-     (define output
-       (cond
-         [(member "--output" rest)
-          (for/or ([argument (in-list rest)] [next (in-list (cdr rest))])
-            (and (string=? argument "--output") (string->path next)))]
-         [else (build-path "dist" "update-family.json")]))
+     (define parse-manifest-compose-arguments
+       (command "manifest-compose" 'parse-manifest-compose-arguments))
+     (define-values (inputs output)
+       (parse-manifest-compose-arguments rest))
      (define private-key-path
        (or (getenv "RIVET_UPDATE_PRIVATE_KEY")
            (error 'rivet "RIVET_UPDATE_PRIVATE_KEY is required to sign the family manifest")))

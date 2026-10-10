@@ -1,7 +1,13 @@
 #lang racket/base
 
 (require rackunit
-         "../rivet-cli/release.rkt")
+         racket/file
+         racket/path
+         racket/string
+         "../rivet/distribution/manifest.rkt"
+         "../rivet-cli/project.rkt"
+         "../rivet-cli/release.rkt"
+         (submod "../rivet-cli/release.rkt" test-support))
 
 (define update-variable-names
   '("RIVET_UPDATE_BASE_URL"
@@ -34,3 +40,37 @@
                             #"release-2026")
 (parameterize ([current-environment-variables complete-env])
   (check-not-false (release-update-environment #t)))
+
+(define temp-root (make-temporary-file "rivet-release-options-~a" 'directory))
+(dynamic-wind
+  void
+  (lambda ()
+    (define project
+      (rivet-project temp-root
+                     #hasheq((name . "Example")
+                             (version . "2.3.4"))))
+    (define zip-name
+      (path->string (file-name-from-path (portable-zip-path project))))
+    (check-regexp-match
+     #rx"^Example-2\\.3\\.4-(windows|macos|linux)-(x64|arm64)\\.zip$"
+     zip-name)
+    (define package (build-path temp-root "dist" "Example-package"))
+    (make-directory* package)
+    (call-with-output-file (build-path package "payload.txt")
+      #:exists 'truncate/replace
+      (lambda (out) (display "portable payload" out)))
+    (define archive (create-portable-zip! project package))
+    (check-equal? archive (portable-zip-path project))
+    (check-true (file-exists? archive))
+    (check-true
+     (file-exists? (string-append (path->string archive) ".sha256")))
+    (define artifact
+      (parameterize ([current-environment-variables complete-env])
+        (portable-update-artifact (release-update-environment #t) archive)))
+    (check-equal? (update-artifact-installer artifact) 'zip)
+    (check-equal? (update-artifact-size artifact) (file-size archive))
+    (check-true
+     (string-suffix? (update-artifact-url artifact) zip-name)))
+  (lambda ()
+    (when (directory-exists? temp-root)
+      (delete-directory/files temp-root))))

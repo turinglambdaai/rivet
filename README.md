@@ -117,11 +117,11 @@ See [architecture](docs/architecture.md), [agent-native development](docs/agent-
 | Typed generated client | ✅ C++ | ✅ Swift | ✅ C++ |
 | `new` / `doctor` / `build` / `dev` | ✅ | ✅ | ✅ |
 | `package` / `verify` | ✅ dependency audit | ✅ signing/rpath/plist audit | 🧪 directory + `ldd` audit |
-| Production signing / installer | ✅ Authenticode + MSI | ✅ Developer ID + DMG | 🧪 Ed25519-signed tarball via `raco rivet release` |
-| System services / secure storage | ✅ | ✅ | 🧪 Linux adapter (no tray) |
+| Production signing / installer | ✅ Authenticode + MSI | ✅ Developer ID + DMG | 🧪 signed tarball + deb/rpm/AppImage |
+| System services / secure storage | ✅ | ✅ | 🧪 Linux adapter + StatusNotifierItem tray |
 | Real embedded-runtime CI | ✅ | ✅ | ✅ |
 
-Windows and macOS remain the production release targets. Linux is a developer preview with the complete daily CLI path, an Ed25519-signed release artifact, real embedded-runtime CI, and a first-party system adapter for single-instance, notifications, autostart, secure storage, and crash hooks; the tray contract and distro-native installers remain before production status, along with an explicit X11/Wayland policy.
+Windows and macOS remain the production release targets. Linux is a developer preview with the complete daily CLI path, signed tarball plus deb/rpm/AppImage artifacts, real embedded-runtime CI, and a first-party system adapter for single-instance, notifications, tray, autostart, secure storage, crash hooks, and graceful shutdown. Production graduation still requires an explicit X11/Wayland policy and install/upgrade evidence across the supported distribution matrix.
 
 ### Apple mobile foundation
 
@@ -316,7 +316,7 @@ CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exerc
 
 ## Honest gaps
 
-- **Linux is a developer preview** — the complete daily CLI path, Ed25519-signed tarball, and first-party system adapter work, but distro-native installers/trust integration, a tray contract, and explicit compositor policy are not complete.
+- **Linux is a developer preview** — the complete daily CLI path, signed tarball, deb/rpm/AppImage formats, tray, and first-party system adapter work; explicit compositor policy and production install/upgrade evidence across supported distributions are not complete.
 - **Apple mobile delivery is foundational** — the portable Swift and typed WatchConnectivity layers exist, but iOS/iPadOS/watchOS project generation, runtime packaging, signing, and store delivery are not complete.
 - **Android remains foundational** — its Kotlin RVT1 codec, coroutine runtime client, typed client code generation, and pinned Gradle build are tested, but Jetpack Compose, JNI, portable Racket CS packaging, signing, and device delivery are not complete.
 - **Architecture evidence covers build/package/verify, not production releases** — clean-runner gates exercise Windows x64/ARM64, macOS Apple-Silicon/Intel, and Linux x64/ARM64, but production release artifacts are still produced by the tag-driven release flow per application.

@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 0.6.1
+
+- Fix the 0.6.0 family-release path: `manifest-compose --output` no longer
+  treats the destination as another input, every release leg's Ed25519
+  signature and key ID are verified before aggregation, and the command is
+  listed in `raco rivet help`.
+- Make portable update archives honor the documented
+  `<name>-<version>-<os>-<arch>.zip` convention and point per-platform update
+  manifests at those archives instead of the separately published installer.
+- Carry `linux-binary-name` through deb/rpm desktop entries, AppImage staging
+  and `AppRun`, dependency collection, and production verification. Native
+  Linux formats now work with product executables instead of assuming
+  `RivetHost`.
+- Make AppImage command capture check exit status and collect stderr without
+  the serial-pipe deadlock risk of the previous `process*` implementation.
+- Keep the source-package release smoke test self-contained by validating its
+  JSON contract with Racket instead of an incidental Python dependency.
+- Refresh the English and Chinese Linux capability summaries to reflect the
+  shipped native installers and StatusNotifierItem tray implementation.
+
 ## 0.6.0
 
 - Add `raco rivet manifest-compose`: folds the per-platform signed

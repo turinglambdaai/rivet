@@ -11,6 +11,7 @@
 
 (require racket/file
          racket/list
+         racket/match
          racket/set
          racket/path
          racket/string
@@ -19,7 +20,37 @@
          "project.rkt"
          "signing-options.rkt")
 
-(provide compose-manifests!)
+(provide compose-manifests!
+         parse-manifest-compose-arguments)
+
+(define (parse-manifest-compose-arguments arguments)
+  (let loop ([remaining arguments] [inputs '()] [output #f])
+    (match remaining
+      ['()
+       (values (reverse inputs)
+               (or output (build-path "dist" "update-family.json")))]
+      [(list "--output")
+       (raise-arguments-error
+        'manifest-compose
+        "--output requires a destination path")]
+      [(list* "--output" destination tail)
+       (when output
+         (raise-arguments-error
+          'manifest-compose
+          "--output may be specified only once"))
+       (when (regexp-match? #rx"^--" destination)
+         (raise-arguments-error
+          'manifest-compose
+          "--output requires a destination path"
+          "value" destination))
+       (loop tail inputs (string->path destination))]
+      [(cons argument tail)
+       (when (regexp-match? #rx"^--" argument)
+         (raise-arguments-error
+          'manifest-compose
+          "unknown option"
+          "option" argument))
+       (loop tail (cons (string->path argument) inputs) output)])))
 
 (define (duplicates items)
   (define seen (mutable-set))
@@ -46,9 +77,12 @@
         "a signing key is required (pass #:private-key or #:private-key-path)")]))
   (define manifests
     (for/list ([input (in-list inputs)])
-      (define-values (manifest _payload _key-id _signature)
-        (call-with-input-file input (lambda (in) (read-signed-manifest in))))
-      manifest))
+      ;; Verify each independently signed release leg before the family key
+      ;; endorses its payload again.
+      (call-with-input-file
+       input
+       (lambda (in)
+         (verify-signed-manifest in signing-key #:key-id key-id)))))
   (define (agree who accessor)
     (define values-seen
       (remove-duplicates (map accessor manifests) equal?))
