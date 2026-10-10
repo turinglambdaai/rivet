@@ -8,6 +8,7 @@
          racket/string
          "../rivet/distribution/crypto.rkt"
          "../rivet/distribution/manifest.rkt"
+         "appimage.rkt"
          "compliance.rkt"
          "installer.rkt"
          "package.rkt"
@@ -80,18 +81,39 @@
               (path->string (file-name-from-path zip-path)))))
   zip-path)
 
-(define (portable-update-artifact update-config portable-zip)
+(define (update-artifact-for-file update-config payload platform architecture installer)
   (update-artifact
-   (release-platform)
-   (release-architecture)
+   platform
+   architecture
    (string-append
     (string-trim (update-environment-base-url update-config) "/")
     "/"
-    (path->string (file-name-from-path portable-zip)))
-   (sha256-file/hex portable-zip)
-   (file-size portable-zip)
-   'zip
+    (path->string (file-name-from-path payload)))
+   (sha256-file/hex payload)
+   (file-size payload)
+   installer
    '()))
+
+(define (portable-update-artifact update-config portable-zip)
+  (update-artifact-for-file update-config portable-zip
+                            (release-platform) (release-architecture) 'zip))
+
+(define (release-update-artifact update-config project portable-zip
+                                 #:platform [platform (release-platform)]
+                                 #:architecture [architecture (release-architecture)])
+  ;; AppImage is the Linux self-replacing format. When a release produces one,
+  ;; make it the signed update payload rather than asking products to derive an
+  ;; unsigned sibling URL from the portable ZIP or tarball name.
+  (define appimage? (and (eq? platform 'linux)
+                         (member "appimage" (project-linux-formats project))))
+  (define payload (if appimage? (appimage-installer-path project) portable-zip))
+  (unless (file-exists? payload)
+    (raise-arguments-error 'release-project!
+                           "selected update payload was not produced"
+                           "installer" (if appimage? 'appimage 'zip)
+                           "payload" payload))
+  (update-artifact-for-file update-config payload platform architecture
+                            (if appimage? 'appimage 'zip)))
 
 (define (release-project! project
                           #:production? [production? #t]
@@ -121,7 +143,7 @@
      update-config
      (let* ([previous (getenv "RIVET_PREVIOUS_VERSION")]
             [artifact
-             (portable-update-artifact update-config portable-zip)]
+             (release-update-artifact update-config project portable-zip)]
             [manifest
              (update-manifest
               (project-identifier project)
@@ -152,4 +174,5 @@
   (values installer manifest-path sbom notices portable-zip))
 
 (module+ test-support
-  (provide portable-update-artifact))
+  (provide portable-update-artifact
+           release-update-artifact))

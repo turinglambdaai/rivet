@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Make AppImage the signed Linux update payload when that format is enabled,
+  emit its SHA-256 sidecar, and add install-kind-aware update selection so
+  AppImage, portable, and package-manager installations cannot cross streams.
 - Add first-party portable update installation for Windows, macOS, and Linux:
   verified ZIP/AppImage payloads are staged, platform-signature checked,
   atomically replaced, health-gated, durably committed, and recoverable after
