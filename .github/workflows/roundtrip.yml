@@ -15,6 +15,7 @@ jobs:
   linux-roundtrip:
     name: Linux embedded Racket round trip
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - name: Set up embeddable Racket CS
@@ -160,7 +161,11 @@ jobs:
           raco rivet verify
           test -x dist/Smoke-linux-x64/RivetHost
           test "$(cat dist/Smoke-linux-x64/app/assets/nested/product.txt)" = packaged-resource
-          raco rivet release --development --without-updates
+          racket -e '
+            (require rivet-cli/deb rivet-cli/project)
+            (define project (load-project (current-directory)))
+            (create-deb! project
+                         (project-path project "dist" "Smoke-linux-x64"))'
           initial_deb="$(find dist -maxdepth 1 -type f -name 'Smoke-0.1.0-linux-*.deb' -print -quit)"
           test -n "$initial_deb"
           python3 - <<'PY'
@@ -175,7 +180,12 @@ jobs:
           Path("assets/nested/product.txt").write_text(
               "upgraded-resource", encoding="utf-8")
           PY
-          raco rivet release --development --without-updates
+          raco rivet package
+          racket -e '
+            (require rivet-cli/deb rivet-cli/project)
+            (define project (load-project (current-directory)))
+            (create-deb! project
+                         (project-path project "dist" "Smoke-linux-x64"))'
           upgrade_deb="$(find dist -maxdepth 1 -type f -name 'Smoke-0.1.1-linux-*.deb' -print -quit)"
           test -n "$upgrade_deb"
           bash "$GITHUB_WORKSPACE/.github/scripts/smoke-linux-deb-install.sh" \
