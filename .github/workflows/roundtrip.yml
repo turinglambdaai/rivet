@@ -161,10 +161,34 @@ jobs:
           test -x dist/Smoke-linux-x64/RivetHost
           test "$(cat dist/Smoke-linux-x64/app/assets/nested/product.txt)" = packaged-resource
           raco rivet release --development --without-updates
-          deb="$(find dist -maxdepth 1 -type f -name '*.deb' -print -quit)"
-          test -n "$deb"
+          initial_deb="$(find dist -maxdepth 1 -type f -name 'Smoke-0.1.0-linux-*.deb' -print -quit)"
+          test -n "$initial_deb"
+          python3 - <<'PY'
+          from pathlib import Path
+          config = Path("rivet.rktd")
+          text = config.read_text(encoding="utf-8")
+          text = text.replace('(version . "0.1.0")', '(version . "0.1.1")')
+          text = text.replace('(build . 1)', '(build . 2)')
+          if '(version . "0.1.1")' not in text or '(build . 2)' not in text:
+              raise SystemExit("failed to configure the upgrade version")
+          config.write_text(text, encoding="utf-8")
+          Path("assets/nested/product.txt").write_text(
+              "upgraded-resource", encoding="utf-8")
+          PY
+          raco rivet release --development --without-updates
+          upgrade_deb="$(find dist -maxdepth 1 -type f -name 'Smoke-0.1.1-linux-*.deb' -print -quit)"
+          test -n "$upgrade_deb"
           bash "$GITHUB_WORKSPACE/.github/scripts/smoke-linux-deb-install.sh" \
-            "$deb" smoke Smoke RivetHost
+            "$initial_deb" "$upgrade_deb" smoke Smoke RivetHost 0.1.0-1 0.1.1-2
+      - name: Upload Linux install diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: linux-deb-install-diagnostics
+          path: |
+            ${{ runner.temp }}/rivet-linux-deb-diagnostics
+            ${{ runner.temp }}/rivet-weston.log
+          if-no-files-found: warn
       - name: Build and verify the maintained GTK4 reference app
         shell: bash
         run: |
