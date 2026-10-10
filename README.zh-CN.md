@@ -105,7 +105,7 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 
 嵌入模型受到 [Noise](https://github.com/Bogdanp/Noise) 的启发，但 Rivet 把 runtime contract、协议、代码生成和生命周期都做成平台无关的统一核心，而不是以 Swift 为中心。
 
-深入设计见 [架构](docs/architecture.md)、[Agent-native 开发](docs/agent-native.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[类型安全设备通信](docs/device-communication.md)、尚未实现的[网络设备通道设计](docs/network-device-channel.md)、[Android 架构](docs/android.md)、[项目配置](docs/configuration.md)、[系统服务](docs/system-services.md)、[大载荷与分页](docs/large-payloads.md)、[Windows 原生窗口 interop](docs/windows-native-window.md)、[发布与更新](docs/release-and-updates.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
+深入设计见 [架构](docs/architecture.md)、[Agent-native 开发](docs/agent-native.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[类型安全设备通信](docs/device-communication.md)、尚未实现的[网络设备通道设计](docs/network-device-channel.md)、[Android 架构](docs/android.md)、[项目配置](docs/configuration.md)、[系统服务](docs/system-services.md)、[Linux 显示协议策略](docs/linux-display.md)、[大载荷与分页](docs/large-payloads.md)、[Windows 原生窗口 interop](docs/windows-native-window.md)、[发布与更新](docs/release-and-updates.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
 
 ## 平台支持状态
 
@@ -121,7 +121,7 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 | 系统服务 / 安全存储 | ✅ | ✅ | 🧪 Linux 适配器 + StatusNotifierItem 托盘 |
 | 真实嵌入运行时 CI | ✅ | ✅ | ✅ |
 
-Windows 和 macOS 仍是生产发布目标。Linux 处于开发者预览：日常 CLI 全链路、签名 tarball 与 deb/rpm/AppImage、真实 embedded-runtime CI，以及覆盖单实例、通知、托盘、自启动、安全存储、崩溃钩子和优雅退出的一方系统适配器已经完成。进入生产级之前仍需明确 X11/Wayland 策略，并补齐受支持发行版矩阵上的真实安装与升级证据。
+Windows 和 macOS 仍是生产发布目标。Linux 处于开发者预览：日常 CLI 全链路、签名 tarball 与 deb/rpm/AppImage、真实 embedded-runtime CI，以及覆盖单实例、通知、托盘、自启动、安全存储、崩溃钩子和优雅退出的一方系统适配器已经完成。Wayland 是 Linux 的首要显示目标，CI 会强制验证原生 Wayland 启动；X11/XWayland 仅保留 GTK 尽力兼容。进入生产级之前仍需补齐受支持发行版矩阵上的真实安装与升级证据。
 
 ### Apple 移动端基础
 
@@ -312,11 +312,11 @@ swift test --package-path platform/macos
 platform/android/gradlew -p platform/android test
 ```
 
-CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平台执行真实 embedded Racket round-trip，为 iOS/watchOS 交叉编译可移植 Swift 层，编译生成的 Kotlin 客户端，并对新生成的桌面应用运行 build、package、verify smoke；Windows ARM64、macOS Intel 与 Linux ARM64 由独立的干净 runner 架构矩阵覆盖。
+CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平台执行真实 embedded Racket round-trip，通过无头原生 Wayland compositor 启动打包后的 GTK4 宿主，为 iOS/watchOS 交叉编译可移植 Swift 层，编译生成的 Kotlin 客户端，并对新生成的桌面应用运行 build、package、verify smoke；Windows ARM64、macOS Intel 与 Linux ARM64 由独立的干净 runner 架构矩阵覆盖。
 
 ## 诚实的局限
 
-- **Linux 是开发者预览** —— 日常 CLI 全链路、签名 tarball、deb/rpm/AppImage、托盘与一方系统适配器已经完成；明确的 compositor 策略，以及受支持发行版矩阵上的生产安装/升级证据尚未补齐。
+- **Linux 是开发者预览** —— 日常 CLI 全链路、签名 tarball、deb/rpm/AppImage、托盘、一方系统适配器与 Wayland CI 已经完成；受支持发行版矩阵上的生产安装/升级证据尚未补齐。X11/XWayland 是尽力兼容路径，不是发布门禁。
 - **Apple 移动端仍是基础阶段** —— 可移植 Swift 与类型安全 WatchConnectivity 层已经存在，但 iOS/iPadOS/watchOS 项目生成、runtime 打包、签名和商店交付还未完成。
 - **Android 仍处于基础阶段** —— Kotlin RVT1 codec、协程 runtime 客户端、类型化客户端生成与固定版本的 Gradle 构建已经过测试，但 Jetpack Compose、JNI、portable Racket CS 打包、签名和设备交付尚未完成。
 - **架构证据覆盖构建/打包/验证，尚不覆盖生产发布** —— 干净 runner 门禁覆盖 Windows x64/ARM64、macOS Apple Silicon/Intel 与 Linux x64/ARM64，但生产发布产物仍由标签驱动的发布流程按应用生成。

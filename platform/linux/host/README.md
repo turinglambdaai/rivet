@@ -32,7 +32,7 @@ platform/linux/
 ## Building by hand
 
 Requirements: an embeddable Racket CS build, CMake ≥ 3.24, pkg-config, GTK 4,
-zlib, LZ4, curses, and a graphical session (or Xvfb) to run. The standard
+zlib, LZ4, curses, and a graphical session (or headless Weston) to run. The standard
 prebuilt Linux Racket installer does not ship `libracketcs` or the three boot
 files; build and install
 Racket CS from a source distribution as described by Racket's embedding guide.
@@ -52,18 +52,26 @@ and `res/core.zo` (produced by `raco ctool --mods`, the same artifacts every
 platform host consumes) next to `RivetHost`. `raco rivet build`, `dev`, and
 `package` create this layout automatically.
 
+## Display policy
+
+Wayland is the primary Linux target. CI starts a headless Weston compositor,
+unsets `DISPLAY`, selects `GDK_BACKEND=wayland`, and requires the packaged host
+to survive the launch smoke. Rivet does not force that environment variable in
+shipped applications: GTK may still select a distribution-provided X11 backend
+for compatibility. X11 and XWayland are best-effort paths, not release gates,
+and Rivet does not add X11-only application APIs. See
+[Linux display policy](../../../docs/linux-display.md).
+
 ## Honest gaps
 
 - Production releases use `raco rivet release`: a deterministic self-contained
-  `.tar.gz` with a detached Ed25519 signature, verified by re-deriving the
-  archive from the package directory. Distro-native packages (`.deb`/`.rpm`,
-  AppImage, apt repository trust) and OS-integrated update installation are
-  follow-up work.
-- The system adapter covers single-instance, notifications, XDG autostart,
-  Secret Service secure storage, and crash hooks, with runtime capability
-  reporting. The tray contract is deliberately absent: StatusNotifierItem
-  hosting is compositor-dependent, so it belongs to an explicit application
-  policy, not an adapter default.
+  `.tar.gz` with a detached Ed25519 signature, plus deb/rpm/AppImage formats and
+  a signed portable-zip update feed. Real install/upgrade evidence across the
+  supported distribution matrix remains follow-up work.
+- The system adapter covers single-instance, notifications, StatusNotifierItem
+  tray integration, XDG autostart, Secret Service secure storage, crash hooks,
+  graceful shutdown, and runtime capability reporting.
 - GTK is a toolkit, not a display protocol: global hotkeys and always-on-top
-  overlays are compositor-dependent. Application hosts that need them must
-  define an explicit X11/Wayland policy.
+  overlays remain compositor-dependent. Applications that need those features
+  must use capability checks and a Wayland protocol or portal appropriate to
+  their supported compositors.
