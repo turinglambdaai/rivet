@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add real Linux installer lifecycle gates: build x64 rpm/AppImage artifacts,
+  install and launch the rpm on Fedora 44 under native Wayland, launch the
+  AppImage outside the build tree on Ubuntu 24.04, uninstall the rpm, and
+  retain package/compositor/application diagnostics as CI artifacts.
 - Add first-party portable update installation for Windows, macOS, and Linux:
   verified ZIP/AppImage payloads are staged, platform-signature checked,
   atomically replaced, health-gated, durably committed, and recoverable after
