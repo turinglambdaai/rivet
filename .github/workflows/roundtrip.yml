@@ -114,7 +114,9 @@ jobs:
           from pathlib import Path
           path = Path("rivet.rktd")
           original = path.read_text(encoding="utf-8")
-          updated = original.replace('(resources . ())', '(resources . ("assets"))')
+          updated = original.replace(
+              '(resources . ())',
+              '(resources . ("assets")) (linux-formats . ("deb"))')
           if updated == original:
               raise SystemExit("failed to configure Linux smoke resource")
           path.write_text(updated, encoding="utf-8")
@@ -158,6 +160,11 @@ jobs:
           raco rivet verify
           test -x dist/Smoke-linux-x64/RivetHost
           test "$(cat dist/Smoke-linux-x64/app/assets/nested/product.txt)" = packaged-resource
+          raco rivet release --development --without-updates
+          deb="$(find dist -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          test -n "$deb"
+          bash "$GITHUB_WORKSPACE/.github/scripts/smoke-linux-deb-install.sh" \
+            "$deb" smoke Smoke RivetHost
       - name: Build and verify the maintained GTK4 reference app
         shell: bash
         run: |
