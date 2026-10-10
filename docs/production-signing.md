@@ -72,7 +72,9 @@ Set:
 - `RIVET_LINUX_SIGN_KEY_ID` — public identifier for the signing key.
 - `RIVET_LINUX_SIGN_PUBLIC_KEY` — path to the matching DER-encoded public key, required by `raco rivet verify --production`.
 
-Generate the key pair outside the repository with the same openssl flow as the update key. Distro-native packages (`.deb`/`.rpm`, AppImage, apt repository GPG trust) remain follow-up work; the signed self-contained tarball is the current production artifact.
+Generate the key pair outside the repository with the same openssl flow as the update key. `raco rivet release` also produces `.deb`, `.rpm`, and AppImage artifacts from the verified package payload. The detached Ed25519 signature currently covers the deterministic tarball; the native formats are verified structurally but do not receive separate Rivet artifact signatures. Repository metadata trust, such as apt or dnf repository signing, remains the responsibility of the repository operator and is separate from Rivet's tarball signature.
+
+The deterministic tarball is Rivet's strongest independently reproducible Linux artifact today. The native packages and AppImage receive structural, payload, metadata, and dependency verification, but Linux remains a developer preview until the [production graduation matrix](production-roadmap.md) defines their delivery trust and proves real install, upgrade, launch, and recovery behavior across the supported distributions.
 
 ## CI secrets
 

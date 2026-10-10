@@ -71,7 +71,9 @@ In production verification mode, Rivet additionally runs `xcrun stapler validate
 
 The Linux verifier checks the application directory, executable bit, compiled Racket backend, all three boot files, and configured application resources. It then runs `ldd` on the GTK4 host and rejects every unresolved shared-library dependency. Racket CS itself is linked statically; GTK4 and the normal Linux system libraries remain native distribution dependencies.
 
-In production verification mode, the verifier additionally requires the released installer (`<name>-<version>-linux-<arch>.tar.gz` plus its `.sig`). Because the archive is deterministic, it rebuilds the tarball from the packaged directory, requires a byte-identical match with the released installer, and validates the detached Ed25519 signature against `RIVET_LINUX_SIGN_PUBLIC_KEY`. Linux keeps one honest signature story instead of pretending a generic signature covers Debian, Fedora, Arch, Flatpak, and other delivery channels; distro-native packages remain follow-up work.
+In production verification mode, the verifier additionally requires the deterministic `<name>-<version>-linux-<arch>.tar.gz` and its detached signature. It rebuilds that archive from the packaged directory, requires a byte-identical match, and validates the Ed25519 signature against `RIVET_LINUX_SIGN_PUBLIC_KEY`. It also verifies the generated `.deb`, `.rpm`, and AppImage structure, metadata, staged payload, and launcher behavior. Those native formats do not currently receive separate Rivet artifact signatures; the tarball signature does not replace apt/dnf repository metadata trust or a distribution's own signing policy.
+
+These checks prove the artifact produced by Rivet is internally consistent. They do not by themselves prove package-manager transactions or desktop integration on every supported distribution. That evidence is tracked by the [production graduation matrix](production-roadmap.md).
 
 ## CI
 
