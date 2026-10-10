@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Replace the accidental public backend registry structs and mutable State
+  cell accessors with an opaque `state?` handle and a single immutable
+  `backend-schema` reflection snapshot. Pre-1.0 tooling that used
+  `registered-*` or `*-info-*` should read the corresponding schema entry;
+  applications should use `state-ref` and `state-set!`.
 - Add first-party portable update installation for Windows, macOS, and Linux:
   verified ZIP/AppImage payloads are staged, platform-signature checked,
   atomically replaced, health-gated, durably committed, and recoverable after

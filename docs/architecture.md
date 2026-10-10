@@ -130,6 +130,23 @@ The Racket server creates a custodian and lightweight Racket thread for each req
 
 Cancellation shuts down the request custodian and responds with an Error frame. Native callers never receive a raw Racket exception; errors cross the protocol as data.
 
+## Racket backend boundary
+
+`rivet/backend` has a deliberately small application surface: declaration
+forms, Event/State operations, `serve`/`serve-fds`, diagnostics, and schema
+snapshots. The registry structs, RPC procedures, mutable State cells, locks,
+and request custodians are runtime-owned implementation details.
+
+Build tools load the application in a fresh namespace and call
+`backend-schema`. That one immutable, data-only snapshot is the supported
+reflection boundary; generators do not reach into runtime structs. This keeps
+code generation deterministic and lets the server's concurrency machinery
+evolve without turning internal representation into an accidental API.
+
+Before 1.0, callers that used `registered-*` or `*-info-*` should migrate to
+the corresponding `backend-schema` entry. Application State access should use
+`state-ref` and `state-set!`; `state?` is available when a predicate is needed.
+
 ## Data ownership
 
 No native language binding retains a raw Racket value across calls. This avoids coupling ordinary UI code to Chez Scheme's collector and object movement rules.

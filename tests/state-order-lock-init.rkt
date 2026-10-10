@@ -21,9 +21,11 @@
   (backend-private 'state-update-lock))
 (define state-update-locks-lock
   (backend-private 'state-update-locks-lock))
+(define make-state-info
+  (backend-private 'state-info))
 
 (define state
-  (state-info 'state-order-lock-init 'Int64 (box 0) (make-semaphore 1)))
+  (make-state-info 'state-order-lock-init 'Int64 (box 0) (make-semaphore 1)))
 (define worker-count 32)
 (define ready (make-channel))
 (define results (make-async-channel))

@@ -12,6 +12,7 @@
          define-event
          emit-event!
          define-state
+         state?
          state-ref
          state-set!
          define-record
@@ -21,26 +22,22 @@
          serve
          serve-fds
          current-rivet-diagnostic-sink
-         registered-rpcs
-         registered-events
-         registered-states
-         registered-records
-         registered-enums
+         backend-schema
          rpc-schema
          event-schema
          state-schema
          record-schema
-         enum-schema
-         (struct-out rpc-info)
-         (struct-out event-info)
-         (struct-out state-info)
-         (struct-out record-info)
-         (struct-out enum-info))
+         enum-schema)
 
 
 (struct rpc-info (name arg-names arg-types result-type procedure) #:transparent)
 (struct event-info (name type) #:transparent)
 (struct state-info (name type cell lock) #:transparent)
+
+;; State descriptors are deliberately opaque at the public boundary. The
+;; mutable cell and synchronization primitives are runtime implementation
+;; details; applications only need a predicate plus state-ref/state-set!.
+(define (state? value) (state-info? value))
 
 (struct pending-request (custodian terminal-owned cancel-deferred cancel-requested) #:mutable)
 (struct record-info (name field-names field-types) #:transparent)
@@ -658,6 +655,40 @@
   (for/list ([info (in-list (registered-enums))])
     (hasheq 'name (symbol->string (enum-info-name info))
             'cases (map symbol->string (enum-info-cases info)))))
+
+;; Code generation consumes one immutable, data-only snapshot instead of
+;; depending on Rivet's private registry structs and their mutable State cells.
+;; Keeping the descriptor values as symbols and type s-expressions avoids the
+;; lossy display formatting used by the human-facing `*-schema` procedures.
+(define (backend-schema)
+  (hasheq
+   'rpcs
+   (for/list ([info (in-list (registered-rpcs))])
+     (hasheq 'name (rpc-info-name info)
+             'arguments
+             (for/list ([name (in-list (rpc-info-arg-names info))]
+                        [type (in-list (rpc-info-arg-types info))])
+               (hasheq 'name name 'type type))
+             'result (rpc-info-result-type info)))
+   'events
+   (for/list ([info (in-list (registered-events))])
+     (hasheq 'name (event-info-name info)
+             'type (event-info-type info)))
+   'states
+   (for/list ([info (in-list (registered-states))])
+     (hasheq 'name (state-info-name info)
+             'type (state-info-type info)))
+   'records
+   (for/list ([info (in-list (registered-records))])
+     (hasheq 'name (record-info-name info)
+             'fields
+             (for/list ([name (in-list (record-info-field-names info))]
+                        [type (in-list (record-info-field-types info))])
+               (hasheq 'name name 'type type))))
+   'enums
+   (for/list ([info (in-list (registered-enums))])
+     (hasheq 'name (enum-info-name info)
+             'cases (enum-info-cases info)))))
 
 (define-syntax define-rpc
   (syntax-rules (:)
