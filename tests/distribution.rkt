@@ -135,12 +135,15 @@
 (check-equal?
  (execute-install-plan!
   successful-plan
-  #:health-check
+ #:health-check
   (lambda ()
     (set! successful-calls (cons 'health successful-calls))
-    #t))
+    #t)
+  #:commit
+  (lambda ()
+    (set! successful-calls (cons 'commit successful-calls))))
  'restart-result)
-(check-equal? (reverse successful-calls) '(install restart health))
+(check-equal? (reverse successful-calls) '(install restart health commit))
 
 ;; Health is part of the transaction rather than an informational callback:
 ;; a replacement that starts but is not healthy rolls back.
@@ -252,3 +255,37 @@
     (check-equal? rollback-attempts 2)
     (check-false (file-exists? retry-journal)))
   (lambda () (delete-directory/files journal-root)))
+
+;; Commit is its own durable phase. If a process stops after health but while
+;; deleting its backup, recovery repeats the idempotent commit instead of
+;; rolling a healthy replacement back.
+(define commit-root (make-temporary-file "rivet-install-commit-~a" 'directory))
+(dynamic-wind
+  void
+  (lambda ()
+    (define journal-path (build-path commit-root "transaction.json"))
+    (define escape #f)
+    (define commits 0)
+    (check-equal?
+     (call-with-current-continuation
+      (lambda (return)
+        (set! escape return)
+        (execute-install-plan!
+         successful-plan
+         #:journal-path journal-path
+         #:commit
+         (lambda ()
+           (set! commits (add1 commits))
+           (escape 'commit-interrupted)))))
+     'commit-interrupted)
+    (check-equal?
+     (hash-ref (call-with-input-file journal-path read-json) 'phase)
+     "committing")
+    (check-equal?
+     (recover-install-plan!
+      successful-plan journal-path
+      #:commit (lambda () (set! commits (add1 commits))))
+     'committed)
+    (check-equal? commits 2)
+    (check-false (file-exists? journal-path)))
+  (lambda () (delete-directory/files commit-root)))

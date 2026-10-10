@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add first-party portable update installation for Windows, macOS, and Linux:
+  verified ZIP/AppImage payloads are staged, platform-signature checked,
+  atomically replaced, health-gated, durably committed, and recoverable after
+  interruption. Native MSI/MSIX/DMG/PKG/deb/rpm artifacts remain explicitly
+  owned by their system installer or package manager.
 - Adopt a Wayland-first Linux display policy, document X11/XWayland as
   best-effort GTK compatibility, and launch the packaged GTK4 host through a
   headless native Wayland compositor in CI.
