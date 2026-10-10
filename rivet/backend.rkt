@@ -5,6 +5,7 @@
          racket/async-channel
          racket/list
          racket/match
+         "private/backend-pending.rkt"
          "private/event-id.rkt"
          "protocol.rkt")
 
@@ -39,7 +40,6 @@
 ;; details; applications only need a predicate plus state-ref/state-set!.
 (define (state? value) (state-info? value))
 
-(struct pending-request (custodian terminal-owned cancel-deferred cancel-requested) #:mutable)
 (struct record-info (name field-names field-types) #:transparent)
 (struct record-value (name fields) #:transparent)
 (struct enum-info (name cases) #:transparent)
@@ -836,8 +836,15 @@
   (define runtime-custodian (make-custodian server-custodian))
   (define writer-custodian (make-custodian server-custodian))
   (define responses (make-async-channel max-outgoing-frames))
-  (define pending (make-hash))
-  (define pending-lock (make-semaphore 1))
+  (define pending (make-pending-table max-pending-requests))
+  (define request-id-pending? (pending-table-id-pending? pending))
+  (define admit-request! (pending-table-admit! pending))
+  (define claim-pending! (pending-table-claim! pending))
+  (define cancel-action! (pending-table-cancel-action! pending))
+  (define begin-state-commit! (pending-table-begin-state-commit! pending))
+  (define end-state-commit! (pending-table-end-state-commit! pending))
+  (define release-pending! (pending-table-release! pending))
+  (define take-all-pending! (pending-table-take-all! pending))
   (define event-id-lock (make-semaphore 1))
   (define writer-error (box #f))
   (define reader-error (box #f))
@@ -881,103 +888,6 @@
     (when (eq? outcome 'writer-dead)
       (raise-writer-failure!))
     (void))
-
-  (define (request-id-pending? id)
-    (call-with-semaphore
-     pending-lock
-     (lambda () (hash-has-key? pending id))))
-
-  (define (admit-request! id custodian)
-    (call-with-semaphore
-     pending-lock
-     (lambda ()
-       (cond
-         [(hash-has-key? pending id) 'duplicate]
-         [(>= (hash-count pending) max-pending-requests) 'full]
-         [else
-          (hash-set! pending id (pending-request custodian #f #f #f))
-          'admitted]))))
-
-  (define (claim-pending! id)
-    ;; Completion/error/cancellation claim terminal ownership without removing
-    ;; the entry yet. The request continues to occupy its pending slot while a
-    ;; terminal frame is waiting for output capacity, so backpressure cannot be
-    ;; bypassed by admitting an unbounded stream of newly completed requests.
-    (call-with-semaphore
-     pending-lock
-     (lambda ()
-       (define request (hash-ref pending id #f))
-       (cond
-         [(and request
-               (not (pending-request-terminal-owned request)))
-          (set-pending-request-terminal-owned! request #t)
-          request]
-         [else #f]))))
-
-  (define (cancel-action! id)
-    ;; State commits can briefly defer cancellation after the cell becomes
-    ;; visible and until its reserved Event is accepted by the output queue.
-    ;; Keep the pending slot occupied during that interval so cancellation
-    ;; cannot bypass either correlation ownership or the concurrency limit.
-    (call-with-semaphore
-     pending-lock
-     (lambda ()
-       (define request (hash-ref pending id #f))
-       (cond
-         [(or (not request)
-              (pending-request-terminal-owned request))
-          #f]
-         [(pending-request-cancel-deferred request)
-          (set-pending-request-cancel-requested! request #t)
-          'deferred]
-         [else
-          (set-pending-request-terminal-owned! request #t)
-          request]))))
-
-  (define (begin-state-commit! id)
-    (call-with-semaphore
-     pending-lock
-     (lambda ()
-       (define request (hash-ref pending id #f))
-       (cond
-         [(not request) 'untracked]
-         [(pending-request-terminal-owned request) 'terminal]
-         [else
-          (set-pending-request-cancel-deferred! request #t)
-          request]))))
-
-  (define (end-state-commit! id request)
-    ;; Clear the barrier and atomically convert any deferred Cancel into terminal
-    ;; ownership before another Cancel or normal Response can race in.
-    (call-with-semaphore
-     pending-lock
-     (lambda ()
-       (define current (hash-ref pending id #f))
-       (cond
-         [(not (eq? current request)) #f]
-         [else
-          (set-pending-request-cancel-deferred! request #f)
-          (cond
-            [(and (pending-request-cancel-requested request)
-                  (not (pending-request-terminal-owned request)))
-             (set-pending-request-terminal-owned! request #t)
-             request]
-            [else #f])]))))
-
-  (define (release-pending! id request)
-    (call-with-semaphore
-     pending-lock
-     (lambda ()
-       (when (eq? (hash-ref pending id #f) request)
-         (hash-remove! pending id)))))
-
-  (define (take-all-pending!)
-    (call-with-semaphore
-     pending-lock
-     (lambda ()
-       (define requests (hash-values pending))
-       (hash-clear! pending)
-       (map pending-request-custodian requests))))
 
   (define (send-claimed! id request response)
     ;; Always release the pending slot after the send attempt, including an
