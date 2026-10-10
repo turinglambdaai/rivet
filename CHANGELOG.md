@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add real Linux installer lifecycle gates: build x64 rpm/AppImage artifacts,
+  install and launch the rpm on Fedora 44 under native Wayland, launch the
+  AppImage outside the build tree on Ubuntu 24.04, uninstall the rpm, and
+  retain package/compositor/application diagnostics as CI artifacts.
 - Adopt a Wayland-first Linux display policy, document X11/XWayland as
   best-effort GTK compatibility, and launch the packaged GTK4 host through a
   headless native Wayland compositor in CI.
