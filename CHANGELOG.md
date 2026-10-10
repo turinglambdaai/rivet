@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Adopt a Wayland-first Linux display policy, document X11/XWayland as
+  best-effort GTK compatibility, and launch the packaged GTK4 host through a
+  headless native Wayland compositor in CI.
+
 ## 0.6.1
 
 - Fix the 0.6.0 family-release path: `manifest-compose --output` no longer

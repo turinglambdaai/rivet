@@ -158,7 +158,7 @@ Schema evolution is checked above the codec. `raco rivet schema --output` writes
 
 Rivet deliberately does **not** provide a fake common widget toolkit in its first layer.
 
-Windows applications should be able to use everything WinUI 3 exposes. macOS applications should be able to use everything SwiftUI/AppKit exposes. Linux applications should be able to use GTK4 directly and make an explicit X11/Wayland policy when compositor behavior matters. A future Racket declarative UI layer may map a useful common subset to each renderer, but it is deliberately outside the runtime contract and must not prevent platform-native escape hatches.
+Windows applications should be able to use everything WinUI 3 exposes. macOS applications should be able to use everything SwiftUI/AppKit exposes. Linux applications use GTK4 directly under Rivet's [Wayland-first display policy](linux-display.md): native Wayland is the tested release path, while X11/XWayland remains a best-effort toolkit compatibility path. A future Racket declarative UI layer may map a useful common subset to each renderer, but it is deliberately outside the runtime contract and must not prevent platform-native escape hatches.
 
 This differs from:
 

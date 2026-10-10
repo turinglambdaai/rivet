@@ -105,7 +105,7 @@ Racket CS runs on a dedicated runtime thread. Native UI code never manipulates R
 
 The embedding model is inspired by [Noise](https://github.com/Bogdanp/Noise), but Rivet makes the runtime contract, protocol, code generation, and lifecycle cross-platform instead of Swift-first.
 
-See [architecture](docs/architecture.md), [agent-native development](docs/agent-native.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [typed device communication](docs/device-communication.md), the unimplemented [network device channel design](docs/network-device-channel.md), [Android architecture](docs/android.md), [project configuration](docs/configuration.md), [system services](docs/system-services.md), [large payloads, pagination, and progress](docs/large-payloads.md), [Windows native window interop](docs/windows-native-window.md), [release and updates](docs/release-and-updates.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
+See [architecture](docs/architecture.md), [agent-native development](docs/agent-native.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [typed device communication](docs/device-communication.md), the unimplemented [network device channel design](docs/network-device-channel.md), [Android architecture](docs/android.md), [project configuration](docs/configuration.md), [system services](docs/system-services.md), [Linux display policy](docs/linux-display.md), [large payloads, pagination, and progress](docs/large-payloads.md), [Windows native window interop](docs/windows-native-window.md), [release and updates](docs/release-and-updates.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
 
 ## Platform status
 
@@ -121,7 +121,7 @@ See [architecture](docs/architecture.md), [agent-native development](docs/agent-
 | System services / secure storage | ✅ | ✅ | 🧪 Linux adapter + StatusNotifierItem tray |
 | Real embedded-runtime CI | ✅ | ✅ | ✅ |
 
-Windows and macOS remain the production release targets. Linux is a developer preview with the complete daily CLI path, signed tarball plus deb/rpm/AppImage artifacts, real embedded-runtime CI, and a first-party system adapter for single-instance, notifications, tray, autostart, secure storage, crash hooks, and graceful shutdown. Production graduation still requires an explicit X11/Wayland policy and install/upgrade evidence across the supported distribution matrix.
+Windows and macOS remain the production release targets. Linux is a developer preview with the complete daily CLI path, signed tarball plus deb/rpm/AppImage artifacts, real embedded-runtime CI, and a first-party system adapter for single-instance, notifications, tray, autostart, secure storage, crash hooks, and graceful shutdown. Wayland is the primary Linux display target and a native Wayland launch is a CI gate; X11 and XWayland remain best-effort GTK compatibility paths. Production graduation still requires install/upgrade evidence across the supported distribution matrix.
 
 ### Apple mobile foundation
 
@@ -312,11 +312,11 @@ swift test --package-path platform/macos
 platform/android/gradlew -p platform/android test
 ```
 
-CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exercises real embedded Racket round trips on all three desktop platforms; cross-compiles the portable Swift layers for iOS/watchOS; compiles the generated Kotlin client; smoke-builds, packages, and verifies generated desktop applications; and covers Windows ARM64, macOS Intel, and Linux ARM64 on dedicated clean-runner architecture gates.
+CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exercises real embedded Racket round trips on all three desktop platforms; opens the packaged GTK4 host through a headless native Wayland compositor; cross-compiles the portable Swift layers for iOS/watchOS; compiles the generated Kotlin client; smoke-builds, packages, and verifies generated desktop applications; and covers Windows ARM64, macOS Intel, and Linux ARM64 on dedicated clean-runner architecture gates.
 
 ## Honest gaps
 
-- **Linux is a developer preview** — the complete daily CLI path, signed tarball, deb/rpm/AppImage formats, tray, and first-party system adapter work; explicit compositor policy and production install/upgrade evidence across supported distributions are not complete.
+- **Linux is a developer preview** — the complete daily CLI path, signed tarball, deb/rpm/AppImage formats, tray, first-party system adapter, and Wayland CI work; production install/upgrade evidence across supported distributions is not complete. X11/XWayland is best-effort compatibility, not a release gate.
 - **Apple mobile delivery is foundational** — the portable Swift and typed WatchConnectivity layers exist, but iOS/iPadOS/watchOS project generation, runtime packaging, signing, and store delivery are not complete.
 - **Android remains foundational** — its Kotlin RVT1 codec, coroutine runtime client, typed client code generation, and pinned Gradle build are tested, but Jetpack Compose, JNI, portable Racket CS packaging, signing, and device delivery are not complete.
 - **Architecture evidence covers build/package/verify, not production releases** — clean-runner gates exercise Windows x64/ARM64, macOS Apple-Silicon/Intel, and Linux x64/ARM64, but production release artifacts are still produced by the tag-driven release flow per application.
