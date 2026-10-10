@@ -40,6 +40,13 @@ function Find-ByAutomationId {
         [System.Windows.Automation.TreeScope]::Descendants, $condition)
 }
 
+function Get-StatusText {
+    param([Parameter(Mandatory = $true)]$StatusElement)
+    $message = Find-ByAutomationId $StatusElement 'Message'
+    if ($null -ne $message) { return $message.Current.Name }
+    return $StatusElement.Current.Name
+}
+
 function Convert-Element {
     param($Element, [int]$Depth = 0, [int]$MaximumDepth = 8)
     $current = $Element.Current
@@ -91,7 +98,7 @@ try {
     }
 
     $required = [ordered]@{
-        'application-status' = 'ControlType.Pane'
+        'application-status' = 'ControlType.StatusBar'
         'task-list' = 'ControlType.List'
         'new-task' = 'ControlType.Button'
         'generate-demo' = 'ControlType.Button'
@@ -128,7 +135,7 @@ try {
     $sawEvent = $false
     $deadline = [DateTime]::UtcNow.AddSeconds(6)
     while ([DateTime]::UtcNow -lt $deadline) {
-        $message = $status.Current.Name
+        $message = Get-StatusText $status
         if ($message -and ($observedStatus.Count -eq 0 -or $observedStatus[$observedStatus.Count - 1] -ne $message)) {
             $observedStatus.Add($message)
         }
