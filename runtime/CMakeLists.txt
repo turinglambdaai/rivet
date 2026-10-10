@@ -23,6 +23,18 @@ option(RIVET_BUILD_FUZZERS "Build Rivet native protocol fuzz targets" OFF)
 
 if(RIVET_BUILD_TESTS)
   enable_testing()
+
+  # The native tests intentionally use C assertions. CMake's Release flags
+  # define NDEBUG by default, which would otherwise turn those checks into
+  # no-ops and allow a false-green release build.
+  function(rivet_enable_test_assertions target)
+    if(MSVC)
+      target_compile_options(${target} PRIVATE /UNDEBUG)
+    else()
+      target_compile_options(${target} PRIVATE -UNDEBUG)
+    endif()
+  endfunction()
+
   configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/../tests/protocol-golden.txt
     ${CMAKE_CURRENT_BINARY_DIR}/protocol-golden.txt
@@ -31,22 +43,32 @@ if(RIVET_BUILD_TESTS)
   add_executable(rivet_protocol_test tests/protocol_test.cpp)
   target_link_libraries(rivet_protocol_test PRIVATE rivet_protocol)
   target_compile_features(rivet_protocol_test PRIVATE cxx_std_17)
+  rivet_enable_test_assertions(rivet_protocol_test)
   add_test(NAME rivet_protocol_test COMMAND rivet_protocol_test)
 
   add_executable(rivet_protocol_property_test tests/protocol_property_test.cpp)
   target_link_libraries(rivet_protocol_property_test PRIVATE rivet_protocol)
   target_compile_features(rivet_protocol_property_test PRIVATE cxx_std_17)
+  rivet_enable_test_assertions(rivet_protocol_property_test)
   add_test(NAME rivet_protocol_property_test COMMAND rivet_protocol_property_test)
 
   add_executable(rivet_request_id_allocator_test tests/request_id_allocator_test.cpp)
   target_link_libraries(rivet_request_id_allocator_test PRIVATE rivet_protocol)
   target_compile_features(rivet_request_id_allocator_test PRIVATE cxx_std_17)
+  rivet_enable_test_assertions(rivet_request_id_allocator_test)
   add_test(NAME rivet_request_id_allocator_test COMMAND rivet_request_id_allocator_test)
 
   add_executable(rivet_pending_request_registry_test tests/pending_request_registry_test.cpp)
   target_link_libraries(rivet_pending_request_registry_test PRIVATE rivet_protocol)
   target_compile_features(rivet_pending_request_registry_test PRIVATE cxx_std_17)
+  rivet_enable_test_assertions(rivet_pending_request_registry_test)
   add_test(NAME rivet_pending_request_registry_test COMMAND rivet_pending_request_registry_test)
+
+  add_executable(rivet_backend_completion_registry_test tests/backend_completion_registry_test.cpp)
+  target_link_libraries(rivet_backend_completion_registry_test PRIVATE rivet_protocol)
+  target_compile_features(rivet_backend_completion_registry_test PRIVATE cxx_std_17)
+  rivet_enable_test_assertions(rivet_backend_completion_registry_test)
+  add_test(NAME rivet_backend_completion_registry_test COMMAND rivet_backend_completion_registry_test)
 endif()
 
 if(RIVET_BUILD_FUZZERS)

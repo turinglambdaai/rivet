@@ -18,7 +18,7 @@
 
 #include "chezscheme.h"
 #include "racketcs.h"
-#include "rivet/detail/pending_request_registry.hpp"
+#include "rivet/detail/backend_completion_registry.hpp"
 
 namespace rivet::windows {
 namespace {
@@ -64,11 +64,6 @@ struct PipePair {
   UniqueHandle write;
 };
 
-struct PendingRequest {
-  std::unique_ptr<std::promise<Value>> promise;
-  CompletionHandler completion;
-};
-
 PipePair create_pipe() {
   HANDLE read = INVALID_HANDLE_VALUE;
   HANDLE write = INVALID_HANDLE_VALUE;
@@ -106,7 +101,7 @@ class Backend::Impl {
  public:
   explicit Impl(RacketRuntimeConfig config)
       : config_(std::move(config)),
-        pending_(config_.max_pending_requests) {}
+        completions_(config_.max_pending_requests) {}
 
   ~Impl() {
     try {
@@ -216,7 +211,7 @@ class Backend::Impl {
       transport_.reset();
     }
 
-    reject_all(stopped_error());
+    completions_.reject_all(stopped_error());
     emit_diagnostic("native-runtime", "backend-stop", "success");
   }
 
@@ -225,12 +220,12 @@ class Backend::Impl {
   }
 
   PendingCall request(std::string rpc_name, Value::List arguments) {
-    auto promise = std::make_unique<std::promise<Value>>();
-    auto future = promise->get_future();
-    auto const id = submit_request(
-        std::move(rpc_name), std::move(arguments),
-        PendingRequest{std::move(promise), CompletionHandler{}});
-    return PendingCall{id, std::move(future)};
+    if (!running()) {
+      throw std::runtime_error("Rivet backend is not running");
+    }
+    auto pending = completions_.insert_future();
+    submit_request(pending.id, std::move(rpc_name), std::move(arguments));
+    return PendingCall{pending.id, std::move(pending.result)};
   }
 
   std::future<Value> call(std::string rpc_name, Value::List arguments) {
@@ -243,9 +238,12 @@ class Backend::Impl {
     if (!completion) {
       throw std::invalid_argument("Rivet async completion handler is empty");
     }
-    return submit_request(
-        std::move(rpc_name), std::move(arguments),
-        PendingRequest{nullptr, std::move(completion)});
+    if (!running()) {
+      throw std::runtime_error("Rivet backend is not running");
+    }
+    auto const id = completions_.insert_completion(std::move(completion));
+    submit_request(id, std::move(rpc_name), std::move(arguments));
+    return id;
   }
 
   void cancel(std::uint64_t request_id) {
@@ -261,7 +259,7 @@ class Backend::Impl {
     if (!running()) {
       return;
     }
-    (void)pending_.request_cancel(request_id, [&] {
+    (void)completions_.request_cancel(request_id, [&] {
       auto* transport = transport_.get();
       if (transport != nullptr) {
         note_protocol_event("cancel");
@@ -303,15 +301,9 @@ class Backend::Impl {
     }
   }
 
-  std::uint64_t submit_request(std::string rpc_name,
-                               Value::List arguments,
-                               PendingRequest pending) {
-    if (!running()) {
-      throw std::runtime_error("Rivet backend is not running");
-    }
-
-    auto const id = pending_.insert(std::move(pending));
-
+  void submit_request(std::uint64_t id,
+                      std::string rpc_name,
+                      Value::List arguments) {
     note_protocol_event("request");
     emit_diagnostic("native-client", "rpc-dispatch", "begin", rpc_name, id);
 
@@ -338,7 +330,7 @@ class Backend::Impl {
                   Frame{MessageType::Request, id,
                         encode_value(Value(std::move(request)))});
 
-      bool const send_deferred_cancel = pending_.mark_request_sent(id);
+      bool const send_deferred_cancel = completions_.mark_request_sent(id);
       // Keep write_mutex_ while emitting a latched cancellation so no other
       // frame can interleave between this Request and its deferred Cancel. If
       // stop began after the running check above, it is waiting for this mutex,
@@ -349,10 +341,8 @@ class Backend::Impl {
     } catch (...) {
       emit_diagnostic("transport", "request-write", "failure",
                       exception_message(std::current_exception()), id);
-      fail_request(id, std::current_exception());
+      completions_.fail(id, std::current_exception());
     }
-
-    return id;
   }
 
   void racket_main(UniqueHandle server_read, UniqueHandle server_write) noexcept {
@@ -451,7 +441,7 @@ class Backend::Impl {
             note_protocol_event("response");
             emit_diagnostic("native-client", "rpc-dispatch", "success", "",
                             frame->id);
-            resolve_request(frame->id, decode_value(frame->payload));
+            completions_.resolve(frame->id, decode_value(frame->payload));
             break;
           case MessageType::Error: {
             note_protocol_event("error");
@@ -462,7 +452,7 @@ class Backend::Impl {
             }
             emit_diagnostic("racket-backend", "rpc-dispatch", "failure",
                             message, frame->id);
-            fail_request(
+            completions_.fail(
                 frame->id,
                 std::make_exception_ptr(std::runtime_error(std::move(message))));
             break;
@@ -483,11 +473,11 @@ class Backend::Impl {
       emit_diagnostic("protocol", "reader-loop", "failure",
                       exception_message(std::current_exception()));
       set_ready_exception(std::current_exception());
-      reject_all(std::current_exception());
+      completions_.reject_all(std::current_exception());
     }
 
     running_.store(false, std::memory_order_release);
-    reject_all(stopped_error());
+    completions_.reject_all(stopped_error());
   }
 
   void accept_hello(Frame const& frame) {
@@ -551,73 +541,6 @@ class Backend::Impl {
     }
   }
 
-  std::optional<PendingRequest> take_request(std::uint64_t id) {
-    return pending_.take(id);
-  }
-
-  void resolve_request(std::uint64_t id, Value value) noexcept {
-    auto pending = take_request(id);
-    if (!pending.has_value()) {
-      return;
-    }
-
-    if (pending->promise != nullptr) {
-      try {
-        pending->promise->set_value(std::move(value));
-      } catch (...) {
-      }
-      return;
-    }
-
-    if (pending->completion) {
-      try {
-        pending->completion(CallResult{std::move(value), nullptr});
-      } catch (...) {
-        // Application completions are isolated from the transport loop.
-      }
-    }
-  }
-
-  void fail_request(std::uint64_t id, std::exception_ptr error) noexcept {
-    auto pending = take_request(id);
-    if (!pending.has_value()) {
-      return;
-    }
-
-    if (pending->promise != nullptr) {
-      try {
-        pending->promise->set_exception(error);
-      } catch (...) {
-      }
-      return;
-    }
-
-    if (pending->completion) {
-      try {
-        pending->completion(CallResult{std::nullopt, error});
-      } catch (...) {
-        // Application completions are isolated from the transport loop.
-      }
-    }
-  }
-
-  void reject_all(std::exception_ptr error) noexcept {
-    pending_.drain([&](PendingRequest request) {
-      if (request.promise != nullptr) {
-        try {
-          request.promise->set_exception(error);
-        } catch (...) {
-        }
-      } else if (request.completion) {
-        try {
-          request.completion(CallResult{std::nullopt, error});
-        } catch (...) {
-          // Application completions must not interrupt shutdown.
-        }
-      }
-    });
-  }
-
   RacketRuntimeConfig config_;
   mutable std::mutex state_mutex_;
   std::mutex stop_mutex_;
@@ -627,7 +550,8 @@ class Backend::Impl {
   std::unique_ptr<Win32PipeTransport> transport_;
   std::thread racket_thread_;
   std::thread reader_thread_;
-  detail::PendingRequestRegistry<PendingRequest> pending_;
+  detail::BackendCompletionRegistry<Value, CallResult, CompletionHandler>
+      completions_;
   EventHandler event_handler_;
   std::atomic<bool> running_{false};
   std::atomic<bool> hello_seen_{false};
