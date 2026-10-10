@@ -108,8 +108,8 @@
 ;; Stages the dependency closure plus the data directories GTK4 needs at
 ;; runtime (compiled GSettings schemas, pixbuf loaders, a minimal hicolor
 ;; index) into the AppDir. Returns the list of copied libraries.
-(define (stage-appimage-dependencies! appdir)
-  (define payload-binary (build-path appdir "usr" "bin" "RivetHost"))
+(define (stage-appimage-dependencies! appdir #:binary-name [binary-name "RivetHost"])
+  (define payload-binary (build-path appdir "usr" "bin" binary-name))
   (define lib-dir (build-path appdir "usr" "lib"))
   (make-directory* lib-dir)
   (define libraries (dependency-closure payload-binary))
@@ -180,7 +180,7 @@
   (unless (eq? (system-type 'os) 'windows)
     (file-or-directory-permissions path #o755)))
 
-(define (write-appimage-apprun! appdir)
+(define (write-appimage-apprun! appdir #:binary-name [binary-name "RivetHost"])
   (call-with-output-file (build-path appdir "AppRun")
     #:exists 'truncate/replace
     (lambda (out)
@@ -197,26 +197,27 @@
         "  export GDK_PIXBUF_MODULEDIR=\"$LOADERS\"\n"
         "fi\n"
         "export XDG_DATA_DIRS=\"${HERE}/usr/share${XDG_DATA_DIRS:+:${XDG_DATA_DIRS}}\"\n"
-        "exec \"${HERE}/usr/bin/RivetHost\" \"$@\"\n")
+        "exec \"${HERE}/usr/bin/" binary-name "\" \"$@\"\n")
        out)))
   (mark-executable! (build-path appdir "AppRun")))
 
 (define (stage-appdir! project package)
   (define name (project-name project))
+  (define binary-name (project-linux-binary-name project))
   (define appdir
     (project-path project ".rivet" "installer"
                   (string-append name ".AppDir")))
   (when (directory-exists? appdir) (delete-directory/files appdir))
   (make-directory* (build-path appdir "usr" "bin"))
-  ;; Payload keeps its RivetHost-relative layout (runtime/, res/, app/ sit
-  ;; beside the executable) because the embedded runtime resolves those
+  ;; Payload keeps its executable-relative layout (runtime/, res/, app/ sit
+  ;; beside the binary) because the embedded runtime resolves those
   ;; relative to the binary location.
   (for ([entry (in-list (directory-list package))])
     (define source (build-path package entry))
     (if (directory-exists? source)
         (copy-directory/files source (build-path appdir "usr" "bin" entry))
         (copy-file source (build-path appdir "usr" "bin" entry))))
-  (mark-executable! (build-path appdir "usr" "bin" "RivetHost"))
+  (mark-executable! (build-path appdir "usr" "bin" binary-name))
   (write-desktop-entry! project (build-path appdir (string-append name ".desktop")))
   ;; Fail closed: the AppImage format requires a top-level icon, and a
   ;; placeholder would ship an invisible product tile to users' app grids.
@@ -227,7 +228,7 @@
             " `linux-icon` (a project-relative .png) in rivet.rktd")))
   (copy-file (project-path project (project-linux-icon project))
              (build-path appdir (string-append name ".png")) #t)
-  (write-appimage-apprun! appdir)
+  (write-appimage-apprun! appdir #:binary-name (project-linux-binary-name project))
   appdir)
 
 ;; Fetches a checksum-verified appimagetool into .rivet/bin. The digests
@@ -288,7 +289,7 @@
             " building the AppImage")))
   (printf "rivet: staging AppDir for the AppImage installer\n")
   (define appdir (stage-appdir! project package))
-  (stage-appimage-dependencies! appdir)
+  (stage-appimage-dependencies! appdir #:binary-name (project-linux-binary-name project))
   (printf "rivet: packaging the AppImage with appimagetool\n")
   (define tool (appimagetool-executable project))
   (define output (appimage-installer-path project))
