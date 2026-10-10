@@ -24,7 +24,7 @@ jobs:
       - name: Install Linux development files
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libglib2.0-dev libsecret-1-dev libgtk-4-dev weston
+          sudo apt-get install --yes desktop-file-utils libglib2.0-dev libsecret-1-dev libgtk-4-dev weston
       - name: Build backend and integration runner
         shell: bash
         run: |
