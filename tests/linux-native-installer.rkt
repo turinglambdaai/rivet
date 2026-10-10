@@ -86,6 +86,11 @@
     (check-true (regexp-match? #rx"(?m:^Version: 1\\.2\\.0$)" spec))
     (check-true (regexp-match? #rx"(?m:^Release: 7$)" spec))
     (check-true (regexp-match? #rx"(?m:^Requires: gtk4$)" spec))
+    (check-true (regexp-match? #rx"(?m:^Requires: ncurses-libs$)" spec))
+    (check-true
+     (regexp-match?
+      #rx"(?m:^%global __requires_exclude \\^libtinfo\\\\[.]so)"
+      spec))
     (check-true (regexp-match? #rx"\"/opt/Demo_App/\\*\"" spec))
     ;; System-owned directories must not be re-owned by the package.
     (check-false (regexp-match? #rx"%dir \"/usr/share/applications\"" spec))

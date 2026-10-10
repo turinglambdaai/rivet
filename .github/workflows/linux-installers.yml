@@ -72,6 +72,7 @@ jobs:
           cp dist/*.rpm dist/*.AppImage "$artifacts/"
           sha256sum "$artifacts"/* > "$diagnostics/SHA256SUMS"
           rpm -qpi "$artifacts"/*.rpm > "$diagnostics/rpm-info.txt"
+          rpm -qp --requires "$artifacts"/*.rpm > "$diagnostics/rpm-requires.txt"
           raco rivet doctor --json > "$diagnostics/doctor.json"
       - name: Upload installers
         uses: actions/upload-artifact@v6
