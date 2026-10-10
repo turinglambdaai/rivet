@@ -418,10 +418,31 @@ architecture policy.}
          path?]{
 Downloads to a partial file, enforces the signed size and configured bound,
 verifies SHA-256, and atomically moves the verified artifact into place.}
-@defproc[(execute-install-plan! [plan install-plan?]) any/c]{
-Runs the native installation and restart callbacks. If installation fails and
-the signed policy allows rollback, the rollback callback runs before the
-exception is re-raised.}
+@defproc[(execute-install-plan! [plan install-plan?]
+                                [#:health-check health-check (-> any/c) (lambda () #t)]
+                                [#:journal-path journal-path (or/c #f path-string?) #f])
+         any/c]{
+Runs the native installation and restart callbacks, then requires
+@racket[health-check] to return a true value before committing. The return
+value is the restart callback's result, preserving the original procedure
+contract. If any step fails and the signed policy allows rollback, the rollback
+callback runs before the exception is re-raised.
+
+When @racket[journal-path] is provided, every destructive phase is written to
+an atomically replaced JSON journal. The restart callback must start the
+replacement and return so the health check and commit can complete. Use an
+absolute downloaded path and make rollback idempotent when durable recovery is
+enabled.}
+
+@defproc[(recover-install-plan! [plan install-plan?]
+                                [journal-path path-string?])
+         (or/c 'committed 'rolled-back)]{
+Recovers an interrupted journal for the exact same signed candidate, download,
+and backup paths. A transaction already marked healthy commits; any other
+unfinished phase rolls back when the signed manifest permits it. A mismatched
+plan, malformed journal, forbidden rollback, or failed rollback is rejected
+without deleting the evidence needed for diagnosis or another recovery
+attempt.}
 
 @section{Command-Line Workflow}
 

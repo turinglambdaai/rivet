@@ -73,7 +73,7 @@ The updater verifies in this order:
 4. SHA-256 of the complete downloaded portable archive.
 5. Platform code signature/trust of the application carried by that archive as part of release and package verification.
 
-Only then may the native adapter install. A failed installation invokes the rollback callback only when the signed manifest permits rollback. The adapter extracts the portable archive into a new versioned location, preserves the previous installation until the replacement launches successfully, and uses the platform-specific application signature where available. Direct MSI/DMG/deb/rpm/AppImage installs retain their own platform transaction or package-manager behavior. Private keys never belong in the repository. Generate and store them outside the checkout, for example:
+Only then may the native adapter install. A failed installation, restart, or health check invokes the rollback callback only when the signed manifest permits rollback. The adapter extracts the portable archive into a new versioned location, preserves the previous installation until the replacement passes its health check, and uses the platform-specific application signature where available. Direct MSI/DMG/deb/rpm/AppImage installs retain their own platform transaction or package-manager behavior. Private keys never belong in the repository. Generate and store them outside the checkout, for example:
 
 ```bash
 openssl genpkey -algorithm Ed25519 -outform DER -out update-private.der
@@ -84,7 +84,7 @@ Embed only `update-public.der` (or its bytes) in the native host. Key rotation i
 
 ## Application API
 
-Require `rivet/distribution`. `fetch-update-manifest` verifies before parsing, `select-update` applies channel/version/rollout/platform policy, `download-update` enforces limits and hashes, and `execute-install-plan!` delegates elevation/process replacement to a native adapter while owning the rollback state machine.
+Require `rivet/distribution`. `fetch-update-manifest` verifies before parsing, `select-update` applies channel/version/rollout/platform policy, and `download-update` enforces limits and hashes. `execute-install-plan!` delegates elevation and process replacement to a native adapter while owning the health and rollback state machine. Pass `#:journal-path` to atomically persist every destructive phase; on the next start, `recover-install-plan!` accepts only the exact same signed candidate and paths before committing a previously healthy transaction or retrying its idempotent rollback. A durable adapter should use absolute paths, keep the backup until commit, and make its restart callback return after starting the replacement so the health check can run.
 
 - `stable` accepts release SemVer versions only.
 - `beta` accepts stable versions and `beta` prereleases.
