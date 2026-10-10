@@ -68,6 +68,15 @@ def find_application(name):
     for application in children(desktop):
         if name.casefold() in (application.name or "").casefold():
             return application
+        # GTK exposes the process/application name and the top-level window
+        # title independently. The window title is the stable product-facing
+        # identity and remains valid when a distribution renames the binary.
+        for node in children(application):
+            if (
+                role_name(node) == "frame"
+                and name.casefold() in (node.name or "").casefold()
+            ):
+                return application
     return None
 
 

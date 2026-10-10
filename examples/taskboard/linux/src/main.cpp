@@ -549,6 +549,7 @@ void perform_orderly_shutdown() { on_shutdown(nullptr, nullptr); }
 }  // namespace
 
 int main(int argc, char** argv) {
+  g_set_application_name("Rivet Taskboard");
   auto* app = gtk_application_new("dev.rivet.taskboard", G_APPLICATION_DEFAULT_FLAGS);
   g_signal_connect(app, "activate", G_CALLBACK(on_activate), nullptr);
   g_signal_connect(app, "shutdown", G_CALLBACK(on_shutdown), nullptr);

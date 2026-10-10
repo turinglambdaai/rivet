@@ -97,8 +97,12 @@ for _ in $(seq 1 100); do
   }
   sleep 0.05
 done
-gdbus call --session --dest org.a11y.Bus --object-path /org/a11y/bus \
-  --method org.a11y.Bus.GetAddress >/dev/null
+atspi_address="$({
+  gdbus call --session --dest org.a11y.Bus --object-path /org/a11y/bus \
+    --method org.a11y.Bus.GetAddress
+} | sed -E "s/^\('([^']+)',\)$/\1/")"
+[[ "$atspi_address" == unix:* ]]
+export AT_SPI_BUS_ADDRESS="$atspi_address"
 
 "$executable" >"$output/application.log" 2>&1 &
 application_pid=$!
