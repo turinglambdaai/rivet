@@ -98,24 +98,10 @@ packaged dependency-closure, and clean-machine checks.
 @defthing[Bytes rivet-type?]
 @defthing[List rivet-type?]
 
-@defstruct*[state-info
-            ([name symbol?]
-             [type any/c]
-             [cell box?]
-             [lock semaphore?])]{
-Represents a registered shared state value. Applications normally create one
-with @racket[define-state] instead of calling the constructor directly.}
-
-@defstruct*[record-info
-            ([name symbol?]
-             [field-names list?]
-             [field-types list?])]{
-Represents the ordered schema of a named Record. Applications normally create
-one with @racket[define-record] instead of calling the constructor directly.}
-
-@defstruct*[enum-info ([name symbol?] [cases list?])]{
-Represents the ordered cases of a named Enum. Applications normally create one
-with @racket[define-enum] instead of calling the constructor directly.}
+State descriptors and the registry records behind RPCs, Events, Records, and
+Enums are intentionally opaque. Applications declare them with the forms in
+this section; code generators consume the immutable @racket[backend-schema]
+snapshot instead of depending on mutable runtime representation.
 
 @defform[(define-rpc (name [arg : type] ... : result-type) body ...)]{
 Defines a Racket procedure named @racket[name] and registers it as an RPC for
@@ -157,9 +143,12 @@ state event. State values cannot have type @racket[Void].}
 Emits an already registered event value on the active server connection. The
 procedure reports an error when no server is active on the current thread.}
 
-@defproc[(state-ref [state state-info?]) any/c]{Returns the current state value.}
+@defproc[(state? [value any/c]) boolean?]{Reports whether @racket[value] is an
+opaque State descriptor produced by @racket[define-state].}
 
-@defproc[(state-set! [state state-info?] [value any/c]) void?]{
+@defproc[(state-ref [state state?]) any/c]{Returns the current state value.}
+
+@defproc[(state-set! [state state?] [value any/c]) void?]{
 Validates and atomically commits a state value, then admits its native event in
 the same update order.}
 
@@ -189,6 +178,11 @@ backpressure.}
                     [#:max-outgoing-frames max-outgoing-frames exact-positive-integer? 64])
          void?]{
 Adapts native file descriptors to binary ports and calls @racket[serve].}
+
+@defproc[(backend-schema) hash?]{Returns one immutable, data-only snapshot with
+@racket['rpcs], @racket['events], @racket['states], @racket['records], and
+@racket['enums] entries. This is the supported reflection boundary for code
+generation and tooling; registry structs and mutable State cells are private.}
 
 @defproc[(rpc-schema) list?]{Returns the registered RPC schema used by code generation.}
 @defproc[(event-schema) list?]{Returns the registered event schema.}
