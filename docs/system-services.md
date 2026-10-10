@@ -51,6 +51,14 @@ macOS asks the user for notification and login-item consent as required by the O
 
 `rivet::system::Capabilities()` reports what the running session actually provides; a missing session bus, Secret Service provider, or libsecret build fails clearly at call time instead of silently degrading.
 
+Install `rivet::system::InstallShutdownHook` only after the embedded backend's
+`start()` has completed its Hello handshake. `racket_boot` establishes Racket
+CS signal handling during startup; installing the application hook earlier
+would let that initialization replace it, turning `SIGTERM` into a backend
+break while the GTK main loop remains alive. Generated hosts and the reference
+Taskboard enforce this ordering and the deb lifecycle gate sends a real
+`SIGTERM` to the installed application.
+
 The Linux integration binary self-checks the adapter (`RivetIntegration --system`): lease acquisition and activation forwarding, autostart entries, and the crash hook always run; notification, tray, and secure-storage checks skip themselves when the session lacks those services.
 
 ## Settings, logs, and crashes

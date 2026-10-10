@@ -65,6 +65,11 @@
     (check-true (regexp-match? #rx"platform/linux/runtime" linux-cmake))
     (check-true (regexp-match? #rx"platform/linux/theme/theme[.]cpp" linux-cmake))
     (check-true (regexp-match? #rx"rivet::linux_ui::ApplyTheme" linux-main))
+    (check-true
+     (regexp-match?
+      #px"(?s:g_state[.]backend = std::move[(]backend[)];.*InstallShutdownHook)"
+      linux-main)
+     "the generated Linux host must install its signal hook after backend startup")
     (for ([generated-path (in-list '("windows/Generated Files/"
                                      "windows/obj/"
                                      "windows/RivetHost/"

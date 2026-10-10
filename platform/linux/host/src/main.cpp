@@ -49,6 +49,8 @@ struct AppState {
 
 AppState g_state;
 
+void perform_orderly_shutdown();
+
 std::filesystem::path executable_path() {
   return std::filesystem::read_symlink("/proc/self/exe");
 }
@@ -143,6 +145,18 @@ int on_backend_finished(gpointer) {
 
   g_state.backend = std::move(backend);
   g_state.api = std::make_unique<rivet_app::API>(*g_state.backend);
+
+  // racket_boot installs Racket CS signal handlers. Install Rivet's process
+  // shutdown bridge after the Hello handshake so SIGTERM/SIGINT keep reaching
+  // the native application's orderly close path.
+  try {
+    rivet::system::InstallShutdownHook(perform_orderly_shutdown);
+  } catch (std::exception const& hook_error) {
+    std::fputs((std::string{"shutdown hook unavailable: "} +
+                hook_error.what() + "\n")
+                   .c_str(),
+               stderr);
+  }
 
   g_state.set_status("Embedded Racket CS is ready");
   gtk_widget_set_sensitive(GTK_WIDGET(g_state.increment), TRUE);
@@ -280,13 +294,6 @@ int main(int argc, char** argv) {
                                   G_APPLICATION_DEFAULT_FLAGS);
   g_signal_connect(app, "activate", G_CALLBACK(on_activate), nullptr);
   g_signal_connect(app, "shutdown", G_CALLBACK(on_shutdown), nullptr);
-  try {
-    rivet::system::InstallShutdownHook(perform_orderly_shutdown);
-  } catch (std::exception const& error) {
-    std::fputs((std::string{"shutdown hook unavailable: "} + error.what() +
-                "\n").c_str(),
-               stderr);
-  }
   int const status = g_application_run(G_APPLICATION(app), argc, argv);
   g_object_unref(app);
   return status;
