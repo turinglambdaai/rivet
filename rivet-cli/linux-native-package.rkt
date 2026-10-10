@@ -62,6 +62,10 @@
 (define (write-desktop-entry! project destination)
   (define name (project-name project))
   (define display-name (project-display-name project))
+  ;; The payload under /opt/<name> is the verified package directory, so the
+  ;; executable inside it is whatever linux-binary-name names (default the
+  ;; scaffold's RivetHost).
+  (define binary (project-linux-binary-name project))
   (make-parent-directory* destination)
   (call-with-output-file destination
     #:exists 'truncate/replace
@@ -72,8 +76,8 @@
       (entry "Type" "Application")
       (entry "Version" "1.0")
       (entry "Name" display-name)
-      (entry "Exec" (format "/opt/~a/RivetHost" name))
-      (entry "TryExec" (format "/opt/~a/RivetHost" name))
+      (entry "Exec" (format "/opt/~a/~a" name binary))
+      (entry "TryExec" (format "/opt/~a/~a" name binary))
       (entry "Terminal" "false")
       (entry "Categories" "Utility;")
       (when (project-linux-icon project)

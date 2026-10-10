@@ -59,11 +59,12 @@
   anything (observed on Fulcrum 0.4.1: `kill` left a half-dead app that
   only SIGKILL would remove).
 - Honor `linux-binary-name` in `rivet.rktd`: the Linux build stage, package
-  staging, verification, and launch smoke now use the configured executable
-  name instead of the hardcoded scaffold name `RivetHost` (default
-  unchanged). Apps ship as their product name — `fulcrum`, not a generic
-  host binary — matching what the docs and desktop entries already say.
-  Partially addresses #169.
+  staging, verification, launch smoke, the deb/rpm `.desktop` entry
+  (`Exec`/`TryExec`), and the AppImage payload + AppRun now use the
+  configured executable name instead of the hardcoded scaffold name
+  `RivetHost` (default unchanged). Apps ship as their product name —
+  `fulcrum`, not a generic host binary — matching what the docs and desktop
+  entries already say. Partially addresses #169.
 - Build native Linux system installers from `raco rivet release`: a deb
   (dpkg-deb, unprivileged, installs under /opt with a desktop entry and
   pixmaps icon), an rpm (rpmbuild BUILDROOT, no distro-specific macros), and
