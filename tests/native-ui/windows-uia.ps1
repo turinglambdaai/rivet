@@ -146,7 +146,7 @@ try {
         throw "operation-progress Event never reached UI Automation; observed=$($observedStatus -join ' | ')"
     }
     Wait-Until 'the RPC-driven 1,000-row state' {
-        Find-ByAutomationId $window 'task-row-1004'
+        (Get-StatusText $status) -eq 'Generated 1000 tasks'
     } -TimeoutSeconds 20 | Out-Null
 
     Convert-Element $window | ConvertTo-Json -Depth 20 |

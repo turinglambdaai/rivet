@@ -161,7 +161,7 @@ final class AppModel: ObservableObject {
                 guard let self else { return }
                 self.tasks = items
                 self.selectedID = items.first?.id
-                self.status = "Generated 1,000 tasks"
+                self.status = "Generated \(items.count) tasks"
             } catch is CancellationError {
                 self?.status = "Generation cancelled"
             } catch {

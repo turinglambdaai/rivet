@@ -41,16 +41,16 @@ func parseOptions() throws -> Options {
     return Options(pid: pid, output: output)
 }
 
-func attribute(_ element: AXUIElement, _ name: CFString) -> CFTypeRef? {
+func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
     var value: CFTypeRef?
-    return AXUIElementCopyAttributeValue(element, name, &value) == .success ? value : nil
+    return AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success ? value : nil
 }
 
-func stringAttribute(_ element: AXUIElement, _ name: CFString) -> String {
+func stringAttribute(_ element: AXUIElement, _ name: String) -> String {
     attribute(element, name) as? String ?? ""
 }
 
-func boolAttribute(_ element: AXUIElement, _ name: CFString) -> Bool {
+func boolAttribute(_ element: AXUIElement, _ name: String) -> Bool {
     attribute(element, name) as? Bool ?? false
 }
 
@@ -64,7 +64,7 @@ func walk(_ element: AXUIElement) -> [AXUIElement] {
 
 func find(_ root: AXUIElement, identifier: String) -> AXUIElement? {
     walk(root).first {
-        stringAttribute($0, kAXIdentifierAttribute as CFString) == identifier
+        stringAttribute($0, kAXIdentifierAttribute) == identifier
     }
 }
 
@@ -84,7 +84,7 @@ func waitFor<T>(
 func snapshot(_ element: AXUIElement, depth: Int = 0) -> [String: Any] {
     var result: [String: Any] = [
         "role": stringAttribute(element, kAXRoleAttribute),
-        "identifier": stringAttribute(element, kAXIdentifierAttribute as CFString),
+        "identifier": stringAttribute(element, kAXIdentifierAttribute),
         "title": stringAttribute(element, kAXTitleAttribute),
         "label": stringAttribute(element, kAXDescriptionAttribute),
         "value": stringAttribute(element, kAXValueAttribute),
@@ -101,7 +101,7 @@ func writeJSON(_ value: Any, to url: URL) throws {
 }
 
 func press(_ element: AXUIElement, description: String) throws {
-    let result = AXUIElementPerformAction(element, kAXPressAction)
+    let result = AXUIElementPerformAction(element, kAXPressAction as CFString)
     guard result == .success else {
         throw DriverError.failure("AXPress failed for \(description): \(result.rawValue)")
     }
@@ -129,8 +129,9 @@ do {
     let window: AXUIElement = try waitFor("the Taskboard window") {
         (attribute(application, kAXWindowsAttribute) as? [AXUIElement])?.first
     }
-    _ = AXUIElementSetAttributeValue(application, kAXFrontmostAttribute, kCFBooleanTrue)
-    _ = AXUIElementPerformAction(window, kAXRaiseAction)
+    _ = AXUIElementSetAttributeValue(
+        application, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+    _ = AXUIElementPerformAction(window, kAXRaiseAction as CFString)
 
     let expectedRoles = [
         "application-status": "AXStaticText",
@@ -182,7 +183,7 @@ do {
             "operation-progress Event never reached AX; observed=\(observed)")
     }
     _ = try waitFor("the RPC-driven 1,000-row state", timeout: 20) {
-        find(window, identifier: "task-row-1004")
+        statusText(status) == "Generated 1000 tasks" ? true : nil
     }
 
     try writeJSON(snapshot(application), to: options.output.appendingPathComponent("accessibility-after.json"))

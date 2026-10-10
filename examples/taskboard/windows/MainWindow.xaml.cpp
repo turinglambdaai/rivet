@@ -261,7 +261,7 @@ void MainWindow::Generate_Click(
   auto const weak = get_weak();
   rivet_app::API api(*backend_);
   generation_request_ = api.generate_demo_tasks_async(1000, [dispatcher, weak](auto result) {
-    try { auto items = result.get(); dispatcher.TryEnqueue([weak, items = std::move(items)]() mutable { if (auto window = weak.get()) { window->generation_request_.reset(); window->ApplyTasks(std::move(items)); window->StatusBar().Message(L"Generated 1,000 tasks"); } }); }
+    try { auto items = result.get(); dispatcher.TryEnqueue([weak, items = std::move(items)]() mutable { if (auto window = weak.get()) { auto const message = "Generated " + std::to_string(items.size()) + " tasks"; window->generation_request_.reset(); window->ApplyTasks(std::move(items)); window->StatusBar().Message(winrt::to_hstring(message)); } }); }
     catch (std::exception const& e) { auto message = std::string(e.what()); dispatcher.TryEnqueue([weak, message = std::move(message)] { if (auto window = weak.get()) { window->generation_request_.reset(); window->SetReadyUi(); window->StatusBar().Message(winrt::to_hstring(message)); } }); }
   });
 }

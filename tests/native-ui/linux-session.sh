@@ -22,6 +22,7 @@ weston --backend=headless-backend.so --socket="$WAYLAND_DISPLAY" --idle-time=0 \
   --debug --log="$output/weston.log" &
 weston_pid=$!
 application_pid=""
+atspi_bus_pid=""
 
 capture_screen() {
   if command -v weston-screenshooter >/dev/null 2>&1; then
@@ -56,6 +57,10 @@ cleanup() {
     stop_bounded "$application_pid" application || status=1
     wait "$application_pid" 2>/dev/null || true
   fi
+  if [[ -n "$atspi_bus_pid" ]] && kill -0 "$atspi_bus_pid" 2>/dev/null; then
+    kill -TERM "$atspi_bus_pid" 2>/dev/null || true
+    wait "$atspi_bus_pid" 2>/dev/null || true
+  fi
   kill -TERM "$weston_pid" 2>/dev/null || true
   wait "$weston_pid" 2>/dev/null || true
   exit "$status"
@@ -71,6 +76,29 @@ for _ in $(seq 1 100); do
   sleep 0.05
 done
 [[ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]]
+
+# Headless sessions do not have a desktop autostart agent to own org.a11y.Bus.
+# Start the real AT-SPI bus explicitly so both GTK and the external client join
+# the same accessibility registry instead of racing an absent cache service.
+atspi_launcher="$(command -v at-spi-bus-launcher || true)"
+if [[ -z "$atspi_launcher" && -x /usr/libexec/at-spi-bus-launcher ]]; then
+  atspi_launcher=/usr/libexec/at-spi-bus-launcher
+fi
+[[ -n "$atspi_launcher" ]]
+"$atspi_launcher" --launch-immediately \
+  >"$output/at-spi-bus.log" 2>&1 &
+atspi_bus_pid=$!
+for _ in $(seq 1 100); do
+  gdbus call --session --dest org.a11y.Bus --object-path /org/a11y/bus \
+    --method org.a11y.Bus.GetAddress >/dev/null 2>&1 && break
+  kill -0 "$atspi_bus_pid" 2>/dev/null || {
+    cat "$output/at-spi-bus.log" >&2
+    exit 1
+  }
+  sleep 0.05
+done
+gdbus call --session --dest org.a11y.Bus --object-path /org/a11y/bus \
+  --method org.a11y.Bus.GetAddress >/dev/null
 
 "$executable" >"$output/application.log" 2>&1 &
 application_pid=$!
@@ -92,3 +120,5 @@ fi
 trap - EXIT
 kill -TERM "$weston_pid" 2>/dev/null || true
 wait "$weston_pid" 2>/dev/null || true
+kill -TERM "$atspi_bus_pid" 2>/dev/null || true
+wait "$atspi_bus_pid" 2>/dev/null || true

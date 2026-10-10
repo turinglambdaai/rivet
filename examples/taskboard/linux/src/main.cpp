@@ -184,7 +184,8 @@ int on_tasks_delivered(gpointer user_data) {
     g_state.set_status("Backend error: " + delivered->error);
   } else {
     apply_tasks(std::move(delivered->tasks), delivered->preferred);
-    g_state.set_status("Saved by the Racket backend");
+    g_state.set_status("Loaded " + std::to_string(g_state.tasks.size()) +
+                       " tasks");
   }
   return G_SOURCE_REMOVE;
 }

@@ -164,7 +164,7 @@ def main():
 
     wait_for(
         "the RPC-driven 1,000-row state",
-        lambda: find_named(window, "Generated task 1000"),
+        lambda: text_value(status) == "Loaded 1000 tasks",
         timeout=15.0,
     )
     after = snapshot(application)
