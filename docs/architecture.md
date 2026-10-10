@@ -118,6 +118,14 @@ The protocol is not pipe-specific. The C++ runtime exposes an abstract `Transpor
 
 The native client allocates a monotonically increasing 64-bit request ID and inserts a native promise into a pending table before writing a Request frame.
 
+Windows and Linux share that pending-request and completion ownership through
+`rivet/detail/backend_completion_registry.hpp`. The shared core owns capacity,
+request identifiers, cancellation gates, future/callback completion,
+exactly-once removal, and callback-exception isolation. Platform backends still
+own their transports, Racket boot arguments, threads, diagnostics, and UI
+dispatch. This boundary prevents lifecycle fixes from drifting between the two
+C++ hosts without turning native integration into a cross-platform host layer.
+
 The Racket server creates a custodian and lightweight Racket thread for each request. Completed responses are funneled through one writer thread to guarantee that frames cannot interleave.
 
 Cancellation shuts down the request custodian and responds with an Error frame. Native callers never receive a raw Racket exception; errors cross the protocol as data.

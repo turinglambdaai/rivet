@@ -47,6 +47,11 @@ if(RIVET_BUILD_TESTS)
   target_link_libraries(rivet_pending_request_registry_test PRIVATE rivet_protocol)
   target_compile_features(rivet_pending_request_registry_test PRIVATE cxx_std_17)
   add_test(NAME rivet_pending_request_registry_test COMMAND rivet_pending_request_registry_test)
+
+  add_executable(rivet_backend_completion_registry_test tests/backend_completion_registry_test.cpp)
+  target_link_libraries(rivet_backend_completion_registry_test PRIVATE rivet_protocol)
+  target_compile_features(rivet_backend_completion_registry_test PRIVATE cxx_std_17)
+  add_test(NAME rivet_backend_completion_registry_test COMMAND rivet_backend_completion_registry_test)
 endif()
 
 if(RIVET_BUILD_FUZZERS)
