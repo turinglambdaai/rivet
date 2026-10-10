@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Make embedded diagnostics opt-in across Racket, C++, and Swift. GUI hosts no
+  longer write to standard error by default, preventing Windows applications
+  from allocating a black console window on their first diagnostic; explicit
+  structured-log and stderr sinks remain supported.
 - Add first-party portable update installation for Windows, macOS, and Linux:
   verified ZIP/AppImage payloads are staged, platform-signature checked,
   atomically replaced, health-gated, durably committed, and recoverable after

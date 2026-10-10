@@ -49,6 +49,8 @@ public typealias RivetDiagnosticSink = @Sendable (RivetDiagnosticRecord) -> Void
 public enum RivetDiagnostics {
     private static let outputLock = NSLock()
 
+    public static let discard: RivetDiagnosticSink = { _ in }
+
     public static let standardError: RivetDiagnosticSink = { record in
         let data = Data((record.jsonLine() + "\n").utf8)
         outputLock.lock()
