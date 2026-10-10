@@ -77,10 +77,14 @@ int main() {
   assert(!registry.request_cancel(cancelled.id,
                                   [&] { cancel_sent = true; }));
   assert(!cancel_sent);
-  assert(registry.mark_request_sent(cancelled.id));
-  assert(registry.request_cancel(cancelled.id,
-                                 [&] { cancel_sent = true; }));
+  auto const send_deferred_cancel = registry.mark_request_sent(cancelled.id);
+  assert(send_deferred_cancel);
+  if (send_deferred_cancel) {
+    cancel_sent = true;
+  }
   assert(cancel_sent);
+  assert(!registry.request_cancel(cancelled.id,
+                                  [&] { assert(false); }));
 
   auto drained_future = registry.insert_future();
   bool drained_callback = false;
