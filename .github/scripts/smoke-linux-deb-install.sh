@@ -63,6 +63,19 @@ launch_installed_application() {
   done
 
   kill -TERM "$application_pid"
+  for _ in $(seq 1 100); do
+    if ! kill -0 "$application_pid" 2>/dev/null; then
+      break
+    fi
+    sleep 0.05
+  done
+  if kill -0 "$application_pid" 2>/dev/null; then
+    kill -KILL "$application_pid" 2>/dev/null || true
+    wait "$application_pid" 2>/dev/null || true
+    application_pid=""
+    echo "installed application did not stop within five seconds of SIGTERM" >&2
+    exit 1
+  fi
   set +e
   wait "$application_pid"
   application_status=$?
@@ -80,11 +93,16 @@ cleanup() {
 
   if [[ -n "$application_pid" ]] && kill -0 "$application_pid" 2>/dev/null; then
     kill -TERM "$application_pid" 2>/dev/null || true
+    for _ in $(seq 1 20); do
+      kill -0 "$application_pid" 2>/dev/null || break
+      sleep 0.05
+    done
+    kill -KILL "$application_pid" 2>/dev/null || true
     wait "$application_pid" 2>/dev/null || true
   fi
 
   if [[ "$installed" -eq 1 ]]; then
-    sudo dpkg --remove "$deb_package" >/dev/null || true
+    sudo timeout 120s dpkg --remove "$deb_package" >/dev/null || true
   fi
 
   if [[ "$status" -ne 0 && -f "$application_log" ]]; then
@@ -102,7 +120,7 @@ test -n "${WAYLAND_DISPLAY:-}"
 test "${GDK_BACKEND:-}" = wayland
 test -z "${DISPLAY:-}"
 
-sudo dpkg --install "$initial_deb" >>"$package_log" 2>&1
+sudo timeout 120s dpkg --install "$initial_deb" >>"$package_log" 2>&1
 installed=1
 
 assert_installed_version "$initial_version"
@@ -118,30 +136,46 @@ record_package_state initial-install
 # installation. Keep the previous version launchable after the failed attempt.
 corrupt_deb="${diagnostics_dir}/corrupt-upgrade.deb"
 printf 'not a Debian package\n' >"$corrupt_deb"
-if sudo dpkg --install "$corrupt_deb" >>"$package_log" 2>&1; then
+set +e
+sudo timeout 120s dpkg --install "$corrupt_deb" >>"$package_log" 2>&1
+corrupt_status=$?
+set -e
+if [[ "$corrupt_status" -eq 0 ]]; then
   echo "malformed upgrade unexpectedly installed" >&2
+  exit 1
+fi
+if [[ "$corrupt_status" -eq 124 ]]; then
+  echo "malformed upgrade check timed out" >&2
   exit 1
 fi
 assert_installed_version "$initial_version"
 launch_installed_application packaged-resource
 record_package_state failed-upgrade-recovery
 
-sudo dpkg --install "$upgrade_deb" >>"$package_log" 2>&1
+sudo timeout 120s dpkg --install "$upgrade_deb" >>"$package_log" 2>&1
 assert_installed_version "$upgrade_version"
 launch_installed_application upgraded-resource
 record_package_state in-place-upgrade
 
 # apt refuses an unattended downgrade unless --allow-downgrades is explicit.
 # Verify the rejection leaves the upgraded payload and version untouched.
-if sudo apt-get install --yes "$initial_deb" >>"$package_log" 2>&1; then
+set +e
+sudo timeout 120s apt-get install --yes "$initial_deb" >>"$package_log" 2>&1
+downgrade_status=$?
+set -e
+if [[ "$downgrade_status" -eq 0 ]]; then
   echo "package manager unexpectedly accepted a downgrade" >&2
+  exit 1
+fi
+if [[ "$downgrade_status" -eq 124 ]]; then
+  echo "package manager downgrade check timed out" >&2
   exit 1
 fi
 assert_installed_version "$upgrade_version"
 launch_installed_application upgraded-resource
 record_package_state downgrade-rejected
 
-sudo dpkg --remove "$deb_package"
+sudo timeout 120s dpkg --remove "$deb_package"
 installed=0
 if dpkg-query --show --showformat='${db:Status-Abbrev}\n' "$deb_package" 2>/dev/null | grep -qx 'ii '; then
   echo "deb package remained installed after dpkg --remove" >&2
