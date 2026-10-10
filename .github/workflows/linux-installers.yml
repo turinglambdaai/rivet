@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build x64 rpm and AppImage
+    name: Build x64 deb, rpm, and AppImage
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -60,7 +60,7 @@ jobs:
               '(resources . ())',
               '(resources . ("assets")) '
               '(linux-icon . "assets/icon.png") '
-              '(linux-formats . ("rpm" "appimage"))')
+              '(linux-formats . ("deb" "rpm" "appimage"))')
           if updated == original:
               raise SystemExit("failed to configure Linux installer smoke")
           path.write_text(updated, encoding="utf-8")
@@ -70,7 +70,7 @@ jobs:
           artifacts="$RUNNER_TEMP/rivet-linux-native-artifacts"
           diagnostics="$RUNNER_TEMP/rivet-linux-build-diagnostics"
           mkdir -p "$artifacts" "$diagnostics"
-          cp dist/*.rpm dist/*.AppImage "$artifacts/"
+          cp dist/*.deb dist/*.rpm dist/*.AppImage "$artifacts/"
           sha256sum "$artifacts"/* > "$diagnostics/SHA256SUMS"
           rpm -qpi "$artifacts"/*.rpm > "$diagnostics/rpm-info.txt"
           rpm -qp --requires "$artifacts"/*.rpm > "$diagnostics/rpm-requires.txt"
@@ -182,6 +182,118 @@ jobs:
           path: ${{ runner.temp }}/rivet-appimage-diagnostics
           if-no-files-found: warn
 
+  debian-deb-wayland:
+    name: deb install and launch on Debian 13 Wayland
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container: debian:13
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: linux-native-installers
+          path: /tmp/rivet-installers
+      - name: Install desktop runtime
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install --yes \
+            dbus-daemon desktop-file-utils libgtk-4-1 libsecret-1-0 \
+            procps weston
+      - name: Install, launch, and uninstall deb
+        shell: bash
+        run: |
+          set -euo pipefail
+          diagnostics=/tmp/rivet-debian-diagnostics
+          mkdir -p "$diagnostics"
+          deb_artifact="$(find /tmp/rivet-installers -type f -name '*.deb' -print -quit)"
+          test -n "$deb_artifact"
+          deb_package="$(dpkg-deb --field "$deb_artifact" Package)"
+          test -n "$deb_package"
+          apt-get install --yes "$deb_artifact" >"$diagnostics/apt-install.log" 2>&1
+          dpkg-query --show --showformat='${Package} ${Version} ${Architecture}\n' \
+            "$deb_package" >"$diagnostics/installed-version.txt"
+          test -x /opt/Smoke/RivetHost
+          test -f /usr/share/applications/Smoke.desktop
+          test -f /usr/share/pixmaps/Smoke.png
+          desktop-file-validate /usr/share/applications/Smoke.desktop
+          test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource
+
+          export XDG_RUNTIME_DIR=/tmp/rivet-debian-wayland-runtime
+          export WAYLAND_DISPLAY=wayland-rivet-debian
+          export GDK_BACKEND=wayland
+          unset DISPLAY
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          weston --backend=headless-backend.so \
+            --socket="$WAYLAND_DISPLAY" --idle-time=0 \
+            --log="$diagnostics/weston.log" &
+          weston_pid=$!
+          app_pid=""
+          stop_bounded() {
+            local pid="$1"
+            local label="$2"
+            kill -TERM "$pid" 2>/dev/null || true
+            for _ in $(seq 1 200); do
+              kill -0 "$pid" 2>/dev/null || return 0
+              sleep 0.05
+            done
+            kill -KILL "$pid" 2>/dev/null || true
+            echo "$label did not stop within ten seconds of SIGTERM" >&2
+            return 1
+          }
+          cleanup() {
+            local status=$?
+            trap - EXIT
+            if [[ -n "$app_pid" ]] && kill -0 "$app_pid" 2>/dev/null; then
+              stop_bounded "$app_pid" application || status=1
+              wait "$app_pid" 2>/dev/null || true
+            fi
+            kill "$weston_pid" 2>/dev/null || true
+            wait "$weston_pid" 2>/dev/null || true
+            apt-get remove --yes "$deb_package" \
+              >>"$diagnostics/apt-remove.log" 2>&1 || true
+            exit "$status"
+          }
+          trap cleanup EXIT
+          for _ in $(seq 1 100); do
+            test -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" && break
+            kill -0 "$weston_pid" 2>/dev/null || {
+              cat "$diagnostics/weston.log"
+              exit 1
+            }
+            sleep 0.05
+          done
+          test -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"
+          /opt/Smoke/RivetHost >"$diagnostics/application.log" 2>&1 &
+          app_pid=$!
+          for _ in $(seq 1 50); do
+            kill -0 "$app_pid" 2>/dev/null || {
+              wait "$app_pid" || true
+              cat "$diagnostics/application.log"
+              exit 1
+            }
+            sleep 0.1
+          done
+          stop_bounded "$app_pid" application
+          wait "$app_pid" || test "$?" -eq 143
+          app_pid=""
+          kill "$weston_pid" 2>/dev/null || true
+          wait "$weston_pid" 2>/dev/null || true
+          apt-get remove --yes "$deb_package" >"$diagnostics/apt-remove.log" 2>&1
+          test ! -e /opt/Smoke/RivetHost
+          test ! -e /usr/share/applications/Smoke.desktop
+          test ! -e /usr/share/pixmaps/Smoke.png
+          trap - EXIT
+      - name: Upload Debian diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: debian-deb-wayland-diagnostics
+          path: /tmp/rivet-debian-diagnostics
+          if-no-files-found: warn
+
   fedora-rpm-wayland:
     name: rpm install and launch on Fedora 44 Wayland
     needs: build
@@ -210,6 +322,7 @@ jobs:
             >"$diagnostics/installed-version.txt"
           test -x /opt/Smoke/RivetHost
           test -f /usr/share/applications/Smoke.desktop
+          test -f /usr/share/pixmaps/Smoke.png
           desktop-file-validate /usr/share/applications/Smoke.desktop
           test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource
 
@@ -276,6 +389,7 @@ jobs:
           dnf remove --assumeyes "$rpm_package" >"$diagnostics/dnf-remove.log" 2>&1
           test ! -e /opt/Smoke/RivetHost
           test ! -e /usr/share/applications/Smoke.desktop
+          test ! -e /usr/share/pixmaps/Smoke.png
           trap - EXIT
       - name: Upload Fedora diagnostics
         if: always()
