@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require net/url
+(require json
+         net/url
          racket/file
          racket/match
          racket/path
@@ -18,7 +19,8 @@
          download-update
          verify-update-artifact!
          make-install-plan
-         execute-install-plan!)
+         execute-install-plan!
+         recover-install-plan!)
 
 (struct updater-config
   (application-id current-version channel platform architecture
@@ -27,6 +29,11 @@
 
 (struct update-candidate (manifest artifact) #:transparent)
 (struct install-plan (candidate downloaded-path backup-path install restart rollback) #:transparent)
+
+(define install-journal-schema 1)
+(define install-journal-phases
+  '(prepared installing installed restarting restarted checking healthy
+             rollback-started rolled-back rollback-failed))
 
 (define (copy-limited! in out limit)
   (define buffer (make-bytes 65536))
@@ -138,16 +145,151 @@
                            #:rollback [rollback void])
   (install-plan candidate downloaded-path backup-path install restart rollback))
 
-(define (execute-install-plan! plan)
-  ;; Platform adapters own elevation and process replacement. Rivet controls
-  ;; the verified input and the failure path, keeping this state machine out of
-  ;; RVT1 and away from the embedded runtime transport.
+(define (normalized-path-string path)
+  (path->string (simplify-path (path->complete-path path) #f)))
+
+(define (install-journal-record plan phase)
+  (define candidate (install-plan-candidate plan))
+  (define manifest (update-candidate-manifest candidate))
+  (define artifact (update-candidate-artifact candidate))
+  (hasheq 'schema install-journal-schema
+          'application_id (update-manifest-application-id manifest)
+          'version (update-manifest-version manifest)
+          'artifact_sha256 (update-artifact-sha256 artifact)
+          'downloaded_path
+          (normalized-path-string (install-plan-downloaded-path plan))
+          'backup_path
+          (and (install-plan-backup-path plan)
+               (normalized-path-string (install-plan-backup-path plan)))
+          'phase (symbol->string phase)))
+
+(define (write-install-journal! path record)
+  (make-parent-directory* path)
+  (define temporary (path-add-extension path #".partial"))
+  (when (file-exists? temporary) (delete-file temporary))
   (with-handlers ([exn:fail?
                    (lambda (e)
-                     (when (update-manifest-rollback-allowed?
-                            (update-candidate-manifest
-                             (install-plan-candidate plan)))
-                       ((install-plan-rollback plan)))
+                     (when (file-exists? temporary) (delete-file temporary))
                      (raise e))])
+    (call-with-output-file temporary
+      #:exists 'truncate/replace
+      (lambda (out)
+        (write-json record out)
+        (newline out)
+        (flush-output out)))
+    (rename-file-or-directory temporary path #t)))
+
+(define (read-install-journal path)
+  (unless (file-exists? path)
+    (raise-arguments-error 'recover-install-plan!
+                           "install transaction journal does not exist"
+                           "journal" path))
+  (with-handlers ([exn:fail?
+                   (lambda (e)
+                     (raise-arguments-error
+                      'recover-install-plan!
+                      "install transaction journal is malformed"
+                      "journal" path
+                      "detail" (exn-message e)))])
+    (call-with-input-file path read-json)))
+
+(define (journal-phase record)
+  (define value (and (hash? record) (hash-ref record 'phase #f)))
+  (define phase (and (string? value) (string->symbol value)))
+  (and (memq phase install-journal-phases) phase))
+
+(define (journal-matches-plan? record plan)
+  (and (hash? record)
+       (equal? (hash-ref record 'schema #f) install-journal-schema)
+       (equal? record
+               (install-journal-record plan (journal-phase record)))))
+
+(define (delete-install-journal! path)
+  (when (file-exists? path) (delete-file path)))
+
+(define (record-install-phase! plan journal-path phase)
+  (when journal-path
+    (write-install-journal! journal-path
+                            (install-journal-record plan phase))))
+
+(define (rollback-allowed? plan)
+  (update-manifest-rollback-allowed?
+   (update-candidate-manifest (install-plan-candidate plan))))
+
+(define (rollback-after-failure! plan journal-path original-error)
+  (when (rollback-allowed? plan)
+    (record-install-phase! plan journal-path 'rollback-started)
+    (with-handlers
+        ([exn:fail?
+          (lambda (rollback-error)
+            (record-install-phase! plan journal-path 'rollback-failed)
+            (raise
+             (exn:fail
+              (format "~a; rollback also failed: ~a"
+                      (exn-message original-error)
+                      (exn-message rollback-error))
+              (exn-continuation-marks original-error))))])
+      ((install-plan-rollback plan)))
+    (record-install-phase! plan journal-path 'rolled-back)
+    (when journal-path (delete-install-journal! journal-path)))
+  (raise original-error))
+
+(define (execute-install-plan! plan
+                               #:health-check [health-check (lambda () #t)]
+                               #:journal-path [journal-path #f])
+  ;; Platform adapters own elevation and process replacement. Rivet controls
+  ;; the verified input, durable phase journal, health gate, and failure path,
+  ;; keeping this state machine out of RVT1 and away from the embedded runtime
+  ;; transport. A restart callback must return after starting the replacement;
+  ;; the health check decides when that replacement is ready to commit.
+  (record-install-phase! plan journal-path 'prepared)
+  (with-handlers ([exn:fail?
+                   (lambda (e)
+                     (rollback-after-failure! plan journal-path e))])
+    (record-install-phase! plan journal-path 'installing)
     ((install-plan-install plan) (install-plan-downloaded-path plan))
-    ((install-plan-restart plan))))
+    (record-install-phase! plan journal-path 'installed)
+    (record-install-phase! plan journal-path 'restarting)
+    (define restart-result ((install-plan-restart plan)))
+    (record-install-phase! plan journal-path 'restarted)
+    (record-install-phase! plan journal-path 'checking)
+    (unless (health-check)
+      (error 'execute-install-plan! "installed update failed its health check"))
+    (record-install-phase! plan journal-path 'healthy)
+    (when journal-path (delete-install-journal! journal-path))
+    restart-result))
+
+(define (recover-install-plan! plan journal-path)
+  ;; Recovery is deliberately conservative: a journal describes one exact
+  ;; signed candidate and its paths. A different plan cannot consume it.
+  ;; Rollback callbacks must be idempotent because a process may stop after the
+  ;; rollback side effect but before the final phase is durably recorded.
+  (define record (read-install-journal journal-path))
+  (define phase (journal-phase record))
+  (unless (and phase (journal-matches-plan? record plan))
+    (raise-arguments-error 'recover-install-plan!
+                           "install transaction journal does not match the plan"
+                           "journal" journal-path))
+  (case phase
+    [(healthy)
+     (delete-install-journal! journal-path)
+     'committed]
+    [(rolled-back)
+     (delete-install-journal! journal-path)
+     'rolled-back]
+    [else
+     (unless (rollback-allowed? plan)
+       (raise-arguments-error
+        'recover-install-plan!
+        "interrupted install cannot be rolled back by signed policy"
+        "phase" phase
+        "journal" journal-path))
+     (record-install-phase! plan journal-path 'rollback-started)
+     (with-handlers ([exn:fail?
+                      (lambda (e)
+                        (record-install-phase! plan journal-path 'rollback-failed)
+                        (raise e))])
+       ((install-plan-rollback plan)))
+     (record-install-phase! plan journal-path 'rolled-back)
+     (delete-install-journal! journal-path)
+     'rolled-back]))

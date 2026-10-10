@@ -119,3 +119,136 @@
 (check-exn #rx"failed" (lambda () (execute-install-plan! plan)))
 (check-true installed?)
 (check-true rolled-back?)
+
+;; A successful plan preserves the restart callback's result and commits only
+;; after the replacement passes its health check.
+(define successful-calls '())
+(define successful-plan
+  (make-install-plan
+   (update-candidate sample-manifest sample-artifact) "download.msi"
+   #:install (lambda (_) (set! successful-calls (cons 'install successful-calls)))
+   #:restart (lambda ()
+               (set! successful-calls (cons 'restart successful-calls))
+               'restart-result)
+   #:rollback (lambda ()
+                (set! successful-calls (cons 'rollback successful-calls)))))
+(check-equal?
+ (execute-install-plan!
+  successful-plan
+  #:health-check
+  (lambda ()
+    (set! successful-calls (cons 'health successful-calls))
+    #t))
+ 'restart-result)
+(check-equal? (reverse successful-calls) '(install restart health))
+
+;; Health is part of the transaction rather than an informational callback:
+;; a replacement that starts but is not healthy rolls back.
+(define unhealthy-rolled-back? #f)
+(define unhealthy-plan
+  (make-install-plan
+   (update-candidate sample-manifest sample-artifact) "download.msi"
+   #:install void
+   #:rollback (lambda () (set! unhealthy-rolled-back? #t))))
+(check-exn #rx"failed its health check"
+           (lambda ()
+             (execute-install-plan! unhealthy-plan
+                                    #:health-check (lambda () #f))))
+(check-true unhealthy-rolled-back?)
+
+;; A non-local exit models interruption after installation and before the
+;; replacement has returned. The durable journal survives and the next process
+;; can roll back the exact same plan. A different plan is rejected.
+(define journal-root (make-temporary-file "rivet-install-journal-~a" 'directory))
+(dynamic-wind
+  void
+  (lambda ()
+    (define journal-path (build-path journal-root "transaction.json"))
+    (define recovery-rolled-back? #f)
+    (define escape #f)
+    (define interrupted-plan
+      (make-install-plan
+       (update-candidate sample-manifest sample-artifact)
+       (build-path journal-root "download.msi")
+       #:backup-path (build-path journal-root "backup")
+       #:install void
+       #:restart (lambda () (escape 'interrupted))
+       #:rollback (lambda () (set! recovery-rolled-back? #t))))
+    (check-equal?
+     (call-with-current-continuation
+      (lambda (return)
+        (set! escape return)
+        (execute-install-plan! interrupted-plan #:journal-path journal-path)))
+     'interrupted)
+    (check-true (file-exists? journal-path))
+    (check-equal?
+     (hash-ref (call-with-input-file journal-path read-json) 'phase)
+     "restarting")
+
+    (define mismatched-plan
+      (make-install-plan
+       (update-candidate sample-manifest sample-artifact)
+       (build-path journal-root "different.msi")
+       #:install void))
+    (check-exn #rx"does not match the plan"
+               (lambda ()
+                 (recover-install-plan! mismatched-plan journal-path)))
+    (check-true (file-exists? journal-path))
+
+    (check-equal? (recover-install-plan! interrupted-plan journal-path)
+                  'rolled-back)
+    (check-true recovery-rolled-back?)
+    (check-false (file-exists? journal-path))
+
+    (define success-journal (build-path journal-root "success.json"))
+    (check-equal?
+     (execute-install-plan! successful-plan
+                            #:health-check (lambda () #t)
+                            #:journal-path success-journal)
+     'restart-result)
+    (check-false (file-exists? success-journal))
+
+    ;; Signed policy can forbid rollback. The journal remains available for
+    ;; diagnosis instead of claiming a recovery that did not occur.
+    (define no-rollback-journal (build-path journal-root "no-rollback.json"))
+    (define no-rollback-plan
+      (make-install-plan
+       (update-candidate
+        (struct-copy update-manifest sample-manifest [rollback-allowed? #f])
+        sample-artifact)
+       (build-path journal-root "no-rollback.msi")
+       #:install (lambda (_) (error 'installer "no rollback"))))
+    (check-exn #rx"no rollback"
+               (lambda ()
+                 (execute-install-plan! no-rollback-plan
+                                        #:journal-path no-rollback-journal)))
+    (check-true (file-exists? no-rollback-journal))
+    (check-exn #rx"cannot be rolled back"
+               (lambda ()
+                 (recover-install-plan! no-rollback-plan no-rollback-journal)))
+    (delete-file no-rollback-journal)
+
+    ;; A rollback that was itself interrupted remains retryable. Recovery
+    ;; records the failed phase and invokes the same idempotent callback again.
+    (define retry-journal (build-path journal-root "retry.json"))
+    (define rollback-attempts 0)
+    (define retry-plan
+      (make-install-plan
+       (update-candidate sample-manifest sample-artifact)
+       (build-path journal-root "retry.msi")
+       #:install (lambda (_) (error 'installer "install failed"))
+       #:rollback
+       (lambda ()
+         (set! rollback-attempts (add1 rollback-attempts))
+         (when (= rollback-attempts 1)
+           (error 'rollback "first rollback failed")))))
+    (check-exn #rx"install failed; rollback also failed: rollback: first rollback failed"
+               (lambda ()
+                 (execute-install-plan! retry-plan #:journal-path retry-journal)))
+    (check-equal?
+     (hash-ref (call-with-input-file retry-journal read-json) 'phase)
+     "rollback-failed")
+    (check-equal? (recover-install-plan! retry-plan retry-journal) 'rolled-back)
+    (check-equal? rollback-attempts 2)
+    (check-false (file-exists? retry-journal)))
+  (lambda () (delete-directory/files journal-root)))
