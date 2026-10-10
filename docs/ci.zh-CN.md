@@ -95,6 +95,12 @@ SHA。该 action 会下载官方 minimal Racket CS 源码归档、校验 SHA-256
 action 固定到同一 revision。用一个 Rivet revision 编译宿主、再用另一个
 revision 发布，不构成有效门禁。
 
+仓库中的 `Native UI End-to-End` 工作流还会打包维护中的 Taskboard，并分别
+通过 WinUI 3 的 UI Automation、SwiftUI/AppKit 的 AXUIElement 和 GTK4 的
+AT-SPI 检查真实原生界面。门禁覆盖窗口激活、一次 RPC 变更、一次 Event、
+State 渲染与有序关闭；失败时保留有界的无障碍快照、交互轨迹、截图和日志。
+应用如何复用这套模式，见[原生 UI 端到端测试](native-ui-testing.md)。
+
 ## 发布门禁
 
 推送标签前，应要求上述所有原生宿主任务和产品自己的 Racket 测试通过。

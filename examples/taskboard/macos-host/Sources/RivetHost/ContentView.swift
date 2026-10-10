@@ -95,12 +95,12 @@ struct ContentView: View {
                 Text(model.status)
                     .font(.callout)
                     .lineLimit(2)
+                    .accessibilityIdentifier("application-status")
                 Spacer()
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(.bar)
-            .accessibilityIdentifier("application-status")
         }
         .onChange(of: model.selectedID) { _, id in model.persistSelection(id) }
     }

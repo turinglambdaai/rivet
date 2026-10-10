@@ -1,0 +1,138 @@
+name: Native UI End-to-End
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-ui-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: GTK4 accessibility and interaction
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up embeddable Racket CS
+        uses: ./.github/actions/setup-embed-racket
+      - name: Install Rivet and native UI test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes \
+            at-spi2-core dbus-x11 libgtk-4-dev libsecret-1-dev \
+            python3-pyatspi weston
+          raco pkg install --auto --no-docs --name rivet --link "$PWD"
+      - name: Package and exercise the GTK4 Taskboard on native Wayland
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd examples/taskboard
+          raco rivet package --skip-launch-smoke
+          dbus-run-session -- \
+            "$GITHUB_WORKSPACE/tests/native-ui/linux-session.sh" \
+            "$PWD/dist/rivet-taskboard-linux-x64/RivetHost" \
+            "$RUNNER_TEMP/rivet-native-ui-linux"
+      - name: Upload Linux native UI evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-ui-linux
+          path: ${{ runner.temp }}/rivet-native-ui-linux
+          if-no-files-found: warn
+
+  windows:
+    name: WinUI 3 accessibility and interaction
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Install Rivet
+        shell: pwsh
+        run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
+      - name: Package and exercise the WinUI Taskboard
+        shell: pwsh
+        run: |
+          Set-Location (Join-Path $env:GITHUB_WORKSPACE 'examples\taskboard')
+          raco rivet package --skip-launch-smoke
+          & (Join-Path $env:GITHUB_WORKSPACE 'tests\native-ui\windows-uia.ps1') `
+            -Executable (Join-Path $PWD 'dist\rivet-taskboard-windows-x64\RivetHost.exe') `
+            -OutputDirectory (Join-Path $env:RUNNER_TEMP 'rivet-native-ui-windows')
+      - name: Upload Windows native UI evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-ui-windows
+          path: ${{ runner.temp }}/rivet-native-ui-windows
+          if-no-files-found: warn
+
+  macos:
+    name: SwiftUI accessibility and interaction
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Install Rivet
+        run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
+      - name: Package and exercise the SwiftUI Taskboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/rivet-native-ui-macos"
+          driver="$RUNNER_TEMP/rivet-macos-ax"
+          mkdir -p "$output"
+          swiftc tests/native-ui/macos-ax.swift -o "$driver" \
+            -framework AppKit -framework ApplicationServices
+          cd examples/taskboard
+          raco rivet package --skip-launch-smoke
+          app="$PWD/dist/rivet-taskboard.app/Contents/MacOS/rivet-taskboard"
+          "$app" >"$output/application.log" 2>&1 &
+          app_pid=$!
+          cleanup() {
+            local status=$?
+            trap - EXIT
+            if kill -0 "$app_pid" 2>/dev/null; then
+              kill -TERM "$app_pid" 2>/dev/null || true
+              wait "$app_pid" 2>/dev/null || true
+            fi
+            exit "$status"
+          }
+          trap cleanup EXIT
+          "$driver" --pid "$app_pid" --output "$output"
+          for _ in $(seq 1 200); do
+            kill -0 "$app_pid" 2>/dev/null || break
+            sleep 0.05
+          done
+          if kill -0 "$app_pid" 2>/dev/null; then
+            echo "Taskboard did not exit within ten seconds of native window close" >&2
+            exit 1
+          fi
+          wait "$app_pid"
+          trap - EXIT
+      - name: Upload macOS native UI evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-ui-macos
+          path: ${{ runner.temp }}/rivet-native-ui-macos
+          if-no-files-found: warn
