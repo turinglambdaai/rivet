@@ -94,6 +94,13 @@ Wayland gate: `DISPLAY` is unset, so the application cannot silently pass by
 using X11 or XWayland. Products supporting Linux should keep an equivalent
 Wayland launch in their release matrix; see [Linux display policy](linux-display.md).
 
+The separate `Native UI End-to-End` workflow packages the maintained Taskboard
+and drives its real WinUI 3, SwiftUI/AppKit, and GTK4 accessibility surfaces.
+It covers activation, an RPC mutation, an Event, State rendering, and orderly
+close while retaining bounded failure evidence. See
+[native UI end-to-end testing](native-ui-testing.md) for the application-level
+extension contract.
+
 For a security-sensitive product, replace `@main` with the Rivet tag or full
 commit SHA used by the application. The action downloads the official minimal
 Racket CS source archive, verifies its SHA-256, builds and caches the static

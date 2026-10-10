@@ -186,7 +186,8 @@ int on_tasks_delivered(gpointer user_data) {
     g_state.set_status("Backend error: " + delivered->error);
   } else {
     apply_tasks(std::move(delivered->tasks), delivered->preferred);
-    g_state.set_status("Saved by the Racket backend");
+    g_state.set_status("Loaded " + std::to_string(g_state.tasks.size()) +
+                       " tasks");
   }
   return G_SOURCE_REMOVE;
 }
@@ -548,6 +549,7 @@ void perform_orderly_shutdown() { on_shutdown(nullptr, nullptr); }
 }  // namespace
 
 int main(int argc, char** argv) {
+  g_set_application_name("Rivet Taskboard");
   auto* app = gtk_application_new("dev.rivet.taskboard", G_APPLICATION_DEFAULT_FLAGS);
   g_signal_connect(app, "activate", G_CALLBACK(on_activate), nullptr);
   g_signal_connect(app, "shutdown", G_CALLBACK(on_shutdown), nullptr);
