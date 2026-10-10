@@ -15,6 +15,7 @@ jobs:
   build:
     name: Build x64 rpm and AppImage
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - name: Set up embeddable Racket CS
@@ -92,6 +93,7 @@ jobs:
     name: AppImage launch on Ubuntu 24.04 Wayland
     needs: build
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/download-artifact@v7
         with:
@@ -120,11 +122,23 @@ jobs:
             --log="$diagnostics/weston.log" &
           weston_pid=$!
           app_pid=""
+          stop_bounded() {
+            local pid="$1"
+            local label="$2"
+            kill -TERM "$pid" 2>/dev/null || true
+            for _ in $(seq 1 200); do
+              kill -0 "$pid" 2>/dev/null || return 0
+              sleep 0.05
+            done
+            kill -KILL "$pid" 2>/dev/null || true
+            echo "$label did not stop within ten seconds of SIGTERM" >&2
+            return 1
+          }
           cleanup() {
             local status=$?
             trap - EXIT
             if [[ -n "$app_pid" ]] && kill -0 "$app_pid" 2>/dev/null; then
-              kill -TERM "$app_pid" 2>/dev/null || true
+              stop_bounded "$app_pid" application || status=1
               wait "$app_pid" 2>/dev/null || true
             fi
             kill "$weston_pid" 2>/dev/null || true
@@ -154,7 +168,7 @@ jobs:
             }
             sleep 0.1
           done
-          kill -TERM "$app_pid"
+          stop_bounded "$app_pid" application
           wait "$app_pid" || test "$?" -eq 143
           app_pid=""
           trap - EXIT
@@ -172,6 +186,7 @@ jobs:
     name: rpm install and launch on Fedora 44 Wayland
     needs: build
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     container: fedora:44
     steps:
       - uses: actions/download-artifact@v7
@@ -207,11 +222,23 @@ jobs:
             --log="$diagnostics/weston.log" &
           weston_pid=$!
           app_pid=""
+          stop_bounded() {
+            local pid="$1"
+            local label="$2"
+            kill -TERM "$pid" 2>/dev/null || true
+            for _ in $(seq 1 200); do
+              kill -0 "$pid" 2>/dev/null || return 0
+              sleep 0.05
+            done
+            kill -KILL "$pid" 2>/dev/null || true
+            echo "$label did not stop within ten seconds of SIGTERM" >&2
+            return 1
+          }
           cleanup() {
             local status=$?
             trap - EXIT
             if [[ -n "$app_pid" ]] && kill -0 "$app_pid" 2>/dev/null; then
-              kill -TERM "$app_pid" 2>/dev/null || true
+              stop_bounded "$app_pid" application || status=1
               wait "$app_pid" 2>/dev/null || true
             fi
             kill "$weston_pid" 2>/dev/null || true
@@ -239,7 +266,7 @@ jobs:
             }
             sleep 0.1
           done
-          kill -TERM "$app_pid"
+          stop_bounded "$app_pid" application
           wait "$app_pid" || test "$?" -eq 143
           app_pid=""
           kill "$weston_pid" 2>/dev/null || true
