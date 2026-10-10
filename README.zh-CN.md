@@ -105,7 +105,7 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 
 嵌入模型受到 [Noise](https://github.com/Bogdanp/Noise) 的启发，但 Rivet 把 runtime contract、协议、代码生成和生命周期都做成平台无关的统一核心，而不是以 Swift 为中心。
 
-深入设计见 [架构](docs/architecture.md)、[Agent-native 开发](docs/agent-native.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[类型安全设备通信](docs/device-communication.md)、尚未实现的[网络设备通道设计](docs/network-device-channel.md)、[Android 架构](docs/android.md)、[项目配置](docs/configuration.md)、[系统服务](docs/system-services.md)、[Linux 显示协议策略](docs/linux-display.md)、[大载荷与分页](docs/large-payloads.md)、[Windows 原生窗口 interop](docs/windows-native-window.md)、[发布与更新](docs/release-and-updates.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
+深入设计见 [架构](docs/architecture.md)、[Agent-native 开发](docs/agent-native.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[类型安全设备通信](docs/device-communication.md)、尚未实现的[网络设备通道设计](docs/network-device-channel.md)、[Android 架构](docs/android.md)、[项目配置](docs/configuration.md)、[系统服务](docs/system-services.md)、[Linux 显示协议策略](docs/linux-display.md)、[生产晋级路线图](docs/production-roadmap.md)、[大载荷与分页](docs/large-payloads.md)、[Windows 原生窗口 interop](docs/windows-native-window.md)、[发布与更新](docs/release-and-updates.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
 
 ## 平台支持状态
 
@@ -338,7 +338,8 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
   - [x] 具名 Enum schema、Swift/C++ 代码生成与兼容性检查
   - [x] Kotlin 类型客户端生成
   - [x] 覆盖每个受支持桌面架构的干净 runner 构建/打包/验证证据
-- [ ] **Phase 7 —— 一等移动应用交付** —— 生成 iOS/iPadOS/watchOS 与 Android 项目、runtime/companion 选择、签名、打包和真机验证
+- [ ] **Phase 7 —— 桌面生产晋级** —— 真实 Linux 安装/升级证据、一方更新安装适配器、原生 UI 端到端门禁，以及由特征测试保护的可维护性改造；详见[生产晋级路线图](docs/production-roadmap.md)
+- [ ] **Phase 8 —— 一等移动应用交付** —— 生成 iOS/iPadOS/watchOS 与 Android 项目、runtime/companion 选择、签名、打包和真机验证
 
 ## 许可证
 

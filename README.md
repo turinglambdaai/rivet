@@ -105,7 +105,7 @@ Racket CS runs on a dedicated runtime thread. Native UI code never manipulates R
 
 The embedding model is inspired by [Noise](https://github.com/Bogdanp/Noise), but Rivet makes the runtime contract, protocol, code generation, and lifecycle cross-platform instead of Swift-first.
 
-See [architecture](docs/architecture.md), [agent-native development](docs/agent-native.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [typed device communication](docs/device-communication.md), the unimplemented [network device channel design](docs/network-device-channel.md), [Android architecture](docs/android.md), [project configuration](docs/configuration.md), [system services](docs/system-services.md), [Linux display policy](docs/linux-display.md), [large payloads, pagination, and progress](docs/large-payloads.md), [Windows native window interop](docs/windows-native-window.md), [release and updates](docs/release-and-updates.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
+See [architecture](docs/architecture.md), [agent-native development](docs/agent-native.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [typed device communication](docs/device-communication.md), the unimplemented [network device channel design](docs/network-device-channel.md), [Android architecture](docs/android.md), [project configuration](docs/configuration.md), [system services](docs/system-services.md), [Linux display policy](docs/linux-display.md), [production roadmap](docs/production-roadmap.md), [large payloads, pagination, and progress](docs/large-payloads.md), [Windows native window interop](docs/windows-native-window.md), [release and updates](docs/release-and-updates.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
 
 ## Platform status
 
@@ -338,7 +338,8 @@ CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exerc
   - [x] named Enum schemas with Swift/C++ code generation and compatibility checks
   - [x] Kotlin typed-client generation
   - [x] clean-runner build/package/verify evidence for every supported desktop architecture
-- [ ] **Phase 7 — first-class mobile application delivery** — generated iOS/iPadOS/watchOS and Android projects, runtime/companion choices, signing, packaging, and device verification
+- [ ] **Phase 7 — desktop production graduation** — real Linux install/upgrade evidence, first-party update installation adapters, native UI end-to-end gates, and characterization-protected maintainability work; see the [production roadmap](docs/production-roadmap.md)
+- [ ] **Phase 8 — first-class mobile application delivery** — generated iOS/iPadOS/watchOS and Android projects, runtime/companion choices, signing, packaging, and device verification
 
 ## License
 
