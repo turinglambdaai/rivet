@@ -73,7 +73,7 @@ The updater verifies in this order:
 4. SHA-256 of the complete downloaded portable archive.
 5. Platform code signature/trust of the application carried by that archive as part of release and package verification.
 
-Only then may the native adapter install. A failed installation, restart, or health check invokes the rollback callback only when the signed manifest permits rollback. The adapter extracts the portable archive into a new versioned location, preserves the previous installation until the replacement passes its health check, and uses the platform-specific application signature where available. Direct MSI/DMG/deb/rpm/AppImage installs retain their own platform transaction or package-manager behavior. Private keys never belong in the repository. Generate and store them outside the checkout, for example:
+Only then may the native adapter install. A failed installation, restart, or health check invokes the rollback callback only when the signed manifest permits rollback. The adapter extracts the portable archive into a same-filesystem staging location, verifies the staged platform signature, atomically preserves the previous installation, and keeps that backup until the replacement passes its health check and commits. Direct MSI/MSIX/DMG/PKG/deb/rpm installs retain their own platform transaction or package-manager behavior; Rivet's portable adapter rejects them instead of silently bypassing elevation, receipts, or repository trust. AppImage replacement is supported as a portable Linux policy. Private keys never belong in the repository. Generate and store them outside the checkout, for example:
 
 ```bash
 openssl genpkey -algorithm Ed25519 -outform DER -out update-private.der
@@ -84,7 +84,11 @@ Embed only `update-public.der` (or its bytes) in the native host. Key rotation i
 
 ## Application API
 
-Require `rivet/distribution`. `fetch-update-manifest` verifies before parsing, `select-update` applies channel/version/rollout/platform policy, and `download-update` enforces limits and hashes. `execute-install-plan!` delegates elevation and process replacement to a native adapter while owning the health and rollback state machine. Pass `#:journal-path` to atomically persist every destructive phase; on the next start, `recover-install-plan!` accepts only the exact same signed candidate and paths before committing a previously healthy transaction or retrying its idempotent rollback. A durable adapter should use absolute paths, keep the backup until commit, and make its restart callback return after starting the replacement so the health check can run.
+Require `rivet/distribution`. `fetch-update-manifest` verifies before parsing, `select-update` applies channel/version/rollout/platform policy, and `download-update` enforces limits and hashes. `prepare-platform-installation` turns a verified portable ZIP or Linux AppImage into Rivet's first-party atomic replacement; pass its result to `execute-platform-installation!`. The application supplies restart and health callbacks because it owns its process model and readiness signal. On Windows and macOS the default staged-payload verifier requires Authenticode or a deep strict code signature; development builds may inject an explicit verifier.
+
+Pass `#:journal-path` to atomically persist every destructive phase. On the next start, reconstruct the same installation and call `recover-platform-installation!`; it accepts only the exact same signed candidate and absolute download/target/backup paths. An interruption before health restores the prior payload. An interruption during the idempotent commit repeats backup cleanup instead of rolling a healthy application back.
+
+The lower-level `make-install-plan`, `execute-install-plan!`, and `recover-install-plan!` remain available for product-specific native installers. `execute-install-plan!` accepts `#:commit` for idempotent post-health cleanup. Elevation stays behind those adapters and never enters RVT1 or the embedded runtime.
 
 - `stable` accepts release SemVer versions only.
 - `beta` accepts stable versions and `beta` prereleases.

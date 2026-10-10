@@ -367,6 +367,14 @@ Pairs an accepted manifest with its current-platform artifact.}
              [rollback procedure?])]{
 Contains the verified artifact and platform-owned lifecycle callbacks.}
 
+@defstruct*[platform-installation
+            ([plan install-plan?]
+             [health-check procedure?]
+             [commit procedure?])] {
+Contains a first-party portable replacement plan plus its health and
+idempotent commit callbacks. Applications normally pass this value to
+@racket[execute-platform-installation!] rather than invoking the fields.}
+
 @subsection{Versions and Channels}
 
 @defproc[(version? [value any/c]) boolean?]{Recognizes SemVer 2.0 version strings.}
@@ -420,6 +428,7 @@ Downloads to a partial file, enforces the signed size and configured bound,
 verifies SHA-256, and atomically moves the verified artifact into place.}
 @defproc[(execute-install-plan! [plan install-plan?]
                                 [#:health-check health-check (-> any/c) (lambda () #t)]
+                                [#:commit commit (-> any/c) void]
                                 [#:journal-path journal-path (or/c #f path-string?) #f])
          any/c]{
 Runs the native installation and restart callbacks, then requires
@@ -435,7 +444,8 @@ absolute downloaded path and make rollback idempotent when durable recovery is
 enabled.}
 
 @defproc[(recover-install-plan! [plan install-plan?]
-                                [journal-path path-string?])
+                                [journal-path path-string?]
+                                [#:commit commit (-> any/c) void])
          (or/c 'committed 'rolled-back)]{
 Recovers an interrupted journal for the exact same signed candidate, download,
 and backup paths. A transaction already marked healthy commits; any other
@@ -443,6 +453,56 @@ unfinished phase rolls back when the signed manifest permits it. A mismatched
 plan, malformed journal, forbidden rollback, or failed rollback is rejected
 without deleting the evidence needed for diagnosis or another recovery
 attempt.}
+
+@subsection{First-Party Platform Replacement}
+
+@defproc[(current-update-platform) (or/c 'windows 'macos 'linux)]{
+Returns the update-platform symbol for the running operating system.}
+
+@defproc[(platform-installer-policy [platform symbol?]
+                                    [installer symbol?])
+         (or/c 'portable 'package-manager 'unsupported)]{
+Classifies the signed artifact. Portable ZIPs (and Linux AppImages) may use
+Rivet's atomic replacement adapter. MSI, MSIX, DMG, PKG, deb, and rpm remain
+owned by the native installer or package manager, so the portable adapter
+will not silently bypass elevation, receipts, or repository policy.}
+
+@defproc[(verify-platform-payload! [platform symbol?]
+                                   [payload path-string?])
+         void?]{
+Applies the platform trust gate to a staged portable payload: Authenticode on
+Windows, deep strict code-signature verification on macOS, and the already
+verified signed-manifest size/SHA-256 boundary on Linux.}
+
+@defproc[(prepare-platform-installation
+          [candidate update-candidate?]
+          [downloaded-path path-string?]
+          [#:target target-path complete-path?]
+          [#:restart restart procedure?]
+          [#:health-check health-check procedure?]
+          [#:verify-staged verify-staged (or/c #f procedure?) #f]
+          [#:backup-path backup-path (or/c #f complete-path?) #f])
+         platform-installation?]{
+Builds a same-filesystem, atomic portable replacement. The verified archive
+is staged and platform-verified before the old target moves. A durable marker
+distinguishes first installation from replacement, so rollback is safe in
+every interruption window. Target, download, and backup paths must be absolute
+and distinct. The verifier override is intended for development artifacts and
+tests; production callers should use the default fail-closed verifier.}
+
+@defproc[(execute-platform-installation!
+          [installation platform-installation?]
+          [#:journal-path journal-path (or/c #f path-string?) #f])
+         any/c]{
+Executes the prepared replacement with its restart, health, rollback, and
+commit callbacks. A backup is deleted only after health succeeds.}
+
+@defproc[(recover-platform-installation!
+          [installation platform-installation?]
+          [journal-path path-string?])
+         (or/c 'committed 'rolled-back)]{
+Recovers the exact prepared replacement. Interrupted commits are repeated;
+earlier phases restore the previous payload when signed policy permits it.}
 
 @section{Command-Line Workflow}
 

@@ -33,7 +33,7 @@
 (define install-journal-schema 1)
 (define install-journal-phases
   '(prepared installing installed restarting restarted checking healthy
-             rollback-started rolled-back rollback-failed))
+             committing committed rollback-started rolled-back rollback-failed))
 
 (define (copy-limited! in out limit)
   (define buffer (make-bytes 65536))
@@ -236,6 +236,7 @@
 
 (define (execute-install-plan! plan
                                #:health-check [health-check (lambda () #t)]
+                               #:commit [commit void]
                                #:journal-path [journal-path #f])
   ;; Platform adapters own elevation and process replacement. Rivet controls
   ;; the verified input, durable phase journal, health gate, and failure path,
@@ -256,10 +257,13 @@
     (unless (health-check)
       (error 'execute-install-plan! "installed update failed its health check"))
     (record-install-phase! plan journal-path 'healthy)
+    (record-install-phase! plan journal-path 'committing)
+    (commit)
+    (record-install-phase! plan journal-path 'committed)
     (when journal-path (delete-install-journal! journal-path))
     restart-result))
 
-(define (recover-install-plan! plan journal-path)
+(define (recover-install-plan! plan journal-path #:commit [commit void])
   ;; Recovery is deliberately conservative: a journal describes one exact
   ;; signed candidate and its paths. A different plan cannot consume it.
   ;; Rollback callbacks must be idempotent because a process may stop after the
@@ -271,7 +275,16 @@
                            "install transaction journal does not match the plan"
                            "journal" journal-path))
   (case phase
-    [(healthy)
+    [(healthy committing)
+     ;; The health gate passed before either phase was written. Commit must be
+     ;; idempotent because recovery may repeat it after the side effect but
+     ;; before the final phase reaches disk.
+     (record-install-phase! plan journal-path 'committing)
+     (commit)
+     (record-install-phase! plan journal-path 'committed)
+     (delete-install-journal! journal-path)
+     'committed]
+    [(committed)
      (delete-install-journal! journal-path)
      'committed]
     [(rolled-back)
