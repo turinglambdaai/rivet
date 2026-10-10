@@ -60,7 +60,10 @@
       ;; the Fedora package that owns libtinfo.so.6. The native Wayland RPM
       ;; install/launch gate proves the resulting runtime link, rather than
       ;; papering over all automatically discovered dependencies.
-      (display "%global __requires_exclude ^libtinfo\\.so\\.6\\(NCURSES6_TINFO_.*$\n" out)
+      ;; RPM expands macro bodies before compiling this regular expression,
+      ;; so the generated spec needs two backslashes to deliver one escaped
+      ;; punctuation character to the dependency filter.
+      (display "%global __requires_exclude ^libtinfo\\\\.so\\\\.6\\\\(NCURSES6_TINFO_.*$\n" out)
       (define (tag key value)
         (fprintf out "~a: ~a\n" key value))
       (tag "Name" (rpm-package-name project))
