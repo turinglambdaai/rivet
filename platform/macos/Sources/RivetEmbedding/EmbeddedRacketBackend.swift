@@ -47,7 +47,7 @@ public struct EmbeddedRacketConfiguration: Sendable {
         moduleName: String = "backend",
         entryName: String = "start",
         maxPendingRequests: Int = 1024,
-        diagnosticSink: @escaping RivetDiagnosticSink = RivetDiagnostics.standardError
+        diagnosticSink: @escaping RivetDiagnosticSink = RivetDiagnostics.discard
     ) {
         precondition(maxPendingRequests > 0, "Rivet native pending request limit must be positive")
         self.executable = executable
@@ -73,7 +73,7 @@ public struct EmbeddedRacketConfiguration: Sendable {
         moduleName: String = "backend",
         entryName: String = "start",
         maxPendingRequests: Int = 1024,
-        diagnosticSink: @escaping RivetDiagnosticSink = RivetDiagnostics.standardError
+        diagnosticSink: @escaping RivetDiagnosticSink = RivetDiagnostics.discard
     ) throws -> EmbeddedRacketConfiguration {
         let executable = Bundle.main.executableURL
             ?? URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL

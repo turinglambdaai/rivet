@@ -1,7 +1,6 @@
 #lang racket/base
 
 (require ffi/unsafe/port
-         json
          racket/async-channel
          racket/list
          racket/match
@@ -59,11 +58,11 @@
 (define diagnostic-schema "rivet.diagnostic.v1")
 
 (define current-rivet-diagnostic-sink
-  (make-parameter
-   (lambda (record)
-     (write-json record (current-error-port))
-     (newline (current-error-port))
-     (flush-output (current-error-port)))))
+  ;; Embedded desktop processes do not necessarily own a console. In
+  ;; particular, the first stderr write from a Windows GUI-subsystem process
+  ;; can allocate a visible console window. Diagnostics are therefore opt-in;
+  ;; applications should install a sink backed by their structured logger.
+  (make-parameter void))
 
 (define (safe-diagnostic-message raised)
   (define message
