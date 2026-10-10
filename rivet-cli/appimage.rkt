@@ -39,20 +39,23 @@
 (define (run/capture who executable arguments)
   (unless executable
     (raise-arguments-error who "required executable was not found"))
-  ;; process* documents five return values but hands back a five-element
-  ;; list on current Racket CS builds; accept either shape.
-  (define-values (stdout stdin pid stderr control)
-    (call-with-values
-        (lambda () (apply process* executable arguments))
-      (case-lambda
-        [(result) (apply values result)]
-        [(a b c d e) (values a b c d e)])))
-  (define output (port->string stdout))
-  (close-input-port stdout)
-  (close-input-port stderr)
-  (close-output-port stdin)
-  (control 'wait)
-  output)
+  ;; Redirect both streams instead of draining process* pipes serially: a
+  ;; verbose stderr must never block a child whose stdout is being captured.
+  (define stdout (open-output-string))
+  (define stderr (open-output-string))
+  (define status
+    (parameterize ([current-output-port stdout]
+                   [current-error-port stderr])
+      (apply system*/exit-code executable arguments)))
+  (unless (zero? status)
+    (raise-arguments-error
+     who
+     "external command failed"
+     "executable" executable
+     "arguments" arguments
+     "exit-code" status
+     "stderr" (string-trim (get-output-string stderr))))
+  (get-output-string stdout))
 
 (define (appimage-installer-path project)
   (project-path
@@ -108,8 +111,9 @@
 ;; Stages the dependency closure plus the data directories GTK4 needs at
 ;; runtime (compiled GSettings schemas, pixbuf loaders, a minimal hicolor
 ;; index) into the AppDir. Returns the list of copied libraries.
-(define (stage-appimage-dependencies! appdir)
-  (define payload-binary (build-path appdir "usr" "bin" "RivetHost"))
+(define (stage-appimage-dependencies! appdir
+                                      #:binary-name [binary-name "RivetHost"])
+  (define payload-binary (build-path appdir "usr" "bin" binary-name))
   (define lib-dir (build-path appdir "usr" "lib"))
   (make-directory* lib-dir)
   (define libraries (dependency-closure payload-binary))
@@ -180,7 +184,7 @@
   (unless (eq? (system-type 'os) 'windows)
     (file-or-directory-permissions path #o755)))
 
-(define (write-appimage-apprun! appdir)
+(define (write-appimage-apprun! appdir #:binary-name [binary-name "RivetHost"])
   (call-with-output-file (build-path appdir "AppRun")
     #:exists 'truncate/replace
     (lambda (out)
@@ -197,12 +201,13 @@
         "  export GDK_PIXBUF_MODULEDIR=\"$LOADERS\"\n"
         "fi\n"
         "export XDG_DATA_DIRS=\"${HERE}/usr/share${XDG_DATA_DIRS:+:${XDG_DATA_DIRS}}\"\n"
-        "exec \"${HERE}/usr/bin/RivetHost\" \"$@\"\n")
+        (format "exec \"${HERE}/usr/bin/~a\" \"$@\"\n" binary-name))
        out)))
   (mark-executable! (build-path appdir "AppRun")))
 
 (define (stage-appdir! project package)
   (define name (project-name project))
+  (define binary-name (project-linux-binary-name project))
   (define appdir
     (project-path project ".rivet" "installer"
                   (string-append name ".AppDir")))
@@ -216,7 +221,7 @@
     (if (directory-exists? source)
         (copy-directory/files source (build-path appdir "usr" "bin" entry))
         (copy-file source (build-path appdir "usr" "bin" entry))))
-  (mark-executable! (build-path appdir "usr" "bin" "RivetHost"))
+  (mark-executable! (build-path appdir "usr" "bin" binary-name))
   (write-desktop-entry! project (build-path appdir (string-append name ".desktop")))
   ;; Fail closed: the AppImage format requires a top-level icon, and a
   ;; placeholder would ship an invisible product tile to users' app grids.
@@ -227,7 +232,7 @@
             " `linux-icon` (a project-relative .png) in rivet.rktd")))
   (copy-file (project-path project (project-linux-icon project))
              (build-path appdir (string-append name ".png")) #t)
-  (write-appimage-apprun! appdir)
+  (write-appimage-apprun! appdir #:binary-name binary-name)
   appdir)
 
 ;; Fetches a checksum-verified appimagetool into .rivet/bin. The digests
@@ -288,7 +293,9 @@
             " building the AppImage")))
   (printf "rivet: staging AppDir for the AppImage installer\n")
   (define appdir (stage-appdir! project package))
-  (stage-appimage-dependencies! appdir)
+  (stage-appimage-dependencies!
+   appdir
+   #:binary-name (project-linux-binary-name project))
   (printf "rivet: packaging the AppImage with appimagetool\n")
   (define tool (appimagetool-executable project))
   (define output (appimage-installer-path project))
@@ -301,4 +308,5 @@
 (module+ test-support
   (provide stage-appdir!
            write-appimage-apprun!
-           appimage-installer-path))
+           appimage-installer-path
+           run/capture))

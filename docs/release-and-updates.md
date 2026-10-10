@@ -15,9 +15,9 @@ RIVET_MINIMUM_UPDATABLE_VERSION=1.0.0        # optional; defaults to 0.0.0
 RIVET_UPDATE_ROLLOUT=100                     # optional; 0..100
 ```
 
-Run `raco rivet release`. The result is a signed MSI on Windows, a signed/notarized DMG on macOS, or an Ed25519-signed self-contained `.tar.gz` on Linux, plus a channel manifest, CycloneDX SBOM, and `THIRD_PARTY_NOTICES.txt`. `release --development` exercises the same flow without production platform signing, but the update manifest still requires its independent Ed25519 key.
+Run `raco rivet release`. The result is a signed MSI on Windows, a signed/notarized DMG on macOS, or an Ed25519-signed self-contained `.tar.gz` on Linux, plus a versioned portable zip, channel manifest, CycloneDX SBOM, and `THIRD_PARTY_NOTICES.txt`. The channel manifest describes the portable zip; platform installers remain direct-download artifacts. `release --development` exercises the same flow without production platform signing, but the update manifest still requires its independent Ed25519 key.
 
-On Linux the release additionally builds native system installers: a `.deb` (dpkg-deb, unprivileged, installs under `/opt/<name>` with a desktop entry), an `.rpm` (rpmbuild BUILDROOT, distro-independent), and an `.AppImage` (bundled GTK4 dependency closure, so the same file runs on older distributions). Select the set with the `linux-formats` project setting; the signed tar.gz is always produced because it remains the update-channel payload. Package-manager installs upgrade through the package manager; AppImage installs upgrade by replacing the AppImage, and the in-app updater keeps using the tar.gz channel. AppImage packaging requires a `linux-icon` PNG in rivet.rktd — the format mandates a top-level icon and Rivet fails closed rather than shipping a placeholder.
+On Linux the release additionally builds native system installers: a `.deb` (dpkg-deb, unprivileged, installs under `/opt/<name>` with a desktop entry), an `.rpm` (rpmbuild BUILDROOT, distro-independent), and an `.AppImage` (bundled GTK4 dependency closure, so the same file runs on older distributions). Select the set with the `linux-formats` project setting; the signed tar.gz is always produced as the self-contained installer, while the portable zip is the update-channel payload. Package-manager installs upgrade through the package manager; AppImage installs upgrade by replacing the AppImage. AppImage packaging requires a `linux-icon` PNG in rivet.rktd — the format mandates a top-level icon and Rivet fails closed rather than shipping a placeholder.
 
 Applications that deliberately ship without an online update channel can run `raco rivet release --without-updates`. The command still builds, packages, platform-signs, verifies, and emits the installer, SBOM, and third-party notices; it skips only the channel manifest and does not read any `RIVET_UPDATE_*` credentials. Combine it with `--development` to exercise the unsigned release flow before publisher credentials exist. Omitting `--without-updates` keeps the fail-closed behavior above: all three update settings are required, and a partial configuration is an error.
 
@@ -52,10 +52,11 @@ Conventions that keep the legs composable:
   raco rivet manifest-compose     windows/update-stable.json macos-arm64/update-stable.json     macos-x64/update-stable.json linux/update-stable.json     --output update-stable.json
   ```
 
-  with `RIVET_UPDATE_PRIVATE_KEY` and `RIVET_UPDATE_KEY_ID` set. It folds
-  the per-platform manifests into one signed family manifest (one
-  artifact per platform/architecture, all metadata fields verified
-  identical) — replacing the per-product hand-rolled merge scripts.
+  with `RIVET_UPDATE_PRIVATE_KEY` and `RIVET_UPDATE_KEY_ID` set. It verifies
+  every leg's Ed25519 signature and key ID before folding the authenticated
+  payloads into one signed family manifest (one artifact per
+  platform/architecture, all metadata fields verified identical) — replacing
+  the per-product hand-rolled merge scripts.
 
 The portable zip beside every installer is produced by the same `release`
 run; the family update feed and locked-down machines consume it directly.
@@ -69,10 +70,10 @@ The updater verifies in this order:
 1. Ed25519 signature and expected key ID.
 2. Application identity, channel, SemVer precedence, minimum version, rollout bucket, platform, and architecture.
 3. Download byte limit and signed expected size.
-4. SHA-256 of the complete downloaded installer.
-5. Platform installer signature/trust as part of release and package verification.
+4. SHA-256 of the complete downloaded portable archive.
+5. Platform code signature/trust of the application carried by that archive as part of release and package verification.
 
-Only then may the native adapter install. A failed installation invokes the rollback callback only when the signed manifest permits rollback. MSI supplies transactional rollback; a macOS adapter should preserve the previous `.app` until the replacement has launched successfully; a Linux adapter should extract the tarball into a new versioned directory and keep the previous directory until the replacement has launched successfully. Private keys never belong in the repository. Generate and store them outside the checkout, for example:
+Only then may the native adapter install. A failed installation invokes the rollback callback only when the signed manifest permits rollback. The adapter extracts the portable archive into a new versioned location, preserves the previous installation until the replacement launches successfully, and uses the platform-specific application signature where available. Direct MSI/DMG/deb/rpm/AppImage installs retain their own platform transaction or package-manager behavior. Private keys never belong in the repository. Generate and store them outside the checkout, for example:
 
 ```bash
 openssl genpkey -algorithm Ed25519 -outform DER -out update-private.der

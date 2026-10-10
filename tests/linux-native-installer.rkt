@@ -30,7 +30,7 @@
   (lambda ()
     ;; A minimal verified-package layout mirroring package-linux! output.
     (define package-dir (build-path temp-root "demo-linux"))
-    (write-bytes/text (build-path package-dir "RivetHost") "#!binary")
+    (write-bytes/text (build-path package-dir "demo-app") "#!binary")
     (write-bytes/text (build-path package-dir "res" "core.zo") "zo")
     (for ([boot '("petite.boot" "scheme.boot" "racket.boot")])
       (write-bytes/text (build-path package-dir "runtime" boot) "boot"))
@@ -45,7 +45,8 @@
                (version . "1.2.0")
                (build . 7)
                (identifier . "dev.rivet.demo")
-               (linux-icon . "branding/app.png"))))
+               (linux-icon . "branding/app.png")
+               (linux-binary-name . "demo-app"))))
 
     ;; ---------------------------------------------------------- naming
     (check-equal? (deb-package-name project) "demo-app")
@@ -59,13 +60,14 @@
     ;; ------------------------------------------------------------- deb
     (define deb-root (stage-deb-root! project package-dir
                                       (build-path temp-root "deb-root")))
-    (check-true (file-exists? (build-path deb-root "opt" "Demo_App" "RivetHost")))
+    (check-true (file-exists? (build-path deb-root "opt" "Demo_App" "demo-app")))
     (check-true (file-exists? (build-path deb-root "opt" "Demo_App" "res" "core.zo")))
     (define desktop
       (file->string (build-path deb-root "usr" "share" "applications"
                                 "Demo_App.desktop")))
     (check-true (regexp-match? #rx"(?m:^Type=Application$)" desktop))
-    (check-true (regexp-match? #rx"(?m:^Exec=/opt/Demo_App/RivetHost$)" desktop))
+    (check-true (regexp-match? #rx"(?m:^Exec=/opt/Demo_App/demo-app$)" desktop))
+    (check-true (regexp-match? #rx"(?m:^TryExec=/opt/Demo_App/demo-app$)" desktop))
     (check-true (regexp-match? #rx"(?m:^Icon=Demo_App$)" desktop))
     (check-true (file-exists? (build-path deb-root "usr" "share" "pixmaps"
                                            "Demo_App.png")))
@@ -92,14 +94,14 @@
 
     ;; -------------------------------------------------------- AppImage
     (define appdir (stage-appdir! project package-dir))
-    (check-true (file-exists? (build-path appdir "usr" "bin" "RivetHost")))
+    (check-true (file-exists? (build-path appdir "usr" "bin" "demo-app")))
     (check-true (file-exists? (build-path appdir "usr" "bin" "res" "core.zo")))
     (check-true (file-exists? (build-path appdir "Demo_App.desktop")))
     (check-true (file-exists? (build-path appdir "Demo_App.png")))
     (define apprun (file->string (build-path appdir "AppRun")))
     (check-true (regexp-match? #rx"LD_LIBRARY_PATH" apprun))
     (check-true (regexp-match? #rx"GSETTINGS_SCHEMA_DIR" apprun))
-    (check-true (regexp-match? #rx"exec \"\\$\\{HERE\\}/usr/bin/RivetHost\"" apprun))
+    (check-true (regexp-match? #rx"exec \"\\$\\{HERE\\}/usr/bin/demo-app\"" apprun))
 
     ;; The AppImage format requires a real icon; fail closed without one.
     (define iconless
@@ -109,7 +111,8 @@
                              (publisher . "Demo Publisher")
                              (version . "1.2.0")
                              (build . 7)
-                             (identifier . "dev.rivet.demo"))))
+                             (identifier . "dev.rivet.demo")
+                             (linux-binary-name . "demo-app"))))
     (check-exn #rx"linux-icon"
                (lambda ()
                  (stage-appdir! iconless package-dir)))

@@ -228,6 +228,7 @@
        (define dpkg-deb (find-executable-path "dpkg-deb"))
        (define info (capture-command! who dpkg-deb "--info" (path->string installer)))
        (define name (project-name project))
+       (define binary-name (project-linux-binary-name project))
        (for ([pattern (in-list
                        (list (format "Package: ~a" (deb-package-name project))
                              (format "Architecture: ~a" (deb-architecture))
@@ -245,12 +246,21 @@
          (lambda ()
            (capture-command! who dpkg-deb "-x" (path->string installer)
                              (path->string extraction))
-           (required-file! who (build-path extraction "opt" name "RivetHost")
+           (required-file! who (build-path extraction "opt" name binary-name)
                            "deb-installed executable")
-           (required-file! who
-                           (build-path extraction "usr" "share" "applications"
-                                       (string-append name ".desktop"))
-                           "deb-installed desktop entry"))
+           (define desktop-entry
+             (build-path extraction "usr" "share" "applications"
+                         (string-append name ".desktop")))
+           (required-file! who desktop-entry "deb-installed desktop entry")
+           (unless (regexp-match?
+                    (regexp
+                     (regexp-quote (format "Exec=/opt/~a/~a" name binary-name)))
+                    (file->string desktop-entry))
+             (raise-arguments-error
+              who
+              "deb desktop entry does not launch the configured executable"
+              "executable" binary-name
+              "desktop-entry" desktop-entry)))
          (lambda () (delete-directory/files extraction)))]
       [("rpm")
        (define installer (rpm-installer-path project))
@@ -260,7 +270,9 @@
                                          "-qpl" "--nosignature"
                                          (path->string installer)))
        (for ([required (in-list
-                       (list (format "/opt/~a/RivetHost" (project-name project))
+                       (list (format "/opt/~a/~a"
+                                     (project-name project)
+                                     (project-linux-binary-name project))
                              (format "/usr/share/applications/~a.desktop"
                                      (project-name project))))])
          (unless (regexp-match? (regexp (regexp-quote required)) listing)
@@ -281,9 +293,10 @@
            (parameterize ([current-directory extraction])
              (capture-command! who installer "--appimage-extract"))
            (define name (project-name project))
+           (define binary-name (project-linux-binary-name project))
            (define squashfs-root (build-path extraction "squashfs-root"))
            (required-file! who (build-path squashfs-root "AppRun") "AppImage entry point")
-           (required-file! who (build-path squashfs-root "usr" "bin" "RivetHost")
+           (required-file! who (build-path squashfs-root "usr" "bin" binary-name)
                            "AppImage payload executable")
            (required-file! who (build-path squashfs-root
                                            (string-append name ".desktop"))

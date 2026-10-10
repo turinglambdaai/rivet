@@ -117,11 +117,11 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 | 类型化客户端生成 | ✅ C++ | ✅ Swift | ✅ C++ |
 | `new` / `doctor` / `build` / `dev` | ✅ | ✅ | ✅ |
 | `package` / `verify` | ✅ DLL 依赖审计 | ✅ 签名/rpath/plist | 🧪 目录 + `ldd` 审计 |
-| 生产签名 / 安装包 | ✅ Authenticode + MSI | ✅ Developer ID + DMG | 🧪 `raco rivet release` 生成 Ed25519 签名 tarball |
-| 系统服务 / 安全存储 | ✅ | ✅ | 🧪 Linux 适配器（无托盘） |
+| 生产签名 / 安装包 | ✅ Authenticode + MSI | ✅ Developer ID + DMG | 🧪 签名 tarball + deb/rpm/AppImage |
+| 系统服务 / 安全存储 | ✅ | ✅ | 🧪 Linux 适配器 + StatusNotifierItem 托盘 |
 | 真实嵌入运行时 CI | ✅ | ✅ | ✅ |
 
-Windows 和 macOS 仍是生产发布目标。Linux 处于开发者预览：日常 CLI 全链路、Ed25519 签名发布物、真实 embedded-runtime CI，以及覆盖单实例、通知、自启动、安全存储和崩溃钩子的一方系统适配器已经完成；托盘契约与发行版原生安装包，以及明确的 X11/Wayland 策略，仍是进入生产级之前的工作。
+Windows 和 macOS 仍是生产发布目标。Linux 处于开发者预览：日常 CLI 全链路、签名 tarball 与 deb/rpm/AppImage、真实 embedded-runtime CI，以及覆盖单实例、通知、托盘、自启动、安全存储、崩溃钩子和优雅退出的一方系统适配器已经完成。进入生产级之前仍需明确 X11/Wayland 策略，并补齐受支持发行版矩阵上的真实安装与升级证据。
 
 ### Apple 移动端基础
 
@@ -316,7 +316,7 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
 
 ## 诚实的局限
 
-- **Linux 是开发者预览** —— 日常 CLI 全链路、Ed25519 签名 tarball 与一方系统适配器已经完成，但发行版原生安装包/信任集成、托盘契约与明确的 compositor 策略还未完成。
+- **Linux 是开发者预览** —— 日常 CLI 全链路、签名 tarball、deb/rpm/AppImage、托盘与一方系统适配器已经完成；明确的 compositor 策略，以及受支持发行版矩阵上的生产安装/升级证据尚未补齐。
 - **Apple 移动端仍是基础阶段** —— 可移植 Swift 与类型安全 WatchConnectivity 层已经存在，但 iOS/iPadOS/watchOS 项目生成、runtime 打包、签名和商店交付还未完成。
 - **Android 仍处于基础阶段** —— Kotlin RVT1 codec、协程 runtime 客户端、类型化客户端生成与固定版本的 Gradle 构建已经过测试，但 Jetpack Compose、JNI、portable Racket CS 打包、签名和设备交付尚未完成。
 - **架构证据覆盖构建/打包/验证，尚不覆盖生产发布** —— 干净 runner 门禁覆盖 Windows x64/ARM64、macOS Apple Silicon/Intel 与 Linux x64/ARM64，但生产发布产物仍由标签驱动的发布流程按应用生成。

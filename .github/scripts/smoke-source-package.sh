@@ -97,17 +97,36 @@ grep -Fq 'docs/getting-started.zh-CN.md' ArchiveSmoke/README.md
 cd ArchiveSmoke
 PLTUSERHOME="$user_home" \
   raco rivet inspect --json > inspect.json
-python3 - <<'PY'
-import json
-with open("inspect.json", encoding="utf-8") as handle:
-    report = json.load(handle)
-assert report["contract-version"] == 1
-assert report["project"]["name"] == "ArchiveSmoke"
-assert report["backend"]["source"]["exists"] is True
-assert report["edit-points"]["windows-ui"][0]["exists"] is True
-assert report["generated-clients"]["kotlin"]["path"] == \
-    ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
-PY
+PLTUSERHOME="$user_home" racket -e '
+  (require json)
+  (define report (call-with-input-file "inspect.json" read-json))
+  (define (expect actual expected label)
+    (unless (equal? actual expected)
+      (raise-arguments-error
+       (quote source-package-smoke)
+       "inspect report did not match the packaged scaffold"
+       "field" label
+       "expected" expected
+       "actual" actual)))
+  (expect (hash-ref report (quote contract-version)) 1 "contract-version")
+  (expect (hash-ref (hash-ref report (quote project)) (quote name))
+          "ArchiveSmoke"
+          "project.name")
+  (expect (hash-ref (hash-ref (hash-ref report (quote backend)) (quote source))
+                    (quote exists))
+          #t
+          "backend.source.exists")
+  (expect (hash-ref (car (hash-ref (hash-ref report (quote edit-points))
+                                  (quote windows-ui)))
+                    (quote exists))
+          #t
+          "edit-points.windows-ui[0].exists")
+  (expect (hash-ref (hash-ref (hash-ref report (quote generated-clients))
+                             (quote kotlin))
+                    (quote path))
+          ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
+          "generated-clients.kotlin.path")
+'
 
 # The published archive must still generate every typed client, including the
 # Kotlin client that Android applications consume from the shared tree.

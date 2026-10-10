@@ -16,6 +16,7 @@
 
 (provide release-project!
          release-update-environment
+         portable-zip-path
          create-portable-zip!)
 
 (define (required-environment name)
@@ -54,19 +55,20 @@
     [(aarch64 arm64) 'arm64]
     [else 'x64]))
 
-(define (installer-kind)
-  (case (system-type 'os)
-    [(windows) 'msi]
-    [(macosx) 'dmg]
-    [(unix) 'targz]))
+(define (portable-zip-path project)
+  (project-path
+   project "dist"
+   (format "~a-~a-~a-~a.zip"
+           (project-name project)
+           (project-version project)
+           (release-platform)
+           (release-architecture))))
 
 ;; Portable zip beside the installer: the family update feed consumes
 ;; it and it runs on locked-down machines. Deterministic input tree,
 ;; family naming <name>-<version>-<os>-<arch>.zip, sha256 alongside.
 (define (create-portable-zip! project package)
-  (define zip-path
-    (project-path project "dist"
-                  (string-append (path->string (file-name-from-path package)) ".zip")))
+  (define zip-path (portable-zip-path project))
   (when (file-exists? zip-path) (delete-file zip-path))
   (parameterize ([current-directory (path-only package)])
     (zip zip-path (path->string (file-name-from-path package))))
@@ -77,6 +79,19 @@
               (sha256-file/hex zip-path)
               (path->string (file-name-from-path zip-path)))))
   zip-path)
+
+(define (portable-update-artifact update-config portable-zip)
+  (update-artifact
+   (release-platform)
+   (release-architecture)
+   (string-append
+    (string-trim (update-environment-base-url update-config) "/")
+    "/"
+    (path->string (file-name-from-path portable-zip)))
+   (sha256-file/hex portable-zip)
+   (file-size portable-zip)
+   'zip
+   '()))
 
 (define (release-project! project
                           #:production? [production? #t]
@@ -106,17 +121,7 @@
      update-config
      (let* ([previous (getenv "RIVET_PREVIOUS_VERSION")]
             [artifact
-             (update-artifact
-              (release-platform)
-              (release-architecture)
-              (string-append
-               (string-trim (update-environment-base-url update-config) "/")
-               "/"
-               (path->string (file-name-from-path installer)))
-              (sha256-file/hex installer)
-              (file-size installer)
-              (installer-kind)
-              '())]
+             (portable-update-artifact update-config portable-zip)]
             [manifest
              (update-manifest
               (project-identifier project)
@@ -145,3 +150,6 @@
             out)))
        path)))
   (values installer manifest-path sbom notices portable-zip))
+
+(module+ test-support
+  (provide portable-update-artifact))
