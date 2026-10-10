@@ -5,6 +5,7 @@
          racket/path
          racket/string
          "../rivet/distribution/manifest.rkt"
+         "../rivet-cli/appimage.rkt"
          "../rivet-cli/project.rkt"
          "../rivet-cli/release.rkt"
          (submod "../rivet-cli/release.rkt" test-support))
@@ -70,7 +71,44 @@
     (check-equal? (update-artifact-installer artifact) 'zip)
     (check-equal? (update-artifact-size artifact) (file-size archive))
     (check-true
-     (string-suffix? (update-artifact-url artifact) zip-name)))
+     (string-suffix? (update-artifact-url artifact) zip-name))
+
+    ;; AppImage is selected by the signed manifest itself. Products never
+    ;; derive a sibling URL or trust a detached sidecar instead of the feed.
+    (define appimage-project
+      (rivet-project temp-root
+                     #hasheq((name . "Example")
+                             (version . "2.3.4")
+                             (linux-formats . ("appimage")))))
+    (define appimage (appimage-installer-path appimage-project))
+    (call-with-output-file appimage
+      #:exists 'truncate/replace #:mode 'binary
+      (lambda (out) (write-bytes #"appimage-payload" out)))
+    (define appimage-artifact
+      (parameterize ([current-environment-variables complete-env])
+        (release-update-artifact (release-update-environment #t)
+                                 appimage-project archive
+                                 #:platform 'linux
+                                 #:architecture 'x64)))
+    (check-equal? (update-artifact-installer appimage-artifact) 'appimage)
+    (check-equal? (update-artifact-size appimage-artifact)
+                  (file-size appimage))
+    (check-true
+     (string-suffix? (update-artifact-url appimage-artifact)
+                     (path->string (file-name-from-path appimage))))
+
+    (define deb-only-project
+      (rivet-project temp-root
+                     #hasheq((name . "Example")
+                             (version . "2.3.4")
+                             (linux-formats . ("deb")))))
+    (define fallback-artifact
+      (parameterize ([current-environment-variables complete-env])
+        (release-update-artifact (release-update-environment #t)
+                                 deb-only-project archive
+                                 #:platform 'linux
+                                 #:architecture 'x64)))
+    (check-equal? (update-artifact-installer fallback-artifact) 'zip))
   (lambda ()
     (when (directory-exists? temp-root)
       (delete-directory/files temp-root))))

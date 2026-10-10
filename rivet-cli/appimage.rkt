@@ -17,6 +17,7 @@
          racket/set
          racket/string
          racket/system
+         "../rivet/distribution/crypto.rkt"
          "linux-native-package.rkt"
          "project.rkt")
 
@@ -64,6 +65,16 @@
            (project-name project)
            (project-version project)
            (appimage-architecture))))
+
+(define (write-appimage-checksum! output)
+  (define sidecar (string->path (string-append (path->string output) ".sha256")))
+  (call-with-output-file sidecar
+    #:exists 'truncate/replace
+    (lambda (out)
+      (fprintf out "~a  ~a~n"
+               (sha256-file/hex output)
+               (path->string (file-name-from-path output)))))
+  sidecar)
 
 ;; Libraries that must remain the host system's own: the dynamic loader and
 ;; libc family, and the GL/Vulkan driver stack (the display driver owns it).
@@ -303,10 +314,12 @@
   (when (file-exists? output) (delete-file output))
   (putenv "APPIMAGE_EXTRACT_AND_RUN" "1")
   (run! 'create-appimage! tool (path->string appdir) (path->string output))
+  (write-appimage-checksum! output)
   output)
 
 (module+ test-support
   (provide stage-appdir!
            write-appimage-apprun!
+           write-appimage-checksum!
            appimage-installer-path
            run/capture))

@@ -8,12 +8,14 @@
          racket/file
          racket/list
          racket/path
+         racket/string
          racket/system
          "manifest.rkt"
          "updater.rkt")
 
 (provide (struct-out platform-installation)
          current-update-platform
+         current-install-kind
          platform-installer-policy
          verify-platform-payload!
          prepare-platform-installation
@@ -31,6 +33,33 @@
      (raise-arguments-error 'current-update-platform
                             "unsupported operating system"
                             "system-type" (system-type 'os))]))
+
+(define (detect-install-kind platform executable appimage)
+  (cond
+    [(not (eq? platform 'linux)) 'portable]
+    [(and appimage (not (string=? (string-trim appimage) ""))) 'appimage]
+    [else
+     (define raw
+       (string-replace (if (path? executable)
+                           (path->string executable)
+                           executable)
+                       "\\" "/"))
+     (define normalized
+       (if (string-prefix? raw "/")
+           raw
+           (string-replace
+            (path->string (simplify-path (path->complete-path executable) #f))
+            "\\" "/")))
+     ;; Rivet's deb and rpm both install under /opt. /usr also covers products
+     ;; following the conventional rpm layout. Update ownership matters here,
+     ;; not which package database owns the executable.
+     (if (or (string-prefix? normalized "/opt/")
+             (string-prefix? normalized "/usr/"))
+         'package-manager
+         'portable)]))
+
+(define (current-install-kind [executable (find-system-path 'run-file)])
+  (detect-install-kind (current-update-platform) executable (getenv "APPIMAGE")))
 
 ;; `portable` means Rivet can replace the application payload itself.
 ;; `package-manager` means installation must remain under the OS transaction
@@ -275,3 +304,6 @@
    (platform-installation-plan installation)
    journal-path
    #:commit (platform-installation-commit installation)))
+
+(module+ test-support
+  (provide detect-install-kind))
