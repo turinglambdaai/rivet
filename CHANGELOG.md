@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Make AppImage the signed Linux update payload when that format is enabled,
+  emit its SHA-256 sidecar, and add install-kind-aware update selection so
+  AppImage, portable, and package-manager installations cannot cross streams.
 - Graduate the Linux package-manager lifecycle gates from a single install to
   two-version deb/rpm transactions: corrupt upgrades preserve the working
   install, normal upgrades replace both metadata and payload, Debian rejects

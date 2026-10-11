@@ -206,10 +206,10 @@
       #:exists 'truncate/replace
       (lambda (out)
         (displayln (bytes->base64-string signature) out))))
-  ;; Native system installer formats ride along with the signed tar.gz
-  ;; payload: deb and rpm integrate with the distribution package manager,
-  ;; AppImage carries its own GTK4 dependency closure. The tar.gz remains
-  ;; the update-channel artifact for every format choice.
+  ;; Native system installer formats ride along with the signed tar.gz:
+  ;; deb/rpm integrate with the distribution package manager, while AppImage
+  ;; carries its own GTK4 dependency closure and becomes the signed in-place
+  ;; update payload when enabled.
   (for ([format (in-list (project-linux-formats project))])
     (case format
       [("deb") (create-deb! project package)]
