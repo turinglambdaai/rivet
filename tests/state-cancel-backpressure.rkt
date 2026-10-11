@@ -1,8 +1,18 @@
 #lang racket/base
 
-(require rackunit
+(require racket/runtime-path
+         rackunit
          "../rivet/backend.rkt"
          "../rivet/protocol.rkt")
+
+;; Raw-cell observation is intentionally limited to this white-box ordering
+;; test; state descriptors are opaque to application code.
+(define-runtime-module-path-index backend-module "../rivet/backend.rkt")
+(define backend-namespace
+  (module->namespace (module-path-index-resolve backend-module)))
+(define state-info-cell
+  (parameterize ([current-namespace backend-namespace])
+    (eval 'state-info-cell)))
 
 (define-event state-cancel-progress : Int64)
 (define-state state-cancel-counter : Int64 0)
