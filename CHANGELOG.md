@@ -7,6 +7,10 @@
   `backend-schema` reflection snapshot. Pre-1.0 tooling that used
   `registered-*` or `*-info-*` should read the corresponding schema entry;
   applications should use `state-ref` and `state-set!`.
+- Add real Linux installer lifecycle gates: build x64 rpm/AppImage artifacts,
+  install and launch the rpm on Fedora 44 under native Wayland, launch the
+  AppImage outside the build tree on Ubuntu 24.04, uninstall the rpm, and
+  retain package/compositor/application diagnostics as CI artifacts.
 - Add first-party portable update installation for Windows, macOS, and Linux:
   verified ZIP/AppImage payloads are staged, platform-signature checked,
   atomically replaced, health-gated, durably committed, and recoverable after
