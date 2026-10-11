@@ -123,7 +123,8 @@ See [architecture](docs/architecture.md), [agent-native development](docs/agent-
 
 Windows, macOS, and Linux are production release targets. Linux qualification
 uses native Wayland and real deb/rpm package-manager transactions for install,
-failed-upgrade recovery, upgrade, downgrade rejection, launch, and uninstall;
+failed-upgrade recovery, upgrade, distro-native downgrade or rollback behavior,
+launch, and uninstall;
 AppImage launch is independently gated outside the build tree. X11 and
 XWayland remain best-effort GTK compatibility paths, not release targets.
 

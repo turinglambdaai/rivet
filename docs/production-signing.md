@@ -78,8 +78,8 @@ The deterministic tarball is Rivet's strongest independently reproducible
 Linux artifact. Native packages and AppImage also receive structural, payload,
 metadata, and dependency verification. The
 [production graduation matrix](production-roadmap.md) adds real
-package-manager install, corrupt-upgrade recovery, upgrade, downgrade
-rejection, native-Wayland launch, and uninstall evidence across the declared
+package-manager install, corrupt-upgrade recovery, upgrade, distro-native
+downgrade or rollback semantics, native-Wayland launch, and uninstall evidence across the declared
 distribution lifecycle; AppImage launch and atomic replacement are gated
 separately.
 

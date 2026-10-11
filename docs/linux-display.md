@@ -58,7 +58,7 @@ unbounded list of historical images:
 | --- | --- | --- |
 | Ubuntu | Supported LTS releases while they receive standard security maintenance | Ubuntu 24.04: AppImage launch under headless native Wayland; deb format shares the Debian transaction gate |
 | Debian | Current stable release during Debian's regular support period | Debian 13: deb install, corrupt-upgrade recovery, upgrade, downgrade rejection, launch, and uninstall under headless native Wayland |
-| Fedora | Current and previous Fedora releases while upstream still maintains them | Fedora 44: rpm install, corrupt-upgrade recovery, upgrade, downgrade rejection, launch, and uninstall under headless native Wayland |
+| Fedora | Current and previous Fedora releases while upstream still maintains them | Fedora 44: rpm install, corrupt-upgrade recovery, upgrade, explicit local-RPM rollback and re-upgrade, launch, and uninstall under headless native Wayland |
 
 The matrix is reviewed for every Rivet minor release. A distribution enters the
 support table only after its native package is installed by the real package

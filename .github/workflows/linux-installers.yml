@@ -360,7 +360,7 @@ jobs:
           path: /tmp/rivet-installers
       - name: Install desktop runtime
         run: dnf install --assumeyes dbus-daemon desktop-file-utils gtk4 procps-ng weston
-      - name: Install, recover, upgrade, reject downgrade, launch, and uninstall rpm
+      - name: Install, recover, upgrade, roll back, re-upgrade, launch, and uninstall rpm
         shell: bash
         run: |
           set -euo pipefail
@@ -398,11 +398,16 @@ jobs:
           test "$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$rpm_package")" = "0.2.0-2"
           test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource-v2
 
-          # Normal install/upgrade policy must not move a package backwards.
-          # Explicit administrative `dnf downgrade` remains outside Rivet's
-          # authority, just like an explicit apt --allow-downgrades request.
+          # DNF treats an explicitly selected older local RPM as an authorized
+          # rollback. Prove that its transaction restores the complete v1
+          # payload, then prove recovery to v2 before launching the app.
           dnf install --assumeyes "$rpm_v1" \
-            >"$diagnostics/dnf-downgrade-attempt.log" 2>&1 || true
+            >"$diagnostics/dnf-rollback-v1.log" 2>&1
+          test "$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$rpm_package")" = "0.1.0-1"
+          test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource-v1
+
+          dnf install --assumeyes "$rpm_v2" \
+            >"$diagnostics/dnf-reupgrade-v2.log" 2>&1
           test "$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$rpm_package")" = "0.2.0-2"
           test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource-v2
 
