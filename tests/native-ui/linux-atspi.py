@@ -120,6 +120,10 @@ def main():
             None,
         ),
     )
+    (args.output / "accessibility-discovered.json").write_text(
+        json.dumps(snapshot(application), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     required = {
         "Tasks": "list",
         "New task": "push button",

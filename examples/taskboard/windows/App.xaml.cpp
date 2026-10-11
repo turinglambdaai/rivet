@@ -21,6 +21,13 @@ App::App() {
 
 void App::OnLaunched(Microsoft::UI::Xaml::LaunchActivatedEventArgs const&) {
   window_ = winrt::make<MainWindow>();
+  window_.Closed([this](auto const&, auto const&) {
+    // App owns the last strong reference to the desktop window. Releasing it
+    // lets WinUI finish its normal last-window shutdown after Closed unwinds;
+    // forcing Application::Exit from this callback can race teardown of a
+    // large virtualized tree and strand the host in process-detach cleanup.
+    window_ = nullptr;
+  });
   window_.Activate();
 }
 

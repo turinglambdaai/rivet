@@ -36,8 +36,15 @@
                 SelectionMode="Single"
                 IsEnabled="False"
                 SelectionChanged="TaskList_SelectionChanged"
+                ContainerContentChanging="TaskList_ContainerContentChanging"
                 AutomationProperties.Name="Tasks"
-                AutomationProperties.AutomationId="task-list" />
+                AutomationProperties.AutomationId="task-list">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding [Title]}" />
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
 
             <Border Grid.Column="1" Padding="28" BorderThickness="1" CornerRadius="8">
                 <StackPanel Spacing="14">

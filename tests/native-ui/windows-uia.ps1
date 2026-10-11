@@ -166,11 +166,20 @@ try {
         Set-Content -LiteralPath (Join-Path $OutputDirectory 'interaction-trace.json') -Encoding utf8
     Save-Screenshot (Join-Path $OutputDirectory 'screen.png')
 
-    $window.GetCurrentPattern(
-        [System.Windows.Automation.WindowPattern]::Pattern).Close()
+    # CloseMainWindow sends the same native WM_CLOSE path as the title-bar
+    # close button. Some WinUI providers expose the root as a pane and reject
+    # WindowPattern even though the HWND is a real top-level window.
+    $shutdownTimer = [System.Diagnostics.Stopwatch]::StartNew()
+    if (-not $process.CloseMainWindow()) {
+        throw 'Taskboard did not expose a closeable native main window'
+    }
     if (-not $process.WaitForExit(10000)) {
         throw 'Taskboard did not exit within ten seconds of native window close'
     }
+    $shutdownTimer.Stop()
+    [ordered]@{ shutdownMilliseconds = $shutdownTimer.ElapsedMilliseconds } |
+        ConvertTo-Json |
+        Set-Content -LiteralPath (Join-Path $OutputDirectory 'shutdown-trace.json') -Encoding utf8
     if ($process.ExitCode -ne 0) {
         throw "Taskboard exited with status $($process.ExitCode)"
     }

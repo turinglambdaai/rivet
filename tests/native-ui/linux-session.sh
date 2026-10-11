@@ -13,6 +13,7 @@ mkdir -p "$output"
 export XDG_RUNTIME_DIR="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/rivet-native-ui-runtime"
 export WAYLAND_DISPLAY=wayland-rivet-native-ui
 export GDK_BACKEND=wayland
+export GTK_A11Y=atspi
 export NO_AT_BRIDGE=0
 unset DISPLAY
 mkdir -p "$XDG_RUNTIME_DIR"
