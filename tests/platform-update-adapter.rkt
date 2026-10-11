@@ -6,9 +6,22 @@
          racket/file
          racket/path
          racket/port
-         "../rivet/distribution.rkt")
+         "../rivet/distribution.rkt"
+         (submod "../rivet/distribution/platform-adapter.rkt" test-support))
 
 (define platform (current-update-platform))
+
+(check-equal? (detect-install-kind 'linux "/tmp/App.AppImage"
+                                   "/tmp/App.AppImage")
+              'appimage)
+(check-equal? (detect-install-kind 'linux "/opt/Example/RivetHost" #f)
+              'package-manager)
+(check-equal? (detect-install-kind 'linux "/usr/bin/example" #f)
+              'package-manager)
+(check-equal? (detect-install-kind 'linux "/home/user/example" #f)
+              'portable)
+(check-equal? (detect-install-kind 'windows "C:\\Example\\RivetHost.exe" #f)
+              'portable)
 
 (define (candidate installer [version "2.0.0"])
   (define artifact

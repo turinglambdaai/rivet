@@ -11,7 +11,10 @@
          racket/file
          racket/path
          racket/string
+         "../rivet/distribution/crypto.rkt"
          "../rivet-cli/appimage.rkt"
+         (only-in (submod "../rivet-cli/appimage.rkt" test-support)
+                  write-appimage-checksum!)
          "../rivet-cli/deb.rkt"
          "../rivet-cli/linux-native-package.rkt"
          "../rivet-cli/project.rkt"
@@ -56,6 +59,13 @@
     (check-true (regexp-match? #rx"(?m:\\.rpm$)" (path->string (rpm-installer-path project))))
     (check-true (regexp-match? #rx"(?m:\\.AppImage$)"
                                (path->string (appimage-installer-path project))))
+    (define checksum-payload (build-path temp-root "Demo_App.AppImage"))
+    (write-bytes/text checksum-payload "appimage-bytes")
+    (define checksum-sidecar (write-appimage-checksum! checksum-payload))
+    (check-equal?
+     (string-trim (file->string checksum-sidecar))
+     (format "~a  Demo_App.AppImage"
+             (sha256-file/hex checksum-payload)))
 
     ;; ------------------------------------------------------------- deb
     (define deb-root (stage-deb-root! project package-dir
