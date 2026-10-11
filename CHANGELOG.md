@@ -5,6 +5,10 @@
 - Make AppImage the signed Linux update payload when that format is enabled,
   emit its SHA-256 sidecar, and add install-kind-aware update selection so
   AppImage, portable, and package-manager installations cannot cross streams.
+- Make embedded diagnostics opt-in across Racket, C++, and Swift. GUI hosts no
+  longer write to standard error by default, preventing Windows applications
+  from allocating a black console window on their first diagnostic; explicit
+  structured-log and stderr sinks remain supported.
 - Replace the accidental public backend registry structs and mutable State
   cell accessors with an opaque `state?` handle and a single immutable
   `backend-schema` reflection snapshot. Pre-1.0 tooling that used

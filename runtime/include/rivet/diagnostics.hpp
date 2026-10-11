@@ -75,9 +75,10 @@ inline void write_diagnostic_to_stderr(DiagnosticRecord const& record) {
 }
 
 inline DiagnosticSink default_diagnostic_sink() {
-  return [](DiagnosticRecord const& record) {
-    write_diagnostic_to_stderr(record);
-  };
+  // A desktop GUI process may not own a console. On Windows, writing to stderr
+  // can cause a console window to appear beside the application. Preserve the
+  // explicit stderr helper, but require products to opt into any log sink.
+  return {};
 }
 
 }  // namespace rivet

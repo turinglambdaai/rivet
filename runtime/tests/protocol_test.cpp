@@ -264,5 +264,10 @@ int main() {
          "\"last_protocol_event\":\"request\\nread\",\"request_id\":42,"
          "\"message\":\"quote: \\\" and control: \\u0001\"}");
 
+  // Desktop applications opt into a sink. The framework default must not
+  // touch stderr because a Windows GUI-subsystem process can allocate a
+  // visible console on its first write.
+  assert(!rivet::default_diagnostic_sink());
+
   return 0;
 }
