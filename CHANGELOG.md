@@ -5,6 +5,15 @@
 - Split the Linux system adapter into focused single-instance, notification,
   tray, autostart, secure-storage, and crash/shutdown implementation units,
   with one private XDG/D-Bus support core and no public API change.
+- Make embedded diagnostics opt-in across Racket, C++, and Swift. GUI hosts no
+  longer write to standard error by default, preventing Windows applications
+  from allocating a black console window on their first diagnostic; explicit
+  structured-log and stderr sinks remain supported.
+- Replace the accidental public backend registry structs and mutable State
+  cell accessors with an opaque `state?` handle and a single immutable
+  `backend-schema` reflection snapshot. Pre-1.0 tooling that used
+  `registered-*` or `*-info-*` should read the corresponding schema entry;
+  applications should use `state-ref` and `state-set!`.
 - Add real Linux installer lifecycle gates: build x64 rpm/AppImage artifacts,
   install and launch the rpm on Fedora 44 under native Wayland, launch the
   AppImage outside the build tree on Ubuntu 24.04, uninstall the rpm, and
