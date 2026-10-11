@@ -2,6 +2,7 @@
 #include "system_services_internal.hpp"
 
 #include <cctype>
+#include <cstring>
 #include <mutex>
 #include <stdexcept>
 
