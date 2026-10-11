@@ -10,6 +10,17 @@ Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class RivetNativeUi {
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool PostMessage(
+        IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+}
+'@
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
@@ -166,13 +177,29 @@ try {
         Set-Content -LiteralPath (Join-Path $OutputDirectory 'interaction-trace.json') -Encoding utf8
     Save-Screenshot (Join-Path $OutputDirectory 'screen.png')
 
-    # CloseMainWindow sends the same native WM_CLOSE path as the title-bar
-    # close button. Some WinUI providers expose the root as a pane and reject
-    # WindowPattern even though the HWND is a real top-level window.
+    # Target the exact HWND exposed by the UIA root. Process.MainWindowHandle
+    # is heuristic and may select a diagnostic console instead of the WinUI
+    # window; WindowPattern is also absent when WinUI exposes the root as a
+    # pane. WM_CLOSE is the same native path as the title-bar close button.
     $shutdownTimer = [System.Diagnostics.Stopwatch]::StartNew()
-    if (-not $process.CloseMainWindow()) {
-        throw 'Taskboard did not expose a closeable native main window'
+    $nativeWindow = [IntPtr]$window.Current.NativeWindowHandle
+    if ($nativeWindow -eq [IntPtr]::Zero -or
+        -not [RivetNativeUi]::PostMessage(
+            $nativeWindow, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)) {
+        throw 'Taskboard did not expose a closeable native WinUI HWND'
     }
+    # UI Automation proxies keep out-of-process provider objects alive. Drop
+    # every retained proxy once WM_CLOSE is sent so XAML can destroy the large
+    # virtualized tree before the process-exit assertion.
+    $element = $null
+    $newTask = $null
+    $invoke = $null
+    $generate = $null
+    $status = $null
+    $window = $null
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+    [GC]::Collect()
     if (-not $process.WaitForExit(10000)) {
         throw 'Taskboard did not exit within ten seconds of native window close'
     }

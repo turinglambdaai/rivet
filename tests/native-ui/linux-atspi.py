@@ -89,6 +89,19 @@ def find_named(root, name, role=None):
     return None
 
 
+def find_status(root):
+    prefixes = ("Starting embedded Racket CS", "Loaded ", "Preparing task ")
+    return next(
+        (
+            node
+            for node in walk(root)
+            if role_name(node) == "label"
+            and (text_value(node) or "").startswith(prefixes)
+        ),
+        None,
+    )
+
+
 def press(node):
     actions = node.queryAction()
     if actions.nActions < 1 or not actions.doAction(0):
@@ -126,9 +139,8 @@ def main():
     )
     required = {
         "Tasks": "list",
-        "New task": "push button",
-        "Generate 1,000 tasks": "push button",
-        "Application status": "label",
+        "New Task": "push button",
+        "Generate 1,000": "push button",
     }
     for name, role in required.items():
         wait_for(
@@ -139,7 +151,7 @@ def main():
         "the ready native controls",
         lambda: all(
             is_enabled(find_named(window, name, "push button"))
-            for name in ("New task", "Generate 1,000 tasks")
+            for name in ("New Task", "Generate 1,000")
         ),
     )
 
@@ -149,7 +161,7 @@ def main():
     )
 
     new_task_count = sum(1 for node in walk(window) if (node.name or "") == "New task")
-    press(find_named(window, "New task", "push button"))
+    press(find_named(window, "New Task", "push button"))
     wait_for(
         "the RPC-created task row",
         lambda: sum(
@@ -158,8 +170,8 @@ def main():
         > new_task_count,
     )
 
-    status = find_named(window, "Application status", "label")
-    press(find_named(window, "Generate 1,000 tasks", "push button"))
+    status = wait_for("the live application status", lambda: find_status(window))
+    press(find_named(window, "Generate 1,000", "push button"))
     observed_progress = []
     deadline = time.monotonic() + 6.0
     while time.monotonic() < deadline:
