@@ -111,17 +111,20 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 
 | 能力 | Windows | macOS | Linux |
 |---|---|---|---|
-| 原生宿主 | ✅ WinUI 3 + C++/WinRT | ✅ SwiftUI + Swift | 🧪 GTK4 + C++ |
+| 原生宿主 | ✅ WinUI 3 + C++/WinRT | ✅ SwiftUI + Swift | ✅ GTK4 + C++ / Wayland |
 | Embedded Racket CS | ✅ | ✅ | ✅ 静态 runtime |
 | RVT1 / Event / State / Cancel | ✅ | ✅ | ✅ |
 | 类型化客户端生成 | ✅ C++ | ✅ Swift | ✅ C++ |
 | `new` / `doctor` / `build` / `dev` | ✅ | ✅ | ✅ |
-| `package` / `verify` | ✅ DLL 依赖审计 | ✅ 签名/rpath/plist | 🧪 目录 + `ldd` 审计 |
-| 生产签名 / 安装包 | ✅ Authenticode + MSI | ✅ Developer ID + DMG | 🧪 签名 tarball + deb/rpm/AppImage |
-| 系统服务 / 安全存储 | ✅ | ✅ | 🧪 Linux 适配器 + StatusNotifierItem 托盘 |
+| `package` / `verify` | ✅ DLL 依赖审计 | ✅ 签名/rpath/plist | ✅ 目录 + `ldd` 审计 |
+| 生产签名 / 安装包 | ✅ Authenticode + MSI | ✅ Developer ID + DMG | ✅ 签名 tarball + deb/rpm/AppImage |
+| 系统服务 / 安全存储 | ✅ | ✅ | ✅ Linux 适配器 + StatusNotifierItem 托盘 |
 | 真实嵌入运行时 CI | ✅ | ✅ | ✅ |
 
-Windows 和 macOS 仍是生产发布目标。Linux 处于开发者预览：日常 CLI 全链路、签名 tarball 与 deb/rpm/AppImage、真实 embedded-runtime CI，以及覆盖单实例、通知、托盘、自启动、安全存储、崩溃钩子和优雅退出的一方系统适配器已经完成。Wayland 是 Linux 的首要显示目标，CI 会强制验证原生 Wayland 启动；X11/XWayland 仅保留 GTK 尽力兼容。进入生产级之前仍需补齐受支持发行版矩阵上的真实安装与升级证据。
+Windows、macOS 与 Linux 都是生产发布目标。Linux 资格门禁使用原生
+Wayland，并通过真实 deb/rpm 包管理器事务验证安装、失败升级恢复、升级、
+拒绝隐式降级、启动与卸载；AppImage 还会在构建目录外独立启动验证。
+X11/XWayland 仅保留 GTK 尽力兼容，不是发布目标。
 
 ### Apple 移动端基础
 
@@ -316,7 +319,7 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
 
 ## 诚实的局限
 
-- **Linux 是开发者预览** —— 日常 CLI 全链路、签名 tarball、deb/rpm/AppImage、托盘、一方系统适配器与 Wayland CI 已经完成；受支持发行版矩阵上的生产安装/升级证据尚未补齐。X11/XWayland 是尽力兼容路径，不是发布门禁。
+- **Linux 桌面资格验证有明确边界** —— 发布矩阵会在仍受维护的发行版上验证原生 Wayland、包管理器生命周期、AppImage 启动与系统适配器行为；GPU、Portal、缩放、输入、GNOME、KDE 等产品特定行为仍应由各应用自己的发布证据覆盖。X11/XWayland 是尽力兼容路径，不是发布门禁。
 - **Apple 移动端仍是基础阶段** —— 可移植 Swift 与类型安全 WatchConnectivity 层已经存在，但 iOS/iPadOS/watchOS 项目生成、runtime 打包、签名和商店交付还未完成。
 - **Android 仍处于基础阶段** —— Kotlin RVT1 codec、协程 runtime 客户端、类型化客户端生成与固定版本的 Gradle 构建已经过测试，但 Jetpack Compose、JNI、portable Racket CS 打包、签名和设备交付尚未完成。
 - **架构证据覆盖构建/打包/验证，尚不覆盖生产发布** —— 干净 runner 门禁覆盖 Windows x64/ARM64、macOS Apple Silicon/Intel 与 Linux x64/ARM64，但生产发布产物仍由标签驱动的发布流程按应用生成。

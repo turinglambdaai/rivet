@@ -45,9 +45,9 @@ The Linux round-trip workflow:
 4. packages and verifies the application, including the launch-survival smoke.
 
 This is a deterministic protocol check, not a substitute for hardware and
-desktop coverage. Linux production graduation still requires install, upgrade,
-GPU, input, scaling, portal, GNOME, and KDE evidence across the declared
-distribution matrix.
+desktop coverage. The package-manager matrix below supplies the release gate;
+products with GPU-, input-, scaling-, portal-, GNOME-, or KDE-specific behavior
+must add those surfaces to their own application release evidence.
 
 ## Distribution lifecycle matrix
 
@@ -56,9 +56,9 @@ unbounded list of historical images:
 
 | Family | Qualification policy | Automated release evidence |
 | --- | --- | --- |
-| Ubuntu | Supported LTS releases while they receive standard security maintenance | Ubuntu 24.04: deb lifecycle and AppImage launch under headless native Wayland |
-| Debian | Current stable release during Debian's regular support period | Debian 13: deb install, launch, and uninstall under headless native Wayland |
-| Fedora | Current and previous Fedora releases while upstream still maintains them | Fedora 44: rpm install, launch, and uninstall under headless native Wayland |
+| Ubuntu | Supported LTS releases while they receive standard security maintenance | Ubuntu 24.04: AppImage launch under headless native Wayland; deb format shares the Debian transaction gate |
+| Debian | Current stable release during Debian's regular support period | Debian 13: deb install, corrupt-upgrade recovery, upgrade, downgrade rejection, launch, and uninstall under headless native Wayland |
+| Fedora | Current and previous Fedora releases while upstream still maintains them | Fedora 44: rpm install, corrupt-upgrade recovery, upgrade, explicit local-RPM rollback and re-upgrade, launch, and uninstall under headless native Wayland |
 
 The matrix is reviewed for every Rivet minor release. A distribution enters the
 support table only after its native package is installed by the real package
@@ -66,7 +66,8 @@ manager, launched outside the build tree through `GDK_BACKEND=wayland` with no
 `DISPLAY`, and cleanly removed. AppImage is tested independently because its
 dependency closure and replacement policy differ from deb/rpm. CI uploads the
 package-manager transcript, exact installed version, compositor log, and
-application log so a failed gate can be reproduced rather than guessed at.
+application log, both installed versions, and every package-manager transaction
+so a failed gate can be reproduced rather than guessed at.
 The installed-package gates also validate the desktop entry, packaged icon,
 resource payload, graceful SIGTERM handling, and complete metadata removal.
 The Linux integration runner separately exercises single-instance forwarding,

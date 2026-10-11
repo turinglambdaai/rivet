@@ -111,17 +111,22 @@ See [architecture](docs/architecture.md), [agent-native development](docs/agent-
 
 | Capability | Windows | macOS | Linux |
 |---|---|---|---|
-| Native host | ✅ WinUI 3 + C++/WinRT | ✅ SwiftUI + Swift | 🧪 GTK4 + C++ |
+| Native host | ✅ WinUI 3 + C++/WinRT | ✅ SwiftUI + Swift | ✅ GTK4 + C++ / Wayland |
 | Embedded Racket CS | ✅ | ✅ | ✅ static runtime |
 | RVT1 / Events / State / Cancel | ✅ | ✅ | ✅ |
 | Typed generated client | ✅ C++ | ✅ Swift | ✅ C++ |
 | `new` / `doctor` / `build` / `dev` | ✅ | ✅ | ✅ |
-| `package` / `verify` | ✅ dependency audit | ✅ signing/rpath/plist audit | 🧪 directory + `ldd` audit |
-| Production signing / installer | ✅ Authenticode + MSI | ✅ Developer ID + DMG | 🧪 signed tarball + deb/rpm/AppImage |
-| System services / secure storage | ✅ | ✅ | 🧪 Linux adapter + StatusNotifierItem tray |
+| `package` / `verify` | ✅ dependency audit | ✅ signing/rpath/plist audit | ✅ directory + `ldd` audit |
+| Production signing / installer | ✅ Authenticode + MSI | ✅ Developer ID + DMG | ✅ signed tarball + deb/rpm/AppImage |
+| System services / secure storage | ✅ | ✅ | ✅ Linux adapter + StatusNotifierItem tray |
 | Real embedded-runtime CI | ✅ | ✅ | ✅ |
 
-Windows and macOS remain the production release targets. Linux is a developer preview with the complete daily CLI path, signed tarball plus deb/rpm/AppImage artifacts, real embedded-runtime CI, and a first-party system adapter for single-instance, notifications, tray, autostart, secure storage, crash hooks, and graceful shutdown. Wayland is the primary Linux display target and a native Wayland launch is a CI gate; X11 and XWayland remain best-effort GTK compatibility paths. Production graduation still requires install/upgrade evidence across the supported distribution matrix.
+Windows, macOS, and Linux are production release targets. Linux qualification
+uses native Wayland and real deb/rpm package-manager transactions for install,
+failed-upgrade recovery, upgrade, distro-native downgrade or rollback behavior,
+launch, and uninstall;
+AppImage launch is independently gated outside the build tree. X11 and
+XWayland remain best-effort GTK compatibility paths, not release targets.
 
 ### Apple mobile foundation
 
@@ -318,7 +323,7 @@ The maintained Taskboard also has platform-native [UI end-to-end gates](docs/nat
 
 ## Honest gaps
 
-- **Linux is a developer preview** — the complete daily CLI path, signed tarball, deb/rpm/AppImage formats, tray, first-party system adapter, and Wayland CI work; production install/upgrade evidence across supported distributions is not complete. X11/XWayland is best-effort compatibility, not a release gate.
+- **Linux desktop qualification is intentionally bounded** — the release matrix proves native Wayland, package-manager lifecycle, AppImage launch, and system-adapter behavior on maintained distributions. Product-specific GPU, portal, scaling, input, GNOME, and KDE behavior still belongs in each application's release evidence. X11/XWayland is best-effort compatibility, not a release gate.
 - **Apple mobile delivery is foundational** — the portable Swift and typed WatchConnectivity layers exist, but iOS/iPadOS/watchOS project generation, runtime packaging, signing, and store delivery are not complete.
 - **Android remains foundational** — its Kotlin RVT1 codec, coroutine runtime client, typed client code generation, and pinned Gradle build are tested, but Jetpack Compose, JNI, portable Racket CS packaging, signing, and device delivery are not complete.
 - **Architecture evidence covers build/package/verify, not production releases** — clean-runner gates exercise Windows x64/ARM64, macOS Apple-Silicon/Intel, and Linux x64/ARM64, but production release artifacts are still produced by the tag-driven release flow per application.
