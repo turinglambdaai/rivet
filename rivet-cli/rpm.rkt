@@ -52,6 +52,18 @@
   (call-with-output-file destination
     #:exists 'truncate/replace
     (lambda (out)
+      ;; The pinned embeddable Racket archive is built on Ubuntu, whose
+      ;; libtinfo exports versioned ncurses symbols. Fedora intentionally
+      ;; publishes the same libtinfo.so.6 ABI without those versioned RPM
+      ;; Provides. Keep rpmbuild's dependency discovery for every other ELF
+      ;; requirement, but replace only that unsatisfiable metadata edge with
+      ;; the Fedora package that owns libtinfo.so.6. The native Wayland RPM
+      ;; install/launch gate proves the resulting runtime link, rather than
+      ;; papering over all automatically discovered dependencies.
+      ;; RPM expands macro bodies before compiling this regular expression,
+      ;; so the generated spec needs two backslashes to deliver one escaped
+      ;; punctuation character to the dependency filter.
+      (display "%global __requires_exclude ^libtinfo\\\\.so\\\\.6\\\\(NCURSES6_TINFO_.*$\n" out)
       (define (tag key value)
         (fprintf out "~a: ~a\n" key value))
       (tag "Name" (rpm-package-name project))
@@ -65,6 +77,7 @@
       (tag "URL" "https://github.com/turinglambdaai/rivet")
       (tag "BuildArch" (rpm-architecture))
       (tag "Requires" "gtk4")
+      (tag "Requires" "ncurses-libs")
       (display "\n%description\n" out)
       (fprintf out "~a native desktop app. The application payload and the\n"
                (project-display-name project))
