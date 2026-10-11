@@ -70,10 +70,28 @@
 (check-equal? (state-schema)
               (list (hasheq 'name "counter" 'type "Int64")
                     (hasheq 'name "payload" 'type "Any")))
+(check-true (state? counter))
+(check-false (state? 10))
 (check-equal? (state-ref counter) 10)
 (check-equal? (state-ref payload) "initial")
 (check-exn exn:fail?
            (lambda () (state-set! counter "wrong-type")))
+
+;; Tooling gets immutable data, never registry structs or mutable State cells.
+(define reflected-schema (backend-schema))
+(check-true (immutable? reflected-schema))
+(check-equal? (sort (hash-keys reflected-schema) symbol<?)
+              '(enums events records rpcs states))
+(check-equal? (map (lambda (entry) (hash-ref entry 'name))
+                   (hash-ref reflected-schema 'states))
+              '(counter payload))
+(check-equal?
+ (for/first ([entry (in-list (hash-ref reflected-schema 'rpcs))]
+             #:when (eq? (hash-ref entry 'name) 'increment))
+   entry)
+ (hasheq 'name 'increment
+         'arguments (list (hasheq 'name 'value 'type 'Int64))
+         'result 'Int64))
 
 (define-values (server-in client-out) (make-pipe))
 (define-values (client-in server-out) (make-pipe))

@@ -109,9 +109,11 @@ closure, reader-loop failure, and backend exit. A failure record therefore says
 whether the last known boundary was the Racket backend, the ABI bridge, RVT1
 validation, transport I/O, or the native client.
 
-By default, embedded applications write JSONL to standard error. Applications
-can redirect records to their own logger or crash reporter without adding a
-Rivet logging dependency:
+Embedded applications are silent by default. This is important for native GUI
+processes: on Windows, the first standard-error write can allocate a visible
+console window. Applications should install a sink backed by their own logger
+or crash reporter. The native runtimes keep explicit JSONL-to-stderr helpers
+for command-line tools and development sessions:
 
 ```cpp
 rivet::windows::RacketRuntimeConfig config;
@@ -122,9 +124,12 @@ config.diagnostic_sink = [](rivet::DiagnosticRecord const& record) {
 
 The same `diagnostic_sink` field is available in the Linux runtime config. On
 Apple platforms, pass `diagnosticSink:` to
-`EmbeddedRacketConfiguration.resolvedDefault` or `RivetClient`. On the Racket
-side, `serve-fds` uses `current-rivet-diagnostic-sink`; direct `serve` callers
-can pass `#:diagnostic-sink` explicitly.
+`EmbeddedRacketConfiguration.resolvedDefault` or `RivetClient`; use
+`RivetDiagnostics.standardError` only when stderr is intentional. On the
+Racket side, `serve-fds` uses `current-rivet-diagnostic-sink`; direct `serve`
+callers can pass `#:diagnostic-sink` explicitly. The parameter defaults to
+`void`, so importing an embedded backend never acquires a console as a side
+effect.
 
 Diagnostic sinks run on runtime and request threads. They should be fast,
 thread-safe, non-blocking, and must not call back into the same runtime. C++
