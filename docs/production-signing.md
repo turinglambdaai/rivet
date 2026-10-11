@@ -74,7 +74,14 @@ Set:
 
 Generate the key pair outside the repository with the same openssl flow as the update key. `raco rivet release` also produces `.deb`, `.rpm`, and AppImage artifacts from the verified package payload. The detached Ed25519 signature currently covers the deterministic tarball; the native formats are verified structurally but do not receive separate Rivet artifact signatures. Repository metadata trust, such as apt or dnf repository signing, remains the responsibility of the repository operator and is separate from Rivet's tarball signature.
 
-The deterministic tarball is Rivet's strongest independently reproducible Linux artifact today. The native packages and AppImage receive structural, payload, metadata, and dependency verification, but Linux remains a developer preview until the [production graduation matrix](production-roadmap.md) defines their delivery trust and proves real install, upgrade, launch, and recovery behavior across the supported distributions.
+The deterministic tarball is Rivet's strongest independently reproducible
+Linux artifact. Native packages and AppImage also receive structural, payload,
+metadata, and dependency verification. The
+[production graduation matrix](production-roadmap.md) adds real
+package-manager install, corrupt-upgrade recovery, upgrade, distro-native
+downgrade or rollback semantics, native-Wayland launch, and uninstall evidence across the declared
+distribution lifecycle; AppImage launch and atomic replacement are gated
+separately.
 
 ## CI secrets
 
