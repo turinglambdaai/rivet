@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Split the Linux system adapter into focused single-instance, notification,
+  tray, autostart, secure-storage, and crash/shutdown implementation units,
+  with one private XDG/D-Bus support core and no public API change.
 - Add real Linux installer lifecycle gates: build x64 rpm/AppImage artifacts,
   install and launch the rpm on Fedora 44 under native Wayland, launch the
   AppImage outside the build tree on Ubuntu 24.04, uninstall the rpm, and

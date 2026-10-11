@@ -29,7 +29,14 @@ pkg_check_modules(LIBSECRET IMPORTED_TARGET libsecret-1)
 add_executable(RivetIntegration
   main.cpp
   ../runtime/backend.cpp
+  ../system/autostart.cpp
+  ../system/crash_shutdown.cpp
+  ../system/notifications.cpp
+  ../system/secure_storage.cpp
+  ../system/single_instance.cpp
   ../system/system_services.cpp
+  ../system/system_services_internal.cpp
+  ../system/tray.cpp
   ${RIVET_ROOT}/runtime/src/protocol.cpp
 )
 
