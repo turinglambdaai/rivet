@@ -209,7 +209,8 @@ do {
         throw DriverError.failure("screencapture exited with status \(screenshot.terminationStatus)")
     }
 
-    if let closeButton = attribute(window, kAXCloseButtonAttribute) as? AXUIElement {
+    if let closeButtonValue = attribute(window, kAXCloseButtonAttribute) {
+        let closeButton = closeButtonValue as! AXUIElement
         try press(closeButton, description: "window close button")
     } else {
         throw DriverError.failure("Taskboard window has no native close button")

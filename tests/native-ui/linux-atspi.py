@@ -110,7 +110,14 @@ def press(node):
 
 def is_enabled(node):
     try:
-        return node.getState().contains(pyatspi.STATE_ENABLED)
+        state = node.getState()
+        # GTK 4.14 on Ubuntu 24.04 exposes actionable buttons as SENSITIVE
+        # without also setting AT-SPI's optional ENABLED state. SENSITIVE is
+        # the cross-toolkit state that means the control accepts input; newer
+        # GTK releases commonly publish both.
+        return state.contains(pyatspi.STATE_SENSITIVE) or state.contains(
+            pyatspi.STATE_ENABLED
+        )
     except Exception:
         return False
 

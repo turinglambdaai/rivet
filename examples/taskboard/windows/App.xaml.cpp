@@ -22,11 +22,13 @@ App::App() {
 void App::OnLaunched(Microsoft::UI::Xaml::LaunchActivatedEventArgs const&) {
   window_ = winrt::make<MainWindow>();
   window_.Closed([this](auto const&, auto const&) {
-    // App owns the last strong reference to the desktop window. Releasing it
-    // lets WinUI finish its normal last-window shutdown after Closed unwinds;
-    // forcing Application::Exit from this callback can race teardown of a
-    // large virtualized tree and strand the host in process-detach cleanup.
+    // A WinUI 3 desktop Application owns its dispatcher independently of its
+    // windows. Releasing the final Window reference is necessary, but it does
+    // not consistently end the dispatcher on hosted CI desktops. The window's
+    // Closed handler was registered first and has already stopped the backend,
+    // so explicitly terminate the application lifecycle here.
     window_ = nullptr;
+    Microsoft::UI::Xaml::Application::Current().Exit();
   });
   window_.Activate();
 }
