@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Graduate the Linux package-manager lifecycle gates from a single install to
+  two-version deb/rpm transactions: corrupt upgrades preserve the working
+  install, normal upgrades replace both metadata and payload, implicit
+  downgrades are rejected, and uninstall remains complete under native
+  Wayland.
 - Replace the accidental public backend registry structs and mutable State
   cell accessors with an opaque `state?` handle and a single immutable
   `backend-schema` reflection snapshot. Pre-1.0 tooling that used
