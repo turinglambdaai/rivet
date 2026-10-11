@@ -5,6 +5,11 @@
 - Make AppImage the signed Linux update payload when that format is enabled,
   emit its SHA-256 sidecar, and add install-kind-aware update selection so
   AppImage, portable, and package-manager installations cannot cross streams.
+- Replace the accidental public backend registry structs and mutable State
+  cell accessors with an opaque `state?` handle and a single immutable
+  `backend-schema` reflection snapshot. Pre-1.0 tooling that used
+  `registered-*` or `*-info-*` should read the corresponding schema entry;
+  applications should use `state-ref` and `state-set!`.
 - Add real Linux installer lifecycle gates: build x64 rpm/AppImage artifacts,
   install and launch the rpm on Fedora 44 under native Wayland, launch the
   AppImage outside the build tree on Ubuntu 24.04, uninstall the rpm, and
