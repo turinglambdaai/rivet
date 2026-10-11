@@ -1,10 +1,18 @@
+import AppKit
 import SwiftUI
 import RivetEmbedding
 import RivetRuntime
 import RivetSystem
 
+final class RivetAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
+    }
+}
+
 @main
 struct RivetHostApp: App {
+    @NSApplicationDelegateAdaptor(RivetAppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
     private let activationRouter = RivetActivationRouter()
 
@@ -14,6 +22,7 @@ struct RivetHostApp: App {
                 .environmentObject(model)
                 .frame(minWidth: 760, minHeight: 480)
                 .task { model.start() }
+                .onDisappear { model.stop() }
                 .onOpenURL { url in activationRouter.handle([url]) }
         }
     }
@@ -174,6 +183,14 @@ final class AppModel: ObservableObject {
 
     func cancelGeneration() {
         generationTask?.cancel()
+    }
+
+    func stop() {
+        generationTask?.cancel()
+        generationTask = nil
+        backend?.stop()
+        backend = nil
+        ready = false
     }
 
     func persistSelection(_ id: Int64?) {

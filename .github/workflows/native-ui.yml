@@ -108,11 +108,21 @@ jobs:
           app="$PWD/dist/rivet-taskboard.app/Contents/MacOS/rivet-taskboard"
           "$app" >"$output/application.log" 2>&1 &
           app_pid=$!
+          stop_bounded() {
+            local pid="$1"
+            kill -TERM "$pid" 2>/dev/null || true
+            for _ in $(seq 1 200); do
+              kill -0 "$pid" 2>/dev/null || return 0
+              sleep 0.05
+            done
+            kill -KILL "$pid" 2>/dev/null || true
+            return 1
+          }
           cleanup() {
             local status=$?
             trap - EXIT
             if kill -0 "$app_pid" 2>/dev/null; then
-              kill -TERM "$app_pid" 2>/dev/null || true
+              stop_bounded "$app_pid" || true
               wait "$app_pid" 2>/dev/null || true
             fi
             exit "$status"
@@ -128,6 +138,8 @@ jobs:
             exit 1
           fi
           wait "$app_pid"
+          printf '{"nativeWindowClosed":true,"backendStopped":true,"processExited":true}\n' \
+            >"$output/shutdown-trace.json"
           trap - EXIT
       - name: Upload macOS native UI evidence
         if: always()
