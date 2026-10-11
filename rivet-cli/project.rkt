@@ -209,7 +209,7 @@
                    (andmap (lambda (item)
                              (member item '("deb" "rpm" "appimage")))
                            v)))
-            "subset of (\"deb\" \"rpm\" \"appimage\") selecting the native Linux installer formats; the signed tar.gz update payload is always produced")
+            "subset of (\"deb\" \"rpm\" \"appimage\") selecting native Linux installer formats; AppImage becomes the signed update payload when enabled")
   (optional 'linux-binary-name
             (lambda (v)
               (and (string? v)

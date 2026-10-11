@@ -37,6 +37,33 @@
                    "2026-09-28T00:00:00Z" "1.0.0" "1.1.0"
                    #t 100 (list sample-artifact)))
 
+(define linux-config
+  (updater-config "dev.rivet.test" "1.1.0" 'stable 'linux 'x64
+                  #f #f 0 (* 1024 1024)))
+(define linux-zip
+  (update-artifact 'linux 'x64 "https://updates.example/app.zip"
+                   (make-string 64 #\b) 4 'zip '()))
+(define linux-appimage
+  (update-artifact 'linux 'x64 "https://updates.example/app.AppImage"
+                   (make-string 64 #\c) 4 'appimage '()))
+(define linux-manifest
+  (struct-copy update-manifest sample-manifest
+               [artifacts (list linux-zip linux-appimage)]))
+(check-eq? (update-candidate-artifact
+            (select-update linux-config linux-manifest
+                           #:install-kind 'portable))
+           linux-zip)
+(check-eq? (update-candidate-artifact
+            (select-update linux-config linux-manifest
+                           #:install-kind 'appimage))
+           linux-appimage)
+(check-false (select-update linux-config linux-manifest
+                            #:install-kind 'package-manager))
+(check-exn exn:fail:contract?
+           (lambda ()
+             (select-update linux-config linux-manifest
+                            #:install-kind 'unknown)))
+
 (when private-key
   (define public-key
     (datum->pk-key (pk-key->datum private-key 'SubjectPublicKeyInfo)
