@@ -5,6 +5,11 @@
 - Make AppImage the signed Linux update payload when that format is enabled,
   emit its SHA-256 sidecar, and add install-kind-aware update selection so
   AppImage, portable, and package-manager installations cannot cross streams.
+- Graduate the Linux package-manager lifecycle gates from a single install to
+  two-version deb/rpm transactions: corrupt upgrades preserve the working
+  install, normal upgrades replace both metadata and payload, Debian rejects
+  implicit downgrade while Fedora verifies explicit local-RPM rollback and
+  re-upgrade, and uninstall remains complete under native Wayland.
 - Make embedded diagnostics opt-in across Racket, C++, and Swift. GUI hosts no
   longer write to standard error by default, preventing Windows applications
   from allocating a black console window on their first diagnostic; explicit

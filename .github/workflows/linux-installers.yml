@@ -39,7 +39,7 @@ jobs:
           raco rivet new Smoke
           cd Smoke
           mkdir -p assets/nested
-          printf %s packaged-resource > assets/nested/product.txt
+          printf %s packaged-resource-v1 > assets/nested/product.txt
           python3 - <<'PY'
           import struct, zlib
           from pathlib import Path
@@ -60,7 +60,7 @@ jobs:
               '(resources . ())',
               '(resources . ("assets")) '
               '(linux-icon . "assets/icon.png") '
-              '(linux-formats . ("deb" "rpm" "appimage"))')
+              '(linux-formats . ("deb" "rpm"))')
           if updated == original:
               raise SystemExit("failed to configure Linux installer smoke")
           path.write_text(updated, encoding="utf-8")
@@ -69,11 +69,35 @@ jobs:
           raco rivet verify
           artifacts="$RUNNER_TEMP/rivet-linux-native-artifacts"
           diagnostics="$RUNNER_TEMP/rivet-linux-build-diagnostics"
-          mkdir -p "$artifacts" "$diagnostics"
-          cp dist/*.deb dist/*.rpm dist/*.AppImage "$artifacts/"
-          sha256sum "$artifacts"/* > "$diagnostics/SHA256SUMS"
-          rpm -qpi "$artifacts"/*.rpm > "$diagnostics/rpm-info.txt"
-          rpm -qp --requires "$artifacts"/*.rpm > "$diagnostics/rpm-requires.txt"
+          mkdir -p "$artifacts/v1" "$artifacts/v2" "$diagnostics"
+          cp dist/*.deb dist/*.rpm "$artifacts/v1/"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          resource = Path("assets/nested/product.txt")
+          resource.write_text("packaged-resource-v2", encoding="utf-8")
+          config = Path("rivet.rktd")
+          original = config.read_text(encoding="utf-8")
+          updated = (original
+                     .replace('(version . "0.1.0")', '(version . "0.2.0")')
+                     .replace('(build . 1)', '(build . 2)')
+                     .replace('(linux-formats . ("deb" "rpm"))',
+                              '(linux-formats . ("deb" "rpm" "appimage"))'))
+          if updated == original or '(version . "0.2.0")' not in updated:
+              raise SystemExit("failed to configure the upgrade candidate")
+          config.write_text(updated, encoding="utf-8")
+          PY
+          raco rivet clean
+          raco rivet release --development --without-updates
+          raco rivet verify
+          cp dist/*.deb dist/*.rpm dist/*.AppImage "$artifacts/v2/"
+          sha256sum "$artifacts"/v1/* "$artifacts"/v2/* \
+            > "$diagnostics/SHA256SUMS"
+          rpm -qpi "$artifacts"/v1/*.rpm "$artifacts"/v2/*.rpm \
+            > "$diagnostics/rpm-info.txt"
+          rpm -qp --requires "$artifacts"/v2/*.rpm \
+            > "$diagnostics/rpm-requires.txt"
           raco rivet doctor --json > "$diagnostics/doctor.json"
       - name: Upload installers
         uses: actions/upload-artifact@v6
@@ -155,7 +179,7 @@ jobs:
             sleep 0.05
           done
           test -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"
-          appimage="$(find "$RUNNER_TEMP/installers" -type f -name '*.AppImage' -print -quit)"
+          appimage="$(find "$RUNNER_TEMP/installers/v2" -type f -name '*.AppImage' -print -quit)"
           test -n "$appimage"
           chmod +x "$appimage"
           "$appimage" >"$diagnostics/application.log" 2>&1 &
@@ -183,7 +207,7 @@ jobs:
           if-no-files-found: warn
 
   debian-deb-wayland:
-    name: deb install and launch on Debian 13 Wayland
+    name: deb install, upgrade, launch, and recover on Debian 13 Wayland
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -201,24 +225,53 @@ jobs:
           apt-get install --yes \
             dbus-daemon desktop-file-utils libgtk-4-1 libsecret-1-0 \
             procps weston
-      - name: Install, launch, and uninstall deb
+      - name: Install, recover, upgrade, reject downgrade, launch, and uninstall deb
         shell: bash
         run: |
           set -euo pipefail
           diagnostics=/tmp/rivet-debian-diagnostics
           mkdir -p "$diagnostics"
-          deb_artifact="$(find /tmp/rivet-installers -type f -name '*.deb' -print -quit)"
-          test -n "$deb_artifact"
-          deb_package="$(dpkg-deb --field "$deb_artifact" Package)"
+          deb_v1="$(find /tmp/rivet-installers/v1 -type f -name '*.deb' -print -quit)"
+          deb_v2="$(find /tmp/rivet-installers/v2 -type f -name '*.deb' -print -quit)"
+          test -n "$deb_v1"
+          test -n "$deb_v2"
+          deb_package="$(dpkg-deb --field "$deb_v1" Package)"
           test -n "$deb_package"
-          apt-get install --yes "$deb_artifact" >"$diagnostics/apt-install.log" 2>&1
+          apt-get install --yes "$deb_v1" >"$diagnostics/apt-install-v1.log" 2>&1
           dpkg-query --show --showformat='${Package} ${Version} ${Architecture}\n' \
-            "$deb_package" >"$diagnostics/installed-version.txt"
+            "$deb_package" >"$diagnostics/installed-version-v1.txt"
+          test "$(dpkg-query --show --showformat='${Version}' "$deb_package")" = "0.1.0-1"
           test -x /opt/Smoke/RivetHost
           test -f /usr/share/applications/Smoke.desktop
           test -f /usr/share/pixmaps/Smoke.png
           desktop-file-validate /usr/share/applications/Smoke.desktop
-          test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource
+          test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource-v1
+
+          # A truncated upgrade candidate must fail before the package manager
+          # mutates the working installation.
+          cp "$deb_v2" /tmp/corrupt-upgrade.deb
+          truncate --size 64 /tmp/corrupt-upgrade.deb
+          if apt-get install --yes /tmp/corrupt-upgrade.deb \
+              >"$diagnostics/apt-corrupt-upgrade.log" 2>&1; then
+            echo "apt unexpectedly accepted a corrupt upgrade" >&2
+            exit 1
+          fi
+          test "$(dpkg-query --show --showformat='${Version}' "$deb_package")" = "0.1.0-1"
+          test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource-v1
+
+          apt-get install --yes "$deb_v2" >"$diagnostics/apt-upgrade-v2.log" 2>&1
+          dpkg-query --show --showformat='${Package} ${Version} ${Architecture}\n' \
+            "$deb_package" >"$diagnostics/installed-version-v2.txt"
+          test "$(dpkg-query --show --showformat='${Version}' "$deb_package")" = "0.2.0-2"
+          test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource-v2
+
+          if apt-get install --yes "$deb_v1" \
+              >"$diagnostics/apt-downgrade-attempt.log" 2>&1; then
+            echo "apt unexpectedly downgraded without --allow-downgrades" >&2
+            exit 1
+          fi
+          test "$(dpkg-query --show --showformat='${Version}' "$deb_package")" = "0.2.0-2"
+          test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource-v2
 
           export XDG_RUNTIME_DIR=/tmp/rivet-debian-wayland-runtime
           export WAYLAND_DISPLAY=wayland-rivet-debian
@@ -295,7 +348,7 @@ jobs:
           if-no-files-found: warn
 
   fedora-rpm-wayland:
-    name: rpm install and launch on Fedora 44 Wayland
+    name: rpm install, upgrade, launch, and recover on Fedora 44 Wayland
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -307,24 +360,56 @@ jobs:
           path: /tmp/rivet-installers
       - name: Install desktop runtime
         run: dnf install --assumeyes dbus-daemon desktop-file-utils gtk4 procps-ng weston
-      - name: Install, launch, and uninstall rpm
+      - name: Install, recover, upgrade, roll back, re-upgrade, launch, and uninstall rpm
         shell: bash
         run: |
           set -euo pipefail
           diagnostics=/tmp/rivet-fedora-diagnostics
           mkdir -p "$diagnostics"
-          rpm_artifact="$(find /tmp/rivet-installers -type f -name '*.rpm' -print -quit)"
-          test -n "$rpm_artifact"
-          rpm_package="$(rpm -qp --qf '%{NAME}' "$rpm_artifact")"
+          rpm_v1="$(find /tmp/rivet-installers/v1 -type f -name '*.rpm' -print -quit)"
+          rpm_v2="$(find /tmp/rivet-installers/v2 -type f -name '*.rpm' -print -quit)"
+          test -n "$rpm_v1"
+          test -n "$rpm_v2"
+          rpm_package="$(rpm -qp --qf '%{NAME}' "$rpm_v1")"
           test -n "$rpm_package"
-          dnf install --assumeyes "$rpm_artifact" >"$diagnostics/dnf-install.log" 2>&1
+          dnf install --assumeyes "$rpm_v1" >"$diagnostics/dnf-install-v1.log" 2>&1
           rpm -q --qf '%{NAME} %{VERSION}-%{RELEASE} %{ARCH}\n' "$rpm_package" \
-            >"$diagnostics/installed-version.txt"
+            >"$diagnostics/installed-version-v1.txt"
+          test "$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$rpm_package")" = "0.1.0-1"
           test -x /opt/Smoke/RivetHost
           test -f /usr/share/applications/Smoke.desktop
           test -f /usr/share/pixmaps/Smoke.png
           desktop-file-validate /usr/share/applications/Smoke.desktop
-          test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource
+          test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource-v1
+
+          cp "$rpm_v2" /tmp/corrupt-upgrade.rpm
+          truncate --size 64 /tmp/corrupt-upgrade.rpm
+          if dnf install --assumeyes /tmp/corrupt-upgrade.rpm \
+              >"$diagnostics/dnf-corrupt-upgrade.log" 2>&1; then
+            echo "dnf unexpectedly accepted a corrupt upgrade" >&2
+            exit 1
+          fi
+          test "$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$rpm_package")" = "0.1.0-1"
+          test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource-v1
+
+          dnf install --assumeyes "$rpm_v2" >"$diagnostics/dnf-upgrade-v2.log" 2>&1
+          rpm -q --qf '%{NAME} %{VERSION}-%{RELEASE} %{ARCH}\n' "$rpm_package" \
+            >"$diagnostics/installed-version-v2.txt"
+          test "$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$rpm_package")" = "0.2.0-2"
+          test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource-v2
+
+          # DNF treats an explicitly selected older local RPM as an authorized
+          # rollback. Prove that its transaction restores the complete v1
+          # payload, then prove recovery to v2 before launching the app.
+          dnf install --assumeyes "$rpm_v1" \
+            >"$diagnostics/dnf-rollback-v1.log" 2>&1
+          test "$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$rpm_package")" = "0.1.0-1"
+          test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource-v1
+
+          dnf install --assumeyes "$rpm_v2" \
+            >"$diagnostics/dnf-reupgrade-v2.log" 2>&1
+          test "$(rpm -q --qf '%{VERSION}-%{RELEASE}' "$rpm_package")" = "0.2.0-2"
+          test "$(cat /opt/Smoke/app/assets/nested/product.txt)" = packaged-resource-v2
 
           export XDG_RUNTIME_DIR=/tmp/rivet-fedora-wayland-runtime
           export WAYLAND_DISPLAY=wayland-rivet-fedora
