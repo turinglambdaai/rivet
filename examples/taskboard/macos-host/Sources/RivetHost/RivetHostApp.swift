@@ -1,18 +1,12 @@
-import AppKit
 import SwiftUI
 import RivetEmbedding
 import RivetRuntime
 import RivetSystem
 
-final class RivetAppDelegate: NSObject, NSApplicationDelegate {
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
-    }
-}
-
 @main
 struct RivetHostApp: App {
-    @NSApplicationDelegateAdaptor(RivetAppDelegate.self) private var appDelegate
+    @NSApplicationDelegateAdaptor(ApplicationDelegate.self)
+    private var applicationDelegate
     @StateObject private var model = AppModel()
     private let activationRouter = RivetActivationRouter()
 
@@ -22,9 +16,26 @@ struct RivetHostApp: App {
                 .environmentObject(model)
                 .frame(minWidth: 760, minHeight: 480)
                 .task { model.start() }
-                .onDisappear { model.stop() }
                 .onOpenURL { url in activationRouter.handle([url]) }
         }
+    }
+}
+
+@MainActor
+final class ApplicationDelegate: NSObject, NSApplicationDelegate {
+    static var orderlyShutdown: (() -> Void)?
+
+    nonisolated func applicationShouldTerminateAfterLastWindowClosed(
+        _ sender: NSApplication
+    ) -> Bool {
+        true
+    }
+
+    nonisolated func applicationShouldTerminate(
+        _ sender: NSApplication
+    ) -> NSApplication.TerminateReply {
+        MainActor.assumeIsolated { Self.orderlyShutdown?() }
+        return .terminateNow
     }
 }
 
@@ -81,6 +92,7 @@ final class AppModel: ObservableObject {
             let backend = EmbeddedRacketBackend(configuration: config)
             let relay = EventRelay(self)
             self.backend = backend
+            ApplicationDelegate.orderlyShutdown = { [weak self] in self?.stop() }
 
             Task.detached { [backend, relay] in
                 do {

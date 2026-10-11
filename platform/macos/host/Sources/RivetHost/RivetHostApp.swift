@@ -33,6 +33,12 @@ struct RivetHostApp: App {
 final class ApplicationDelegate: NSObject, NSApplicationDelegate {
     static var orderlyShutdown: (() -> Void)?
 
+    nonisolated func applicationShouldTerminateAfterLastWindowClosed(
+        _ sender: NSApplication
+    ) -> Bool {
+        true
+    }
+
     nonisolated func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // AppKit delivers this callback on the main thread, where the
         // registered shutdown closure lives.

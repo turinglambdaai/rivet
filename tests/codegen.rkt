@@ -56,6 +56,9 @@
     (check-true
      (regexp-match? #rx"applicationShouldTerminate" macos-app-source))
     (check-true
+     (regexp-match? #rx"applicationShouldTerminateAfterLastWindowClosed"
+                    macos-app-source))
+    (check-true
      (regexp-match? #rx"orderlyShutdown" macos-app-source))
     (check-false
      (regexp-match? #rx"<WindowsTargetPlatformMinVersion>10\\.0\\.19041\\.0"
