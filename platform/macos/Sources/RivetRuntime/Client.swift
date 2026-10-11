@@ -137,7 +137,7 @@ public final class RivetClient: @unchecked Sendable {
         input: FileHandle,
         output: FileHandle,
         maxPendingRequests: Int = 1024,
-        diagnosticSink: @escaping RivetDiagnosticSink = RivetDiagnostics.standardError
+        diagnosticSink: @escaping RivetDiagnosticSink = RivetDiagnostics.discard
     ) {
         precondition(maxPendingRequests > 0, "Rivet native pending request limit must be positive")
         self.input = input
