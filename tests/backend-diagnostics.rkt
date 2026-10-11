@@ -9,6 +9,13 @@
 (define diagnostic-records (box '()))
 (define diagnostic-lock (make-semaphore 1))
 
+;; The embedded default is deliberately silent. Writing to stderr can lazily
+;; allocate a console for a Windows GUI-subsystem host.
+(define default-output (open-output-string))
+(parameterize ([current-error-port default-output])
+  ((current-rivet-diagnostic-sink) (hasheq 'event "must-not-print")))
+(check-equal? (get-output-string default-output) "")
+
 (define (capture-diagnostic! record)
   (call-with-semaphore
    diagnostic-lock

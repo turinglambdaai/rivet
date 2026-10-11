@@ -4,9 +4,13 @@
 
 - Graduate the Linux package-manager lifecycle gates from a single install to
   two-version deb/rpm transactions: corrupt upgrades preserve the working
-  install, normal upgrades replace both metadata and payload, implicit
-  downgrades are rejected, and uninstall remains complete under native
-  Wayland.
+  install, normal upgrades replace both metadata and payload, Debian rejects
+  implicit downgrade while Fedora verifies explicit local-RPM rollback and
+  re-upgrade, and uninstall remains complete under native Wayland.
+- Make embedded diagnostics opt-in across Racket, C++, and Swift. GUI hosts no
+  longer write to standard error by default, preventing Windows applications
+  from allocating a black console window on their first diagnostic; explicit
+  structured-log and stderr sinks remain supported.
 - Replace the accidental public backend registry structs and mutable State
   cell accessors with an opaque `state?` handle and a single immutable
   `backend-schema` reflection snapshot. Pre-1.0 tooling that used
