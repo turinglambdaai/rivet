@@ -13,6 +13,7 @@
   '(["base" #:version "9.0"]
     "cext-lib"
     "crypto-lib"
+    ["keel" #:version "0.3.1"]
     "net-lib"))
 
 (define build-deps

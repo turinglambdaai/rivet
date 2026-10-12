@@ -4,7 +4,7 @@ Build first-party native desktop apps with [Racket](https://racket-lang.org/). U
 
 **Human-first. Agent-native. Local by design.**
 
-[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.6.0-C15F3C)
+[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.6.1-C15F3C)
 
 **English** · [中文](README.zh-CN.md)
 
@@ -38,6 +38,7 @@ Rivet fills that gap:
 - **First-party native UI** — WinUI 3 on Windows, SwiftUI/AppKit on macOS, GTK4 on Linux
 - **Racket for application logic** — macros, pattern matching, concurrency, data processing, domain logic
 - **One backend contract** — typed RPC, events, shared state, cancellation, and lifecycle over the same RVT1 protocol
+- **Shared application model** — project the backend schema into [Keel](https://github.com/turinglambdaai/keel), the transport-neutral contract shared with Glaze, without moving RVT1 or native UI ownership
 - **Generated native clients** — Racket declarations become typed Swift and C++ APIs at build time
 - **Embedded Racket CS** — the Racket runtime lives inside the application process; no external backend process is required
 - **Exact runtime matching** — Rivet stages the installed Racket CS runtime and never silently falls back to a nearby version
