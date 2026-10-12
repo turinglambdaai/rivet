@@ -79,15 +79,33 @@
   (define schemes (project-url-schemes project))
   (define associations (project-file-associations project))
   (define registrations? (or (pair? schemes) (pair? associations)))
+  ;; Add/Remove Programs shows a generic tile unless the package pins an
+  ;; icon; the shortcuts and the exe already carry the resource icon. The
+  ;; elements must author as direct Package children: WiX drops unreferenced
+  ;; fragments, so a standalone Icon/Property fragment never reaches the MSI.
+  (define icon-xml
+    (let* ([configured (project-windows-icon project)]
+           [icon (and configured (project-path project configured))])
+      (when icon
+        (unless (file-exists? icon)
+          (raise-arguments-error 'write-wix-source!
+                                 "configured windows icon does not exist"
+                                 "icon" configured
+                                 "source" icon)))
+      (if icon
+          (format "    <Icon Id=\"RivetAppIcon.ico\" SourceFile=\"~a\" />\n    <Property Id=\"ARPPRODUCTICON\" Value=\"RivetAppIcon.ico\" />\n"
+                  (xml-escape (path->string icon)))
+          "")))
   (call-with-output-file source
     #:exists 'truncate/replace
     (lambda (out)
       (fprintf out
-               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Wix xmlns=\"http://wixtoolset.org/schemas/v4/wxs\">\n  <Package Name=\"~a\" Manufacturer=\"~a\" Version=\"~a\" UpgradeCode=\"~a\" Scope=\"perMachine\">\n    <MajorUpgrade DowngradeErrorMessage=\"A newer version is already installed.\" />\n    <MediaTemplate EmbedCab=\"yes\" />\n    <Feature Id=\"Main\"><ComponentGroupRef Id=\"ProductComponents\" /><ComponentGroupRef Id=\"ShortcutComponents\" /></Feature>\n  </Package>\n  <Fragment><StandardDirectory Id=\"ProgramFiles6432Folder\"><Directory Id=\"INSTALLFOLDER\" Name=\"~a\" /></StandardDirectory></Fragment>\n  <Fragment><StandardDirectory Id=\"ProgramMenuFolder\"><Directory Id=\"ApplicationProgramsFolder\" Name=\"~a\" /></StandardDirectory><StandardDirectory Id=\"DesktopFolder\" /></Fragment>\n  <Fragment><ComponentGroup Id=\"ShortcutComponents\" Directory=\"ApplicationProgramsFolder\">\n    <Component Id=\"StartMenuShortcutComponent\" Guid=\"*\">\n      <Shortcut Id=\"StartMenuApplicationShortcut\" Name=\"~a\" Description=\"~a\" Target=\"[INSTALLFOLDER]RivetHost.exe\" WorkingDirectory=\"INSTALLFOLDER\" />\n      <RemoveFolder Id=\"RemoveApplicationProgramsFolder\" Directory=\"ApplicationProgramsFolder\" On=\"uninstall\" />\n      <RegistryValue Root=\"HKLM\" Key=\"Software\\~a\\Shortcuts\" Name=\"StartMenu\" Type=\"integer\" Value=\"1\" KeyPath=\"yes\" />\n    </Component>\n    <Component Id=\"DesktopShortcutComponent\" Guid=\"*\" Directory=\"DesktopFolder\">\n      <Shortcut Id=\"DesktopApplicationShortcut\" Name=\"~a\" Description=\"~a\" Target=\"[INSTALLFOLDER]RivetHost.exe\" WorkingDirectory=\"INSTALLFOLDER\" />\n      <RegistryValue Root=\"HKLM\" Key=\"Software\\~a\\Shortcuts\" Name=\"Desktop\" Type=\"integer\" Value=\"1\" KeyPath=\"yes\" />\n    </Component>\n  </ComponentGroup></Fragment>\n  <Fragment><ComponentGroup Id=\"ProductComponents\" Directory=\"INSTALLFOLDER\">\n"
+               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Wix xmlns=\"http://wixtoolset.org/schemas/v4/wxs\">\n  <Package Name=\"~a\" Manufacturer=\"~a\" Version=\"~a\" UpgradeCode=\"~a\" Scope=\"perMachine\">\n    <MajorUpgrade DowngradeErrorMessage=\"A newer version is already installed.\" />\n    <MediaTemplate EmbedCab=\"yes\" />\n    <Feature Id=\"Main\"><ComponentGroupRef Id=\"ProductComponents\" /><ComponentGroupRef Id=\"ShortcutComponents\" /></Feature>\n~a  </Package>\n  <Fragment><StandardDirectory Id=\"ProgramFiles6432Folder\"><Directory Id=\"INSTALLFOLDER\" Name=\"~a\" /></StandardDirectory></Fragment>\n  <Fragment><StandardDirectory Id=\"ProgramMenuFolder\"><Directory Id=\"ApplicationProgramsFolder\" Name=\"~a\" /></StandardDirectory><StandardDirectory Id=\"DesktopFolder\" /></Fragment>\n  <Fragment><ComponentGroup Id=\"ShortcutComponents\" Directory=\"ApplicationProgramsFolder\">\n    <Component Id=\"StartMenuShortcutComponent\" Guid=\"*\">\n      <Shortcut Id=\"StartMenuApplicationShortcut\" Name=\"~a\" Description=\"~a\" Target=\"[INSTALLFOLDER]RivetHost.exe\" WorkingDirectory=\"INSTALLFOLDER\" />\n      <RemoveFolder Id=\"RemoveApplicationProgramsFolder\" Directory=\"ApplicationProgramsFolder\" On=\"uninstall\" />\n      <RegistryValue Root=\"HKLM\" Key=\"Software\\~a\\Shortcuts\" Name=\"StartMenu\" Type=\"integer\" Value=\"1\" KeyPath=\"yes\" />\n    </Component>\n    <Component Id=\"DesktopShortcutComponent\" Guid=\"*\" Directory=\"DesktopFolder\">\n      <Shortcut Id=\"DesktopApplicationShortcut\" Name=\"~a\" Description=\"~a\" Target=\"[INSTALLFOLDER]RivetHost.exe\" WorkingDirectory=\"INSTALLFOLDER\" />\n      <RegistryValue Root=\"HKLM\" Key=\"Software\\~a\\Shortcuts\" Name=\"Desktop\" Type=\"integer\" Value=\"1\" KeyPath=\"yes\" />\n    </Component>\n  </ComponentGroup></Fragment>\n  <Fragment><ComponentGroup Id=\"ProductComponents\" Directory=\"INSTALLFOLDER\">\n"
                (xml-escape display-name)
                (xml-escape publisher)
                (xml-escape (project-version project))
                (upgrade-code-for identifier)
+               icon-xml
                (xml-escape name)
                (xml-escape display-name)
                (xml-escape display-name)

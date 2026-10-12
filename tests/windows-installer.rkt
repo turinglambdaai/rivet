@@ -93,16 +93,64 @@
               "shortcuts must survive registration authoring")
 (check-regexp-match #rx"NativeActivationRegistration" registration-source)
 
+;; Add/Remove Programs pinning rides on the configured windows icon.
+(check-false (regexp-match? #rx"ARPPRODUCTICON" plain-source)
+             "projects without a windows icon must not pin an ARP icon")
+
+;; A minimal but structurally valid 16x16 32bpp ICO (WiX's binder parses the
+;; icon when embedding it, so the fixture has to be the real format).
+(define (minimal-16x16-ico)
+  (define (u16-le n)
+    (bytes (bitwise-and n #xFF) (bitwise-and (arithmetic-shift n -8) #xFF)))
+  (define (u32-le n)
+    (bytes (bitwise-and n #xFF) (bitwise-and (arithmetic-shift n -8) #xFF)
+           (bitwise-and (arithmetic-shift n -16) #xFF)
+           (bitwise-and (arithmetic-shift n -24) #xFF)))
+  (define xor-bytes (make-bytes (* 16 16 4) #xCC))
+  (define and-mask (make-bytes (* 16 4) 0))
+  (define header
+    (bytes-append (u32-le 40)          ; biSize
+                  (u32-le 16)          ; biWidth
+                  (u32-le 32)          ; biHeight (XOR + AND height)
+                  (u16-le 1)           ; biPlanes
+                  (u16-le 32)          ; biBitCount
+                  (u32-le 0)           ; biCompression: BI_RGB
+                  (u32-le (bytes-length xor-bytes))
+                  (u32-le 0) (u32-le 0) (u32-le 0) (u32-le 0)))
+  (define image-bytes (bytes-append header xor-bytes and-mask))
+  (bytes-append (u16-le 0)            ; reserved
+                (u16-le 1)            ; type: icon
+                (u16-le 1)            ; image count
+                (bytes 16 16 0 0)     ; entry: 16x16, no palette
+                (u16-le 1) (u16-le 32)
+                (u32-le (bytes-length image-bytes))
+                (u32-le 22)           ; offset: 6-byte dir + 16-byte entry
+                image-bytes))
+(define icon-file (build-path package-root "shared" "assets" "app.ico"))
+(make-parent-directory* icon-file)
+(call-with-output-file icon-file #:exists 'truncate/replace
+  (lambda (out) (write-bytes (minimal-16x16-ico) out)))
+(define icon-source
+  (wix-source-for (hasheq 'windows-icon "shared/assets/app.ico")))
+(check-regexp-match
+ #rx"<Icon Id=\"RivetAppIcon[.]ico\" SourceFile=\"[^\"]*app[.]ico\" />"
+ icon-source
+ "a configured windows icon must be embedded into the MSI")
+(check-regexp-match
+ #rx"<Property Id=\"ARPPRODUCTICON\" Value=\"RivetAppIcon[.]ico\" />"
+ icon-source
+ "the pinned ARP icon must reference the embedded icon")
+
 ;; ---------------------------------------------------------------------------
 ;; Real MSI build (only where WiX is installed; release CI covers this too)
 
 (define wix (or (find-executable-path "wix") (find-executable-path "wix.exe")))
-(when wix
+(define (build-smoke-msi! overrides msi-name)
   (define project
-    (rivet-project package-root (hasheq 'name "Smoke")))
+    (rivet-project package-root (hash-union (hasheq 'name "Smoke") overrides)))
   (define source (build-path package-root ".rivet" "installer" "product.wxs"))
   (write-wix-source! project package source)
-  (define msi (build-path package-root "Smoke-0.1.0-windows-x64.msi"))
+  (define msi (build-path package-root msi-name))
   (define exit-code
     (parameterize ([current-directory package-root])
       (system*/exit-code wix "build" "-arch" "x64"
@@ -112,5 +160,11 @@
     (define size (file-size msi))
     (check-true (> size 1024) "the built MSI must not be empty")
     (delete-file msi)))
+
+(when wix
+  (build-smoke-msi! (hasheq) "Smoke-plain-windows-x64.msi")
+  ;; the icon variant validates the ARP-icon fragment against the real schema
+  (build-smoke-msi! (hasheq 'windows-icon "shared/assets/app.ico")
+                    "Smoke-icon-windows-x64.msi"))
 
 (delete-directory/files package-root)
