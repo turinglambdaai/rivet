@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The Windows tray icon (`rivet::system::TrayIcon`) can update its tooltip
+  (`SetTooltip`) and re-register itself after an Explorer restart
+  (`Readd`, called from the host's `TaskbarCreated` broadcast handler) —
+  state-aware tray apps no longer re-allocate the icon to relabel it and no
+  longer lose it the first time the shell restarts. `TrayIcon` owns an icon
+  copy so recovery does not impose a new lifetime requirement on callers.
 - Add Wayland-safe Linux global shortcuts through the XDG Desktop Portal,
   including asynchronous consent/binding results, compositor activation tokens,
   runtime capability discovery, and a hermetic mock-portal integration test.
