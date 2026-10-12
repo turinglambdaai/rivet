@@ -24,8 +24,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install --yes desktop-file-utils libgtk-4-dev libsecret-1-dev rpm
+          bash .github/scripts/apt-retry.sh --sudo update
+          bash .github/scripts/apt-retry.sh --sudo install --yes \
+            desktop-file-utils libgtk-4-dev libsecret-1-dev rpm
           raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Build release artifacts
         shell: bash
@@ -125,8 +126,8 @@ jobs:
           path: ${{ runner.temp }}/installers
       - name: Install headless Wayland compositor
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes weston
+          bash .github/scripts/apt-retry.sh --sudo update
+          bash .github/scripts/apt-retry.sh --sudo install --yes weston
       - name: Launch AppImage outside the build tree
         shell: bash
         env:

@@ -94,6 +94,14 @@ Wayland gate: `DISPLAY` is unset, so the application cannot silently pass by
 using X11 or XWayland. Products supporting Linux should keep an equivalent
 Wayland launch in their release matrix; see [Linux display policy](linux-display.md).
 
+Rivet's own Ubuntu jobs run provisioning `apt-get` commands through
+`.github/scripts/apt-retry.sh`. Each attempt is non-interactive, applies APT's
+network and lock retries, and has a three-minute wall-clock limit; one fresh
+attempt is allowed before the job fails. Product CI should use the same bounded
+principle so a stalled package mirror cannot consume the whole native-build
+budget. Package installation lifecycle tests themselves stay unwrapped because
+their raw transaction outcome is the behavior under test.
+
 The separate `Native UI End-to-End` workflow packages the maintained Taskboard
 and drives its real WinUI 3, SwiftUI/AppKit, and GTK4 accessibility surfaces.
 It covers activation, an RPC mutation, an Event, State rendering, and orderly

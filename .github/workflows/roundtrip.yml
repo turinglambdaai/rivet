@@ -24,8 +24,9 @@ jobs:
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Install Linux development files
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes desktop-file-utils libglib2.0-dev libsecret-1-dev libgtk-4-dev weston
+          bash .github/scripts/apt-retry.sh --sudo update
+          bash .github/scripts/apt-retry.sh --sudo install --yes \
+            desktop-file-utils libglib2.0-dev libsecret-1-dev libgtk-4-dev weston
       - name: Build backend and integration runner
         shell: bash
         run: |
