@@ -90,6 +90,14 @@ Require `rivet/distribution`. `fetch-update-manifest` verifies before parsing, `
 
 Pass `#:journal-path` to atomically persist every destructive phase. On the next start, reconstruct the same installation and call `recover-platform-installation!`; it accepts only the exact same signed candidate and absolute download/target/backup paths. An interruption before health restores the prior payload. An interruption during the idempotent commit repeats backup cleanup instead of rolling a healthy application back.
 
+Portable execution and recovery share an exclusive lock derived from the
+installation target identity, independent of a caller-selected backup path.
+The lock serializes threads and processes before
+they can touch staging, backup, marker, or journal state; a competing updater
+fails explicitly. Its sibling lock file is intentionally persistent and empty:
+the operating-system lock on that file carries ownership, so a crash releases
+ownership without making stale-file cleanup part of recovery.
+
 The lower-level `make-install-plan`, `execute-install-plan!`, and `recover-install-plan!` remain available for product-specific native installers. `execute-install-plan!` accepts `#:commit` for idempotent post-health cleanup. Elevation stays behind those adapters and never enters RVT1 or the embedded runtime.
 
 - `stable` accepts release SemVer versions only.

@@ -70,13 +70,11 @@
       install-plan-downloaded-path install-plan-install install-plan-restart
       install-plan-rollback install-plan? make-install-plan
       manifest->payload-bytes manifest-schema-version payload-bytes->manifest
-      platform-installation platform-installation-commit
-      platform-installation-health-check platform-installation-plan
       platform-installation? platform-installer-policy
       prepare-platform-installation read-ed25519-private-key
       read-ed25519-public-key read-signed-manifest recover-install-plan!
       recover-platform-installation! select-update sha256-bytes sha256-file
-      sha256-file/hex struct:install-plan struct:platform-installation
+      sha256-file/hex struct:install-plan
       struct:update-artifact struct:update-candidate struct:update-manifest
       struct:updater-config update-artifact update-artifact-architecture
       update-artifact-arguments update-artifact-installer

@@ -386,13 +386,10 @@ Pairs an accepted manifest with its current-platform artifact.}
              [rollback procedure?])]{
 Contains the verified artifact and platform-owned lifecycle callbacks.}
 
-@defstruct*[platform-installation
-            ([plan install-plan?]
-             [health-check procedure?]
-             [commit procedure?])] {
-Contains a first-party portable replacement plan plus its health and
-idempotent commit callbacks. Applications normally pass this value to
-@racket[execute-platform-installation!] rather than invoking the fields.}
+@defproc[(platform-installation? [value any/c]) boolean?]{
+Recognizes an opaque first-party portable replacement transaction. Its plan,
+health and commit callbacks, and target-scoped lock identity remain private so
+callers cannot bypass the installation invariants.}
 
 @subsection{Versions and Channels}
 
@@ -531,14 +528,17 @@ tests; production callers should use the default fail-closed verifier.}
           [#:journal-path journal-path (or/c #f path-string?) #f])
          any/c]{
 Executes the prepared replacement with its restart, health, rollback, and
-commit callbacks. A backup is deleted only after health succeeds.}
+commit callbacks. A backup is deleted only after health succeeds. Only one
+thread or process may execute or recover an installation at a time; a
+competing transaction fails before touching shared filesystem state.}
 
 @defproc[(recover-platform-installation!
           [installation platform-installation?]
           [journal-path path-string?])
          (or/c 'committed 'rolled-back)]{
 Recovers the exact prepared replacement. Interrupted commits are repeated;
-earlier phases restore the previous payload when signed policy permits it.}
+earlier phases restore the previous payload when signed policy permits it. The
+same installation-scoped lock used by execution protects recovery.}
 
 @section{Command-Line Workflow}
 

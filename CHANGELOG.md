@@ -15,6 +15,13 @@
   of entering semantic validation and contradicting the documented trust
   order. `read-signed-manifest` remains an explicitly unauthenticated
   inspection API; update clients use `verify-signed-manifest`.
+
+- Serialize portable update execution and recovery with an installation-scoped
+  in-process semaphore plus a target-derived operating-system file lock, even
+  when callers configure different backup paths. A competing updater now fails
+  before it can remove or rename shared staging, backup, marker, or journal
+  state; the persistent empty lock file is not a crash marker. The prepared
+  installation handle is opaque so callers cannot forge its lock identity.
 - Add a Windows `rivet::system::TrayController` that owns tray window
   subclassing, localized native menu presentation, command dispatch, and
   automatic `TaskbarCreated` recovery. The reference Taskboard now exercises
