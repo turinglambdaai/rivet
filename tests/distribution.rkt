@@ -111,6 +111,29 @@
                (verify-signed-manifest
                 (open-input-bytes (get-output-bytes tampered-out)) public-key)))
 
+  ;; Unauthenticated payload bytes never reach the JSON/manifest parser. A
+  ;; malformed payload with a well-formed but mismatched signature must fail at
+  ;; the cryptographic boundary, not disclose a downstream parse diagnostic.
+  (define untrusted-out (open-output-bytes))
+  (write-json
+   (hasheq
+    'schema manifest-schema-version
+    'payload (bytes->base64-string #"not JSON")
+    'signature
+    (hasheq
+     'algorithm "ed25519"
+     'key_id "release-2026"
+     'value
+     (bytes->base64-string
+      (ed25519-sign private-key #"different authenticated payload"))))
+   untrusted-out)
+  (check-exn #rx"signature verification failed"
+             (lambda ()
+               (verify-signed-manifest
+                (open-input-bytes (get-output-bytes untrusted-out))
+                public-key
+                #:key-id "release-2026")))
+
   (define config
     (updater-config "dev.rivet.test" "1.1.0" 'stable 'windows 'x64
                     public-key "release-2026" 0 (* 1024 1024)))

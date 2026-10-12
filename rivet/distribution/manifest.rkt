@@ -194,7 +194,10 @@
   (values (payload-bytes->manifest payload) payload key-id signature))
 
 (define (verify-signed-manifest input public-key #:key-id [expected-key-id #f])
-  (define-values (manifest payload key-id signature) (read-signed-manifest input))
+  ;; The payload is attacker-controlled until the signature succeeds. Parse
+  ;; only the small outer wrapper first, authenticate the exact payload bytes,
+  ;; and cross the semantic parsing boundary afterwards.
+  (define-values (payload key-id signature) (read-wrapper input))
   (when (and expected-key-id (not (string=? expected-key-id key-id)))
     (raise-arguments-error 'verify-signed-manifest
                            "manifest was signed by an unexpected key"
@@ -202,4 +205,4 @@
                            "actual" key-id))
   (unless (ed25519-verify public-key payload signature)
     (error 'verify-signed-manifest "Ed25519 manifest signature verification failed"))
-  manifest)
+  (payload-bytes->manifest payload))

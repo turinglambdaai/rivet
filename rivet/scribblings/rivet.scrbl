@@ -417,11 +417,17 @@ policy plus a list of artifacts.
                                 [out output-port? (current-output-port)])
          void?]{
 Validates, serializes, and signs a manifest payload with Ed25519.}
+@defproc[(read-signed-manifest [input input-port?])
+         (values update-manifest? bytes? string? bytes?)]{
+Decodes a signed wrapper for inspection and returns its parsed manifest, exact
+payload bytes, key ID, and signature bytes. This procedure does not
+authenticate them; update clients should use @racket[verify-signed-manifest].}
 @defproc[(verify-signed-manifest [input input-port?]
                                  [public-key any/c]
                                  [#:key-id expected-key-id (or/c #f string?) #f])
          update-manifest?]{
-Verifies the exact signed payload before exposing the parsed manifest.}
+Verifies the expected key ID and Ed25519 signature over the exact payload bytes
+before parsing or exposing the manifest.}
 
 @subsection{Selecting and Installing an Update}
 
