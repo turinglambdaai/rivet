@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Split the Linux system adapter into focused single-instance, notification,
+  tray, autostart, secure-storage, and crash/shutdown implementation units,
+  with one private XDG/D-Bus support core and no public API change.
 - Make AppImage the signed Linux update payload when that format is enabled,
   emit its SHA-256 sidecar, and add install-kind-aware update selection so
   AppImage, portable, and package-manager installations cannot cross streams.

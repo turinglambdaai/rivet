@@ -21,8 +21,14 @@ platform/linux/
 │   ├── backend.hpp        # rivet::linux_runtime::Backend — same contract as rivet::windows
 │   └── backend.cpp        # racketcs boot + RVT1-over-socketpair transport
 ├── system/
-│   ├── system_services.hpp  # rivet::system — single-instance, notifications,
-│   └── system_services.cpp  #   autostart, Secret Service, crash hook, capabilities
+│   ├── system_services.hpp  # public rivet::system surface
+│   ├── system_services.cpp  # capability discovery + activation arguments
+│   ├── single_instance.cpp  # local activation lease and forwarding
+│   ├── notifications.cpp    # freedesktop notifications
+│   ├── tray.cpp             # StatusNotifierItem + dbusmenu
+│   ├── autostart.cpp        # XDG autostart entries
+│   ├── secure_storage.cpp   # Secret Service through libsecret
+│   └── crash_shutdown.cpp   # fatal-signal record + orderly termination
 └── host/
     ├── GeneratedBackend.hpp  # scaffold schema; raco rivet build replaces it
     ├── CMakeLists.txt
