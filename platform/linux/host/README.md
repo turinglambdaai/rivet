@@ -25,6 +25,7 @@ platform/linux/
 │   ├── system_services.cpp  # capability discovery + activation arguments
 │   ├── single_instance.cpp  # local activation lease and forwarding
 │   ├── notifications.cpp    # freedesktop notifications
+│   ├── global_shortcuts.cpp # XDG GlobalShortcuts portal
 │   ├── tray.cpp             # StatusNotifierItem + dbusmenu
 │   ├── autostart.cpp        # XDG autostart entries
 │   ├── secure_storage.cpp   # Secret Service through libsecret
@@ -74,10 +75,11 @@ and Rivet does not add X11-only application APIs. See
   `.tar.gz` with a detached Ed25519 signature, plus deb/rpm/AppImage formats and
   a signed portable-zip update feed. Real install/upgrade evidence across the
   supported distribution matrix remains follow-up work.
-- The system adapter covers single-instance, notifications, StatusNotifierItem
-  tray integration, XDG autostart, Secret Service secure storage, crash hooks,
-  graceful shutdown, and runtime capability reporting.
-- GTK is a toolkit, not a display protocol: global hotkeys and always-on-top
-  overlays remain compositor-dependent. Applications that need those features
-  must use capability checks and a Wayland protocol or portal appropriate to
-  their supported compositors.
+- The system adapter covers single-instance, XDG portal global shortcuts,
+  notifications, StatusNotifierItem tray integration, XDG autostart, Secret
+  Service secure storage, crash hooks, graceful shutdown, and runtime
+  capability reporting. Global shortcuts remain compositor-controlled and
+  report unavailable instead of falling back to X11-only `XGrabKey`.
+- GTK is a toolkit, not a display protocol: always-on-top overlays and other
+  compositor-specific features still require a capability check and an
+  appropriate Wayland protocol or portal.

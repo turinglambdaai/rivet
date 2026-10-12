@@ -119,7 +119,7 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 | `new` / `doctor` / `build` / `dev` | ✅ | ✅ | ✅ |
 | `package` / `verify` | ✅ DLL 依赖审计 | ✅ 签名/rpath/plist | ✅ 目录 + `ldd` 审计 |
 | 生产签名 / 安装包 | ✅ Authenticode + MSI | ✅ Developer ID + DMG | ✅ 签名 tarball + deb/rpm/AppImage |
-| 系统服务 / 安全存储 | ✅ | ✅ | ✅ Linux 适配器 + StatusNotifierItem 托盘 |
+| 系统服务 / 安全存储 | ✅ | ✅ | ✅ Linux 适配器 + Portal 全局快捷键 + StatusNotifierItem 托盘 |
 | 真实嵌入运行时 CI | ✅ | ✅ | ✅ |
 
 Windows、macOS 与 Linux 都是生产发布目标。Linux 资格门禁使用原生
