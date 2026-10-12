@@ -106,7 +106,7 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 
 嵌入模型受到 [Noise](https://github.com/Bogdanp/Noise) 的启发，但 Rivet 把 runtime contract、协议、代码生成和生命周期都做成平台无关的统一核心，而不是以 Swift 为中心。
 
-深入设计见 [架构](docs/architecture.md)、[Agent-native 开发](docs/agent-native.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[类型安全设备通信](docs/device-communication.md)、尚未实现的[网络设备通道设计](docs/network-device-channel.md)、[Android 架构](docs/android.md)、[项目配置](docs/configuration.md)、[系统服务](docs/system-services.md)、[Linux 显示协议策略](docs/linux-display.md)、[生产晋级路线图](docs/production-roadmap.md)、[大载荷与分页](docs/large-payloads.md)、[Windows 原生窗口 interop](docs/windows-native-window.md)、[发布与更新](docs/release-and-updates.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
+深入设计见 [架构](docs/architecture.md)、[API 稳定性策略](docs/api-stability.zh-CN.md)、[Agent-native 开发](docs/agent-native.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[类型安全设备通信](docs/device-communication.md)、尚未实现的[网络设备通道设计](docs/network-device-channel.md)、[Android 架构](docs/android.md)、[项目配置](docs/configuration.md)、[系统服务](docs/system-services.md)、[Linux 显示协议策略](docs/linux-display.md)、[生产晋级路线图](docs/production-roadmap.md)、[大载荷与分页](docs/large-payloads.md)、[Windows 原生窗口 interop](docs/windows-native-window.md)、[发布与更新](docs/release-and-updates.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
 
 ## 平台支持状态
 
@@ -200,6 +200,8 @@ raco rivet release
 ```
 
 参数与返回值都会在 Racket 边界做类型校验。目前支持 `String`、`Int64`、`Bool`、`Bytes`、`Void`、`Any`、`(List T)`、`(Optional T)`、通过 `define-record` 声明的具名 Record，以及通过 `define-enum` 声明的封闭取值。Record 会生成位于 `RivetTypes` 下的 Swift struct、C++ struct 与 Kotlin data class；Enum 会生成位于 `RivetTypes` 下的 Swift raw-value enum、C++ `enum class` 与 Kotlin `enum class`。Swift 命名空间可避免 `Task`、`Result` 等领域名称在整个应用模块中遮蔽标准库类型。
+
+这些类型名属于 Rivet 的声明语法，并不是 Racket 运行时值。运行时工具应检查 `current-backend-app-schema` 返回的不可变 Keel schema，而不是依赖第二套 descriptor API。
 
 ### Event
 
@@ -327,6 +329,8 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
 - **没有统一声明式跨平台 UI DSL** —— UI 代码仍然直接写 SwiftUI/AppKit 或 WinUI 3/C++/WinRT。
 - **正式发布凭据仍属于应用自身** —— Rivet 已自动化 Authenticode、Developer ID、notarization 流程，但证书、PFX 密码、Apple notary profile 会由应用/CI 环境注入，不由 Rivet 保存。
 - **Public API 仍处于 pre-1.0** —— 协议有版本控制，但高层 API 仍可能继续调整。
+
+维护者应遵循 [API 稳定性策略](docs/api-stability.zh-CN.md)：仓库会快照全部公开导出，并使用最低支持的 Racket 版本运行完整 Racket 测试套件。
 
 ## 路线图
 

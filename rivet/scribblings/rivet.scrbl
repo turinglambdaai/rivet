@@ -91,19 +91,16 @@ packaged dependency-closure, and clean-machine checks.
 
 @subsection{RPCs, Events, State, Records, and Enums}
 
-@defstruct*[rivet-type ([name symbol?])]{Represents a public schema type descriptor.}
-
-@defthing[Void rivet-type?]
-@defthing[Bool rivet-type?]
-@defthing[Int64 rivet-type?]
-@defthing[String rivet-type?]
-@defthing[Bytes rivet-type?]
-@defthing[List rivet-type?]
-
 State descriptors and the registry records behind RPCs, Events, Records, and
 Enums are intentionally opaque. Applications declare them with the forms in
 this section; code generators consume the immutable @racket[backend-schema]
 snapshot instead of depending on mutable runtime representation.
+
+The type names in declarations are schema grammar, not Racket variables or
+runtime descriptor values. They are interpreted only inside the declaration
+forms below. This keeps application code honest: use ordinary Racket
+predicates and contracts for runtime values, and use the generated Keel schema
+when a tool needs to inspect the application contract.
 
 @defform[(define-rpc (name [arg : type] ... : result-type) body ...)]{
 Defines a Racket procedure named @racket[name] and registers it as an RPC for
