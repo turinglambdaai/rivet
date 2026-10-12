@@ -96,6 +96,26 @@ Embed only `update-public.der` (or its bytes) in the native host. Key rotation i
 
 Require `rivet/distribution`. `fetch-update-manifest` verifies before parsing, `select-update` applies channel/version/rollout/platform policy, and `download-update` enforces limits and hashes. On Linux, pass `(current-install-kind)` as `#:install-kind`: AppImage and portable installs only select their matching payload, while deb/rpm installations return `package-manager` and do not consume the AppImage feed. `prepare-platform-installation` turns a verified portable ZIP or Linux AppImage into Rivet's first-party atomic replacement; pass its result to `execute-platform-installation!`. The application supplies restart and health callbacks because it owns its process model and readiness signal. On Windows and macOS the default staged-payload verifier requires Authenticode or a deep strict code signature; development builds may inject an explicit verifier.
 
+Applications that need an in-app progress UI should use `make-updater` instead
+of rebuilding this orchestration. `updater-check!` performs the authenticated
+check and selection, `updater-download!` starts one bounded background worker,
+and `updater-state` returns an immutable JSON-safe polling snapshot.
+`updater-cancel!` interrupts an active transfer. The managed worker uses
+monotonic no-progress and total deadlines, cleans partial files on cancellation
+or timeout, and rejects concurrent check/download operations. It deliberately
+stops at a verified downloaded artifact: installation consent, elevation,
+restart, and health policy remain with the native host and the platform
+installation APIs below.
+
+Persist one rollout bucket from 0 through 99 per installation and pass it to
+`make-updater`; generating a fresh value for every check would make staged
+rollouts unstable. The managed API accepts only Rivet's supported Windows,
+macOS, and Linux x64/ARM64 targets and fails closed on an unknown architecture.
+Its polling phase vocabulary is stable: `idle`, `checking`, `available`,
+`up-to-date`, `downloading`, `downloaded`, `cancelled`, and `error`. A failed
+or cancelled transfer keeps the authenticated candidate for an explicit retry;
+a new check clears it before fetching current policy.
+
 Pass `#:journal-path` to atomically persist every destructive phase. On the next start, reconstruct the same installation and call `recover-platform-installation!`; it accepts only the exact same signed candidate and absolute download/target/backup paths. An interruption before health restores the prior payload. An interruption during the idempotent commit repeats backup cleanup instead of rolling a healthy application back.
 
 Portable execution and recovery share an exclusive lock derived from the

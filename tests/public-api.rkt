@@ -64,13 +64,14 @@
     (rivet/distribution
      (base64-string->bytes bytes->base64-string bytes->ed25519-public-key
       channel-accepts-version? current-install-kind current-update-platform
-      download-update ed25519-sign ed25519-verify execute-install-plan!
+      current-update-architecture download-update ed25519-sign ed25519-verify
+      execute-install-plan!
       execute-platform-installation! fetch-update-manifest install-plan
       install-plan-backup-path install-plan-candidate
       install-plan-downloaded-path install-plan-install install-plan-restart
       install-plan-rollback install-plan? make-install-plan
       manifest->payload-bytes manifest-schema-version payload-bytes->manifest
-      platform-installation? platform-installer-policy
+      make-updater platform-installation? platform-installer-policy
       prepare-platform-installation read-ed25519-private-key
       read-ed25519-public-key read-signed-manifest recover-install-plan!
       recover-platform-installation! select-update sha256-bytes sha256-file
@@ -86,11 +87,13 @@
       update-manifest-minimum-version update-manifest-previous-version
       update-manifest-published-at update-manifest-rollback-allowed?
       update-manifest-rollout update-manifest-version update-manifest?
+      updater-cancel! updater-check! updater-download! updater-state
       updater-config updater-config-application-id
       updater-config-architecture updater-config-channel
       updater-config-current-version updater-config-expected-key-id
       updater-config-maximum-download-bytes updater-config-platform
       updater-config-public-key updater-config-rollout-bucket updater-config?
+      updater-wait updater?
       valid-channel? verify-platform-payload! verify-signed-manifest
       verify-update-artifact! version-compare version<=? version<? version=?
       version>=? version>? version? write-signed-manifest))
