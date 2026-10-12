@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Stage Racket's bundled foreign runtime libraries (`libeay32.dll`,
+  `ssleay32.dll`, `libgmp-10.dll`) beside the Windows host executable.
+  Embedded backends resolve these by bare DLL name through the FFI —
+  OpenSSL for `racket/openssl` and the libcrypto factory (TLS and update/
+  license verification), GMP for `gmp-lib` and `math` — and a package that
+  only carried the Racket CS DLL died at startup or first crypto use with
+  `ffi-lib: could not load foreign library`.
+- Pin the MSI's Add/Remove Programs tile to the configured Windows icon
+  (`ARPPRODUCTICON`); shortcuts and the executable already inherited it
+  from the compiled resource.
 - Split the Linux system adapter into focused single-instance, notification,
   tray, autostart, secure-storage, and crash/shutdown implementation units,
   with one private XDG/D-Bus support core and no public API change.

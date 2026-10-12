@@ -205,6 +205,31 @@
       (write-windows-version-info! out project)))
   resource-script)
 
+;; Foreign libraries bundled with Racket's Windows distribution that an
+;; embedded headless backend can load by bare DLL name through the FFI:
+;; OpenSSL (racket/openssl and crypto-lib's libcrypto factory — TLS and
+;; manifest verification) and GMP (gmp-lib and everything built on it, e.g.
+;; math/bigfloat). The GTK stack also living in the installation's lib
+;; directory serves only GRacket and is intentionally not staged. Each name
+;; copies only when present so Racket builds that ship a subset keep working.
+(define windows-foreign-runtime-dlls
+  '("libeay32.dll" "ssleay32.dll" "libgmp-10.dll"))
+
+(define (stage-windows-foreign-runtime! runtime stage)
+  (define dirs
+    (filter values
+            (list (racket-runtime-dll-dir runtime)
+                  (racket-runtime-lib-dir runtime))))
+  (for ([name (in-list windows-foreign-runtime-dlls)])
+    (define source
+      (for/or ([dir (in-list dirs)])
+        (define candidate (build-path dir name))
+        (and (file-exists? candidate) candidate)))
+    (when source
+      (copy-required! 'build-project!
+                      source
+                      (build-path stage (file-name-from-path source))))))
+
 (define (compile-backend! project runtime stage)
   (define backend-relative (project-ref project 'backend))
   (define backend (project-path project backend-relative))
@@ -299,6 +324,7 @@
   (copy-required! 'build-project!
                   racketcs-dll
                   (build-path stage (file-name-from-path racketcs-dll)))
+  (stage-windows-foreign-runtime! runtime stage)
 
   (define msbuild (windows-toolchain-msbuild toolchain))
   (unless msbuild
