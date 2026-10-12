@@ -1,9 +1,6 @@
-#include <atomic>
-#include <condition_variable>
 #include <cstdlib>
 #include <future>
 #include <iostream>
-#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -142,6 +139,7 @@ class MockGlobalShortcutsPortal final {
       GVariant* options = nullptr;
       g_variant_get(parameters, "(&o@a(sa{sv})&s@a{sv})", &session,
                     &shortcuts, &parent_window, &options);
+      (void)parent_window;
       std::string const token = option_string(options, "handle_token");
       g_variant_unref(options);
       if (!session || std::string(session) != kSessionPath || token.empty()) {

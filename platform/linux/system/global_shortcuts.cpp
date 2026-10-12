@@ -136,7 +136,11 @@ struct GlobalShortcuts::Impl final
         session_handle.clear();
       }
     }
-    callback(std::move(result));
+    try {
+      callback(std::move(result));
+    } catch (...) {
+      // A host callback must not unwind through GLib's C signal dispatcher.
+    }
   }
 
   void finish_response(std::uint32_t response, char const* operation) {
