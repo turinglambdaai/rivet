@@ -149,12 +149,18 @@
   path)
 
 (define (download-update config candidate destination
-                         #:on-progress [on-progress void])
+                         #:on-progress [on-progress void]
+                         #:progress-every [configured-progress-every #f])
   (unless (and (procedure? on-progress)
                (procedure-arity-includes? on-progress 1))
     (raise-argument-error 'download-update
                           "procedure accepting one argument"
                           on-progress))
+  (unless (or (not configured-progress-every)
+              (exact-positive-integer? configured-progress-every))
+    (raise-argument-error 'download-update
+                          "(or/c #f exact-positive-integer?)"
+                          configured-progress-every))
   (define artifact (update-candidate-artifact candidate))
   (define maximum (updater-config-maximum-download-bytes config))
   (when (> (update-artifact-size artifact) maximum)
@@ -183,8 +189,11 @@
                             #:who 'download-update
                             #:on-progress on-progress
                             #:progress-every
-                            (max 1 (quotient (update-artifact-size artifact)
-                                             100))))))
+                            (or configured-progress-every
+                                (max 1
+                                     (quotient
+                                      (update-artifact-size artifact)
+                                      100)))))))
        (lambda () (close-input-port in)))
      (verify-update-artifact! candidate temporary)
      (rename-file-or-directory temporary destination #t)

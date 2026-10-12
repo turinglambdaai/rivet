@@ -74,6 +74,12 @@
                               (update-candidate linux-manifest linux-zip)
                               "unused"
                               #:on-progress (lambda () (void)))))
+(check-exn exn:fail:contract?
+           (lambda ()
+             (download-update linux-config
+                              (update-candidate linux-manifest linux-zip)
+                              "unused"
+                              #:progress-every 0)))
 
 (when private-key
   (define public-key

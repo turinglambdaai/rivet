@@ -5,10 +5,10 @@
 - `download-update` reports download progress: an optional `#:on-progress`
   callback receives cumulative bytes from zero through the final downloaded
   size. Intermediate reports are throttled to about one per percent of the
-  signed artifact size, allowing in-app updaters to drive progress bars
-  without copying Rivet's bounded, redirect-aware downloader. Interrupted or
-  cancelled downloads remove their partial file as reliably as ordinary
-  failures.
+  signed artifact size by default, with an optional byte cadence for activity
+  watchdogs. In-app updaters can drive progress bars without copying Rivet's
+  bounded, redirect-aware downloader. Interrupted or cancelled downloads
+  remove their partial file as reliably as ordinary failures.
 
 - Add a Windows `rivet::system::TrayController` that owns tray window
   subclassing, localized native menu presentation, command dispatch, and
