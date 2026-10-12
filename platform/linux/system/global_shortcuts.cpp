@@ -61,11 +61,30 @@ bool contains_nul(std::string const& value) {
   return value.find('\0') != std::string::npos;
 }
 
+GlobalShortcutSupport parse_support_reply(GVariant* reply) {
+  GVariant* boxed = nullptr;
+  g_variant_get(reply, "(@v)", &boxed);
+  GVariant* value = g_variant_get_variant(boxed);
+  if (!g_variant_is_of_type(value, G_VARIANT_TYPE_UINT32)) {
+    g_variant_unref(value);
+    g_variant_unref(boxed);
+    return {false, 0,
+            "GlobalShortcuts portal returned a non-integer version"};
+  }
+  std::uint32_t const version = g_variant_get_uint32(value);
+  g_variant_unref(value);
+  g_variant_unref(boxed);
+  if (version == 0) {
+    return {false, 0, "GlobalShortcuts portal reported version 0"};
+  }
+  return {true, version, {}};
+}
+
 }  // namespace
 
 struct GlobalShortcuts::Impl final
     : std::enable_shared_from_this<GlobalShortcuts::Impl> {
-  enum class CallStage { create_session, bind_shortcuts };
+  enum class CallStage { detect_support, create_session, bind_shortcuts };
 
   struct PendingCall final {
     std::shared_ptr<Impl> impl;
@@ -178,10 +197,42 @@ struct GlobalShortcuts::Impl final
     GVariant* reply = g_dbus_connection_call_finish(
         G_DBUS_CONNECTION(source), result, &error);
     if (!reply) {
+      if (call->stage == CallStage::detect_support) {
+        call->impl->finish(
+            {GlobalShortcutBindStatus::unavailable, {},
+             take_error_message("GlobalShortcuts portal is unavailable",
+                                error)});
+        return;
+      }
       call->impl->method_failed(call->stage, error);
       return;
     }
+    if (call->stage == CallStage::detect_support) {
+      GlobalShortcutSupport const detected = parse_support_reply(reply);
+      g_variant_unref(reply);
+      if (!detected.available) {
+        call->impl->finish({GlobalShortcutBindStatus::unavailable, {},
+                            detected.reason});
+      } else if (!call->impl->closing) {
+        call->impl->start_create_session();
+      }
+      return;
+    }
     g_variant_unref(reply);
+  }
+
+  void start_support_check() {
+    if (!bus) {
+      finish({GlobalShortcutBindStatus::unavailable, {},
+              "no D-Bus session bus is reachable"});
+      return;
+    }
+    g_dbus_connection_call(
+        bus, kPortalName, kPortalPath, "org.freedesktop.DBus.Properties", "Get",
+        g_variant_new("(ss)", kGlobalShortcutsInterface, "version"),
+        G_VARIANT_TYPE("(v)"), G_DBUS_CALL_FLAGS_NONE, 1000, cancellable,
+        &Impl::call_returned,
+        pending(shared_from_this(), CallStage::detect_support));
   }
 
   void start_create_session() {
@@ -367,24 +418,9 @@ GlobalShortcutSupport GlobalShortcuts::support() {
     return {false, 0,
             take_error_message("GlobalShortcuts portal is unavailable", error)};
   }
-  GVariant* boxed = nullptr;
-  g_variant_get(reply, "(@v)", &boxed);
-  GVariant* value = g_variant_get_variant(boxed);
-  if (!g_variant_is_of_type(value, G_VARIANT_TYPE_UINT32)) {
-    g_variant_unref(value);
-    g_variant_unref(boxed);
-    g_variant_unref(reply);
-    return {false, 0,
-            "GlobalShortcuts portal returned a non-integer version"};
-  }
-  std::uint32_t const version = g_variant_get_uint32(value);
-  g_variant_unref(value);
-  g_variant_unref(boxed);
+  GlobalShortcutSupport const detected = parse_support_reply(reply);
   g_variant_unref(reply);
-  if (version == 0) {
-    return {false, 0, "GlobalShortcuts portal reported version 0"};
-  }
-  return {true, version, {}};
+  return detected;
 }
 
 GlobalShortcuts::GlobalShortcuts()
@@ -432,12 +468,7 @@ void GlobalShortcuts::bind(std::vector<GlobalShortcutSpec> shortcuts,
   impl_->parent_window = std::move(parent_window);
   impl_->completion = std::move(completion);
 
-  GlobalShortcutSupport const detected = support();
-  if (!detected.available) {
-    impl_->finish({GlobalShortcutBindStatus::unavailable, {}, detected.reason});
-    return;
-  }
-  impl_->start_create_session();
+  impl_->start_support_check();
 }
 
 void GlobalShortcuts::set_activation_handler(ActivationHandler handler) {

@@ -149,11 +149,12 @@ class GlobalShortcuts final {
   GlobalShortcuts(GlobalShortcuts const&) = delete;
   GlobalShortcuts& operator=(GlobalShortcuts const&) = delete;
 
-  // Creates one portal session and offers all shortcuts in one compositor
-  // prompt. A portal session permits BindShortcuts only once, so bind() also
-  // permits one call per object. `parent_window` is an XDG portal window
-  // identifier (or empty for an unparented prompt). Completion runs exactly
-  // once unless the object is destroyed first.
+  // Non-blocking: discovers the portal, creates one session, and offers all
+  // shortcuts in one compositor prompt. A portal session permits
+  // BindShortcuts only once, so bind() also permits one call per object.
+  // `parent_window` is an XDG portal window identifier (or empty for an
+  // unparented prompt). Completion runs exactly once unless the object is
+  // destroyed first.
   void bind(std::vector<GlobalShortcutSpec> shortcuts,
             std::string parent_window, BindHandler completion);
   void set_activation_handler(ActivationHandler handler);
