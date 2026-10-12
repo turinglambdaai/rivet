@@ -19,7 +19,8 @@
 namespace rivet::system {
 
 // Runtime capability names, matching the Racket system-adapter contract:
-// single-instance, notification, tray, autostart, secure-storage, crash-hook.
+// single-instance, global-shortcuts, notification, tray, autostart,
+// secure-storage, crash-hook.
 // The tray capability reflects a reachable session bus with a
 // StatusNotifierItem watcher (a compositor service: GNOME hosts it through
 // the AppIndicator extension, KDE natively), so tray presence stays an
@@ -91,6 +92,76 @@ class Notifications final {
                               std::string const& body);
   static void Close(std::uint32_t id);
   static void CloseTag(std::string const& tag);
+};
+
+// One shortcut offered to org.freedesktop.portal.GlobalShortcuts. The trigger
+// follows the XDG Shortcuts specification (for example, "ALT+space"). The
+// compositor owns the final binding and may let the user replace or reject it.
+struct GlobalShortcutSpec final {
+  std::string id;
+  std::string description;
+  std::string preferred_trigger;
+};
+
+struct GlobalShortcutBinding final {
+  std::string id;
+  std::string description;
+  std::string trigger_description;
+};
+
+enum class GlobalShortcutBindStatus {
+  bound,
+  cancelled,
+  unavailable,
+  failed,
+};
+
+struct GlobalShortcutBindResult final {
+  GlobalShortcutBindStatus status = GlobalShortcutBindStatus::failed;
+  std::vector<GlobalShortcutBinding> bindings;
+  std::string message;
+};
+
+struct GlobalShortcutSupport final {
+  bool available = false;
+  std::uint32_t portal_version = 0;
+  std::string reason;
+};
+
+// Wayland-safe global shortcuts through the XDG desktop portal. There is no
+// XGrabKey fallback: when the portal is absent, support() and bind() report
+// that honestly so the application can explain its compositor-command
+// fallback. Construct, bind, and destroy this object on the same GLib main
+// context as the GTK host. Callbacks run on that context.
+class GlobalShortcuts final {
+ public:
+  using BindHandler = std::function<void(GlobalShortcutBindResult)>;
+  using ActivationHandler =
+      std::function<void(std::string const& shortcut_id,
+                         std::uint64_t timestamp,
+                         std::string const& activation_token)>;
+
+  static GlobalShortcutSupport support();
+  static bool available() { return support().available; }
+
+  GlobalShortcuts();
+  ~GlobalShortcuts();
+  GlobalShortcuts(GlobalShortcuts const&) = delete;
+  GlobalShortcuts& operator=(GlobalShortcuts const&) = delete;
+
+  // Non-blocking: discovers the portal, creates one session, and offers all
+  // shortcuts in one compositor prompt. A portal session permits
+  // BindShortcuts only once, so bind() also permits one call per object.
+  // `parent_window` is an XDG portal window identifier (or empty for an
+  // unparented prompt). Completion runs exactly once unless the object is
+  // destroyed first.
+  void bind(std::vector<GlobalShortcutSpec> shortcuts,
+            std::string parent_window, BindHandler completion);
+  void set_activation_handler(ActivationHandler handler);
+
+ private:
+  struct Impl;
+  std::shared_ptr<Impl> impl_;
 };
 
 // One StatusNotifierItem menu entry: a labelled, optionally disabled item

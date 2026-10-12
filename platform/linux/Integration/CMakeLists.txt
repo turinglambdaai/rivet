@@ -31,6 +31,7 @@ add_executable(RivetIntegration
   ../runtime/backend.cpp
   ../system/autostart.cpp
   ../system/crash_shutdown.cpp
+  ../system/global_shortcuts.cpp
   ../system/notifications.cpp
   ../system/secure_storage.cpp
   ../system/single_instance.cpp
@@ -48,6 +49,19 @@ target_compile_features(RivetThemeTest PRIVATE cxx_std_17)
 target_include_directories(RivetThemeTest PRIVATE ../theme)
 target_compile_options(RivetThemeTest PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(RivetThemeTest PRIVATE PkgConfig::GTK4)
+
+add_executable(RivetGlobalShortcutsTest
+  global_shortcuts_test.cpp
+  ../system/global_shortcuts.cpp
+  ../system/system_services_internal.cpp
+)
+target_compile_features(RivetGlobalShortcutsTest PRIVATE cxx_std_17)
+target_include_directories(RivetGlobalShortcutsTest PRIVATE ../system)
+target_compile_options(RivetGlobalShortcutsTest PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(RivetGlobalShortcutsTest PRIVATE
+  Threads::Threads
+  PkgConfig::GLIB
+)
 
 if(LIBSECRET_FOUND)
   target_compile_definitions(RivetIntegration PRIVATE RIVET_HAVE_LIBSECRET=1)

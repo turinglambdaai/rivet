@@ -44,6 +44,7 @@ macOS asks the user for notification and login-item consent as required by the O
 - an abstract-namespace Unix socket for the single-instance lease; secondaries forward their activation arguments to the primary over that socket;
 - `ActivationArguments()` from `/proc/self/cmdline` for URL-scheme and file-association payloads registered by installers;
 - `org.freedesktop.Notifications` over the session bus (GDBus), with stable notification ids for tagged replacements;
+- `GlobalShortcuts` — the asynchronous `org.freedesktop.portal.GlobalShortcuts` session API. `support()` exposes the portal version, `bind(...)` reports bound, cancelled, unavailable, and failed outcomes without blocking GTK's main context, and activation callbacks preserve the compositor timestamp and activation token. The compositor owns the final shortcut and may replace or reject an application's preferred trigger. Rivet does not fall back to `XGrabKey`; applications on a session without this portal can expose their existing single-instance activation command (for example, an executable `--toggle` action) for the user to bind in compositor settings;
 - `TrayIcon` — org.kde.StatusNotifierItem plus a com.canonical.dbusmenu menu, through the session bus (GDBus). This is an explicit opt-in, not an adapter default: desktop hosting is compositor-dependent (GNOME hosts it only through the AppIndicator extension, KDE natively), so the application checks `TrayIcon::available()` (or the `tray` capability) and decides. The icon, tooltip, and flat menu (labelled items, separators, enabled state) update in place; the watcher is re-registered whenever it reappears, so GNOME Shell restarts and extension reloads do not strand a running process without its icon. Methods and menu callbacks run on the thread-default main context the icon was constructed on — for GTK hosts, the main-loop thread;
 - XDG autostart entries under `$XDG_CONFIG_HOME/autostart`;
 - the Secret Service provider (GNOME Keyring, KWallet bridge) through libsecret for binary secrets; the capability is compiled in when libsecret is present and reported at runtime only when a provider is reachable;
@@ -59,7 +60,7 @@ break while the GTK main loop remains alive. Generated hosts and the reference
 Taskboard enforce this ordering and the deb lifecycle gate sends a real
 `SIGTERM` to the installed application.
 
-The Linux integration binary self-checks the adapter (`RivetIntegration --system`): lease acquisition and activation forwarding, autostart entries, and the crash hook always run; notification, tray, and secure-storage checks skip themselves when the session lacks those services.
+The Linux integration binary self-checks the adapter (`RivetIntegration --system`): lease acquisition and activation forwarding, autostart entries, and the crash hook always run; notification, tray, and secure-storage checks skip themselves when the session lacks those services. A separate hermetic test starts a private D-Bus session and mock GlobalShortcuts portal, then verifies discovery, session creation, binding results, and activation delivery without depending on a particular CI desktop.
 
 ## Settings, logs, and crashes
 
