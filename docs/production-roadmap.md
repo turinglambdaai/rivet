@@ -1,26 +1,27 @@
-# Production graduation roadmap
+# Desktop production graduation record
 
 Rivet's desktop foundation is tested across Racket, C++, Swift, Kotlin, and the
-three desktop operating systems. Production graduation is intentionally a
-stronger claim than “the project builds”: it requires evidence for installation,
-native interaction, recovery, and long-term maintainability.
+three desktop operating systems. The 0.7 production-graduation milestone is
+complete. Graduation was intentionally a stronger claim than “the project
+builds”: it required evidence for installation, native interaction, recovery,
+and long-term maintainability.
 
-The [0.7 production-graduation milestone](https://github.com/turinglambdaai/rivet/milestone/1)
-tracks four independently reviewable outcomes:
+The closed [0.7 production-graduation milestone](https://github.com/turinglambdaai/rivet/milestone/1)
+contains four independently reviewed outcomes:
 
 1. [Linux production graduation](https://github.com/turinglambdaai/rivet/issues/182)
-   proves real install, upgrade, launch, uninstall, and recovery behavior on a
+   proved real install, upgrade, launch, uninstall, and recovery behavior on a
    declared distribution and desktop matrix. Native Wayland is the release
    target; X11 and XWayland remain best-effort toolkit compatibility paths.
 2. [First-party update installation adapters](https://github.com/turinglambdaai/rivet/issues/183)
-   close the signed-update loop through installation, restart, health
+   closed the signed-update loop through installation, restart, health
    confirmation, and rollback without changing RVT1 or the embedded-runtime
    boundary.
 3. [Native UI end-to-end gates](https://github.com/turinglambdaai/rivet/issues/184)
-   add platform-specific interaction, accessibility, screenshots, and failure
+   added platform-specific interaction, accessibility, screenshots, and failure
    artifacts. They do not introduce a shared renderer or declarative UI DSL.
 4. [Characterization-protected maintainability work](https://github.com/turinglambdaai/rivet/issues/185)
-   extracts only genuinely shared backend behavior and splits oversized service
+   extracted only genuinely shared backend behavior and split oversized service
    modules after their externally visible behavior is locked down by tests.
 
 ## Graduation rules
