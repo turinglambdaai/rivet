@@ -1,51 +1,131 @@
 #lang racket/base
 
 (require racket/list
+         (prefix-in keel: keel)
          "../project.rkt")
 
-(provide (struct-out schema-rpc)
-         (struct-out schema-event)
-         (struct-out schema-state)
-         (struct-out schema-record)
-         (struct-out schema-enum)
+(provide schema-rpc?
+         schema-rpc-name
+         schema-rpc-arg-names
+         schema-rpc-arg-types
+         schema-rpc-result-type
+         schema-event?
+         schema-event-name
+         schema-event-type
+         schema-state?
+         schema-state-name
+         schema-state-type
+         schema-record?
+         schema-record-name
+         schema-record-field-names
+         schema-record-field-types
+         schema-enum?
+         schema-enum-name
+         schema-enum-cases
          load-schema
          schema-name
          resolve-device-rpcs
          upper-first
          record-native-name)
 
-(struct schema-rpc (name arg-names arg-types result-type) #:transparent)
-(struct schema-event (name type) #:transparent)
-(struct schema-state (name type) #:transparent)
-(struct schema-record (name field-names field-types) #:transparent)
-(struct schema-enum (name cases) #:transparent)
+(define schema-rpc? keel:schema-command?)
+(define schema-event? keel:schema-event?)
+(define schema-state? keel:schema-state?)
+(define schema-record? keel:schema-record?)
+(define schema-enum? keel:schema-enum?)
+(define-namespace-anchor model-namespace-anchor)
 
-(define (load-schema backend)
+;; Native generators still target RVT1's deliberately smaller type system.
+;; Keep that transport mapping in one adapter while Keel remains the canonical
+;; in-memory schema. Unsupported Keel types fail here instead of being silently
+;; approximated by a generator.
+(define (keel-type->rvt1-type type)
+  (cond
+    [(keel:scalar-type? type)
+     (case (keel:scalar-type-name type)
+       [(Bool Int64 String Bytes) (keel:scalar-type-name type)]
+       [(Unit) 'Void]
+       [(Value) 'Any]
+       [else
+        (raise-arguments-error 'load-schema
+                               "Keel type is not supported by RVT1"
+                               "type" type)])]
+    [(keel:list-type? type)
+     (list 'List (keel-type->rvt1-type (keel:list-type-element type)))]
+    [(keel:optional-type? type)
+     (list 'Optional
+           (keel-type->rvt1-type (keel:optional-type-element type)))]
+    [(keel:reference-type? type)
+     (string->symbol (keel:reference-type-name type))]
+    [else
+     (raise-arguments-error 'load-schema
+                            "Keel type is not supported by RVT1"
+                            "type" type)]))
+
+(define (schema-rpc-name rpc)
+  (string->symbol (keel:schema-command-name rpc)))
+
+(define (schema-rpc-arg-names rpc)
+  (for/list ([parameter (in-list (keel:schema-command-parameters rpc))])
+    (string->symbol (keel:schema-parameter-name parameter))))
+
+(define (schema-rpc-arg-types rpc)
+  (for/list ([parameter (in-list (keel:schema-command-parameters rpc))])
+    (keel-type->rvt1-type (keel:schema-parameter-type parameter))))
+
+(define (schema-rpc-result-type rpc)
+  (keel-type->rvt1-type (keel:schema-command-result rpc)))
+
+(define (schema-event-name event)
+  (string->symbol (keel:schema-event-name event)))
+
+(define (schema-event-type event)
+  (keel-type->rvt1-type (keel:schema-event-type event)))
+
+(define (schema-state-name state)
+  (string->symbol (keel:schema-state-name state)))
+
+(define (schema-state-type state)
+  (keel-type->rvt1-type (keel:schema-state-type state)))
+
+(define (schema-record-name record)
+  (string->symbol (keel:schema-record-name record)))
+
+(define (schema-record-field-names record)
+  (for/list ([field (in-list (keel:schema-record-fields record))])
+    (string->symbol (keel:schema-field-name field))))
+
+(define (schema-record-field-types record)
+  (for/list ([field (in-list (keel:schema-record-fields record))])
+    (keel-type->rvt1-type (keel:schema-field-type field))))
+
+(define (schema-enum-name enum)
+  (string->symbol (keel:schema-enum-name enum)))
+
+(define (schema-enum-cases enum)
+  (map string->symbol (keel:schema-enum-cases enum)))
+
+(define (load-schema backend #:id [id "rivet.codegen"])
   ;; Backends register declarations as a module side effect.  A fresh
   ;; namespace keeps separate projects from sharing a registry accidentally.
+  ;; Attach Keel from the caller namespace so the isolated Rivet instance
+  ;; returns canonical structs recognized by these accessors; only Rivet's
+  ;; mutable backend registry must be instantiated per project.
   (define ns (make-base-namespace))
+  (namespace-attach-module
+   (namespace-anchor->namespace model-namespace-anchor)
+   'keel
+   ns)
   (parameterize ([current-namespace ns])
     (dynamic-require backend #f)
-    (define get-schema (dynamic-require 'rivet/backend 'backend-schema))
-    (define schema (get-schema))
-    (values
-     (for/list ([info (in-list (hash-ref schema 'rpcs))])
-       (define arguments (hash-ref info 'arguments))
-       (schema-rpc (hash-ref info 'name)
-                   (map (lambda (argument) (hash-ref argument 'name)) arguments)
-                   (map (lambda (argument) (hash-ref argument 'type)) arguments)
-                   (hash-ref info 'result)))
-     (for/list ([info (in-list (hash-ref schema 'events))])
-       (schema-event (hash-ref info 'name) (hash-ref info 'type)))
-     (for/list ([info (in-list (hash-ref schema 'states))])
-       (schema-state (hash-ref info 'name) (hash-ref info 'type)))
-     (for/list ([info (in-list (hash-ref schema 'records))])
-       (define fields (hash-ref info 'fields))
-       (schema-record (hash-ref info 'name)
-                      (map (lambda (field) (hash-ref field 'name)) fields)
-                      (map (lambda (field) (hash-ref field 'type)) fields)))
-     (for/list ([info (in-list (hash-ref schema 'enums))])
-       (schema-enum (hash-ref info 'name) (hash-ref info 'cases))))))
+    (define current-schema
+      (dynamic-require 'rivet/keel 'current-backend-app-schema))
+    (define schema (current-schema #:id id))
+    (values (keel:app-schema-commands schema)
+            (keel:app-schema-events schema)
+            (keel:app-schema-states schema)
+            (keel:app-schema-records schema)
+            (keel:app-schema-enums schema))))
 
 (define (schema-name value)
   (if (symbol? value) (symbol->string value) value))

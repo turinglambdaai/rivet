@@ -73,10 +73,10 @@
 ;; Keeping it private lets state-set! preserve the same behavior outside serve.
 (define current-state-commit-guard (make-parameter (lambda (thunk) (thunk))))
 
-;; `state-info` is public through struct-out, so keep update-order bookkeeping
-;; private instead of adding a field that would break constructor/pattern source
-;; compatibility. Weak identity keys also avoid retaining externally constructed
-;; State values after the application releases them.
+;; Keep update-order bookkeeping outside the opaque State descriptor. Weak
+;; identity keys avoid retaining State values after the application releases
+;; them and let the descriptor representation evolve without widening the
+;; public API.
 (define state-update-locks (make-weak-hasheq))
 (define state-update-locks-lock (make-semaphore 1))
 

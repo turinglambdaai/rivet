@@ -145,11 +145,12 @@ forms, Event/State operations, `serve`/`serve-fds`, diagnostics, and schema
 snapshots. The registry structs, RPC procedures, mutable State cells, locks,
 and request custodians are runtime-owned implementation details.
 
-Build tools load the application in a fresh namespace and call
-`backend-schema`. That one immutable, data-only snapshot is the supported
-reflection boundary; generators do not reach into runtime structs. This keeps
-code generation deterministic and lets the server's concurrency machinery
-evolve without turning internal representation into an accidental API.
+Build tools load the application in a fresh namespace, project its immutable
+`backend-schema` snapshot into a Keel `app-schema`, and use that canonical
+contract as the input to code generation. Generators do not reach into runtime
+structs or maintain a second schema object model. This keeps code generation
+deterministic and lets the server's concurrency machinery evolve without
+turning internal representation into an accidental API.
 
 The terminal-ownership state machine for active requests lives in the private
 `backend-pending` module. It owns admission capacity, exactly-once terminal
@@ -179,12 +180,13 @@ Typed generated clients are layered on top of this codec. The current schema sup
 
 `rivet/keel` projects the immutable `backend-schema` snapshot into Keel's
 transport-neutral `app-schema`. Keel owns the common type, schema, lifecycle,
-and canonical introspection vocabulary shared with Glaze; Rivet continues to
-own RVT1 framing, typed native code generation, embedded-runtime lifecycle,
-and the WinUI, SwiftUI/AppKit, and GTK4/Wayland adapters. The projection does
-not enable Keel's additional value tags on RVT1. RVT1 v1 Errors also remain
-bounded diagnostic strings, so projected commands advertise no structured
-error codes until that wire boundary changes deliberately.
+canonical introspection vocabulary, and the in-memory objects consumed by
+Rivet's native code generators. Rivet continues to own RVT1 framing, the
+Keel-to-RVT1 type adapter, generated-language policy, embedded-runtime
+lifecycle, and the WinUI, SwiftUI/AppKit, and GTK4/Wayland adapters. The
+projection does not enable Keel's additional value tags on RVT1. RVT1 v1
+Errors also remain bounded diagnostic strings, so projected commands advertise
+no structured error codes until that wire boundary changes deliberately.
 
 Migrating a Swift call site from the pre-namespace emission is mechanical
 — qualify the type once:

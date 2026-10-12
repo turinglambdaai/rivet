@@ -347,7 +347,7 @@ The maintained Taskboard also has platform-native [UI end-to-end gates](docs/nat
   - [x] Kotlin typed-client generation
   - [x] clean-runner build/package/verify evidence for every supported desktop architecture
 - [x] **Phase 7 — desktop production graduation** — real Linux install/upgrade evidence, first-party update installation adapters, native UI end-to-end gates, and characterization-protected maintainability work; see the [graduation record](docs/production-roadmap.md)
-- [ ] **Phase 8 — 1.0 contract stabilization** — incrementally source generated-client inputs from Keel, evaluate Float64/map/structured-error RVT1 extensions only with cross-runtime golden and fuzz evidence, and align portable distribution metadata without moving platform installer policy into Keel
+- [ ] **Phase 8 — 1.0 contract stabilization** — use Keel as the canonical generated-client schema, evaluate Float64/map/structured-error RVT1 extensions only with cross-runtime golden and fuzz evidence, and align portable distribution metadata without moving platform installer policy into Keel
 - [ ] **Phase 9 — first-class device application delivery** — after the Windows/macOS/Linux 1.0 line is stable, add generated iOS/iPadOS/tvOS/visionOS/watchOS and Android projects, explicit embedded-runtime or companion roles, signing, packaging, and real-device verification
 
 ## License
