@@ -14,12 +14,25 @@ Generated native hosts call the first-party Swift/C++ system libraries directly,
 
 - named mutexes for process uniqueness;
 - command-line activation for URL schemes and file associations registered by MSI;
-- `Shell_NotifyIconW` for tray presence and notification balloons;
+- `Shell_NotifyIconW` for tray presence and notification balloons, plus a
+  `TrayController` that owns the window subclass, native popup menu, command
+  routing, and `TaskbarCreated` recovery;
 - the current user's `Run` registry value for opt-in autostart;
 - Windows Credential Manager (`CredWriteW`/`CredReadW`) for secrets;
 - `SetUnhandledExceptionFilter` and `RegisterApplicationRestart` as low-level crash/restart hooks.
 
-The host owns the window handle and receives tray callbacks on its WinUI thread. Applications can replace the built-in crash callback with Crashpad, Sentry, a private endpoint, or no uploader; Rivet does not bind to any provider.
+The host owns the window handle and receives tray callbacks on its WinUI thread.
+Use the low-level `TrayIcon` only when a host deliberately owns all message
+routing. Normal tray-resident hosts use `TrayController`: pass localized
+`TrayMenuItem` labels and application callbacks, and destroy the controller
+before its `HWND`. The controller installs and removes `SetWindowSubclass`,
+restores the icon after Explorer restarts, calls `SetForegroundWindow` before
+`TrackPopupMenu` so outside clicks dismiss the popup, and routes only its own
+menu command identifiers. Callback exceptions never unwind through the Win32
+message procedure. The reference Taskboard is the executable recipe.
+
+Applications can replace the built-in crash callback with Crashpad, Sentry, a
+private endpoint, or no uploader; Rivet does not bind to any provider.
 
 ## macOS
 

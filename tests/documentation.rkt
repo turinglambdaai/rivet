@@ -162,3 +162,12 @@
 (define runtime-limits-guide
   (build-path repository-root "docs" "runtime-limits.md"))
 (check-file-contains runtime-limits-guide "Windows, macOS, and Linux")
+
+(define system-services-guide
+  (build-path repository-root "docs" "system-services.md"))
+(for ([expected (in-list '("TrayController"
+                           "SetWindowSubclass"
+                           "TaskbarCreated"
+                           "SetForegroundWindow"
+                           "TrackPopupMenu"))])
+  (check-file-contains system-services-guide expected))

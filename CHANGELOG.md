@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a Windows `rivet::system::TrayController` that owns tray window
+  subclassing, localized native menu presentation, command dispatch, and
+  automatic `TaskbarCreated` recovery. The reference Taskboard now exercises
+  the blessed tray-resident host pattern instead of leaving every application
+  to rediscover `TrackPopupMenu`'s foreground-window requirement.
 - The Windows tray icon (`rivet::system::TrayIcon`) can update its tooltip
   (`SetTooltip`) and re-register itself after an Explorer restart
   (`Readd`, called from the host's `TaskbarCreated` broadcast handler) —

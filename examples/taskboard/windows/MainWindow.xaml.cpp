@@ -69,9 +69,15 @@ MainWindow::MainWindow() {
   TaskList().ItemsSource(task_rows_);
   try {
     auto const window = rivet::system::NativeWindowHandle(*this);
-    tray_icon_ = std::make_unique<rivet::system::TrayIcon>(
+    std::vector<rivet::system::TrayMenuItem> menu;
+    menu.emplace_back(1, L"Open Taskboard",
+                      [this] { ActivateFromTray(); });
+    menu.emplace_back(rivet::system::TrayMenuItem::Type::separator);
+    menu.emplace_back(2, L"Exit", [this] { Close(); });
+    tray_controller_ = std::make_unique<rivet::system::TrayController>(
         window, 1, WM_APP + 42, L"Rivet Taskboard",
-        ::LoadIconW(nullptr, IDI_APPLICATION));
+        ::LoadIconW(nullptr, IDI_APPLICATION), std::move(menu),
+        [this] { ActivateFromTray(); });
   } catch (...) {
     // Notification availability is platform policy and never blocks startup.
   }
@@ -80,10 +86,17 @@ MainWindow::MainWindow() {
     // stop. Keeping either owner alive after the last XAML window closes would
     // strand an apparently exited GUI process.
     closing_.store(true, std::memory_order_release);
-    tray_icon_.reset();
+    tray_controller_.reset();
     if (backend_) backend_->stop();
   });
   InitializeBackendAsync();
+}
+
+void MainWindow::ActivateFromTray() {
+  auto const window = rivet::system::NativeWindowHandle(*this);
+  ::ShowWindow(window, SW_RESTORE);
+  ::SetForegroundWindow(window);
+  Activate();
 }
 
 winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
@@ -210,9 +223,9 @@ void MainWindow::ShowSelectedTask() {
 }
 
 void MainWindow::NotifyCompleted(std::string const& title) {
-  if (!tray_icon_) return;
+  if (!tray_controller_) return;
   try {
-    tray_icon_->Notify(L"Task completed", winrt::to_hstring(title).c_str());
+    tray_controller_->Notify(L"Task completed", winrt::to_hstring(title).c_str());
   } catch (...) {
     // A denied notification does not turn a successful backend update into an
     // application failure.
