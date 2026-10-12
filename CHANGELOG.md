@@ -9,6 +9,8 @@
   longer lose it the first time the shell restarts. `TrayIcon` owns an icon
   copy so recovery does not impose a new lifetime requirement on callers.
 
+- Bound and retry Ubuntu runner package-manager operations so a stalled mirror
+  cannot consume an entire desktop validation job without a useful failure.
 - Removed the misleading `rivet-type` runtime descriptors from the pre-1.0
   public surface. Schema type identifiers are declaration grammar, while Keel
   is the canonical runtime-inspection model.

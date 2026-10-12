@@ -172,8 +172,9 @@ jobs:
           raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Install GTK4 development files and rpm tooling
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes libgtk-4-dev rpm desktop-file-utils
+          bash .github/scripts/apt-retry.sh --sudo update
+          bash .github/scripts/apt-retry.sh --sudo install --yes \
+            libgtk-4-dev rpm desktop-file-utils
       - name: Compile full schema matrix, package, and verify a GTK4 app
         shell: bash
         run: |
