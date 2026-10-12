@@ -38,6 +38,9 @@ jobs:
       - name: Test release tag provenance validator
         shell: bash
         run: bash .github/scripts/test-release-tag.sh
+      - name: Test bounded apt retry wrapper
+        shell: bash
+        run: bash .github/scripts/test-apt-retry.sh
       - name: Set up Racket CS
         uses: Bogdanp/setup-racket@2466913449df77df2bad149d1f2fc4e1ea4795dd # v1.15
         with:
