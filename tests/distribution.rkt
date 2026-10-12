@@ -316,3 +316,27 @@
     (check-equal? commits 2)
     (check-false (file-exists? journal-path)))
   (lambda () (delete-directory/files commit-root)))
+
+;; download-update progress: copy-limited! streams the payload, enforces the
+;; byte limit, and reports progress without flooding the callback.
+(let* ([payload (apply bytes (for/list ([i (in-range 300)]) (modulo i 256)))]
+       [in (open-input-bytes payload)]
+       [out (open-output-bytes)]
+       [reports '()])
+  (define total
+    (copy-limited! in out (* 1024 1024)
+                   #:on-progress (lambda (n) (set! reports (cons n reports)))
+                   #:progress-every 100))
+  (check-equal? total 300)
+  (check-equal? (get-output-bytes out) payload)
+  (check-equal? (car reports) 300)          ; the final call fires
+  (check-true (<= (length reports) 5))      ; throttled, not one per chunk
+  (check-true (equal? reports (reverse reports))))  ; monotonically increasing
+
+(let ([in (open-input-bytes (make-bytes 10))]
+      [out (open-output-bytes)])
+  ;; The limit is enforced before the offending chunk is written.
+  (check-exn exn:fail?
+             (lambda ()
+               (copy-limited! in out 5)))
+  (check-equal? (bytes-length (get-output-bytes out)) 0))

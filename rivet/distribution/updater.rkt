@@ -17,6 +17,7 @@
          fetch-update-manifest
          select-update
          download-update
+         copy-limited!
          verify-update-artifact!
          make-install-plan
          execute-install-plan!
@@ -35,18 +36,28 @@
   '(prepared installing installed restarting restarted checking healthy
              committing committed rollback-started rolled-back rollback-failed))
 
-(define (copy-limited! in out limit)
+(define (copy-limited! in out limit
+                       #:on-progress [on-progress void]
+                       #:progress-every [progress-every 1])
+  ;; progress-every: call on-progress at most once per this many bytes, so
+  ;; UI pollers are not flooded on fast links. The first and the final call
+  ;; always fire (a progress bar that skips 0% and 100% looks broken).
   (define buffer (make-bytes 65536))
-  (let loop ([total 0])
+  (let loop ([total 0] [last-reported 0])
     (define count (read-bytes-avail! buffer in))
     (cond
-      [(eof-object? count) total]
+      [(eof-object? count)
+       (unless (= last-reported total) (on-progress total))
+       total]
       [else
        (define next (+ total count))
        (when (> next limit)
          (error 'download-update "update exceeds configured download limit"))
        (write-bytes buffer out 0 count)
-       (loop next)])))
+       (when (>= (- next last-reported) progress-every)
+         (on-progress next)
+         (set! last-reported next))
+       (loop next last-reported)])))
 
 ;; GitHub release assets — the dominant update origin — answer with a 302
 ;; to their CDN, so every fetch must follow redirections or the updater
@@ -125,7 +136,8 @@
                            "actual" actual))
   path)
 
-(define (download-update config candidate destination)
+(define (download-update config candidate destination
+                         #:on-progress [on-progress void])
   (define artifact (update-candidate-artifact candidate))
   (define maximum (updater-config-maximum-download-bytes config))
   (when (> (update-artifact-size artifact) maximum)
@@ -147,7 +159,12 @@
         (call-with-output-file temporary
           #:exists 'truncate/replace
           #:mode 'binary
-          (lambda (out) (copy-limited! in out maximum))))
+          (lambda (out)
+            (copy-limited! in out maximum
+                           #:on-progress on-progress
+                           #:progress-every
+                           (max 1 (quotient (update-artifact-size artifact)
+                                            100))))))
       (lambda () (close-input-port in)))
     (verify-update-artifact! candidate temporary)
     (rename-file-or-directory temporary destination #t)
