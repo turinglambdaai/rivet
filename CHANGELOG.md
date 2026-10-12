@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `download-update` reports download progress: an optional `#:on-progress`
+  callback receives the byte count as the payload streams (throttled via
+  `#:progress-every`, defaulting to one report per percent of the signed
+  artifact size, with the final count always firing), and `copy-limited!`
+  is exported as the reusable throttled-copy primitive. Both feed the
+  in-app updaters that were hand-rolling silent copies just to drive
+  progress bars (fulcrum, movebit).
+
 - Add a Windows `rivet::system::TrayController` that owns tray window
   subclassing, localized native menu presentation, command dispatch, and
   automatic `TaskbarCreated` recovery. The reference Taskboard now exercises
