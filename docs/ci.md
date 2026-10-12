@@ -22,9 +22,10 @@ release environment.
 
 ## Copy-paste GitHub Actions workflow
 
-The following workflow assumes the application installs the released `rivet`
-package from the Racket Package Catalog. Pin the Racket and Rivet versions used
-by production instead of allowing the two workflows to drift.
+The following workflow pins Rivet 0.7.0. Update every Rivet package source and
+the Linux setup action to the same tag (or full commit) in one review. A direct
+Git source is intentional: the Racket Package Catalog has one current entry
+for a package name and cannot select an older Rivet release.
 
 ```yaml
 name: Native hosts
@@ -48,7 +49,7 @@ jobs:
           distribution: full
           variant: CS
           version: '9.3'
-      - run: raco pkg install --auto --no-docs rivet
+      - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.7.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
       - run: raco rivet build
@@ -67,7 +68,7 @@ jobs:
           distribution: full
           variant: CS
           version: '9.3'
-      - run: raco pkg install --auto --no-docs rivet
+      - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.7.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
       - run: raco rivet build
@@ -77,16 +78,33 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Set up embeddable Racket CS
-        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@main
+        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@v0.7.0
       - name: Install GTK4 development files
         run: |
           sudo apt-get update
           sudo apt-get install --yes libgtk-4-dev
-      - run: raco pkg install --auto --no-docs rivet
+      - name: Install the matching Rivet package and dependencies
+        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.7.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
       - run: raco rivet build
 ```
+
+The Linux order is load-bearing: install the Rivet package **after**
+`setup-embed-racket`. The action's minimal Racket build intentionally ships
+without packages; installing Rivet afterward resolves `cext-lib`, `crypto-lib`,
+`keel`, and the rest of the dependency closure into the package directory that
+the embeddable runtime actually uses. Installing Rivet earlier under a full
+Racket distribution can make those dependencies appear satisfied there while
+leaving the minimal runtime incomplete; a later backend bundle then fails, for
+example because `raco ctool` is supplied by `cext-lib`.
+
+For an intentionally moving development channel, replace the direct Git source
+with the catalog name `rivet` and use the setup action from `@main`. Do not use
+that pair as a release pin: catalog installation follows the catalog's current
+checksum and there is no `raco pkg install rivet@<version>` selector. The
+standard hold-back form is the tag-pinned Git source shown above. Racket treats
+the fragment as the Git revision while retaining normal dependency resolution.
 
 Rivet itself additionally launches the generated GTK4 package inside a
 headless Weston compositor with `GDK_BACKEND=wayland`. This is a native
@@ -109,18 +127,17 @@ close while retaining bounded failure evidence. See
 [native UI end-to-end testing](native-ui-testing.md) for the application-level
 extension contract.
 
-For a security-sensitive product, replace `@main` with the Rivet tag or full
-commit SHA used by the application. The action downloads the official minimal
+For a security-sensitive product, replace the action tag with the full commit
+SHA for that tag and use the same commit in the package URL fragment. The action downloads the official minimal
 Racket CS source archive, verifies its SHA-256, builds and caches the static
 embedding runtime by version/OS/architecture, and exports
 `RIVET_RACKET_INCLUDE`, `RIVET_RACKET_LIB_DIR`, `RIVET_RACKET_LIBRARY`, and
 `RIVET_RACKET_BOOT_DIR`. Product workflows should not copy those discovery
 rules.
 
-If an application installs Rivet from a linked or Git checkout rather than the
-catalog, pin that checkout and the setup action to the same revision. A host
-compiled against one Rivet revision and released with another is not a useful
-gate.
+For local Rivet development, a linked checkout remains appropriate. Pin that
+checkout and the setup action to the same revision in CI. A host compiled
+against one Rivet revision and released with another is not a useful gate.
 
 ## Release gate
 

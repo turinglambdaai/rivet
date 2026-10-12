@@ -129,6 +129,18 @@
                            "raco rivet build"))])
   (check-file-contains ci-guide expected))
 (check-file-contains ci-guide-zh "raco rivet build")
+(for ([guide (in-list (list ci-guide ci-guide-zh))])
+  (check-file-contains
+   guide
+   "https://github.com/turinglambdaai/rivet.git#v0.7.0")
+  (check-file-contains guide "setup-embed-racket@v0.7.0")
+  (define text (file->string guide))
+  (check-true
+   (regexp-match?
+    #px"(?s:linux-host:.*setup-embed-racket@v0[.]7[.]0.*raco pkg install.*rivet[.]git#v0[.]7[.]0)"
+    text)
+   (format "~a must install the pinned package after the embeddable runtime"
+           (find-relative-path repository-root guide))))
 
 (define embed-action
   (build-path repository-root ".github" "actions" "setup-embed-racket" "action.yml"))

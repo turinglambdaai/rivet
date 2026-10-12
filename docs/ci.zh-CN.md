@@ -19,8 +19,10 @@ CI 应使用与发布任务相同类别的 runner 和工具链：
 
 ## 可直接使用的 GitHub Actions 工作流
 
-下面的工作流假设应用从 Racket Package Catalog 安装已发布的 `rivet` 包。
-生产项目应固定 Racket 与 Rivet 版本，不能让 CI 和发布任务各自漂移。
+下面的工作流固定到 Rivet 0.7.0。升级时，应在同一次评审中把每处 Rivet
+包来源和 Linux setup action 更新到同一个标签（或完整 commit）。这里有意
+使用 Git 来源：Racket Package Catalog 对每个包名只保留一个当前入口，不能
+选择较旧的 Rivet 版本。
 
 ```yaml
 name: Native hosts
@@ -44,7 +46,7 @@ jobs:
           distribution: full
           variant: CS
           version: '9.3'
-      - run: raco pkg install --auto --no-docs rivet
+      - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.7.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
       - run: raco rivet build
@@ -63,7 +65,7 @@ jobs:
           distribution: full
           variant: CS
           version: '9.3'
-      - run: raco pkg install --auto --no-docs rivet
+      - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.7.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
       - run: raco rivet build
@@ -73,25 +75,40 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Set up embeddable Racket CS
-        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@main
+        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@v0.7.0
       - name: Install GTK4 development files
         run: |
           sudo apt-get update
           sudo apt-get install --yes libgtk-4-dev
-      - run: raco pkg install --auto --no-docs rivet
+      - name: Install the matching Rivet package and dependencies
+        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.7.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
       - run: raco rivet build
 ```
 
-对安全要求高的产品，应把 `@main` 改成应用使用的 Rivet 标签或完整 commit
-SHA。该 action 会下载官方 minimal Racket CS 源码归档、校验 SHA-256、按
+Linux 中的顺序是必要条件：必须在 `setup-embed-racket` **之后**安装 Rivet。
+该 action 准备的是刻意不附带任何包的 minimal Racket；此时再安装 Rivet，
+`cext-lib`、`crypto-lib`、`keel` 等完整依赖才会进入嵌入式 runtime 实际读取的
+包目录。如果先在 full Racket 下安装，这些依赖可能在那里显示为已满足，却没有
+进入 minimal runtime；之后制作 backend bundle 就会失败，例如 `raco ctool`
+实际由 `cext-lib` 提供。
+
+若明确需要随开发分支移动，可把 Git 来源换回 catalog 包名 `rivet`，并把 setup
+action 改为 `@main`。不要把这组配置当作发布版本固定：catalog 安装跟随当前
+checksum，也不存在 `raco pkg install rivet@<version>` 这种历史版本选择器。
+标准的版本保留方式就是上面带标签的 Git 来源；Racket 会把片段解释为 Git
+revision，同时照常解析依赖。
+
+对安全要求高的产品，应把 action 标签换成该标签对应的完整 commit SHA，并在
+包 URL 片段中使用同一个 commit。该 action 会下载官方 minimal Racket CS
+源码归档、校验 SHA-256、按
 版本/系统/架构构建并缓存静态嵌入 runtime，然后导出
 `RIVET_RACKET_INCLUDE`、`RIVET_RACKET_LIB_DIR`、
 `RIVET_RACKET_LIBRARY` 和 `RIVET_RACKET_BOOT_DIR`。产品工作流不应再复制
 这套探测脚本。
 
-若应用安装的是 link 或 Git checkout 版本的 Rivet，应让 checkout 与 setup
+本地开发 Rivet 时仍适合使用 link checkout；在 CI 中应让 checkout 与 setup
 action 固定到同一 revision。用一个 Rivet revision 编译宿主、再用另一个
 revision 发布，不构成有效门禁。
 

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Document one reproducible downstream install contract: pin Rivet's Git
+  package source and `setup-embed-racket` action to the same revision, and
+  install the package only after the minimal embeddable runtime is active.
 - Bound and retry Ubuntu runner package-manager operations so a stalled mirror
   cannot consume an entire desktop validation job without a useful failure.
 - Removed the misleading `rivet-type` runtime descriptors from the pre-1.0
