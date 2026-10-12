@@ -32,8 +32,14 @@ XDG portal or compositor protocol and must report capability absence honestly.
 Applications must not silently fall back to broad X11 privileges.
 
 StatusNotifierItem tray integration remains available where a desktop hosts
-it. Global hotkeys, always-on-top overlays, and other compositor-specific
-features are not implied by the GTK4 host baseline.
+it. Global hotkeys use `org.freedesktop.portal.GlobalShortcuts`: the runtime
+reports portal availability and version, and the compositor retains consent
+and final-binding authority. There is deliberately no `XGrabKey` fallback.
+On a compositor without the portal, an application can expose a command such
+as `--toggle` through Rivet's existing single-instance activation route and
+let the user assign that command in compositor settings. Always-on-top
+overlays and other compositor-specific features are not implied by the GTK4
+host baseline.
 
 ## CI contract
 
@@ -73,6 +79,8 @@ resource payload, graceful SIGTERM handling, and complete metadata removal.
 The Linux integration runner separately exercises single-instance forwarding,
 autostart persistence, crash/shutdown hooks, and capability-conditioned
 notifications, StatusNotifierItem tray, and Secret Service storage.
+The GlobalShortcuts adapter is additionally exercised against a deterministic
+mock portal on a private D-Bus session, including activation-token delivery.
 
 Fedora advances on its roughly thirteen-month upstream lifecycle; CI pins a
 specific maintained release instead of using `fedora:latest`. Ubuntu LTS and

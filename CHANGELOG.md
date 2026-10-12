@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add Wayland-safe Linux global shortcuts through the XDG Desktop Portal,
+  including asynchronous consent/binding results, compositor activation tokens,
+  runtime capability discovery, and a hermetic mock-portal integration test.
+  Rivet deliberately provides no X11 `XGrabKey` fallback.
 - Bound and retry Ubuntu runner package-manager operations so a stalled mirror
   cannot consume an entire desktop validation job without a useful failure.
 - Removed the misleading `rivet-type` runtime descriptors from the pre-1.0

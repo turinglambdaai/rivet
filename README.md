@@ -119,7 +119,7 @@ See [architecture](docs/architecture.md), [API stability](docs/api-stability.md)
 | `new` / `doctor` / `build` / `dev` | ✅ | ✅ | ✅ |
 | `package` / `verify` | ✅ dependency audit | ✅ signing/rpath/plist audit | ✅ directory + `ldd` audit |
 | Production signing / installer | ✅ Authenticode + MSI | ✅ Developer ID + DMG | ✅ signed tarball + deb/rpm/AppImage |
-| System services / secure storage | ✅ | ✅ | ✅ Linux adapter + StatusNotifierItem tray |
+| System services / secure storage | ✅ | ✅ | ✅ Linux adapter + portal global shortcuts + StatusNotifierItem tray |
 | Real embedded-runtime CI | ✅ | ✅ | ✅ |
 
 Windows, macOS, and Linux are production release targets. Linux qualification
