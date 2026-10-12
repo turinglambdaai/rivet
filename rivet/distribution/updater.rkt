@@ -17,7 +17,6 @@
          fetch-update-manifest
          select-update
          download-update
-         copy-limited!
          verify-update-artifact!
          make-install-plan
          execute-install-plan!
@@ -37,12 +36,14 @@
              committing committed rollback-started rolled-back rollback-failed))
 
 (define (copy-limited! in out limit
+                       #:who [who 'copy-limited!]
                        #:on-progress [on-progress void]
                        #:progress-every [progress-every 1])
-  ;; progress-every: call on-progress at most once per this many bytes, so
-  ;; UI pollers are not flooded on fast links. The first and the final call
-  ;; always fire (a progress bar that skips 0% and 100% looks broken).
+  ;; Report the initial zero and the final byte count. Intermediate reports are
+  ;; separated by at least progress-every bytes so fast links do not flood UI
+  ;; pollers. This helper stays private; download-update is the public contract.
   (define buffer (make-bytes 65536))
+  (on-progress 0)
   (let loop ([total 0] [last-reported 0])
     (define count (read-bytes-avail! buffer in))
     (cond
@@ -52,12 +53,15 @@
       [else
        (define next (+ total count))
        (when (> next limit)
-         (error 'download-update "update exceeds configured download limit"))
+         (error who "response exceeds permitted byte limit"))
        (write-bytes buffer out 0 count)
        (when (>= (- next last-reported) progress-every)
          (on-progress next)
          (set! last-reported next))
        (loop next last-reported)])))
+
+(module+ test
+  (provide copy-limited!))
 
 ;; GitHub release assets — the dominant update origin — answer with a 302
 ;; to their CDN, so every fetch must follow redirections or the updater
@@ -77,7 +81,7 @@
     void
     (lambda ()
       (define out (open-output-bytes))
-      (copy-limited! in out maximum-bytes)
+      (copy-limited! in out maximum-bytes #:who 'fetch-update-manifest)
       (verify-signed-manifest (open-input-bytes (get-output-bytes out))
                               public-key
                               #:key-id key-id))
@@ -138,6 +142,11 @@
 
 (define (download-update config candidate destination
                          #:on-progress [on-progress void])
+  (unless (and (procedure? on-progress)
+               (procedure-arity-includes? on-progress 1))
+    (raise-argument-error 'download-update
+                          "procedure accepting one argument"
+                          on-progress))
   (define artifact (update-candidate-artifact candidate))
   (define maximum (updater-config-maximum-download-bytes config))
   (when (> (update-artifact-size artifact) maximum)
@@ -160,7 +169,11 @@
           #:exists 'truncate/replace
           #:mode 'binary
           (lambda (out)
-            (copy-limited! in out maximum
+            ;; Bound the stream to the signed size, not merely the looser
+            ;; configured ceiling, so progress never exceeds 100% before a
+            ;; malformed response is rejected.
+            (copy-limited! in out (update-artifact-size artifact)
+                           #:who 'download-update
                            #:on-progress on-progress
                            #:progress-every
                            (max 1 (quotient (update-artifact-size artifact)

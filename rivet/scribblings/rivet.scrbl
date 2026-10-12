@@ -441,10 +441,16 @@ Applies identity, channel, version, minimum-version, rollout, platform, and
 architecture policy.}
 @defproc[(download-update [config updater-config?]
                           [candidate update-candidate?]
-                          [destination path-string?])
+                          [destination path-string?]
+                          [#:on-progress on-progress procedure? void])
          path?]{
 Downloads to a partial file, enforces the signed size and configured bound,
-verifies SHA-256, and atomically moves the verified artifact into place.}
+verifies SHA-256, and atomically moves the verified artifact into place.
+@racket[on-progress] receives cumulative downloaded bytes, starting at zero
+and ending at the downloaded size. Intermediate reports are throttled to about
+one per percent of the signed artifact size. The callback runs synchronously
+on the downloading thread and should quickly dispatch or record UI work. A
+final byte count reports transfer progress, not successful verification.}
 @defproc[(execute-install-plan! [plan install-plan?]
                                 [#:health-check health-check (-> any/c) (lambda () #t)]
                                 [#:commit commit (-> any/c) void]

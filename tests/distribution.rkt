@@ -6,7 +6,9 @@
          rackunit
          racket/file
          racket/port
-         "../rivet/distribution.rkt")
+         "../rivet/distribution.rkt"
+         (rename-in (submod "../rivet/distribution/updater.rkt" test)
+                    [copy-limited! copy-limited!/test]))
 
 (use-all-factories!)
 
@@ -63,6 +65,13 @@
            (lambda ()
              (select-update linux-config linux-manifest
                             #:install-kind 'unknown)))
+
+(check-exn exn:fail:contract?
+           (lambda ()
+             (download-update linux-config
+                              (update-candidate linux-manifest linux-zip)
+                              "unused"
+                              #:on-progress (lambda () (void)))))
 
 (when private-key
   (define public-key
@@ -317,26 +326,27 @@
     (check-false (file-exists? journal-path)))
   (lambda () (delete-directory/files commit-root)))
 
-;; download-update progress: copy-limited! streams the payload, enforces the
-;; byte limit, and reports progress without flooding the callback.
-(let* ([payload (apply bytes (for/list ([i (in-range 300)]) (modulo i 256)))]
+;; download-update's private copy path streams the payload, enforces the byte
+;; limit, and reports a useful zero-to-final sequence without flooding the
+;; callback. A payload larger than the copy buffer makes the cadence assertion
+;; exercise multiple reads instead of passing vacuously on one read.
+(let* ([payload (apply bytes (for/list ([i (in-range 200000)]) (modulo i 256)))]
        [in (open-input-bytes payload)]
        [out (open-output-bytes)]
        [reports '()])
   (define total
-    (copy-limited! in out (* 1024 1024)
-                   #:on-progress (lambda (n) (set! reports (cons n reports)))
-                   #:progress-every 100))
-  (check-equal? total 300)
+    (copy-limited!/test in out (* 1024 1024)
+                        #:on-progress
+                        (lambda (n) (set! reports (cons n reports)))
+                        #:progress-every 100000))
+  (check-equal? total 200000)
   (check-equal? (get-output-bytes out) payload)
-  (check-equal? (car reports) 300)          ; the final call fires
-  (check-true (<= (length reports) 5))      ; throttled, not one per chunk
-  (check-true (equal? reports (reverse reports))))  ; monotonically increasing
+  (check-equal? (reverse reports) '(0 131072 200000)))
 
 (let ([in (open-input-bytes (make-bytes 10))]
       [out (open-output-bytes)])
   ;; The limit is enforced before the offending chunk is written.
-  (check-exn exn:fail?
+  (check-exn #rx"permitted byte limit"
              (lambda ()
-               (copy-limited! in out 5)))
+               (copy-limited!/test in out 5)))
   (check-equal? (bytes-length (get-output-bytes out)) 0))
