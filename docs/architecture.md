@@ -177,6 +177,15 @@ Rivet v1 begins with a small value model:
 
 Typed generated clients are layered on top of this codec. The current schema supports `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `List`, `Optional`, named Records, and named Enums. Optional values reuse the Null/Void wire tag; Records reuse List with a declared field order; Enums reuse String with a closed declared case set. They generate native Swift, C++, and Kotlin types without changing RVT1 framing. Swift Records and Enums are scoped under `RivetTypes`, keeping schema names such as `Task` or `Result` from shadowing concurrency and standard-library types module-wide.
 
+`rivet/keel` projects the immutable `backend-schema` snapshot into Keel's
+transport-neutral `app-schema`. Keel owns the common type, schema, lifecycle,
+and canonical introspection vocabulary shared with Glaze; Rivet continues to
+own RVT1 framing, typed native code generation, embedded-runtime lifecycle,
+and the WinUI, SwiftUI/AppKit, and GTK4/Wayland adapters. The projection does
+not enable Keel's additional value tags on RVT1. RVT1 v1 Errors also remain
+bounded diagnostic strings, so projected commands advertise no structured
+error codes until that wire boundary changes deliberately.
+
 Migrating a Swift call site from the pre-namespace emission is mechanical
 — qualify the type once:
 

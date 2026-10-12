@@ -241,6 +241,20 @@
                            "owner" owner
                            "type" type)))
 
+(define (type-contains-void? type)
+  (or (eq? type 'Void)
+      (match type
+        [(list (or 'List 'Optional) inner) (type-contains-void? inner)]
+        [_ #f])))
+
+(define (validate-payload-type! who owner type)
+  (validate-type! who owner type)
+  (when (type-contains-void? type)
+    (raise-arguments-error who
+                           "Void is valid only as an RPC result"
+                           "owner" owner
+                           "type" type)))
+
 (define (register-record! name field-names field-types)
   (when (or (memq name reserved-type-names)
             (hash-has-key? record-registry name)
@@ -254,7 +268,7 @@
                            "record" name
                            "fields" field-names))
   (for ([type (in-list field-types)])
-    (validate-type! 'define-record name type))
+    (validate-payload-type! 'define-record name type))
   (define info (record-info name field-names field-types))
   (hash-set! record-registry name info)
   ;; Declarations can execute before a stdio transport starts. Returning a
@@ -488,8 +502,15 @@
   (check-api-name-length! 'define-rpc "RPC" (symbol->string name))
   (when (hash-has-key? registry name)
     (error 'define-rpc "RPC already registered: ~a" name))
-  (for ([type (in-list (append arg-types (list result-type)))])
-    (validate-type! 'define-rpc name type))
+  (for ([type (in-list arg-types)])
+    (validate-payload-type! 'define-rpc name type))
+  (validate-type! 'define-rpc name result-type)
+  (when (and (not (eq? result-type 'Void))
+             (type-contains-void? result-type))
+    (raise-arguments-error 'define-rpc
+                           "Void is valid only as a direct RPC result"
+                           "RPC" name
+                           "type" result-type))
   (hash-set! registry name
              (rpc-info name arg-names arg-types result-type proc))
   (void))
@@ -498,15 +519,7 @@
   (check-api-name-length! 'define-event "Event" (symbol->string name))
   (when (hash-has-key? event-registry name)
     (error 'define-event "Event already registered: ~a" name))
-  (unless (supported-type? type)
-    (raise-arguments-error 'define-event
-                           "unsupported Rivet Event type"
-                           "event" name
-                           "type" type))
-  (when (eq? type 'Void)
-    (raise-arguments-error 'define-event
-                           "Void is not a valid Event payload type"
-                           "event" name))
+  (validate-payload-type! 'define-event name type)
   (hash-set! event-registry name (event-info name type))
   (void))
 
@@ -532,11 +545,7 @@
   (check-api-name-length! 'define-state "State" (symbol->string name))
   (when (hash-has-key? state-registry name)
     (error 'define-state "state already registered: ~a" name))
-  (validate-type! 'define-state name type)
-  (when (eq? type 'Void)
-    (raise-arguments-error 'define-state
-                           "Void is not a valid state type"
-                           "state" name))
+  (validate-payload-type! 'define-state name type)
   (validate-value 'define-state name type initial)
   ;; A State is a wire-visible value even before a server starts. Validate the
   ;; complete reserved Event shape before storing the initial value so every

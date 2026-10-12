@@ -4,7 +4,7 @@
 
 **Human-first. Agent-native. Local by design. —— 为人而生，为 Agent 原生设计，本地优先。**
 
-[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.6.0-C15F3C)
+[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.6.1-C15F3C)
 
 [English](README.md) · **中文**
 
@@ -38,6 +38,7 @@ Rivet 补上的是这一层：
 - **第一方原生 UI** —— Windows 使用 WinUI 3，macOS 使用 SwiftUI/AppKit，Linux 使用 GTK4
 - **Racket 负责应用逻辑** —— 宏、模式匹配、并发、数据处理、业务逻辑都留在 Racket
 - **一套后端契约** —— typed RPC、Event、共享 State、取消与生命周期统一走 RVT1
+- **共享应用模型** —— 将后端 schema 投影到与 Glaze 共用的传输无关契约 [Keel](https://github.com/turinglambdaai/keel)，但 RVT1 与原生 UI 所有权仍留在 Rivet
 - **自动生成原生客户端** —— Racket 侧的声明在构建时生成 Swift/C++/Kotlin 类型化 API
 - **进程内嵌 Racket CS** —— 不需要额外启动后端进程，Racket runtime 直接嵌入应用
 - **精确 runtime 匹配** —— 构建时使用当前安装的精确 Racket CS 版本，不会静默退回相邻版本
@@ -341,8 +342,9 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
   - [x] 具名 Enum schema、Swift/C++ 代码生成与兼容性检查
   - [x] Kotlin 类型客户端生成
   - [x] 覆盖每个受支持桌面架构的干净 runner 构建/打包/验证证据
-- [ ] **Phase 7 —— 桌面生产晋级** —— 真实 Linux 安装/升级证据、一方更新安装适配器、原生 UI 端到端门禁，以及由特征测试保护的可维护性改造；详见[生产晋级路线图](docs/production-roadmap.md)
-- [ ] **Phase 8 —— 一等移动应用交付** —— 生成 iOS/iPadOS/watchOS 与 Android 项目、runtime/companion 选择、签名、打包和真机验证
+- [x] **Phase 7 —— 桌面生产晋级** —— 真实 Linux 安装/升级证据、一方更新安装适配器、原生 UI 端到端门禁，以及由特征测试保护的可维护性改造；详见[晋级记录](docs/production-roadmap.md)
+- [ ] **Phase 8 —— 1.0 契约稳定化** —— 渐进地让生成客户端以 Keel 为规范输入；Float64、map、结构化 error 等 RVT1 扩展只有在跨 runtime golden 与 fuzz 证据齐备时才引入；对齐可移植分发元数据，但平台安装器策略不进入 Keel
+- [ ] **Phase 9 —— 一等设备应用交付** —— Windows/macOS/Linux 1.0 主线稳定之后，再提供生成式 iOS/iPadOS/tvOS/visionOS/watchOS 与 Android 项目，明确 embedded-runtime 或 companion 角色，并补齐签名、打包和真机验证
 
 ## 许可证
 

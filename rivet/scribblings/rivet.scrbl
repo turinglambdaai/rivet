@@ -37,11 +37,13 @@ build to identify missing platform tools.
 
 @section{Architecture and Module Boundaries}
 
-The public libraries are deliberately split into three layers:
+The public libraries are deliberately split into four explicit boundaries:
 
 @itemlist[
  @item{@racketmodname[rivet] defines application RPCs, events, shared state,
        RVT1 framing, and the embedded backend server.}
+ @item{@racketmodname[rivet/keel] projects Rivet declarations into the shared,
+       transport-neutral Keel application schema.}
  @item{@racketmodname[rivet/system] provides opt-in operating-system services
        through a native adapter installed by the WinUI or AppKit host.}
  @item{@racketmodname[rivet/distribution] provides opt-in release and update
@@ -160,6 +162,32 @@ the same update order.}
 
 (define-event notification : String)
 (define-state signed-in? : Bool #f)]
+
+@subsection{Keel Schema Projection}
+
+@defmodule[rivet/keel]
+
+Keel is the transport-neutral application contract shared by Rivet and Glaze.
+These adapters expose the same application model without moving RVT1 framing,
+native client generation, embedding, or UI ownership out of Rivet.
+
+@defproc[(backend-schema->app-schema [schema hash?]
+                                     [#:id id string?]
+                                     [#:revision revision exact-nonnegative-integer? 1])
+         any/c]{
+Converts an immutable @racket[backend-schema] snapshot into a validated Keel
+@racketidfont{app-schema?}. Rivet @racket[Void] maps to Keel
+@racketidfont{Unit}, @racket[Any] to @racketidfont{Value}, and named Records
+and Enums to references. RVT1 v1 Error frames
+carry diagnostic strings rather than typed application errors, so projected
+commands intentionally publish an empty error-code list.
+}
+
+@defproc[(current-backend-app-schema [#:id id string?]
+                                     [#:revision revision exact-nonnegative-integer? 1])
+         any/c]{
+Projects the declarations currently registered in the backend.
+}
 
 @subsection{Serving an Embedded Connection}
 

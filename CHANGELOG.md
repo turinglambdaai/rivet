@@ -12,6 +12,13 @@
 - Pin the MSI's Add/Remove Programs tile to the configured Windows icon
   (`ARPPRODUCTICON`); shortcuts and the executable already inherited it
   from the compiled resource.
+- Adopt Keel as Rivet's transport-neutral schema contract. The new
+  `backend-schema->app-schema` and `current-backend-app-schema` adapters project
+  RPC, Event, State, Record, and Enum declarations into a validated,
+  deterministic Keel `app-schema` while RVT1 framing and native renderers stay
+  Rivet-owned. Align schema placement rules with Keel: `Void` is valid only as
+  a direct RPC result, not inside parameters, containers, Records, Events, or
+  States.
 - Split the Linux system adapter into focused single-instance, notification,
   tray, autostart, secure-storage, and crash/shutdown implementation units,
   with one private XDG/D-Bus support core and no public API change.
