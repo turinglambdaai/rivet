@@ -19,6 +19,10 @@ dist/
 .swiftpm/
 DerivedData/
 
+# Python test tooling
+__pycache__/
+*.py[cod]
+
 # NuGet / Windows
 packages/
 AppPackages/

@@ -319,6 +319,8 @@ platform/android/gradlew -p platform/android test
 
 CI runs the protocol implementation across Racket, C++, Swift, and Kotlin; exercises real embedded Racket round trips on all three desktop platforms; opens the packaged GTK4 host through a headless native Wayland compositor; cross-compiles the portable Swift layers for iOS/watchOS; compiles the generated Kotlin client; smoke-builds, packages, and verifies generated desktop applications; and covers Windows ARM64, macOS Intel, and Linux ARM64 on dedicated clean-runner architecture gates.
 
+The maintained Taskboard also has platform-native [UI end-to-end gates](docs/native-ui-testing.md): UI Automation on WinUI 3, AXUIElement on SwiftUI/AppKit, and AT-SPI on GTK4/Wayland assert semantic roles, RPC/State/Event behavior, screenshots, and orderly close without introducing a shared UI abstraction.
+
 ## Honest gaps
 
 - **Linux desktop qualification is intentionally bounded** — the release matrix proves native Wayland, package-manager lifecycle, AppImage launch, and system-adapter behavior on maintained distributions. Product-specific GPU, portal, scaling, input, GNOME, and KDE behavior still belongs in each application's release evidence. X11/XWayland is best-effort compatibility, not a release gate.

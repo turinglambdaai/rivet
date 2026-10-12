@@ -66,6 +66,7 @@ std::wstring status_text(rivet_app::TaskStatus status) {
 MainWindow::MainWindow() {
   InitializeComponent();
   Title(L"Rivet Taskboard — Racket + WinUI 3");
+  TaskList().ItemsSource(task_rows_);
   try {
     auto const window = rivet::system::NativeWindowHandle(*this);
     tray_icon_ = std::make_unique<rivet::system::TrayIcon>(
@@ -74,6 +75,14 @@ MainWindow::MainWindow() {
   } catch (...) {
     // Notification availability is platform policy and never blocks startup.
   }
+  Closed([this](auto const&, auto const&) {
+    // Release the hidden tray window before asking the embedded runtime to
+    // stop. Keeping either owner alive after the last XAML window closes would
+    // strand an apparently exited GUI process.
+    closing_.store(true, std::memory_order_release);
+    tray_icon_.reset();
+    if (backend_) backend_->stop();
+  });
   InitializeBackendAsync();
 }
 
@@ -104,9 +113,15 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
     backend->start();
     dispatcher.TryEnqueue([weak, backend = std::move(backend)]() mutable {
       if (auto window = weak.get()) {
-        window->backend_ = std::move(backend);
-        window->SetReadyUi();
-        window->LoadTasksAsync();
+        if (window->closing_.load(std::memory_order_acquire)) {
+          std::thread([backend = std::move(backend)]() mutable {
+            backend->stop();
+          }).detach();
+        } else {
+          window->backend_ = std::move(backend);
+          window->SetReadyUi();
+          window->LoadTasksAsync();
+        }
       } else {
         std::thread([backend = std::move(backend)]() mutable { backend->stop(); }).detach();
       }
@@ -146,14 +161,15 @@ void MainWindow::LoadTasksAsync(std::optional<std::int64_t> preferred) {
 void MainWindow::ApplyTasks(std::vector<rivet_app::BoardTask> items,
                             std::optional<std::int64_t> preferred) {
   tasks_ = std::move(items);
-  TaskList().Items().Clear();
+  task_rows_.Clear();
   for (auto const& task : tasks_) {
-    Microsoft::UI::Xaml::Controls::ListViewItem item;
-    item.Content(winrt::box_value(winrt::to_hstring(task.title)));
-    item.Tag(winrt::box_value(task.id));
-    Microsoft::UI::Xaml::Automation::AutomationProperties::SetAutomationId(
-        item, L"task-row-" + std::to_wstring(task.id));
-    TaskList().Items().Append(item);
+    auto row = winrt::single_threaded_map<
+        winrt::hstring, winrt::Windows::Foundation::IInspectable>();
+    row.Insert(L"Id", winrt::box_value(task.id));
+    row.Insert(L"Title", winrt::box_value(winrt::to_hstring(task.title)));
+    row.Insert(L"AutomationId",
+               winrt::box_value(L"task-row-" + std::to_wstring(task.id)));
+    task_rows_.Append(row);
   }
   TaskList().IsEnabled(true);
   selected_id_ = preferred;
@@ -206,14 +222,31 @@ void MainWindow::NotifyCompleted(std::string const& title) {
 void MainWindow::TaskList_SelectionChanged(
     winrt::Windows::Foundation::IInspectable const&,
     Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const&) {
-  auto item = TaskList().SelectedItem().try_as<Microsoft::UI::Xaml::Controls::ListViewItem>();
-  if (!item) return;
-  selected_id_ = winrt::unbox_value<std::int64_t>(item.Tag());
+  auto row = TaskList().SelectedItem().try_as<
+      winrt::Windows::Foundation::Collections::IMap<
+          winrt::hstring, winrt::Windows::Foundation::IInspectable>>();
+  if (!row) return;
+  selected_id_ = winrt::unbox_value<std::int64_t>(row.Lookup(L"Id"));
   ShowSelectedTask();
   if (backend_ && backend_->running()) {
     rivet_app::API api(*backend_);
     (void)api.select_task_async(*selected_id_, [](auto) {});
   }
+}
+
+void MainWindow::TaskList_ContainerContentChanging(
+    Microsoft::UI::Xaml::Controls::ListViewBase const&,
+    Microsoft::UI::Xaml::Controls::ContainerContentChangingEventArgs const& args) {
+  if (args.InRecycleQueue()) return;
+  auto row = args.Item().try_as<
+      winrt::Windows::Foundation::Collections::IMap<
+          winrt::hstring, winrt::Windows::Foundation::IInspectable>>();
+  auto container = args.ItemContainer().try_as<
+      Microsoft::UI::Xaml::Controls::ListViewItem>();
+  if (!row || !container) return;
+  Microsoft::UI::Xaml::Automation::AutomationProperties::SetAutomationId(
+      container, winrt::unbox_value<winrt::hstring>(
+                     row.Lookup(L"AutomationId")));
 }
 
 void MainWindow::New_Click(
@@ -261,7 +294,7 @@ void MainWindow::Generate_Click(
   auto const weak = get_weak();
   rivet_app::API api(*backend_);
   generation_request_ = api.generate_demo_tasks_async(1000, [dispatcher, weak](auto result) {
-    try { auto items = result.get(); dispatcher.TryEnqueue([weak, items = std::move(items)]() mutable { if (auto window = weak.get()) { window->generation_request_.reset(); window->ApplyTasks(std::move(items)); window->StatusBar().Message(L"Generated 1,000 tasks"); } }); }
+    try { auto items = result.get(); dispatcher.TryEnqueue([weak, items = std::move(items)]() mutable { if (auto window = weak.get()) { auto const message = "Generated " + std::to_string(items.size()) + " tasks"; window->generation_request_.reset(); window->ApplyTasks(std::move(items)); window->StatusBar().Message(winrt::to_hstring(message)); } }); }
     catch (std::exception const& e) { auto message = std::string(e.what()); dispatcher.TryEnqueue([weak, message = std::move(message)] { if (auto window = weak.get()) { window->generation_request_.reset(); window->SetReadyUi(); window->StatusBar().Message(winrt::to_hstring(message)); } }); }
   });
 }

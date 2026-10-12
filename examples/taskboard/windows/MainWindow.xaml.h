@@ -14,6 +14,9 @@ struct MainWindow : MainWindowT<MainWindow> {
   void TaskList_SelectionChanged(
       winrt::Windows::Foundation::IInspectable const& sender,
       Microsoft::UI::Xaml::Controls::SelectionChangedEventArgs const& args);
+  void TaskList_ContainerContentChanging(
+      Microsoft::UI::Xaml::Controls::ListViewBase const& sender,
+      Microsoft::UI::Xaml::Controls::ContainerContentChangingEventArgs const& args);
   void New_Click(winrt::Windows::Foundation::IInspectable const& sender,
                  Microsoft::UI::Xaml::RoutedEventArgs const& args);
   void Samples_Click(winrt::Windows::Foundation::IInspectable const& sender,
@@ -40,9 +43,14 @@ struct MainWindow : MainWindowT<MainWindow> {
 
   std::shared_ptr<rivet::windows::Backend> backend_;
   std::vector<rivet_app::BoardTask> tasks_;
+  winrt::Windows::Foundation::Collections::IObservableVector<
+      winrt::Windows::Foundation::IInspectable>
+      task_rows_{winrt::single_threaded_observable_vector<
+          winrt::Windows::Foundation::IInspectable>()};
   std::optional<std::int64_t> selected_id_;
   std::optional<std::uint64_t> generation_request_;
   std::unique_ptr<rivet::system::TrayIcon> tray_icon_;
+  std::atomic<bool> closing_{false};
 };
 
 }  // namespace winrt::RivetHost::implementation

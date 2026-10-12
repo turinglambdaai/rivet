@@ -5,6 +5,8 @@ import RivetSystem
 
 @main
 struct RivetHostApp: App {
+    @NSApplicationDelegateAdaptor(ApplicationDelegate.self)
+    private var applicationDelegate
     @StateObject private var model = AppModel()
     private let activationRouter = RivetActivationRouter()
 
@@ -16,6 +18,24 @@ struct RivetHostApp: App {
                 .task { model.start() }
                 .onOpenURL { url in activationRouter.handle([url]) }
         }
+    }
+}
+
+@MainActor
+final class ApplicationDelegate: NSObject, NSApplicationDelegate {
+    static var orderlyShutdown: (() -> Void)?
+
+    nonisolated func applicationShouldTerminateAfterLastWindowClosed(
+        _ sender: NSApplication
+    ) -> Bool {
+        true
+    }
+
+    nonisolated func applicationShouldTerminate(
+        _ sender: NSApplication
+    ) -> NSApplication.TerminateReply {
+        MainActor.assumeIsolated { Self.orderlyShutdown?() }
+        return .terminateNow
     }
 }
 
@@ -72,6 +92,7 @@ final class AppModel: ObservableObject {
             let backend = EmbeddedRacketBackend(configuration: config)
             let relay = EventRelay(self)
             self.backend = backend
+            ApplicationDelegate.orderlyShutdown = { [weak self] in self?.stop() }
 
             Task.detached { [backend, relay] in
                 do {
@@ -161,7 +182,7 @@ final class AppModel: ObservableObject {
                 guard let self else { return }
                 self.tasks = items
                 self.selectedID = items.first?.id
-                self.status = "Generated 1,000 tasks"
+                self.status = "Generated \(items.count) tasks"
             } catch is CancellationError {
                 self?.status = "Generation cancelled"
             } catch {
@@ -174,6 +195,14 @@ final class AppModel: ObservableObject {
 
     func cancelGeneration() {
         generationTask?.cancel()
+    }
+
+    func stop() {
+        generationTask?.cancel()
+        generationTask = nil
+        backend?.stop()
+        backend = nil
+        ready = false
     }
 
     func persistSelection(_ id: Int64?) {
