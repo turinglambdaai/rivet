@@ -33,7 +33,8 @@
 
 (define (schema-snapshot project)
   (define backend (project-path project (project-ref project 'backend)))
-  (define-values (rpcs events states records enums) (load-schema backend))
+  (define-values (rpcs events states records enums)
+    (load-schema backend #:id (project-identifier project)))
   (define device-rpcs (resolve-device-rpcs project rpcs 'schema-snapshot))
   (parameterize ([current-records records]
                  [current-enums enums])

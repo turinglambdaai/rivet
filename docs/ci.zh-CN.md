@@ -10,7 +10,7 @@ CI 应使用与发布任务相同类别的 runner 和工具链：
 - Windows：用 `windows-latest` 编译 WinUI 3 宿主；
 - macOS：同时使用 `macos-latest` 与 `macos-15`，分别覆盖当前 Swift 和
   固定的 Xcode 16 发布环境；
-- Linux：用 `ubuntu-latest`，安装 GTK4 开发文件，并准备可嵌入的 Racket
+- Linux：用 `ubuntu-24.04`，安装 GTK4 开发文件，并准备可嵌入的 Racket
   CS runtime。
 
 `raco rivet build` 是必需的宿主编译门禁。若还要验证分发布局，可继续执行
@@ -69,7 +69,7 @@ jobs:
       - run: raco rivet build
 
   linux-host:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: Set up embeddable Racket CS

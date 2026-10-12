@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Make Keel's validated `app-schema` the canonical in-memory input to Swift,
+  C++, and Kotlin client generation. Rivet now keeps only a fail-closed
+  Keel-to-RVT1 type adapter instead of reconstructing a parallel codegen schema
+  model, while preserving generated source and schema snapshot compatibility.
+- Synchronize the English and Chinese CI guide with the pinned Ubuntu 24.04
+  runner and remove a stale comment about the now-opaque State descriptor.
+
 ## 0.7.0
 
 - Stage Racket's bundled foreign runtime libraries (`libeay32.dll`,

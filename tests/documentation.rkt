@@ -124,7 +124,7 @@
 (for ([expected (in-list '("windows-latest"
                            "macos-latest"
                            "macos-15"
-                           "ubuntu-latest"
+                           "ubuntu-24.04"
                            "setup-embed-racket"
                            "raco rivet build"))])
   (check-file-contains ci-guide expected))

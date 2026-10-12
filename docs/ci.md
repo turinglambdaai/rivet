@@ -11,7 +11,7 @@ uses:
 - Windows: `windows-latest` for the WinUI 3 host;
 - macOS: both `macos-latest` and `macos-15`, so current Swift and the pinned
   Xcode 16 release environment both compile the SwiftUI/AppKit host;
-- Linux: `ubuntu-latest` with GTK4 development files and an embeddable Racket
+- Linux: `ubuntu-24.04` with GTK4 development files and an embeddable Racket
   CS runtime.
 
 `raco rivet build` is the required host-compilation gate. Add `package` and
@@ -73,7 +73,7 @@ jobs:
       - run: raco rivet build
 
   linux-host:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: Set up embeddable Racket CS

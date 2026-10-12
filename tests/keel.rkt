@@ -1,8 +1,13 @@
 #lang racket/base
 
 (require rackunit
+         racket/runtime-path
          rivet
-         (prefix-in keel: keel))
+         (prefix-in keel: keel)
+         (prefix-in codegen: "../rivet-cli/codegen/model.rkt"))
+
+(define-runtime-path schema-matrix-backend
+  "fixtures/schema-matrix-backend.rkt")
 
 (define-enum AccessLevel (viewer editor owner))
 
@@ -39,6 +44,18 @@
 (define encoded (keel:encode-app-schema schema))
 (check-equal? encoded (keel:encode-app-schema schema) "Keel introspection encoding is deterministic")
 (check-equal? (keel:decode-app-value encoded) (keel:app-schema->app-value schema))
+
+;; Code generation isolates each application's mutable Rivet registry in a
+;; fresh namespace, but it must still return canonical Keel schema values from
+;; the one shared Keel module instance.
+(define-values (codegen-commands codegen-events codegen-states
+                                 codegen-records codegen-enums)
+  (codegen:load-schema schema-matrix-backend #:id "rivet.codegen-test"))
+(check-true (andmap keel:schema-command? codegen-commands))
+(check-true (andmap keel:schema-event? codegen-events))
+(check-true (andmap keel:schema-state? codegen-states))
+(check-true (andmap keel:schema-record? codegen-records))
+(check-true (andmap keel:schema-enum? codegen-enums))
 
 (check-exn #rx"Unit is valid only as a command result"
            (lambda ()

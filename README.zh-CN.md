@@ -343,7 +343,7 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
   - [x] Kotlin 类型客户端生成
   - [x] 覆盖每个受支持桌面架构的干净 runner 构建/打包/验证证据
 - [x] **Phase 7 —— 桌面生产晋级** —— 真实 Linux 安装/升级证据、一方更新安装适配器、原生 UI 端到端门禁，以及由特征测试保护的可维护性改造；详见[晋级记录](docs/production-roadmap.md)
-- [ ] **Phase 8 —— 1.0 契约稳定化** —— 渐进地让生成客户端以 Keel 为规范输入；Float64、map、结构化 error 等 RVT1 扩展只有在跨 runtime golden 与 fuzz 证据齐备时才引入；对齐可移植分发元数据，但平台安装器策略不进入 Keel
+- [ ] **Phase 8 —— 1.0 契约稳定化** —— 生成客户端统一以 Keel 为规范 Schema；Float64、map、结构化 error 等 RVT1 扩展只有在跨 runtime golden 与 fuzz 证据齐备时才引入；对齐可移植分发元数据，但平台安装器策略不进入 Keel
 - [ ] **Phase 9 —— 一等设备应用交付** —— Windows/macOS/Linux 1.0 主线稳定之后，再提供生成式 iOS/iPadOS/tvOS/visionOS/watchOS 与 Android 项目，明确 embedded-runtime 或 companion 角色，并补齐签名、打包和真机验证
 
 ## 许可证
