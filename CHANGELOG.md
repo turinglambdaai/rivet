@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- The Windows tray icon (`rivet::system::TrayIcon`) can update its tooltip
+  (`SetTooltip`) and re-register itself after an Explorer restart
+  (`Readd`, called from the host's `TaskbarCreated` broadcast handler) —
+  state-aware tray apps no longer re-allocate the icon to relabel it and no
+  longer lose it the first time the shell restarts. `TrayIcon` owns an icon
+  copy so recovery does not impose a new lifetime requirement on callers.
+
 - Bound and retry Ubuntu runner package-manager operations so a stalled mirror
   cannot consume an entire desktop validation job without a useful failure.
 - Removed the misleading `rivet-type` runtime descriptors from the pre-1.0
