@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.7.0
+
 - Stage Racket's bundled foreign runtime libraries (`libeay32.dll`,
   `ssleay32.dll`, `libgmp-10.dll`) beside the Windows host executable.
   Embedded backends resolve these by bare DLL name through the FFI —

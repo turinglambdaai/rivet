@@ -3,8 +3,8 @@
 (define collection 'multi)
 ;; Racket package versions reject a trailing ".0" component. Release tags and
 ;; native artifacts remain three-component SemVer via `release-version`.
-(define version "0.6.1")
-(define release-version "0.6.1")
+(define version "0.7")
+(define release-version "0.7.0")
 (define pkg-desc "Native application foundation for Racket")
 (define pkg-authors '(turinglambdaai))
 (define license 'MIT)
