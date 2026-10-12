@@ -8,7 +8,9 @@
          racket/port
          "../rivet/distribution.rkt"
          (rename-in (submod "../rivet/distribution/updater.rkt" test)
-                    [copy-limited! copy-limited!/test]))
+                    [copy-limited! copy-limited!/test]
+                    [call-with-partial-cleanup
+                     call-with-partial-cleanup/test]))
 
 (use-all-factories!)
 
@@ -350,3 +352,19 @@
              (lambda ()
                (copy-limited!/test in out 5)))
   (check-equal? (bytes-length (get-output-bytes out)) 0))
+
+;; Cancellation uses exn:break rather than exn:fail. It must still remove the
+;; partial download before the worker publishes its terminal state.
+(define interrupted-partial
+  (make-temporary-file "rivet-interrupted-download-~a.partial"))
+(check-exn
+ exn:break?
+ (lambda ()
+   (call-with-partial-cleanup/test
+    interrupted-partial
+    (lambda ()
+      (let/ec escape
+        (raise (exn:break "cancelled"
+                          (current-continuation-marks)
+                          escape)))))))
+(check-false (file-exists? interrupted-partial))
