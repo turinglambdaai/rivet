@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -88,6 +89,66 @@ class TrayIcon final {
   UINT callback_message_{};
   std::wstring tooltip_;
   HICON icon_{};
+};
+
+// One native popup-menu entry. Command identifiers must be unique, non-zero,
+// and fit in the low word of WM_COMMAND. Labels and callbacks stay owned by
+// the application so localization and business actions do not cross RVT1.
+struct TrayMenuItem final {
+  enum class Type { item, separator };
+
+  TrayMenuItem() = default;
+  TrayMenuItem(UINT identifier, std::wstring label,
+               std::function<void()> activated, bool enabled = true,
+               bool checked = false);
+  explicit TrayMenuItem(Type type) : type(type) {}
+
+  Type type = Type::item;
+  UINT identifier{};
+  std::wstring label;
+  bool enabled = true;
+  bool checked = false;
+  std::function<void()> activated;
+};
+
+// High-level, UI-thread-owned tray host. It installs and removes the HWND
+// subclass, re-adds the icon after Explorer broadcasts TaskbarCreated, opens
+// a dismissible native popup menu, and routes WM_COMMAND to app callbacks.
+// Destroy this object before destroying the HWND. Callback exceptions are
+// contained at the Win32 boundary and reported to the debugger.
+class TrayController final {
+ public:
+  TrayController(HWND window, UINT identifier, UINT callback_message,
+                 std::wstring const& tooltip, HICON icon,
+                 std::vector<TrayMenuItem> menu = {},
+                 std::function<void()> activated = {});
+  ~TrayController();
+  TrayController(TrayController const&) = delete;
+  TrayController& operator=(TrayController const&) = delete;
+
+  void SetMenu(std::vector<TrayMenuItem> menu);
+  void SetActivationHandler(std::function<void()> activated);
+  void SetTooltip(std::wstring const& tooltip);
+  void Notify(std::wstring const& title, std::wstring const& body) const;
+
+ private:
+  static LRESULT CALLBACK WindowSubclass(HWND window, UINT message,
+                                         WPARAM w_param, LPARAM l_param,
+                                         UINT_PTR subclass_id,
+                                         DWORD_PTR reference_data) noexcept;
+  LRESULT HandleMessage(UINT message, WPARAM w_param, LPARAM l_param) noexcept;
+  void ShowMenu();
+  bool DispatchCommand(UINT identifier);
+  static void ReportCallbackFailure() noexcept;
+
+  HWND window_{};
+  UINT identifier_{};
+  UINT callback_message_{};
+  UINT taskbar_created_message_{};
+  UINT_PTR subclass_id_{};
+  std::unique_ptr<TrayIcon> icon_;
+  std::vector<TrayMenuItem> menu_;
+  std::function<void()> activated_;
 };
 
 using CrashCallback = void (*)(EXCEPTION_POINTERS const*) noexcept;

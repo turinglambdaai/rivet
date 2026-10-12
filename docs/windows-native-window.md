@@ -35,6 +35,12 @@ cross-thread access. Remove listeners, subclasses, and registered hotkeys
 before the owning window is destroyed; an `HWND` is not a lifetime-owning
 reference.
 
+For tray applications, do not reproduce the `SetWindowSubclass`,
+`TaskbarCreated`, `TrackPopupMenu`, and `WM_COMMAND` recipe in each host.
+`rivet::system::TrayController` owns that HWND-bound lifecycle. The application
+still owns menu semantics by providing localized `TrayMenuItem` values and
+callbacks; see the reference Taskboard's `MainWindow.xaml.cpp`.
+
 Example:
 
 ```cpp

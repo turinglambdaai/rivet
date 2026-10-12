@@ -164,7 +164,7 @@ try {
         Set-Content -LiteralPath (Join-Path $OutputDirectory 'accessibility-after.json') -Encoding utf8
     [ordered]@{
         application = 'Rivet Taskboard'
-        actions = @('invoke:new-task', 'invoke:generate-demo')
+        actions = @('invoke:new-task', 'invoke:generate-demo', 'tray-command:exit')
         observedStatus = @($observedStatus)
         assertions = @(
             'native WinUI window exposed'
@@ -172,6 +172,7 @@ try {
             'RPC-created task appeared'
             'operation-progress Event appeared'
             '1,000-row State reached the UI'
+            'tray menu command reached its application callback'
         )
     } | ConvertTo-Json -Depth 8 |
         Set-Content -LiteralPath (Join-Path $OutputDirectory 'interaction-trace.json') -Encoding utf8
@@ -180,13 +181,15 @@ try {
     # Target the exact HWND exposed by the UIA root. Process.MainWindowHandle
     # is heuristic and may select a diagnostic console instead of the WinUI
     # window; WindowPattern is also absent when WinUI exposes the root as a
-    # pane. WM_CLOSE is the same native path as the title-bar close button.
+    # pane. Command 2 is the reference host's tray-menu Exit action, so this
+    # also proves that TrayController's HWND subclass routes WM_COMMAND back to
+    # its application callback before the normal close lifecycle runs.
     $shutdownTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $nativeWindow = [IntPtr]$window.Current.NativeWindowHandle
     if ($nativeWindow -eq [IntPtr]::Zero -or
         -not [RivetNativeUi]::PostMessage(
-            $nativeWindow, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)) {
-        throw 'Taskboard did not expose a closeable native WinUI HWND'
+            $nativeWindow, 0x0111, [IntPtr]2, [IntPtr]::Zero)) {
+        throw 'Taskboard did not expose a tray-command-capable native WinUI HWND'
     }
     # UI Automation proxies keep out-of-process provider objects alive. Drop
     # every retained proxy once WM_CLOSE is sent so XAML can destroy the large
@@ -201,7 +204,7 @@ try {
     [GC]::WaitForPendingFinalizers()
     [GC]::Collect()
     if (-not $process.WaitForExit(10000)) {
-        throw 'Taskboard did not exit within ten seconds of native window close'
+        throw 'Taskboard did not exit within ten seconds of its tray Exit command'
     }
     $shutdownTimer.Stop()
     [ordered]@{ shutdownMilliseconds = $shutdownTimer.ElapsedMilliseconds } |

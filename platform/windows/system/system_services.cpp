@@ -1,14 +1,18 @@
 #include "system_services.hpp"
 
+#include <commctrl.h>
 #include <shellapi.h>
 #include <wincred.h>
 
+#include <algorithm>
 #include <functional>
 #include <stdexcept>
 #include <system_error>
+#include <unordered_set>
 #include <utility>
 
 #pragma comment(lib, "Advapi32.lib")
+#pragma comment(lib, "Comctl32.lib")
 #pragma comment(lib, "Shell32.lib")
 
 namespace rivet::system {
@@ -190,6 +194,197 @@ void TrayIcon::Notify(std::wstring const& title,
   wcsncpy_s(data.szInfoTitle, title.c_str(), _TRUNCATE);
   wcsncpy_s(data.szInfo, body.c_str(), _TRUNCATE);
   if (!::Shell_NotifyIconW(NIM_MODIFY, &data)) ThrowLastError("Shell_NotifyIconW");
+}
+
+namespace {
+
+HWND RequireTrayWindow(HWND window) {
+  if (window == nullptr) throw std::invalid_argument("tray window must not be null");
+  return window;
+}
+
+UINT RequireTrayCallbackMessage(UINT message) {
+  if (message < WM_APP || message > 0xBFFF) {
+    throw std::invalid_argument("tray callback message must be in the WM_APP range");
+  }
+  return message;
+}
+
+}  // namespace
+
+TrayMenuItem::TrayMenuItem(UINT identifier, std::wstring label,
+                           std::function<void()> activated, bool enabled,
+                           bool checked)
+    : identifier(identifier),
+      label(std::move(label)),
+      enabled(enabled),
+      checked(checked),
+      activated(std::move(activated)) {}
+
+TrayController::TrayController(HWND window, UINT identifier,
+                               UINT callback_message,
+                               std::wstring const& tooltip, HICON icon,
+                               std::vector<TrayMenuItem> menu,
+                               std::function<void()> activated)
+    : window_(RequireTrayWindow(window)),
+      identifier_(identifier),
+      callback_message_(RequireTrayCallbackMessage(callback_message)),
+      subclass_id_(reinterpret_cast<UINT_PTR>(this)),
+      activated_(std::move(activated)) {
+  SetMenu(std::move(menu));
+  taskbar_created_message_ = ::RegisterWindowMessageW(L"TaskbarCreated");
+  if (taskbar_created_message_ == 0) ThrowLastError("RegisterWindowMessageW");
+  icon_ = std::make_unique<TrayIcon>(window_, identifier_, callback_message_,
+                                     tooltip, icon);
+  if (!::SetWindowSubclass(window_, &TrayController::WindowSubclass,
+                           subclass_id_, reinterpret_cast<DWORD_PTR>(this))) {
+    ThrowLastError("SetWindowSubclass");
+  }
+}
+
+TrayController::~TrayController() {
+  if (window_ != nullptr) {
+    ::RemoveWindowSubclass(window_, &TrayController::WindowSubclass,
+                           subclass_id_);
+  }
+}
+
+void TrayController::SetMenu(std::vector<TrayMenuItem> menu) {
+  std::unordered_set<UINT> identifiers;
+  for (auto const& item : menu) {
+    if (item.type == TrayMenuItem::Type::separator) continue;
+    if (item.identifier == 0 || item.identifier > 0xFFFF) {
+      throw std::invalid_argument(
+          "tray menu command identifiers must be between 1 and 65535");
+    }
+    if (item.label.empty()) {
+      throw std::invalid_argument("tray menu item labels must not be empty");
+    }
+    if (!item.activated) {
+      throw std::invalid_argument("tray menu items require a callback");
+    }
+    if (!identifiers.insert(item.identifier).second) {
+      throw std::invalid_argument("tray menu command identifiers must be unique");
+    }
+  }
+  menu_ = std::move(menu);
+}
+
+void TrayController::SetActivationHandler(std::function<void()> activated) {
+  activated_ = std::move(activated);
+}
+
+void TrayController::SetTooltip(std::wstring const& tooltip) {
+  if (!icon_) throw std::logic_error("tray window has already been destroyed");
+  icon_->SetTooltip(tooltip);
+}
+
+void TrayController::Notify(std::wstring const& title,
+                            std::wstring const& body) const {
+  if (!icon_) throw std::logic_error("tray window has already been destroyed");
+  icon_->Notify(title, body);
+}
+
+LRESULT CALLBACK TrayController::WindowSubclass(
+    HWND window, UINT message, WPARAM w_param, LPARAM l_param, UINT_PTR,
+    DWORD_PTR reference_data) noexcept {
+  auto* self = reinterpret_cast<TrayController*>(reference_data);
+  if (self == nullptr) return ::DefSubclassProc(window, message, w_param, l_param);
+  return self->HandleMessage(message, w_param, l_param);
+}
+
+LRESULT TrayController::HandleMessage(UINT message, WPARAM w_param,
+                                      LPARAM l_param) noexcept {
+  if (message == WM_NCDESTROY) {
+    auto const window = window_;
+    icon_.reset();
+    window_ = nullptr;
+    ::RemoveWindowSubclass(window, &TrayController::WindowSubclass,
+                           subclass_id_);
+    return ::DefSubclassProc(window, message, w_param, l_param);
+  }
+
+  try {
+    if (message == taskbar_created_message_) {
+      if (icon_) icon_->Readd();
+      return 0;
+    }
+    if (message == callback_message_ &&
+        static_cast<UINT>(w_param) == identifier_) {
+      auto const event = static_cast<UINT>(l_param);
+      if (event == WM_RBUTTONUP || event == WM_CONTEXTMENU) {
+        ShowMenu();
+        return 0;
+      }
+      if (event == WM_LBUTTONUP || event == NIN_SELECT ||
+          event == NIN_KEYSELECT) {
+        auto activated = activated_;
+        if (activated) activated();
+        return 0;
+      }
+    }
+    if (message == WM_COMMAND && HIWORD(w_param) == 0 && l_param == 0 &&
+        DispatchCommand(LOWORD(w_param))) {
+      return 0;
+    }
+  } catch (...) {
+    ReportCallbackFailure();
+    return 0;
+  }
+  return ::DefSubclassProc(window_, message, w_param, l_param);
+}
+
+void TrayController::ShowMenu() {
+  if (menu_.empty() || window_ == nullptr) return;
+  auto const owner = window_;
+  auto const popup = ::CreatePopupMenu();
+  if (popup == nullptr) ThrowLastError("CreatePopupMenu");
+  try {
+    for (auto const& item : menu_) {
+      if (item.type == TrayMenuItem::Type::separator) {
+        if (!::AppendMenuW(popup, MF_SEPARATOR, 0, nullptr)) {
+          ThrowLastError("AppendMenuW");
+        }
+        continue;
+      }
+      UINT flags = MF_STRING;
+      if (!item.enabled) flags |= MF_GRAYED;
+      if (item.checked) flags |= MF_CHECKED;
+      if (!::AppendMenuW(popup, flags, item.identifier, item.label.c_str())) {
+        ThrowLastError("AppendMenuW");
+      }
+    }
+    POINT point{};
+    if (!::GetCursorPos(&point)) ThrowLastError("GetCursorPos");
+    // Required by TrackPopupMenu: without a foreground owner the popup can
+    // remain visible after the user clicks elsewhere.
+    ::SetForegroundWindow(owner);
+    ::TrackPopupMenu(popup, TPM_LEFTALIGN | TPM_BOTTOMALIGN | TPM_RIGHTBUTTON,
+                     point.x, point.y, 0, owner, nullptr);
+    ::PostMessageW(owner, WM_NULL, 0, 0);
+  } catch (...) {
+    ::DestroyMenu(popup);
+    throw;
+  }
+  ::DestroyMenu(popup);
+}
+
+bool TrayController::DispatchCommand(UINT identifier) {
+  auto const item = std::find_if(
+      menu_.begin(), menu_.end(), [identifier](TrayMenuItem const& candidate) {
+        return candidate.type == TrayMenuItem::Type::item &&
+               candidate.identifier == identifier;
+      });
+  if (item == menu_.end()) return false;
+  if (!item->enabled) return true;
+  auto activated = item->activated;
+  activated();
+  return true;
+}
+
+void TrayController::ReportCallbackFailure() noexcept {
+  ::OutputDebugStringW(
+      L"Rivet TrayController contained an exception at the Win32 callback boundary.\n");
 }
 
 void InstallCrashHook(CrashCallback callback,

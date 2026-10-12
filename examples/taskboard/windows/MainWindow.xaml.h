@@ -36,6 +36,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   void ApplyTasks(std::vector<rivet_app::BoardTask> items,
                   std::optional<std::int64_t> preferred = std::nullopt);
   void ShowSelectedTask();
+  void ActivateFromTray();
   void NotifyCompleted(std::string const& title);
   void SetBusy(bool busy);
   void SetReadyUi();
@@ -49,7 +50,7 @@ struct MainWindow : MainWindowT<MainWindow> {
           winrt::Windows::Foundation::IInspectable>()};
   std::optional<std::int64_t> selected_id_;
   std::optional<std::uint64_t> generation_request_;
-  std::unique_ptr<rivet::system::TrayIcon> tray_icon_;
+  std::unique_ptr<rivet::system::TrayController> tray_controller_;
   std::atomic<bool> closing_{false};
 };
 
