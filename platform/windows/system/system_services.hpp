@@ -60,7 +60,7 @@ class Autostart final {
 // Uses the first-party Shell_NotifyIcon surface. The owning HWND receives
 // callback_message for tray activation and must stay on the WinUI UI thread;
 // the application intercepts callback_message (SetWindowSubclass) and also
-// forwards the TaskbarCreated broadcast to readd() so the icon survives an
+// forwards the TaskbarCreated broadcast to Readd() so the icon survives an
 // Explorer restart.
 class TrayIcon final {
  public:
@@ -70,6 +70,8 @@ class TrayIcon final {
   TrayIcon(TrayIcon const&) = delete;
   TrayIcon& operator=(TrayIcon const&) = delete;
 
+  // The constructor copies `icon`; the caller retains ownership of its input
+  // handle and may release it immediately after construction.
   // State labels change with the application (running/paused, today's
   // totals); NIM_MODIFY with NIF_TIP, no re-add needed.
   void SetTooltip(std::wstring const& tooltip);

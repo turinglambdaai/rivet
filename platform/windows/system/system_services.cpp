@@ -126,9 +126,16 @@ TrayIcon::TrayIcon(HWND window, UINT identifier, UINT callback_message,
     : window_(window),
       identifier_(identifier),
       callback_message_(callback_message),
-      tooltip_(tooltip),
-      icon_(icon) {
-  Add();
+      tooltip_(tooltip) {
+  icon_ = ::CopyIcon(icon);
+  if (icon_ == nullptr) ThrowLastError("CopyIcon");
+  try {
+    Add();
+  } catch (...) {
+    ::DestroyIcon(icon_);
+    icon_ = nullptr;
+    throw;
+  }
 }
 
 TrayIcon::~TrayIcon() {
@@ -137,6 +144,7 @@ TrayIcon::~TrayIcon() {
   data.hWnd = window_;
   data.uID = identifier_;
   ::Shell_NotifyIconW(NIM_DELETE, &data);
+  if (icon_ != nullptr) ::DestroyIcon(icon_);
 }
 
 void TrayIcon::Add() {
