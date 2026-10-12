@@ -132,8 +132,8 @@
 
 (define embed-action
   (build-path repository-root ".github" "actions" "setup-embed-racket" "action.yml"))
-(for ([expected (in-list '("actions/cache/restore@v5"
-                           "actions/cache/save@v5"
+(for ([expected (in-list '("actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+                           "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
                            "sha256sum --check"
                            "RIVET_RACKET_INCLUDE"
                            "RIVET_RACKET_LIBRARY"
