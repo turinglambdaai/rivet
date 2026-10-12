@@ -38,7 +38,7 @@ runs:
   steps:
     - name: Restore embeddable runtime cache
       id: cache
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ runner.temp }}/racket-embed-${{ inputs.racket-version }}
         key: racket-embed-${{ inputs.racket-version }}-${{ inputs.archive-sha256 }}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-version }}
@@ -120,7 +120,7 @@ runs:
 
     - name: Save validated embeddable runtime cache
       if: steps.cache.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v5
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ runner.temp }}/racket-embed-${{ inputs.racket-version }}
         key: racket-embed-${{ inputs.racket-version }}-${{ inputs.archive-sha256 }}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-version }}

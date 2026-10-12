@@ -19,7 +19,7 @@ jobs:
     name: Windows ARM64 CLI package smoke
     runs-on: windows-11-arm
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Racket CS 9.3 (arm64, checksum-pinned)
         shell: pwsh
         run: |
@@ -89,9 +89,9 @@ jobs:
     name: macOS Intel CLI package smoke
     runs-on: macos-15-intel
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up Racket CS
-        uses: Bogdanp/setup-racket@v1.15
+        uses: Bogdanp/setup-racket@2466913449df77df2bad149d1f2fc4e1ea4795dd # v1.15
         with:
           architecture: x64
           distribution: full
@@ -162,7 +162,7 @@ jobs:
     name: Linux ARM64 CLI package smoke
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up embeddable Racket CS
         uses: ./.github/actions/setup-embed-racket
       - name: Install Rivet
