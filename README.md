@@ -106,7 +106,7 @@ Racket CS runs on a dedicated runtime thread. Native UI code never manipulates R
 
 The embedding model is inspired by [Noise](https://github.com/Bogdanp/Noise), but Rivet makes the runtime contract, protocol, code generation, and lifecycle cross-platform instead of Swift-first.
 
-See [architecture](docs/architecture.md), [agent-native development](docs/agent-native.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [typed device communication](docs/device-communication.md), the unimplemented [network device channel design](docs/network-device-channel.md), [Android architecture](docs/android.md), [project configuration](docs/configuration.md), [system services](docs/system-services.md), [Linux display policy](docs/linux-display.md), [production roadmap](docs/production-roadmap.md), [large payloads, pagination, and progress](docs/large-payloads.md), [Windows native window interop](docs/windows-native-window.md), [release and updates](docs/release-and-updates.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
+See [architecture](docs/architecture.md), [API stability](docs/api-stability.md), [agent-native development](docs/agent-native.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [typed device communication](docs/device-communication.md), the unimplemented [network device channel design](docs/network-device-channel.md), [Android architecture](docs/android.md), [project configuration](docs/configuration.md), [system services](docs/system-services.md), [Linux display policy](docs/linux-display.md), [production roadmap](docs/production-roadmap.md), [large payloads, pagination, and progress](docs/large-payloads.md), [Windows native window interop](docs/windows-native-window.md), [release and updates](docs/release-and-updates.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
 
 ## Platform status
 
@@ -202,6 +202,10 @@ For publisher-signed output, use `raco rivet package --production` with the plat
 ```
 
 Arguments and results are validated at the Racket boundary. Supported schema values currently include `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, `(Optional T)`, named values declared with `define-record`, and closed cases declared with `define-enum`. Records generate Swift structs under `RivetTypes`, C++ structs, and Kotlin data classes; Enums generate Swift raw-value enums under `RivetTypes`, C++ `enum class` values, and Kotlin `enum class` values. The Swift namespace prevents domain names such as `Task` and `Result` from shadowing standard-library types across the application module.
+
+These type names form Rivet's declaration grammar; they are not runtime Racket
+values. Runtime tooling should inspect the immutable Keel schema returned by
+`current-backend-app-schema` rather than depending on a second descriptor API.
 
 ### Events
 
@@ -331,6 +335,10 @@ The maintained Taskboard also has platform-native [UI end-to-end gates](docs/nat
 - **No cross-platform declarative UI DSL** — native UI code remains SwiftUI/AppKit or WinUI 3/C++/WinRT.
 - **Publisher credentials remain application-specific** — Rivet automates Authenticode and Developer ID/notarization flows, but certificates, PFX passwords, and Apple notary profiles are intentionally supplied by the application/CI environment rather than stored by Rivet.
 - **The public API is still pre-1.0** — protocol compatibility is versioned, but higher-level APIs may still evolve.
+
+Maintainers should follow the [API stability policy](docs/api-stability.md);
+the repository snapshots every public export and tests the full Racket suite
+against the minimum supported Racket release.
 
 ## Roadmap
 

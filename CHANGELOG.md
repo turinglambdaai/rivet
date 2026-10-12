@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Removed the misleading `rivet-type` runtime descriptors from the pre-1.0
+  public surface. Schema type identifiers are declaration grammar, while Keel
+  is the canonical runtime-inspection model.
+- Added an exact public-export contract and a Racket 9.0 CI lane so accidental
+  API drift and minimum-version regressions fail before merge.
+
 - Make Keel's validated `app-schema` the canonical in-memory input to Swift,
   C++, and Kotlin client generation. Rivet now keeps only a fail-closed
   Keel-to-RVT1 type adapter instead of reconstructing a parallel codegen schema
