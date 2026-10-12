@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The Windows tray icon (`rivet::system::TrayIcon`) can update its tooltip
+  (`SetTooltip`) and re-register itself after an Explorer restart
+  (`Readd`, called from the host's `TaskbarCreated` broadcast handler) —
+  state-aware tray apps no longer re-allocate the icon to relabel it and no
+  longer lose it the first time the shell restarts.
+
 - Removed the misleading `rivet-type` runtime descriptors from the pre-1.0
   public surface. Schema type identifiers are declaration grammar, while Keel
   is the canonical runtime-inspection model.

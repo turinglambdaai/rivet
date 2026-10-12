@@ -123,16 +123,12 @@ void Autostart::SetEnabled(std::wstring const& application_id,
 
 TrayIcon::TrayIcon(HWND window, UINT identifier, UINT callback_message,
                    std::wstring const& tooltip, HICON icon)
-    : window_(window), identifier_(identifier) {
-  NOTIFYICONDATAW data{};
-  data.cbSize = sizeof(data);
-  data.hWnd = window;
-  data.uID = identifier;
-  data.uFlags = NIF_MESSAGE | NIF_TIP | NIF_ICON;
-  data.uCallbackMessage = callback_message;
-  data.hIcon = icon;
-  wcsncpy_s(data.szTip, tooltip.c_str(), _TRUNCATE);
-  if (!::Shell_NotifyIconW(NIM_ADD, &data)) ThrowLastError("Shell_NotifyIconW");
+    : window_(window),
+      identifier_(identifier),
+      callback_message_(callback_message),
+      tooltip_(tooltip),
+      icon_(icon) {
+  Add();
 }
 
 TrayIcon::~TrayIcon() {
@@ -141,6 +137,38 @@ TrayIcon::~TrayIcon() {
   data.hWnd = window_;
   data.uID = identifier_;
   ::Shell_NotifyIconW(NIM_DELETE, &data);
+}
+
+void TrayIcon::Add() {
+  NOTIFYICONDATAW data{};
+  data.cbSize = sizeof(data);
+  data.hWnd = window_;
+  data.uID = identifier_;
+  data.uFlags = NIF_MESSAGE | NIF_TIP | NIF_ICON;
+  data.uCallbackMessage = callback_message_;
+  data.hIcon = icon_;
+  wcsncpy_s(data.szTip, tooltip_.c_str(), _TRUNCATE);
+  if (!::Shell_NotifyIconW(NIM_ADD, &data)) ThrowLastError("Shell_NotifyIconW");
+}
+
+void TrayIcon::SetTooltip(std::wstring const& tooltip) {
+  tooltip_ = tooltip;
+  NOTIFYICONDATAW data{};
+  data.cbSize = sizeof(data);
+  data.hWnd = window_;
+  data.uID = identifier_;
+  data.uFlags = NIF_TIP;
+  wcsncpy_s(data.szTip, tooltip_.c_str(), _TRUNCATE);
+  if (!::Shell_NotifyIconW(NIM_MODIFY, &data)) ThrowLastError("Shell_NotifyIconW");
+}
+
+void TrayIcon::Readd() {
+  NOTIFYICONDATAW data{};
+  data.cbSize = sizeof(data);
+  data.hWnd = window_;
+  data.uID = identifier_;
+  ::Shell_NotifyIconW(NIM_DELETE, &data);
+  Add();
 }
 
 void TrayIcon::Notify(std::wstring const& title,
