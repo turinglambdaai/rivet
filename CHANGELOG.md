@@ -4,6 +4,17 @@
 
 ## 0.11.0
 
+- Drop the IsolatedDeinit experimental feature from the released SwiftPM
+  packages. Released Xcode toolchains reject experimental features outright,
+  so package consumers could not compile RivetSystem away from trunk
+  compilers; the clipboard change-observation teardown now uses a plain
+  deinit over a nonisolated stored Timer, which every toolchain accepts.
+- Open the Windows taskboard reference window at a size that keeps every
+  layout region usable. At the WinUI default window size the timing-chart
+  row squeezed the task list into a virtualizing sliver whose row
+  containers never realized — invisible in the UI and to UI Automation —
+  and the native-UI end-to-end wait timed out waiting for the RPC-created
+  row even though the RPC itself had succeeded.
 - Make packaging a clean native provenance boundary (#235). Windows package
   builds use MSBuild `Rebuild`, macOS recreates the SwiftPM scratch tree, and
   Linux already recreates its CMake tree; incremental caches can no longer
