@@ -45,6 +45,22 @@ series when the first batch sample was appended. Hosts keep a watermark
 the Racket ring evicted undrained samples, and the host re-pulls the window
 through its typed RPC instead of guessing.
 
+## Throughput envelope
+
+`benches/event-throughput.rkt` drives the real serve path over pipes
+(Racket-side encode + frame + pipe write, client read-frame drain):
+
+| Batch shape | Throughput |
+| --- | ---: |
+| 2-sample tick batch (48 B) | ~52 000 events/s |
+| 16-sample drain batch (272 B — a 128 Hz stream drained at 30 Hz) | ~32 000 events/s |
+| Full 16 384-sample window (256 KiB, recovery path) | ~70 events/s (~14 ms each) |
+
+A two-series product load (batches at 30–60 Hz per series) sits three
+orders of magnitude under capacity; the native redraw cadence is the
+binding constraint, not the event channel. There is deliberately no
+separate streaming transport.
+
 ## Host-side widgets
 
 | Host | Widget | Notes |
