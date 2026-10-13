@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.8.0
+
 - Reject self-contradictory signed update manifests before publication or
   client acceptance: artifact sets must be non-empty and positive-size,
   minimum/previous versions must precede the release, and artifact
