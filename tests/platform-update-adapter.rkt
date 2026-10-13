@@ -87,6 +87,43 @@
          (string=? (read-text (build-path success-target "version.txt"))
                    "new"))
        #:verify-staged (test-verifier "new")))
+    (define same-target-different-backup
+      (prepare-platform-installation
+       (candidate 'zip) success-archive
+       #:target success-target
+       #:backup-path (build-path success-root "alternate-backup")
+       #:restart void
+       #:health-check (lambda () #t)
+       #:verify-staged (test-verifier "new")))
+
+    ;; A second updater is rejected before it can touch the shared staging,
+    ;; backup, marker, or journal paths. The first holder is a separate thread
+    ;; so this proves the in-process layer instead of relying only on an OS
+    ;; file lock.
+    (define lock-entered (make-semaphore 0))
+    (define release-lock (make-semaphore 0))
+    (define lock-result (make-channel))
+    (thread
+     (lambda ()
+       (with-handlers ([exn? (lambda (error) (channel-put lock-result error))])
+         (call-with-platform-installation-lock
+          'test-update-lock
+          success
+          (lambda ()
+            (semaphore-post lock-entered)
+            (semaphore-wait release-lock)))
+         (channel-put lock-result 'released))))
+    (check-not-false (sync/timeout 2 lock-entered))
+    (check-exn #rx"another update transaction already owns"
+               (lambda ()
+                 (execute-platform-installation!
+                  same-target-different-backup
+                  #:journal-path success-journal)))
+    (check-equal? (read-text (build-path success-target "version.txt")) "old")
+    (check-false (file-exists? success-journal))
+    (semaphore-post release-lock)
+    (check-equal? (sync/timeout 2 lock-result) 'released)
+
     (check-equal?
      (execute-platform-installation! success #:journal-path success-journal)
      'restarted)

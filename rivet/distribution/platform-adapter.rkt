@@ -13,7 +13,7 @@
          "manifest.rkt"
          "updater.rkt")
 
-(provide (struct-out platform-installation)
+(provide platform-installation?
          current-update-platform
          current-install-kind
          platform-installer-policy
@@ -22,7 +22,7 @@
          execute-platform-installation!
          recover-platform-installation!)
 
-(struct platform-installation (plan health-check commit) #:transparent)
+(struct platform-installation (plan health-check commit transaction-lock))
 
 (define (current-update-platform)
   (case (system-type 'os)
@@ -138,6 +138,54 @@
 
 (define (sibling-path target suffix)
   (string->path (string-append (path->string target) suffix)))
+
+;; OS file locks serialize separate application processes. Keep a matching
+;; in-process semaphore because some file-lock implementations are scoped to a
+;; process and would otherwise allow two threads to enter the same transaction.
+(define transaction-locks (make-hash))
+(define transaction-locks-guard (make-semaphore 1))
+
+(define (transaction-semaphore lock-path)
+  (define key (path->string (normal-case-path lock-path)))
+  (call-with-semaphore
+   transaction-locks-guard
+   (lambda ()
+     (hash-ref transaction-locks key
+               (lambda ()
+                 (define lock (make-semaphore 1))
+                 (hash-set! transaction-locks key lock)
+                 lock)))))
+
+(define (call-with-platform-installation-lock who installation thunk)
+  (define lock-path (platform-installation-transaction-lock installation))
+  (unless (complete-path? lock-path)
+    (raise-arguments-error who
+                           "platform installation has no absolute target identity"))
+  (make-parent-directory* lock-path)
+  (define local-lock (transaction-semaphore lock-path))
+  (dynamic-wind
+    (lambda ()
+      ;; Do not allow an asynchronous break between acquiring the semaphore
+      ;; and installing the dynamic-wind cleanup that releases it.
+      (parameterize-break
+       #f
+       (unless (semaphore-try-wait? local-lock)
+         (raise-arguments-error
+          who
+          "another update transaction already owns this installation"
+          "lock" lock-path))))
+    (lambda ()
+      (call-with-file-lock/timeout
+       #f
+       'exclusive
+       thunk
+       (lambda ()
+         (raise-arguments-error
+          who
+          "another process already owns this update transaction"
+          "lock" lock-path))
+       #:lock-file lock-path))
+    (lambda () (semaphore-post local-lock))))
 
 (define (normalize-target who path)
   (unless (complete-path? path)
@@ -283,27 +331,37 @@
                       #:restart restart
                       #:rollback rollback)
    health-check
-   commit))
+   commit
+   (sibling-path target ".rivet-update.lock")))
 
 (define (execute-platform-installation! installation
                                         #:journal-path [journal-path #f])
   (unless (platform-installation? installation)
     (raise-argument-error 'execute-platform-installation!
                           "platform-installation?" installation))
-  (execute-install-plan!
-   (platform-installation-plan installation)
-   #:health-check (platform-installation-health-check installation)
-   #:commit (platform-installation-commit installation)
-   #:journal-path journal-path))
+  (call-with-platform-installation-lock
+   'execute-platform-installation!
+   installation
+   (lambda ()
+     (execute-install-plan!
+      (platform-installation-plan installation)
+      #:health-check (platform-installation-health-check installation)
+      #:commit (platform-installation-commit installation)
+      #:journal-path journal-path))))
 
 (define (recover-platform-installation! installation journal-path)
   (unless (platform-installation? installation)
     (raise-argument-error 'recover-platform-installation!
                           "platform-installation?" installation))
-  (recover-install-plan!
-   (platform-installation-plan installation)
-   journal-path
-   #:commit (platform-installation-commit installation)))
+  (call-with-platform-installation-lock
+   'recover-platform-installation!
+   installation
+   (lambda ()
+     (recover-install-plan!
+      (platform-installation-plan installation)
+      journal-path
+      #:commit (platform-installation-commit installation)))))
 
 (module+ test-support
-  (provide detect-install-kind))
+  (provide detect-install-kind
+           call-with-platform-installation-lock))
