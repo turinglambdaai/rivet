@@ -409,7 +409,12 @@ Checks whether a version is allowed by a release channel.}
 @racket[platform], @racket[architecture], @racket[url], @racket[sha256],
 @racket[size], @racket[installer], and @racket[arguments].
 @racket[update-manifest] values contain the signed application and release
-policy plus a list of artifacts.
+policy plus a non-empty list of artifacts. The minimum updatable version and
+optional rollback predecessor must both be older than the release version.
+Artifact sizes are positive, and a manifest cannot repeat the same platform,
+architecture, and installer identity. Payloads and signed wrappers contain
+exactly one JSON value and reject fields outside their versioned schema, so a
+publisher typo cannot be silently ignored.
 
 @defproc[(write-signed-manifest [manifest update-manifest?]
                                 [private-key any/c]

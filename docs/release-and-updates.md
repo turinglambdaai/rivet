@@ -65,6 +65,14 @@ run; the family update feed and locked-down machines consume it directly.
 
 HTTPS protects transport, but it is not the root of update trust. A manifest contains an exact byte payload and an Ed25519 signature. The signed payload identifies the application, version, build, stable/beta/dev channel, staged rollout percentage, minimum updatable version, rollback predecessor, and every platform artifact's URL, byte size, SHA-256, installer kind, and arguments.
 
+Manifest policy is validated as a whole before signing or accepting it. Every
+release has at least one positive-size artifact; minimum and previous versions
+are older than the release; and platform/architecture/installer identities are
+unique. Separate portable and AppImage artifacts for the same Linux target are
+valid because their installer identities differ. Versioned wrapper, manifest,
+signature, and artifact objects are closed schemas; unknown fields and trailing
+JSON values fail instead of being silently ignored.
+
 The updater verifies in this order. The signed payload stays as opaque bytes
 until the Ed25519 check succeeds; unauthenticated input never reaches the
 manifest JSON parser.

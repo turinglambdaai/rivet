@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Reject self-contradictory signed update manifests before publication or
+  client acceptance: artifact sets must be non-empty and positive-size,
+  minimum/previous versions must precede the release, and artifact
+  platform/architecture/installer identities must be unique. Signed wrappers
+  and payloads also reject trailing JSON values and fields outside their
+  versioned schemas.
+
 - `download-update` reports download progress: an optional `#:on-progress`
   callback receives cumulative bytes from zero through the final downloaded
   size. Intermediate reports are throttled to about one per percent of the

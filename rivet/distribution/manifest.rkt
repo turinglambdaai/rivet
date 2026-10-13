@@ -28,6 +28,31 @@
                   previous-version rollback-allowed? rollout artifacts)
   #:transparent)
 
+(define manifest-fields
+  '(schema application_id version build channel published_at minimum_version
+           previous_version rollback_allowed rollout artifacts))
+(define artifact-fields
+  '(platform architecture url sha256 size installer arguments))
+(define wrapper-fields '(schema payload signature))
+(define signature-fields '(algorithm key_id value))
+
+(define (reject-unknown-fields who value allowed context)
+  (define unknown
+    (filter (lambda (key) (not (memq key allowed))) (hash-keys value)))
+  (unless (null? unknown)
+    (raise-arguments-error who
+                           "object contains fields outside its schema"
+                           "object" context
+                           "fields" (sort unknown symbol<?))))
+
+(define (read-complete-json who input)
+  (define value (read-json input))
+  (define trailing (read-json input))
+  (unless (eof-object? trailing)
+    (raise-arguments-error who
+                           "input must contain exactly one JSON value"))
+  value)
+
 (define (required hash key predicate description)
   (define value
     (hash-ref hash key
@@ -75,6 +100,8 @@
 (define (jsexpr->artifact value)
   (unless (hash? value)
     (raise-argument-error 'payload-bytes->manifest "artifact object" value))
+  (reject-unknown-fields
+   'payload-bytes->manifest value artifact-fields "artifact")
   (define sha (required value 'sha256
                         (lambda (v) (and (string? v)
                                          (regexp-match? #px"^[0-9A-Fa-f]{64}$" v)))
@@ -87,7 +114,7 @@
                               (regexp-match? #px"^https://" v)))
              "HTTPS URL")
    (string-downcase sha)
-   (required value 'size exact-nonnegative-integer? "non-negative integer")
+   (required value 'size exact-positive-integer? "positive integer")
    (string->symbol (required value 'installer string? "string"))
    (required value 'arguments
              (lambda (v) (and (list? v) (andmap string? v)))
@@ -100,9 +127,12 @@
                        (raise-arguments-error 'payload-bytes->manifest
                                               "payload is not valid JSON"
                                               "detail" (exn-message e)))])
-      (read-json (open-input-bytes payload))))
+      (read-complete-json
+       'payload-bytes->manifest (open-input-bytes payload))))
   (unless (hash? value)
     (raise-argument-error 'payload-bytes->manifest "JSON object payload" value))
+  (reject-unknown-fields
+   'payload-bytes->manifest value manifest-fields "manifest")
   (define schema (required value 'schema exact-integer? "integer"))
   (unless (= schema manifest-schema-version)
     (raise-arguments-error 'payload-bytes->manifest
@@ -130,6 +160,39 @@
     (raise-arguments-error 'payload-bytes->manifest
                            "previous_version must be null or SemVer"
                            "value" previous))
+  (define minimum-version
+    (required value 'minimum_version version? "SemVer 2.0 string"))
+  (unless (version<? minimum-version version)
+    (raise-arguments-error
+     'payload-bytes->manifest
+     "minimum_version must be older than the release version"
+     "minimum_version" minimum-version
+     "version" version))
+  (when (and (not (eq? previous 'null))
+             (not (version<? previous version)))
+    (raise-arguments-error
+     'payload-bytes->manifest
+     "previous_version must be older than the release version"
+     "previous_version" previous
+     "version" version))
+  (define artifact-values
+    (required value 'artifacts
+              (lambda (v) (and (list? v) (pair? v)))
+              "non-empty array"))
+  (define artifacts (map jsexpr->artifact artifact-values))
+  (define duplicate-identity
+    (check-duplicates
+     (map (lambda (artifact)
+            (list (update-artifact-platform artifact)
+                  (update-artifact-architecture artifact)
+                  (update-artifact-installer artifact)))
+          artifacts)
+     equal?))
+  (when duplicate-identity
+    (raise-arguments-error
+     'payload-bytes->manifest
+     "duplicate artifact platform, architecture, and installer identity"
+     "identity" duplicate-identity))
   (update-manifest
    (required value 'application_id
              (lambda (v) (and (string? v) (not (string=? v ""))))
@@ -142,12 +205,11 @@
                (and (string? v)
                     (regexp-match? #px"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" v)))
              "UTC RFC 3339 timestamp")
-   (required value 'minimum_version version? "SemVer 2.0 string")
+   minimum-version
    (and (not (eq? previous 'null)) previous)
    (required value 'rollback_allowed boolean? "boolean")
    rollout
-   (map jsexpr->artifact
-        (required value 'artifacts list? "array"))))
+   artifacts))
 
 (define (signed-wrapper payload key-id signature)
   (hasheq 'schema manifest-schema-version
@@ -169,9 +231,11 @@
   (newline out))
 
 (define (read-wrapper input)
-  (define value (read-json input))
+  (define value (read-complete-json 'read-signed-manifest input))
   (unless (hash? value)
     (raise-argument-error 'read-signed-manifest "JSON object" value))
+  (reject-unknown-fields
+   'read-signed-manifest value wrapper-fields "signed wrapper")
   (define schema (required value 'schema exact-integer? "integer"))
   (unless (= schema manifest-schema-version)
     (raise-arguments-error 'read-signed-manifest
@@ -179,6 +243,8 @@
                            "configured" schema
                            "supported" manifest-schema-version))
   (define signature (required value 'signature hash? "object"))
+  (reject-unknown-fields
+   'read-signed-manifest signature signature-fields "signature")
   (define algorithm (required signature 'algorithm string? "string"))
   (unless (string=? algorithm "ed25519")
     (raise-arguments-error 'read-signed-manifest
