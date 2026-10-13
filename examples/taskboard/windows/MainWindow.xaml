@@ -87,7 +87,7 @@
                 OnContent="Streaming" OffContent="Stopped"
                 Toggled="StreamToggle_Toggled"
                 AutomationProperties.AutomationId="stream-toggle" />
-            <ContentControl x:Name="ChartHost" MinHeight="170" HorizontalAlignment="Stretch"
+            <ContentControl x:Name="ChartHost" MinHeight="140" HorizontalAlignment="Stretch"
                     AutomationProperties.AutomationId="timing-chart" />
         </StackPanel>
 

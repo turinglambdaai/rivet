@@ -2,6 +2,8 @@
 #include "App.xaml.h"
 #include "MainWindow.xaml.h"
 
+#include <winrt/Microsoft.UI.Windowing.h>
+
 namespace winrt::RivetHost::implementation {
 
 App::App() {
@@ -21,6 +23,10 @@ App::App() {
 
 void App::OnLaunched(Microsoft::UI::Xaml::LaunchActivatedEventArgs const&) {
   window_ = winrt::make<MainWindow>();
+  // The reference layout (status, task list, timing chart, actions) needs more
+  // height than the WinUI default window provides; at that default the list
+  // collapses into a virtualizing sliver whose rows never realize.
+  window_.AppWindow().Resize({ 980, 700 });
   window_.Closed([this](auto const&, auto const&) {
     // A WinUI 3 desktop Application owns its dispatcher independently of its
     // windows. Releasing the final Window reference is necessary, but it does
