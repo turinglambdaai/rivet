@@ -6,7 +6,11 @@
          rackunit
          racket/file
          racket/port
-         "../rivet/distribution.rkt")
+         "../rivet/distribution.rkt"
+         (rename-in (submod "../rivet/distribution/updater.rkt" test)
+                    [copy-limited! copy-limited!/test]
+                    [call-with-partial-cleanup
+                     call-with-partial-cleanup/test]))
 
 (use-all-factories!)
 
@@ -63,6 +67,19 @@
            (lambda ()
              (select-update linux-config linux-manifest
                             #:install-kind 'unknown)))
+
+(check-exn exn:fail:contract?
+           (lambda ()
+             (download-update linux-config
+                              (update-candidate linux-manifest linux-zip)
+                              "unused"
+                              #:on-progress (lambda () (void)))))
+(check-exn exn:fail:contract?
+           (lambda ()
+             (download-update linux-config
+                              (update-candidate linux-manifest linux-zip)
+                              "unused"
+                              #:progress-every 0)))
 
 (when private-key
   (define public-key
@@ -316,3 +333,44 @@
     (check-equal? commits 2)
     (check-false (file-exists? journal-path)))
   (lambda () (delete-directory/files commit-root)))
+
+;; download-update's private copy path streams the payload, enforces the byte
+;; limit, and reports a useful zero-to-final sequence without flooding the
+;; callback. A payload larger than the copy buffer makes the cadence assertion
+;; exercise multiple reads instead of passing vacuously on one read.
+(let* ([payload (apply bytes (for/list ([i (in-range 200000)]) (modulo i 256)))]
+       [in (open-input-bytes payload)]
+       [out (open-output-bytes)]
+       [reports '()])
+  (define total
+    (copy-limited!/test in out (* 1024 1024)
+                        #:on-progress
+                        (lambda (n) (set! reports (cons n reports)))
+                        #:progress-every 100000))
+  (check-equal? total 200000)
+  (check-equal? (get-output-bytes out) payload)
+  (check-equal? (reverse reports) '(0 131072 200000)))
+
+(let ([in (open-input-bytes (make-bytes 10))]
+      [out (open-output-bytes)])
+  ;; The limit is enforced before the offending chunk is written.
+  (check-exn #rx"permitted byte limit"
+             (lambda ()
+               (copy-limited!/test in out 5)))
+  (check-equal? (bytes-length (get-output-bytes out)) 0))
+
+;; Cancellation uses exn:break rather than exn:fail. It must still remove the
+;; partial download before the worker publishes its terminal state.
+(define interrupted-partial
+  (make-temporary-file "rivet-interrupted-download-~a.partial"))
+(check-exn
+ exn:break?
+ (lambda ()
+   (call-with-partial-cleanup/test
+    interrupted-partial
+    (lambda ()
+      (let/ec escape
+        (raise (exn:break "cancelled"
+                          (current-continuation-marks)
+                          escape)))))))
+(check-false (file-exists? interrupted-partial))

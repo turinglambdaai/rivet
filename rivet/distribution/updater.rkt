@@ -35,18 +35,41 @@
   '(prepared installing installed restarting restarted checking healthy
              committing committed rollback-started rolled-back rollback-failed))
 
-(define (copy-limited! in out limit)
+(define (copy-limited! in out limit
+                       #:who [who 'copy-limited!]
+                       #:on-progress [on-progress void]
+                       #:progress-every [progress-every 1])
+  ;; Report the initial zero and the final byte count. Intermediate reports are
+  ;; separated by at least progress-every bytes so fast links do not flood UI
+  ;; pollers. This helper stays private; download-update is the public contract.
   (define buffer (make-bytes 65536))
-  (let loop ([total 0])
+  (on-progress 0)
+  (let loop ([total 0] [last-reported 0])
     (define count (read-bytes-avail! buffer in))
     (cond
-      [(eof-object? count) total]
+      [(eof-object? count)
+       (unless (= last-reported total) (on-progress total))
+       total]
       [else
        (define next (+ total count))
        (when (> next limit)
-         (error 'download-update "update exceeds configured download limit"))
+         (error who "response exceeds permitted byte limit"))
        (write-bytes buffer out 0 count)
-       (loop next)])))
+       (when (>= (- next last-reported) progress-every)
+         (on-progress next)
+         (set! last-reported next))
+       (loop next last-reported)])))
+
+(define (call-with-partial-cleanup temporary thunk)
+  (with-handlers ([exn?
+                   (lambda (error)
+                     (when (file-exists? temporary) (delete-file temporary))
+                     (raise error))])
+    (thunk)))
+
+(module+ test
+  (provide copy-limited!
+           call-with-partial-cleanup))
 
 ;; GitHub release assets — the dominant update origin — answer with a 302
 ;; to their CDN, so every fetch must follow redirections or the updater
@@ -66,7 +89,7 @@
     void
     (lambda ()
       (define out (open-output-bytes))
-      (copy-limited! in out maximum-bytes)
+      (copy-limited! in out maximum-bytes #:who 'fetch-update-manifest)
       (verify-signed-manifest (open-input-bytes (get-output-bytes out))
                               public-key
                               #:key-id key-id))
@@ -125,7 +148,19 @@
                            "actual" actual))
   path)
 
-(define (download-update config candidate destination)
+(define (download-update config candidate destination
+                         #:on-progress [on-progress void]
+                         #:progress-every [configured-progress-every #f])
+  (unless (and (procedure? on-progress)
+               (procedure-arity-includes? on-progress 1))
+    (raise-argument-error 'download-update
+                          "procedure accepting one argument"
+                          on-progress))
+  (unless (or (not configured-progress-every)
+              (exact-positive-integer? configured-progress-every))
+    (raise-argument-error 'download-update
+                          "(or/c #f exact-positive-integer?)"
+                          configured-progress-every))
   (define artifact (update-candidate-artifact candidate))
   (define maximum (updater-config-maximum-download-bytes config))
   (when (> (update-artifact-size artifact) maximum)
@@ -133,25 +168,36 @@
   (make-parent-directory* destination)
   (define temporary (path-add-extension destination #".partial"))
   (when (file-exists? temporary) (delete-file temporary))
-  (with-handlers ([exn:fail?
-                   (lambda (e)
-                     (when (file-exists? temporary) (delete-file temporary))
-                     (raise e))])
-    (define in
-      (get-pure-port (string->url (update-artifact-url artifact))
-                     '("User-Agent: Rivet-Updater/1")
-                     #:redirections update-fetch-redirections))
-    (dynamic-wind
-      void
-      (lambda ()
-        (call-with-output-file temporary
-          #:exists 'truncate/replace
-          #:mode 'binary
-          (lambda (out) (copy-limited! in out maximum))))
-      (lambda () (close-input-port in)))
-    (verify-update-artifact! candidate temporary)
-    (rename-file-or-directory temporary destination #t)
-    destination))
+  (call-with-partial-cleanup
+   temporary
+   (lambda ()
+     (define in
+       (get-pure-port (string->url (update-artifact-url artifact))
+                      '("User-Agent: Rivet-Updater/1")
+                      #:redirections update-fetch-redirections))
+     (dynamic-wind
+       void
+       (lambda ()
+         (call-with-output-file temporary
+           #:exists 'truncate/replace
+           #:mode 'binary
+           (lambda (out)
+             ;; Bound the stream to the signed size, not merely the looser
+             ;; configured ceiling, so progress never exceeds 100% before a
+             ;; malformed response is rejected.
+             (copy-limited! in out (update-artifact-size artifact)
+                            #:who 'download-update
+                            #:on-progress on-progress
+                            #:progress-every
+                            (or configured-progress-every
+                                (max 1
+                                     (quotient
+                                      (update-artifact-size artifact)
+                                      100)))))))
+       (lambda () (close-input-port in)))
+     (verify-update-artifact! candidate temporary)
+     (rename-file-or-directory temporary destination #t)
+     destination)))
 
 (define (make-install-plan candidate downloaded-path
                            #:backup-path [backup-path #f]
