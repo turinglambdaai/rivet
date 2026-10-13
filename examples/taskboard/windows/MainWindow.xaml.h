@@ -57,7 +57,7 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::optional<std::int64_t> selected_id_;
   std::optional<std::uint64_t> generation_request_;
   std::unique_ptr<rivet::system::TrayController> tray_controller_;
-  rivet::win_ui::ChartControl chart_{nullptr};
+  rivet::win_ui::ChartControl chart_;
   bool chart_configured_{false};
   std::atomic<bool> closing_{false};
 };

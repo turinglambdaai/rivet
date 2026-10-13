@@ -67,7 +67,6 @@ MainWindow::MainWindow() {
   InitializeComponent();
   Title(L"Rivet Taskboard — Racket + WinUI 3");
   TaskList().ItemsSource(task_rows_);
-  chart_ = rivet::win_ui::ChartControl();
   ChartHost().Content(chart_);
   chart_.set_title("offsetFromMaster / meanPathDelay");
   try {
@@ -400,12 +399,12 @@ void MainWindow::ConfigureChartAsync() {
             return;
           }
           auto const& received = result.get();
-          auto* specs = new std::vector<rivet::ui::ChartSeriesSpec>();
+          auto* specs = new std::vector<rivet::win_ui::ChartSeriesSpec>();
           for (auto const& timing : received) {
             specs->push_back({timing.id, timing.label, timing.color, timing.unit});
           }
           dispatcher.TryEnqueue([weak, specs] {
-            std::unique_ptr<std::vector<rivet::ui::ChartSeriesSpec>> owned(specs);
+            std::unique_ptr<std::vector<rivet::win_ui::ChartSeriesSpec>> owned(specs);
             if (auto window = weak.get()) {
               window->chart_.set_series(std::move(*owned));
               window->chart_.on_gap = [weak](std::string const& series) {
@@ -425,12 +424,12 @@ void MainWindow::ConfigureChartAsync() {
             return;
           }
           auto const& received = result.get();
-          auto* thresholds = new std::vector<rivet::ui::ChartThreshold>();
+          auto* thresholds = new std::vector<rivet::win_ui::ChartThreshold>();
           for (auto const& timing : received) {
             thresholds->push_back({timing.value, timing.label, timing.color});
           }
           dispatcher.TryEnqueue([weak, thresholds] {
-            std::unique_ptr<std::vector<rivet::ui::ChartThreshold>> owned(thresholds);
+            std::unique_ptr<std::vector<rivet::win_ui::ChartThreshold>> owned(thresholds);
             if (auto window = weak.get()) {
               window->chart_.set_thresholds(std::move(*owned));
             }

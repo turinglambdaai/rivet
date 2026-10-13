@@ -35,6 +35,14 @@
   (file->string
    (build-path repository-root "platform" "windows" "chart"
                "rivet_chart_control.cpp")))
+(define taskboard-window-header
+  (file->string
+   (build-path repository-root "examples" "taskboard" "windows"
+               "MainWindow.xaml.h")))
+(define taskboard-window-source
+  (file->string
+   (build-path repository-root "examples" "taskboard" "windows"
+               "MainWindow.xaml.cpp")))
 
 (check-true (string-contains? linux-manifest "runtime/src/chart_batch.cpp")
             "Linux rivet::platform must link the shared chart implementation")
@@ -74,3 +82,7 @@
             "the chart library should use C++/WinRT's UTF-8 conversion")
 (check-false (string-contains? windows-chart-source "Windows::Foundation::Color")
              "WinRT Color belongs to Windows.UI")
+(check-false (string-contains? taskboard-window-source "rivet::ui::")
+             "the reference app must consume the released rivet::win_ui namespace")
+(check-false (string-contains? taskboard-window-header "ChartControl chart_{nullptr}")
+             "the reference app must use ChartControl's public default constructor")

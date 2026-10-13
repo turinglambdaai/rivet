@@ -41,6 +41,8 @@
 - Make the Windows chart library independent of downstream precompiled
   headers by declaring its C++/WinRT dependencies directly, avoiding Win32
   macro leakage, and using the correct `Windows.UI.Color` type.
+- Update the Windows reference consumer to use the released `rivet::win_ui`
+  namespace and the chart control's public default-construction contract.
 - Keep post-release verification compatible with the clean output contract.
   When the unpacked staging package is gone, `raco rivet verify` now validates
   the portable ZIP through an isolated temporary extraction with strict root
