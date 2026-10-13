@@ -81,6 +81,52 @@
                               "unused"
                               #:progress-every 0)))
 
+;; A signed policy must describe at least one possible upgrade path. Reject
+;; contradictions while parsing and, through write-signed-manifest's round
+;; trip, before a publisher can sign them.
+(define (check-invalid-manifest manifest expected-message)
+  (check-exn expected-message
+             (lambda ()
+               (payload-bytes->manifest
+                (manifest->payload-bytes manifest)))))
+
+(check-invalid-manifest
+ (struct-copy update-manifest sample-manifest [artifacts '()])
+ #rx"non-empty array")
+(check-invalid-manifest
+ (struct-copy update-manifest sample-manifest [minimum-version "1.2.0"])
+ #rx"minimum_version must be older")
+(check-invalid-manifest
+ (struct-copy update-manifest sample-manifest [previous-version "1.2.0"])
+ #rx"previous_version must be older")
+(check-invalid-manifest
+ (struct-copy update-manifest sample-manifest
+              [artifacts
+               (list sample-artifact
+                     (struct-copy update-artifact sample-artifact
+                                  [url "https://mirror.example/app.msi"]))])
+ #rx"duplicate artifact")
+(check-invalid-manifest
+ (struct-copy update-manifest sample-manifest
+              [artifacts
+               (list (struct-copy update-artifact sample-artifact [size 0]))])
+ #rx"positive integer")
+
+(define sample-payload-jsexpr
+  (read-json (open-input-bytes (manifest->payload-bytes sample-manifest))))
+(define unknown-field-out (open-output-bytes))
+(write-json (hash-set sample-payload-jsexpr 'versoin "1.2.0")
+            unknown-field-out)
+(check-exn #rx"fields outside its schema"
+           (lambda ()
+             (payload-bytes->manifest
+              (get-output-bytes unknown-field-out))))
+(check-exn #rx"exactly one JSON value"
+           (lambda ()
+             (payload-bytes->manifest
+              (bytes-append (manifest->payload-bytes sample-manifest)
+                            #" {}"))))
+
 (when private-key
   (define public-key
     (datum->pk-key (pk-key->datum private-key 'SubjectPublicKeyInfo)
