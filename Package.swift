@@ -25,7 +25,8 @@ let package = Package(
         .library(name: "RivetWatchConnectivity", targets: ["RivetWatchConnectivity"]),
         .library(name: "RivetEmbedding", targets: ["RivetEmbedding"]),
         .library(name: "RivetSystem", targets: ["RivetSystem"]),
-        .library(name: "RivetUpdate", targets: ["RivetUpdate"])
+        .library(name: "RivetUpdate", targets: ["RivetUpdate"]),
+        .library(name: "RivetUI", targets: ["RivetUI"])
     ],
     targets: [
         .target(
@@ -61,6 +62,11 @@ let package = Package(
                 .linkedFramework("ServiceManagement"),
                 .linkedFramework("UserNotifications")
             ]
+        ),
+        .target(
+            name: "RivetUI",
+            dependencies: ["RivetRuntime"],
+            path: "platform/macos/Sources/RivetUI"
         ),
         .target(
             name: "RivetUpdate",

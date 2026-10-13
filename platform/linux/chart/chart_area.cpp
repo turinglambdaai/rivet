@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <limits>
+#include <stdexcept>
 
 namespace rivet::ui {
 namespace {

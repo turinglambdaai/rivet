@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Rivet Windows chart widget library (issue #238).
+
+       The chart control is a WinUI 3 widget, so it cannot live in the
+       plain-Win32 rivet-host library. This project consumes the Windows
+       App SDK itself (PackageReference, version overridable via
+       RivetWinAppSDKVersion) and downstream WinUI hosts reference it
+       beside rivet-host:
+
+         <ProjectReference
+           Include="$(RIVET_ROOT)\platform\windows\rivet-chart.vcxproj"
+           Properties="RivetRuntimeLibrary=$(RivetRuntimeLibrary)" />
+
+       CRT must match across the static link; forward the same
+       RivetRuntimeLibrary used for rivet-host. -->
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{E9C6FA31-0B2D-4E9E-9AB6-53A21CB507D2}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>rivet</RootNamespace>
+    <ProjectName>rivet-chart</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <RivetWinAppSDKVersion Condition="'$(RivetWinAppSDKVersion)' == ''">2.4.0</RivetWinAppSDKVersion>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)' == '17.0'">v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level4</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <AdditionalIncludeDirectories>$(RIVET_ROOT)\runtime\include;$(RIVET_ROOT)\platform\windows\chart;$(RIVET_ROOT)\platform\windows\runtime;$(RIVET_ROOT)\platform\windows\system;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary Condition="'$(RivetRuntimeLibrary)' != ''">$(RivetRuntimeLibrary)</RuntimeLibrary>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;NOMINMAX;_UNICODE;UNICODE;_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="$(RivetWinAppSDKVersion)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="$(RIVET_ROOT)\platform\windows\chart\rivet_chart_control.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="$(RIVET_ROOT)\platform\windows\chart\rivet_chart_control.hpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>
