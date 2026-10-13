@@ -190,6 +190,19 @@
                            "TrackPopupMenu"))])
   (check-file-contains system-services-guide expected))
 
+;; The commercial-parity scorecard cannot silently disappear, and its
+;; below-floor rows stay visible until the gap actually closes — closing one
+;; means updating this list in the same change.
+(define parity-guide (build-path repository-root "docs" "commercial-parity.md"))
+(for ([expected (in-list '("Commercial parity baseline"
+                           "Global shortcuts"
+                           "Clipboard read/write/watch"
+                           "Native file dialogs"
+                           "Mobile hosts"))])
+  (check-file-contains
+   parity-guide expected
+   (format "docs/commercial-parity.md must keep its ~s row; update the scorecard when a gap closes" expected)))
+
 ;; --- Scribble coverage: every public export documented, no phantom docs ---
 ;;
 ;; Documentation rots silently when a new export lands without a manual

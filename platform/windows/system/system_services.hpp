@@ -170,4 +170,60 @@ void InstallShutdownHook(std::function<void()> callback);
 // installer; this helper normalizes the received payload for application code.
 std::vector<std::wstring> ActivationArguments();
 
+// Cross-platform global-shortcut parity with the Linux XDG-portal adapter
+// and the macOS Carbon adapter: one activation callback carrying the
+// shortcut id, a platform timestamp in milliseconds, and an empty
+// activation token (portal-only field, kept for signature parity).
+struct GlobalShortcutActivation final {
+  std::string shortcut_id;
+  std::uint64_t timestamp{};
+};
+
+// RegisterHotKey-based global shortcuts on a message-only window. Linux
+// binds through a compositor prompt because Wayland has no global grabs;
+// Windows permits direct registration, so this class exposes explicit
+// Register/Unregister calls. Create, register, unregister, and destroy on
+// one thread; that thread must pump messages for activations to arrive.
+// The activation handler runs on that same thread.
+class GlobalShortcuts final {
+ public:
+  using ActivationHandler =
+      std::function<void(std::string const& shortcut_id,
+                         std::uint64_t timestamp,
+                         std::string const& activation_token)>;
+
+  static bool available();
+
+  GlobalShortcuts();
+  ~GlobalShortcuts();
+  GlobalShortcuts(GlobalShortcuts const&) = delete;
+  GlobalShortcuts& operator=(GlobalShortcuts const&) = delete;
+
+  // `trigger` grammar (case-insensitive, '+'-separated, exactly one key):
+  // modifiers ctrl|control, alt|option, shift, win|meta|super|cmd|command;
+  // keys a-z, 0-9, f1-f24, space, tab, enter|return, escape|esc, backspace,
+  // delete|del, insert, home, end, pageup, pagedown, up, down, left, right,
+  // comma, period, slash, backslash, semicolon, quote, minus, equal,
+  // bracketleft, bracketright. Returns false for an unknown token, a
+  // missing key, or more than one key.
+  [[nodiscard]] static bool ParseTrigger(std::string const& trigger,
+                                         std::uint32_t& modifiers,
+                                         std::uint32_t& virtual_key);
+
+  [[nodiscard]] bool Register(std::string const& shortcut_id,
+                              std::string const& trigger);
+  bool Unregister(std::string const& shortcut_id);
+
+  void SetActivationHandler(ActivationHandler handler);
+
+ private:
+  static LRESULT CALLBACK WndProc(HWND window, UINT message, WPARAM wparam,
+                                  LPARAM lparam) noexcept;
+
+  HWND window_{};
+  std::uint32_t next_hotkey_id_{1};
+  std::vector<std::pair<std::uint32_t, std::string>> registered_;
+  ActivationHandler handler_;
+};
+
 }  // namespace rivet::system
