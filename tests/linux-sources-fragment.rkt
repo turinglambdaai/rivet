@@ -44,14 +44,23 @@
       (check-true (file-exists? (build-path package-root rel))
                   (format "fragment lists a missing file: ~a" rel))))
 
-  (test-case "the host template includes the fragment instead of copying it"
+  (test-case "the platform library consumes the fragment; hosts link the target"
+    (define lib-cmake
+      (file->string
+       (build-path package-root "platform" "linux" "CMakeLists.txt")))
     (define host-cmake
       (file->string
        (build-path package-root "platform" "linux" "host" "CMakeLists.txt")))
     (check-true
-     (string-contains? host-cmake "rivet_linux_sources.cmake")
-     "the template must include() the fragment")
+     (string-contains? lib-cmake "rivet_linux_sources.cmake")
+     "the platform library must include() the fragment")
+    (check-true
+     (regexp-match? #rx"add_library[(]rivet_platform" lib-cmake)
+     "the platform library defines the target")
+    (check-true
+     (regexp-match? #rx"rivet::platform" host-cmake)
+     "the host template links the library target")
     (check-false
      (regexp-match? #px"\\$\\{RIVET_ROOT\\}/platform/linux/system/[a-z_]+\\.cpp"
                     host-cmake)
-     "the template must not carry its own copy of the source list")))
+     "the host template must not carry its own copy of the source list")))

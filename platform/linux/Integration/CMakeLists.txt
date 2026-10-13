@@ -26,21 +26,14 @@ pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4>=4.10)
 # capability then reports itself at runtime based on service availability.
 pkg_check_modules(LIBSECRET IMPORTED_TARGET libsecret-1)
 
+# The integration binary consumes the platform the same way downstream
+# hosts do (issue #238): link the library target, never compile the
+# platform sources into this list.
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/.."
+                 "${CMAKE_BINARY_DIR}/rivet-platform-build")
+
 add_executable(RivetIntegration
   main.cpp
-  ../runtime/backend.cpp
-  ../system/autostart.cpp
-  ../system/clipboard.cpp
-  ../system/crash_shutdown.cpp
-  ../system/file_dialogs.cpp
-  ../system/global_shortcuts.cpp
-  ../system/notifications.cpp
-  ../system/secure_storage.cpp
-  ../system/single_instance.cpp
-  ../system/system_services.cpp
-  ../system/system_services_internal.cpp
-  ../system/tray.cpp
-  ${RIVET_ROOT}/runtime/src/protocol.cpp
 )
 
 add_executable(RivetThemeTest
@@ -66,17 +59,8 @@ target_link_libraries(RivetGlobalShortcutsTest PRIVATE
   PkgConfig::GLIB
 )
 
-if(LIBSECRET_FOUND)
-  target_compile_definitions(RivetIntegration PRIVATE RIVET_HAVE_LIBSECRET=1)
-endif()
-
 target_compile_features(RivetIntegration PRIVATE cxx_std_17)
-target_include_directories(RivetIntegration PRIVATE
-  ${RIVET_RACKET_INCLUDE}
-  ../runtime
-  ../system
-  ${RIVET_ROOT}/runtime/include
-)
+target_link_libraries(RivetIntegration PRIVATE rivet::platform)
 target_compile_options(RivetIntegration PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(RivetIntegration PRIVATE
   ${RIVET_RACKET_LIBRARY}

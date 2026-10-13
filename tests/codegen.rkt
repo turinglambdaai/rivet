@@ -65,8 +65,11 @@
                     windows-project))
     (check-true (regexp-match? #rx"RIVET_MACOS_MIN_VERSION" macos-package))
     (check-true (regexp-match? #rx"RivetDevice" macos-package))
-    (check-true (regexp-match? #rx"platform/linux/runtime" linux-cmake))
-    (check-true (regexp-match? #rx"platform/linux/theme/theme[.]cpp" linux-cmake))
+    (check-true (regexp-match? #rx"rivet::platform" linux-cmake)
+                "the scaffold links the rivet platform library target")
+    (check-false (regexp-match? #px"\\$\\{RIVET_ROOT\\}/platform/linux/[a-z/]+[.]cpp"
+                                linux-cmake)
+                 "the scaffold must not compile rivet sources itself")
     (check-true (regexp-match? #rx"rivet::linux_ui::ApplyTheme" linux-main))
     (check-true
      (regexp-match?

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Rivet Windows host platform library (issue #238).
+
+       Downstream hosts never <ClCompile> Rivet sources into their own
+       projects. They reference this project instead:
+
+         <ItemGroup>
+           <ProjectReference
+             Include="$(RIVET_ROOT)\platform\windows\rivet-host.vcxproj"
+             Properties="RivetRuntimeLibrary=MultiThreadedDebug" />
+         </ItemGroup>
+
+       The Properties= facet forwards the downstream CRT choice (MSVC
+       rejects mixed RuntimeLibrary across a static link, LNK2038);
+       MultiThreadedDebug / MultiThreaded for /MT-style hosts
+       (hybrid-CRT WinUI hosts), MultiThreadedDebugDLL /
+       MultiThreadedDLL otherwise.
+
+       RIVET_ROOT and RIVET_RACKET_INCLUDE arrive as environment
+       variables from `raco rivet build` (or manual exports). -->
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{DC7F7B91-5DEF-4F64-8FDC-06562C2AC64B}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>rivet</RootNamespace>
+    <ProjectName>rivet-host</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)' == '17.0'">v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level4</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <AdditionalIncludeDirectories>$(RIVET_RACKET_INCLUDE);$(RIVET_ROOT)\runtime\include;$(RIVET_ROOT)\platform\windows\runtime;$(RIVET_ROOT)\platform\windows\system;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary Condition="'$(RivetRuntimeLibrary)' != ''">$(RivetRuntimeLibrary)</RuntimeLibrary>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="$(RIVET_ROOT)\platform\windows\runtime\backend.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\platform\windows\runtime\win32_pipe_transport.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\platform\windows\system\system_services.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\runtime\src\protocol.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="$(RIVET_ROOT)\platform\windows\runtime\backend.hpp" />
+    <ClInclude Include="$(RIVET_ROOT)\platform\windows\runtime\win32_pipe_transport.hpp" />
+    <ClInclude Include="$(RIVET_ROOT)\platform\windows\system\system_services.hpp" />
+    <ClInclude Include="$(RIVET_ROOT)\runtime\include\rivet\protocol.hpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>
