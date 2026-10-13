@@ -38,6 +38,9 @@
   Self-contained packages use MT/MTd while development builds use MD/MDd,
   and the selected mode is applied to the executable and forwarded to every
   released static library, preventing clean-package LNK2038 failures.
+- Make the Windows chart library independent of downstream precompiled
+  headers by declaring its Win32 and C++/WinRT dependencies directly and by
+  using the correct `Windows.UI.Color` type.
 - Keep post-release verification compatible with the clean output contract.
   When the unpacked staging package is gone, `raco rivet verify` now validates
   the portable ZIP through an isolated temporary extraction with strict root

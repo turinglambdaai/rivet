@@ -27,6 +27,14 @@
   (file->string
    (build-path repository-root "platform" "windows" "host"
                "RivetHost.vcxproj")))
+(define windows-chart-header
+  (file->string
+   (build-path repository-root "platform" "windows" "chart"
+               "rivet_chart_control.hpp")))
+(define windows-chart-source
+  (file->string
+   (build-path repository-root "platform" "windows" "chart"
+               "rivet_chart_control.cpp")))
 
 (check-true (string-contains? linux-manifest "runtime/src/chart_batch.cpp")
             "Linux rivet::platform must link the shared chart implementation")
@@ -55,3 +63,12 @@
  (string-contains? windows-host-template
                    "Properties=\"RivetRuntimeLibrary=$(RivetRuntimeLibrary)\"")
  "the Windows host must forward its CRT setting to the released library")
+(for ([header (in-list '("winrt/Windows.Foundation.h"
+                         "winrt/Windows.Foundation.Collections.h"
+                         "winrt/Windows.UI.h"))])
+  (check-true (string-contains? windows-chart-header header)
+              (format "the chart library must explicitly include ~a" header)))
+(check-true (string-contains? windows-chart-source "#include <windows.h>")
+            "the chart library must not inherit Win32 declarations from a host PCH")
+(check-false (string-contains? windows-chart-source "Windows::Foundation::Color")
+             "WinRT Color belongs to Windows.UI")

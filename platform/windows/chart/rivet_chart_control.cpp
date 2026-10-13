@@ -1,3 +1,5 @@
+#include <windows.h>
+
 #include "rivet_chart_control.hpp"
 
 #include <winrt/Microsoft.UI.Xaml.h>
@@ -9,6 +11,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <stdexcept>
+#include <utility>
 
 using namespace winrt::Microsoft::UI::Xaml;
 using namespace winrt::Microsoft::UI::Xaml::Controls;
@@ -23,7 +27,8 @@ constexpr double kMarginRight = 18.0;
 constexpr double kMarginTop = 24.0;
 constexpr double kMarginBottom = 30.0;
 
-winrt::Windows::Foundation::Color ParseColor(std::string const& text, winrt::Windows::Foundation::Color fallback) {
+winrt::Windows::UI::Color ParseColor(std::string const& text,
+                                    winrt::Windows::UI::Color fallback) {
   std::string hex = text;
   if (!hex.empty() && hex[0] == '#') {
     hex.erase(0, 1);
@@ -46,7 +51,7 @@ winrt::Windows::Foundation::Color ParseColor(std::string const& text, winrt::Win
   if (!ok) {
     return fallback;
   }
-  winrt::Windows::Foundation::Color color{};
+  winrt::Windows::UI::Color color{};
   if (hex.size() == 6) {
     color.A = 255;
     color.R = static_cast<uint8_t>((value >> 16) & 0xff);
@@ -128,7 +133,7 @@ double NiceStep(double raw) {
 
 Brush DimBrush() {
   static Brush brush = [] {
-    auto color = winrt::Windows::Foundation::Color{0xFF, 0x99, 0x99, 0x99};
+    auto color = winrt::Windows::UI::Color{0xFF, 0x99, 0x99, 0x99};
     return SolidColorBrush(color).as<Brush>();
   }();
   return brush;
@@ -136,7 +141,7 @@ Brush DimBrush() {
 
 Brush GridBrush() {
   static Brush brush = [] {
-    auto color = winrt::Windows::Foundation::Color{0x28, 0x99, 0x99, 0x99};
+    auto color = winrt::Windows::UI::Color{0x28, 0x99, 0x99, 0x99};
     return SolidColorBrush(color).as<Brush>();
   }();
   return brush;
@@ -147,7 +152,8 @@ Brush GridBrush() {
 ChartControl::ChartControl() {
   // The canvas is the plot surface; series polylines and rebuilt
   // decoration are all positioned in absolute control coordinates.
-  SizeChanged([this](IInspectable const&, SizeChangedEventArgs const&) {
+  SizeChanged([this](winrt::Windows::Foundation::IInspectable const&,
+                     SizeChangedEventArgs const&) {
     static_built_ = false;
     Geometry geometry = ComputeGeometry();
     RebuildStatic(geometry);
@@ -169,14 +175,14 @@ void ChartControl::set_series(std::vector<ChartSeriesSpec> specs) {
     Entry entry;
     entry.spec = std::move(spec);
     entry.polyline.StrokeThickness(1.8);
-    auto fallback = winrt::Windows::Foundation::Color{0xFF, 0x99, 0x99, 0x99};
+    auto fallback = winrt::Windows::UI::Color{0xFF, 0x99, 0x99, 0x99};
     entry.polyline.Stroke(SolidColorBrush(ParseColor(entry.spec.color, fallback)));
     entry.cursor_dot.Width(7);
     entry.cursor_dot.Height(7);
     entry.cursor_dot.Fill(entry.polyline.Stroke());
     Children().Append(entry.polyline);
     Children().Append(entry.cursor_dot);
-    entry.cursor_dot.Visibility(Collapsed);
+    entry.cursor_dot.Visibility(Visibility::Collapsed);
     entries_.push_back(std::move(entry));
   }
   Geometry geometry = ComputeGeometry();
@@ -411,7 +417,7 @@ void ChartControl::RebuildStatic(Geometry const& geometry) {
              geometry.top + geometry.height + 6, false);
   }
 
-  auto fallback = winrt::Windows::Foundation::Color{0xFF, 0x99, 0x99, 0x99};
+  auto fallback = winrt::Windows::UI::Color{0xFF, 0x99, 0x99, 0x99};
   for (auto const& threshold : thresholds_) {
     double y = ValueToY(threshold.value);
     if (y < geometry.top || y > geometry.top + geometry.height) {
@@ -449,12 +455,12 @@ void ChartControl::RebuildStatic(Geometry const& geometry) {
     line.StrokeThickness(1);
     Children().Append(line);
     Polygon tick;
-    tick.Points().Append(Windows::Foundation::Point(static_cast<float>(x - 4),
-                                                    static_cast<float>(geometry.top)));
-    tick.Points().Append(Windows::Foundation::Point(static_cast<float>(x + 4),
-                                                    static_cast<float>(geometry.top)));
-    tick.Points().Append(Windows::Foundation::Point(static_cast<float>(x),
-                                                    static_cast<float>(geometry.top + 7)));
+    tick.Points().Append(winrt::Windows::Foundation::Point(
+        static_cast<float>(x - 4), static_cast<float>(geometry.top)));
+    tick.Points().Append(winrt::Windows::Foundation::Point(
+        static_cast<float>(x + 4), static_cast<float>(geometry.top)));
+    tick.Points().Append(winrt::Windows::Foundation::Point(
+        static_cast<float>(x), static_cast<float>(geometry.top + 7)));
     tick.Fill(DimBrush());
     Children().Append(tick);
   }
@@ -483,7 +489,8 @@ void ChartControl::UpdateSeriesPolylines(Geometry const& geometry) {
                  (1.0 - static_cast<double>(samples[i].value - geometry.v_min) /
                             (v_range > 0 ? v_range : 1.0)) *
                      geometry.height;
-      points.Append(Windows::Foundation::Point(static_cast<float>(x), static_cast<float>(y)));
+      points.Append(winrt::Windows::Foundation::Point(
+          static_cast<float>(x), static_cast<float>(y)));
     }
   }
 
