@@ -38,6 +38,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration">
+    <RivetWinAppSDKVersion Condition="'$(RivetWinAppSDKVersion)' == ''">2.4.0</RivetWinAppSDKVersion>
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <PlatformToolset>v145</PlatformToolset>
     <PlatformToolset Condition="'$(VisualStudioVersion)' == '17.0'">v143</PlatformToolset>
@@ -61,6 +62,12 @@
       <PreprocessorDefinitions>WIN32;_WINDOWS;NOMINMAX;_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
+  <ItemGroup>
+    <!-- The library consumes the App SDK itself so its C++/WinRT headers
+         come from the same NuGet graph as the downstream exe; mixed
+         cppwinrt versions are an LNK2038 at link time. -->
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="$(RivetWinAppSDKVersion)" />
+  </ItemGroup>
   <ItemGroup>
     <ClCompile Include="$(RIVET_ROOT)\platform\windows\runtime\backend.cpp" />
     <ClCompile Include="$(RIVET_ROOT)\platform\windows\runtime\win32_pipe_transport.cpp" />

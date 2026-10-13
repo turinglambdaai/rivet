@@ -48,6 +48,12 @@
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <!-- Hybrid CRT (see HybridCRT.props): forwarded to the rivet-host
+         library so the static link never mixes RuntimeLibrary flavors. -->
+    <RivetRuntimeLibrary Condition="'$(Configuration)'=='Debug'">MultiThreadedDebug</RivetRuntimeLibrary>
+    <RivetRuntimeLibrary Condition="'$(Configuration)'=='Release'">MultiThreaded</RivetRuntimeLibrary>
+  </PropertyGroup>
   <ImportGroup Label="ExtensionSettings" />
   <ImportGroup Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -97,7 +103,8 @@
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="$(RIVET_ROOT)\platform\windows\rivet-host.vcxproj">
+    <ProjectReference Include="$(RIVET_ROOT)\platform\windows\rivet-host.vcxproj"
+                      Properties="RivetRuntimeLibrary=$(RivetRuntimeLibrary)">
       <Project>dc7f7b91-5def-4f64-8fdc-06562c2ac64b</Project>
     </ProjectReference>
   </ItemGroup>
