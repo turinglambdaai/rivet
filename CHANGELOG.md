@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Close the scribble coverage gap: the RVT1 framing and value-codec surface
+  (`rivet/protocol` — frames, message-type constants, transport limits,
+  read/write/encode/decode), application resources (`rivet/resources`),
+  the diagnostic sink parameter, `install-crash-hook!`, the version
+  predicates, the Ed25519 key/digest/base64 primitives, canonical manifest
+  payload helpers, `verify-update-artifact!`, `make-install-plan`,
+  `current-install-kind`, and the missing `updater?` predicate now have
+  manual entries. Every public export is covered and the rendered manual
+  carries no undefined-tag warnings.
+- Documentation drift now fails CI instead of rotting silently. The docs
+  suite derives the current release version from `info.rkt` and rejects a
+  `docs/ci*.md` guide pinning any other tag, and it checks scribble
+  coverage in both directions: a public export without a manual mention
+  fails, and a manual entry for a binding that is no longer exported fails
+  (defstruct* forms synthesize their constructor, predicate, structure-type
+  binding, and accessors, mirroring the rendered output).
+
 ## 0.8.1
 
 - Add the macOS `RivetUpdate` Swift module: a shared host-side update client

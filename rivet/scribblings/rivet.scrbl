@@ -4,6 +4,8 @@
                      racket/contract/base
                      rivet
                      rivet/distribution
+                     rivet/protocol
+                     rivet/resources
                      rivet/system))
 
 @title[#:tag "rivet"]{Rivet: First-Party Native Desktop Applications with Racket}
@@ -204,6 +206,14 @@ backpressure.}
          void?]{
 Adapts native file descriptors to binary ports and calls @racket[serve].}
 
+@defparam[current-rivet-diagnostic-sink sink procedure?]{
+Receives each structured diagnostic record emitted by the backend. The
+default discards records: embedded desktop processes do not necessarily own
+a console, and the first stderr write from a Windows GUI-subsystem process
+can allocate a visible console window. Applications that want backend
+diagnostics install a sink backed by their structured logger; records use
+the @tt{rivet.diagnostic.v1} schema.}
+
 @defproc[(backend-schema) hash?]{Returns one immutable, data-only snapshot with
 @racket['rpcs], @racket['events], @racket['states], @racket['records], and
 @racket['enums] entries. This is the supported reflection boundary for code
@@ -214,6 +224,104 @@ generation and tooling; registry structs and mutable State cells are private.}
 @defproc[(state-schema) list?]{Returns the registered state schema.}
 @defproc[(record-schema) list?]{Returns the registered Record schema.}
 @defproc[(enum-schema) list?]{Returns the registered Enum schema.}
+
+@subsection{RVT1 Framing and the Value Codec}
+
+@defmodule[rivet/protocol]
+
+Applications normally reach the wire through @racket[serve] and generated
+clients. This module is the framing layer underneath: it is public because
+debuggers, protocol fuzzers, and alternative transports consume exactly the
+same bytes, and because the transport limits are the contract between an
+application backend and its host.
+
+Every frame carries the @tt{RVT1} magic, the protocol version, a message
+type, an unsigned 64-bit identifier, and a payload. Payloads use a small
+tagged value codec that covers the RVT1 value grammar; framing and the
+value codec are independent so later grammar revisions cannot change
+transport semantics.
+
+@defstruct*[frame ([type exact-integer?]
+                   [id exact-nonnegative-integer?]
+                   [payload bytes?])]
+           #:transparent] {
+One wire frame. @racket[type] is one of the @racket[message:]hello
+through @racket[message:shutdown] constants, and @racket[id] ranges from
+@racket[0] through @math{2^64-1}.}
+
+@defproc[(write-frame [f frame?]
+                      [out output-port? (current-output-port)])
+         void?]{
+Validates the message type, identifier, and payload length, then writes the
+frame. Overlong payloads and out-of-range identifiers are rejected before
+any bytes reach the port.}
+
+@defproc[(read-frame [in input-port? (current-input-port)])
+         (or/c frame? eof-object?)]{
+Reads exactly one frame, validating its version, type, identifier, and
+payload length. Returns @racket[eof] at a clean stream boundary.}
+
+@defproc[(encode-value [value any/c]) bytes?]{
+Encodes one value using the RVT1 tagged value codec. Depth, node count, and
+encoded size are bounded; use @racket[Bytes] instead of huge Lists for bulk
+data, because a flat List inside one legal frame can still expand to far
+more memory as decoded objects.}
+
+@defproc[(decode-value [payload bytes?]) any/c]{
+Decodes bytes produced by @racket[encode-value]. Malformed tags, excessive
+depth, and excessive node counts are rejected instead of allocating.}
+
+@defthing[protocol-version exact-nonnegative-integer? #:value 1]{
+The RVT1 protocol version written into every frame and enforced on read.}
+
+@defthing[max-frame-payload-size exact-nonnegative-integer? #:value 67108864]{
+The largest accepted frame payload: 64 MiB.}
+
+@defthing[max-value-depth exact-positive-integer? #:value 64]{
+The maximum nesting depth accepted by the value codec.}
+
+@defthing[max-value-nodes exact-positive-integer? #:value 262144]{
+The maximum number of value nodes, including the root, decoded or encoded
+per payload.}
+
+@defthing[message:hello exact-positive-integer? #:value 1]{
+The host greeting message type.}
+@defthing[message:request exact-positive-integer? #:value 2]{
+A client request; the identifier correlates it with a response.}
+@defthing[message:response exact-positive-integer? #:value 3]{
+A successful reply to a @racket[message:request].}
+@defthing[message:error exact-positive-integer? #:value 4]{
+A failure reply carrying a diagnostic string.}
+@defthing[message:event exact-positive-integer? #:value 5]{
+A backend-pushed event.}
+@defthing[message:cancel exact-positive-integer? #:value 6]{
+Cancels a pending request by identifier.}
+@defthing[message:shutdown exact-positive-integer? #:value 7]{
+Requests orderly backend shutdown.}
+
+@subsection{Application Resources}
+
+@defmodule[rivet/resources]
+
+Locates the read-only application resource directory staged by the build.
+The same API answers for development layouts, installed .app bundles,
+MSI installs, and Linux prefix layouts, so backends never hardcode
+platform resource paths.
+
+@defparam[current-resource-root root (or/c #f path-string?)]{
+Overrides resource discovery, for hosts with a non-standard layout. When
+unset, @racket[resource-root] searches the locations derived from the
+current executable.}
+
+@defproc[(resource-root) path?]{
+Returns the existing resource root, checking a configured or derived
+location. Raises when no candidate directory exists, so a mis-staged
+application fails at startup instead of at first use.}
+
+@defproc[(resource-path [piece path-string?] ...) path?]{
+Builds a path inside the resource root. Components must be relative and
+must not contain @litchar{.} or @litchar{..} segments; traversal attempts
+are rejected.}
 
 @section{Application Identity}
 
@@ -304,6 +412,11 @@ Stores a secret through the platform credential service.}
 @defproc[(secure-store-ref [service string?] [account string?] [default any/c #f]) any/c]{
 Reads a secret, returning @racket[default] when no value is present.}
 @defproc[(secure-store-remove! [service string?] [account string?]) any/c]{Removes a stored secret.}
+@defproc[(install-crash-hook! [handler procedure?]) any/c]{
+Installs the platform-native crash handler. When the process fails, the
+handler receives a structured crash record; pair it with
+@racket[current-rivet-crash-reporter] to route the Racket-side record the
+same way.}
 
 @subsection{Settings and Diagnostics}
 
@@ -395,6 +508,13 @@ callers cannot bypass the installation invariants.}
 @defproc[(version? [value any/c]) boolean?]{Recognizes SemVer 2.0 version strings.}
 @defproc[(version-compare [left string?] [right string?]) (or/c -1 0 1)]{
 Compares SemVer precedence; build metadata does not affect the result.}
+@defproc[(version<? [left string?] [right string?]) boolean?]{
+Reports SemVer precedence; equivalent to a negative
+@racket[version-compare] result.}
+@defproc[(version<=? [left string?] [right string?]) boolean?]{SemVer @math{<=}.}
+@defproc[(version=? [left string?] [right string?]) boolean?]{SemVer equality by precedence.}
+@defproc[(version>=? [left string?] [right string?]) boolean?]{SemVer @math{>=}.}
+@defproc[(version>? [left string?] [right string?]) boolean?]{SemVer @math{>}.}
 @defproc[(valid-channel? [value any/c]) boolean?]{Recognizes @racket['stable], @racket['beta], and @racket['dev].}
 @defproc[(channel-accepts-version? [channel symbol?] [version string?]) boolean?]{
 Checks whether a version is allowed by a release channel.}
@@ -430,6 +550,51 @@ authenticate them; update clients should use @racket[verify-signed-manifest].}
 Verifies the expected key ID and Ed25519 signature over the exact payload bytes
 before parsing or exposing the manifest.}
 
+@defthing[manifest-schema-version exact-positive-integer? #:value 1]{
+The versioned schema tag carried by every manifest payload.}
+
+@defproc[(manifest->payload-bytes [manifest update-manifest?]) bytes?]{
+Serializes a manifest into the exact canonical payload bytes a signature
+covers. Publishers sign these bytes; there is no second serialization.}
+
+@defproc[(payload-bytes->manifest [payload bytes?]) update-manifest?]{
+Parses canonical payload bytes into a manifest. The closed schema rejects
+unknown fields, trailing JSON values, and contradictory policy, whether or
+not the payload was authenticated.}
+
+@subsection{Key and Digest Primitives}
+
+The same primitives the updater uses, exposed for release tooling and
+tests. Keys are Racket @racket[crypto] key values; readers accept the
+standard DER encodings (SubjectPublicKeyInfo, OneAsymmetricKey,
+PrivateKeyInfo) and Rivet's textual forms.
+
+@defproc[(read-ed25519-public-key [path path-string?]) any/c]{
+Reads and validates an Ed25519 public key from a file.}
+@defproc[(read-ed25519-private-key [path path-string?]) any/c]{
+Reads and validates an Ed25519 private key from a file.}
+@defproc[(bytes->ed25519-public-key [raw bytes?]) any/c]{
+Decodes an embedded public key from bytes, the form release builds embed
+in application source.}
+@defproc[(ed25519-sign [private-key any/c] [message bytes?]) bytes?]{
+Signs @racket[message] with Ed25519 and returns the 64-byte signature.}
+@defproc[(ed25519-verify [public-key any/c]
+                         [message bytes?]
+                         [signature bytes?])
+         boolean?]{
+Verifies an Ed25519 signature; @racket[#f] for any malformed signature.}
+@defproc[(sha256-bytes [input bytes?]) bytes?]{
+Returns the raw SHA-256 digest of a byte string.}
+@defproc[(sha256-file [path path-string?]) bytes?]{
+Returns the raw SHA-256 digest of a file's exact bytes.}
+@defproc[(sha256-file/hex [path path-string?]) string?]{
+Returns the lowercase hexadecimal SHA-256 digest of a file, the form signed
+manifests carry.}
+@defproc[(bytes->base64-string [value bytes?]) string?]{
+Standard base64 encoding, used by signed wrappers and embedded keys.}
+@defproc[(base64-string->bytes [value string?]) bytes?]{
+Decodes standard base64, raising on malformed input.}
+
 @subsection{Selecting and Installing an Update}
 
 An @racket[updater-config] records the application ID, current version,
@@ -463,6 +628,24 @@ final byte count reports transfer progress, not successful verification.
 Pass @racket[progress-every] to select a byte cadence; @racket[#f] uses the
 one-percent default. Small cadences are appropriate for an activity watchdog,
 not direct UI rendering.}
+
+@defproc[(verify-update-artifact! [candidate update-candidate?] [path path-string?])
+         path-string?]{
+Checks the downloaded file's byte size and SHA-256 digest against the signed
+manifest and returns @racket[path]. Used by custom install flows;
+@racket[download-update] already applies it before moving a verified
+artifact into place.}
+
+@defproc[(make-install-plan [candidate update-candidate?]
+                            [downloaded-path path-string?]
+                            [#:backup-path backup-path (or/c #f path-string?) #f]
+                            [#:install install procedure?]
+                            [#:restart restart procedure? void]
+                            [#:rollback rollback procedure? void])
+         install-plan?]{
+Builds the plan consumed by @racket[execute-install-plan!] for
+product-specific native installers. Rivet's portable adapter constructs its
+own plan through @racket[prepare-platform-installation].}
 
 @subsection{Managed Check and Download Lifecycle}
 
@@ -501,6 +684,9 @@ per-installation value from 0 through 99; do not choose a new random value on
 each check. Unsupported platforms and architectures fail at construction
 instead of silently selecting the wrong artifact. Installation and restart
 remain owned by the native host or platform adapter.}
+
+@defproc[(updater? [value any/c]) boolean?]{
+Recognizes an updater created by @racket[make-updater].}
 
 @defproc[(updater-check! [instance updater?]) hash?]{
 Synchronously fetches and authenticates the manifest under
@@ -567,6 +753,17 @@ attempt.}
 
 @defproc[(current-update-platform) (or/c 'windows 'macos 'linux)]{
 Returns the update-platform symbol for the running operating system.}
+
+@defproc[(current-install-kind [executable (or/c #f path-string?)
+                                              (find-system-path 'run-file)])
+         (or/c 'portable 'appimage 'package-manager)]{
+Classifies the running installation for artifact selection: AppImage builds
+detect their @envvar{APPIMAGE} environment, deb and rpm installations
+resolve under @filepath{/opt} or @filepath{/usr}, and everything else is
+portable. On Windows and macOS this always reports @racket['portable].
+Pass @racket[#:install-kind] from this procedure to
+@racket[select-update] or @racket[make-updater] so a machine never selects
+a payload its installation cannot own.}
 
 @defproc[(platform-installer-policy [platform symbol?]
                                     [installer symbol?])
