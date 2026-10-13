@@ -46,22 +46,14 @@ else()
   message(FATAL_ERROR "Set RIVET_RACKET_LIBRARY to libracketcs, or RIVET_RACKET_LIB_DIR to its directory.")
 endif()
 
+# The platform source list and include dirs live in one fragment that
+# downstream hosts include() too — this template cannot drift behind the
+# package, and neither can they.
+include("${RIVET_ROOT}/platform/linux/rivet_linux_sources.cmake")
+
 add_executable(RivetHost
   src/main.cpp
-  "${RIVET_ROOT}/platform/linux/runtime/backend.cpp"
-  "${RIVET_ROOT}/platform/linux/system/autostart.cpp"
-  "${RIVET_ROOT}/platform/linux/system/clipboard.cpp"
-  "${RIVET_ROOT}/platform/linux/system/crash_shutdown.cpp"
-  "${RIVET_ROOT}/platform/linux/system/file_dialogs.cpp"
-  "${RIVET_ROOT}/platform/linux/system/global_shortcuts.cpp"
-  "${RIVET_ROOT}/platform/linux/system/notifications.cpp"
-  "${RIVET_ROOT}/platform/linux/system/secure_storage.cpp"
-  "${RIVET_ROOT}/platform/linux/system/single_instance.cpp"
-  "${RIVET_ROOT}/platform/linux/system/system_services.cpp"
-  "${RIVET_ROOT}/platform/linux/system/system_services_internal.cpp"
-  "${RIVET_ROOT}/platform/linux/system/tray.cpp"
-  "${RIVET_ROOT}/platform/linux/theme/theme.cpp"
-  "${RIVET_ROOT}/runtime/src/protocol.cpp"
+  ${RIVET_LINUX_PLATFORM_SOURCES}
 )
 
 if(LIBSECRET_FOUND)
@@ -70,10 +62,7 @@ endif()
 
 target_include_directories(RivetHost PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}"
-  "${RIVET_ROOT}/platform/linux/runtime"
-  "${RIVET_ROOT}/platform/linux/system"
-  "${RIVET_ROOT}/platform/linux/theme"
-  "${RIVET_ROOT}/runtime/include"
+  ${RIVET_LINUX_INCLUDE_DIRS}
   "$ENV{RIVET_RACKET_INCLUDE}"
 )
 
