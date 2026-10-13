@@ -19,7 +19,7 @@ CI 应使用与发布任务相同类别的 runner 和工具链：
 
 ## 可直接使用的 GitHub Actions 工作流
 
-下面的工作流固定到 Rivet 0.7.0。升级时，应在同一次评审中把每处 Rivet
+下面的工作流固定到 Rivet 0.8.0。升级时，应在同一次评审中把每处 Rivet
 包来源和 Linux setup action 更新到同一个标签（或完整 commit）。这里有意
 使用 Git 来源：Racket Package Catalog 对每个包名只保留一个当前入口，不能
 选择较旧的 Rivet 版本。
@@ -46,7 +46,7 @@ jobs:
           distribution: full
           variant: CS
           version: '9.3'
-      - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.7.0'
+      - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.8.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
       - run: raco rivet build
@@ -65,7 +65,7 @@ jobs:
           distribution: full
           variant: CS
           version: '9.3'
-      - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.7.0'
+      - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.8.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
       - run: raco rivet build
@@ -75,13 +75,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Set up embeddable Racket CS
-        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@v0.7.0
+        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@v0.8.0
       - name: Install GTK4 development files
         run: |
           sudo apt-get update
           sudo apt-get install --yes libgtk-4-dev
       - name: Install the matching Rivet package and dependencies
-        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.7.0'
+        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.8.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
       - run: raco rivet build
