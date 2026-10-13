@@ -10,7 +10,10 @@ import Foundation
 @MainActor
 public final class RivetClipboard {
     private let pasteboard: NSPasteboard
-    private var changeTimer: Timer?
+    // Plain (non-isolated) teardown touches this below; `isolated deinit` and
+    // its IsolatedDeinit feature flag do not exist on pre-6.2 release
+    // toolchains, which are exactly the ones released-package consumers use.
+    nonisolated(unsafe) private var changeTimer: Timer?
     private var observedChangeCount: Int
     private var changeHandler: ((String?) -> Void)?
 
@@ -23,7 +26,7 @@ public final class RivetClipboard {
         observedChangeCount = pasteboard.changeCount
     }
 
-    isolated deinit {
+    deinit {
         changeTimer?.invalidate()
     }
 
