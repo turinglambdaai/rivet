@@ -122,24 +122,30 @@
         (format "inline ~a decode_~a(rivet::Value const& v) { if (std::holds_alternative<std::monostate>(v.data)) return std::nullopt; return decode_~a(v); }\n"
                 (cpp-type type) key (type-key inner))])]))
 
+;; The call-result local and the async-handler lambda parameter use
+;; reserved `rivet_` names: argument names come from the schema, and a
+;; schema arg named `raw` used to collide with the emitted `auto raw`
+;; (C2082) and retarget `.get()` at the parameter. The reserved names are
+;; also added to cpp-keywords in naming.rkt, so a schema id spelled the
+;; same gets the usual rivet_ prefix and can never collide either.
 (define (cpp-future result-type raw-expression)
   (define result (cpp-type result-type))
   (define decode
     (if (eq? result-type 'Void)
-        (format "detail::decode_~a(raw.get());" (type-key result-type))
-        (format "return detail::decode_~a(raw.get());" (type-key result-type))))
+        (format "detail::decode_~a(rivet_call.get());" (type-key result-type))
+        (format "return detail::decode_~a(rivet_call.get());" (type-key result-type))))
   (format
-   "auto raw = ~a; return std::async(std::launch::deferred, [raw = std::move(raw)]() mutable -> ~a { ~a });"
+   "auto rivet_call = ~a; return std::async(std::launch::deferred, [rivet_call = std::move(rivet_call)]() mutable -> ~a { ~a });"
    raw-expression result decode))
 
 (define (cpp-async-handler result-type backend-namespace)
   (define result (cpp-type result-type))
   (define decode
     (if (eq? result-type 'Void)
-        (format "detail::decode_~a(*raw.value);" (type-key result-type))
-        (format "result.value = detail::decode_~a(*raw.value);" (type-key result-type))))
+        (format "detail::decode_~a(*rivet_result.value);" (type-key result-type))
+        (format "result.value = detail::decode_~a(*rivet_result.value);" (type-key result-type))))
   (format
-   "[completion = std::move(completion)](~a::CallResult raw) mutable { Result<~a> result; if (raw.error) { result.error = raw.error; } else { try { if (!raw.value) throw std::runtime_error(\"Rivet async call completed without a value\"); ~a } catch (...) { result.error = std::current_exception(); } } completion(std::move(result)); }"
+   "[completion = std::move(completion)](~a::CallResult rivet_result) mutable { Result<~a> result; if (rivet_result.error) { result.error = rivet_result.error; } else { try { if (!rivet_result.value) throw std::runtime_error(\"Rivet async call completed without a value\"); ~a } catch (...) { result.error = std::current_exception(); } } completion(std::move(result)); }"
    backend-namespace result decode))
 
 (define (cpp-completion-type type)

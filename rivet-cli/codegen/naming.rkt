@@ -22,12 +22,18 @@
     "let" "nil" "nonisolated" "open" "operator" "precedencegroup"
     "private" "protocol" "public" "repeat" "rethrows" "return" "self"
     "static" "struct" "subscript" "super" "switch" "throw" "throws"
-    "true" "try" "typealias" "var" "where" "while"))
+    "true" "try" "typealias" "var" "where" "while"
+    ;; generator-reserved local in emitted method bodies
+    "rivetResult"))
 
 (define cpp-keywords
   '("class" "struct" "enum" "template" "typename" "auto" "return" "throw"
     "switch" "case" "default" "if" "else" "for" "while" "namespace"
-    "public" "private" "protected" "operator" "new" "delete"))
+    "public" "private" "protected" "operator" "new" "delete"
+    ;; generator-reserved names in emitted method bodies: the call-result
+    ;; local, the async-handler lambda parameter, and the completion
+    ;; parameter of the _async companions
+    "rivet_call" "rivet_result" "completion"))
 
 (define (identifier value keywords)
   (define raw
@@ -47,7 +53,9 @@
   '("as" "break" "class" "continue" "do" "else" "false" "for" "fun" "if"
     "in" "interface" "is" "null" "object" "package" "return" "super"
     "this" "throw" "true" "try" "typealias" "typeof" "val" "var" "when"
-    "while" "init"))
+    "while" "init"
+    ;; generator-reserved local in emitted method bodies
+    "rivetResult"))
 
 (define (swift-id value) (identifier value swift-keywords))
 (define (cpp-id value) (identifier value cpp-keywords))

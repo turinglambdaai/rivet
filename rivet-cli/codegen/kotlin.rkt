@@ -139,8 +139,10 @@
                  (for/list ([name (in-list names)] [type (in-list types)])
                    (format "encode_~a(~a)" (type-key type) name))
                  ", "))))
+  ;; `rivetResult` is reserved: a schema arg named `result` used to
+  ;; redeclare the emitted local (Kotlin rejects the shadow at compile).
   (format
-   "    suspend fun ~a(~a): ~a {\n        val result = ~a\n        return decode_~a(result)\n    }\n"
+   "    suspend fun ~a(~a): ~a {\n        val rivetResult = ~a\n        return decode_~a(rivetResult)\n    }\n"
    (kotlin-id (schema-rpc-name info)) params (kotlin-type result)
    call (type-key result)))
 
@@ -152,7 +154,7 @@
   (define name (kotlin-id raw-name))
   (define type (schema-state-type state))
   (format
-   "    suspend fun get_~a(): ~a {\n        val result = client.getState(~a)\n        return decode_~a(result)\n    }\n\n    suspend fun set_~a(value: ~a): ~a {\n        val result = client.setState(~a, encode_~a(value))\n        return decode_~a(result)\n    }\n"
+   "    suspend fun get_~a(): ~a {\n        val rivetResult = client.getState(~a)\n        return decode_~a(rivetResult)\n    }\n\n    suspend fun set_~a(value: ~a): ~a {\n        val rivetResult = client.setState(~a, encode_~a(value))\n        return decode_~a(rivetResult)\n    }\n"
    name (kotlin-type type) (kotlin-string-literal raw-name) (type-key type)
    name (kotlin-type type) (kotlin-type type)
    (kotlin-string-literal raw-name) (type-key type) (type-key type)))

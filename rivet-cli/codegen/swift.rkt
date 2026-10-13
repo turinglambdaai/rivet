@@ -153,8 +153,10 @@
      (for/list ([name (in-list names)] [type (in-list types)])
        (format "encode_~a(~a)" (type-key type) name))
      ", "))
+  ;; `rivetResult` is reserved: a schema arg named `result` used to
+  ;; redeclare the emitted local (Swift rejects the shadow at compile).
   (format
-   "    public func ~a(~a) async throws -> ~a {\n        let result = try await client.call(~a, arguments: [~a])\n        return try decode_~a(result)\n    }\n"
+   "    public func ~a(~a) async throws -> ~a {\n        let rivetResult = try await client.call(~a, arguments: [~a])\n        return try decode_~a(rivetResult)\n    }\n"
    (swift-id (schema-rpc-name info)) params (swift-type result)
    (swift-string-literal (symbol->string (schema-rpc-name info))) encoded (type-key result)))
 
@@ -166,7 +168,7 @@
   (define name (swift-id raw-name))
   (define type (schema-state-type state))
   (format
-   "    public func get_~a() async throws -> ~a {\n        let result = try await client.getState(~a)\n        return try decode_~a(result)\n    }\n    @discardableResult\n    public func set_~a(_ value: ~a) async throws -> ~a {\n        let result = try await client.setState(~a, value: encode_~a(value))\n        return try decode_~a(result)\n    }\n"
+   "    public func get_~a() async throws -> ~a {\n        let rivetResult = try await client.getState(~a)\n        return try decode_~a(rivetResult)\n    }\n    @discardableResult\n    public func set_~a(_ value: ~a) async throws -> ~a {\n        let rivetResult = try await client.setState(~a, value: encode_~a(value))\n        return try decode_~a(rivetResult)\n    }\n"
    name (swift-type type) (swift-string-literal raw-name) (type-key type)
    name (swift-type type) (swift-type type) (swift-string-literal raw-name) (type-key type) (type-key type)))
 

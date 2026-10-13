@@ -196,7 +196,7 @@ RKT
     (check-true
      (regexp-match? #rx"rivet::linux_runtime::Backend& backend" linux-cpp))
     (check-true
-     (regexp-match? #rx"rivet::linux_runtime::CallResult raw" linux-cpp))
+     (regexp-match? #rx"rivet::linux_runtime::CallResult rivet_result" linux-cpp))
     (check-false (regexp-match? #rx"rivet::windows" linux-cpp))
 
     ;; The typed Kotlin client targets the coroutine runtime. State accessors
