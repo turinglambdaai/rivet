@@ -464,6 +464,78 @@ final byte count reports transfer progress, not successful verification.
 Pass @racket[progress-every] to select a byte cadence; @racket[#f] uses the
 one-percent default. Small cadences are appropriate for an activity watchdog,
 not direct UI rendering.}
+
+@subsection{Managed Check and Download Lifecycle}
+
+@defproc[(current-update-architecture) (or/c 'x64 'arm64)]{
+Returns the architecture symbol used by Rivet release manifests.}
+
+@defproc[(make-updater
+          [#:application-id application-id string?]
+          [#:current-version current-version string?]
+          [#:channel channel (or/c 'stable 'beta 'dev) 'stable]
+          [#:platform platform
+           (or/c 'windows 'macos 'linux) (current-update-platform)]
+          [#:architecture architecture
+           (or/c 'x64 'arm64) (current-update-architecture)]
+          [#:install-kind install-kind
+           (or/c #f 'portable 'appimage 'package-manager) #f]
+          [#:public-key public-key any/c]
+          [#:key-id key-id string?]
+          [#:manifest-url manifest-url string?]
+          [#:data-directory data-directory path-string?]
+          [#:rollout-bucket rollout-bucket (integer-in 0 99)]
+          [#:maximum-manifest-bytes maximum-manifest-bytes
+           exact-positive-integer? (* 1024 1024)]
+          [#:maximum-download-bytes maximum-download-bytes
+           exact-positive-integer? (* 512 1024 1024)]
+          [#:check-timeout check-timeout (and/c real? positive?) 30.0]
+          [#:stall-timeout stall-timeout (and/c real? positive?) 120.0]
+          [#:total-timeout total-timeout
+           (and/c real? positive?) (* 30.0 60.0)])
+         updater?]{
+Creates an opaque updater that centralizes signed-manifest checking, candidate
+selection, bounded background download, progress, cancellation, and terminal
+state. @racket[public-key] may be a parsed Ed25519 key or DER bytes, which are
+decoded lazily during the first check. @racket[rollout-bucket] must be a stable
+per-installation value from 0 through 99; do not choose a new random value on
+each check. Unsupported platforms and architectures fail at construction
+instead of silently selecting the wrong artifact. Installation and restart
+remain owned by the native host or platform adapter.}
+
+@defproc[(updater-check! [instance updater?]) hash?]{
+Synchronously fetches and authenticates the manifest under
+@racket[check-timeout], selects the matching candidate, and returns a JSON-safe
+immutable result whose @racket['status] is @racket["available"],
+@racket["up-to-date"], or @racket["error"].}
+
+@defproc[(updater-download! [instance updater?]) void?]{
+Starts the selected download on one background worker. A second check or
+download is rejected while an operation is active. Byte activity is monitored
+independently from UI percentage changes; exceeding the no-progress or total
+deadline interrupts the worker, removes its partial file, and publishes an
+error state.}
+
+@defproc[(updater-cancel! [instance updater?]) boolean?]{
+Requests cancellation of an active download. Returns @racket[#t] when a worker
+was interrupted and @racket[#f] when no download was active.}
+
+@defproc[(updater-state [instance updater?]) hash?]{
+Returns an immutable, synchronized, JSON-safe snapshot with phase, percent,
+message, downloaded path, available version, and current version fields.
+Contained strings and JSON collections are immutable as well as the top-level
+hash. The stable phase vocabulary is @racket["idle"], @racket["checking"],
+@racket["available"], @racket["up-to-date"], @racket["downloading"],
+@racket["downloaded"], @racket["cancelled"], and @racket["error"]. A failed
+or cancelled download retains its authenticated candidate so an application
+may explicitly retry; starting a new check resets it.}
+
+@defproc[(updater-wait [instance updater?]
+                       [timeout (or/c #f (and/c real? (not/c negative?))) #f])
+         (or/c #f hash?)]{
+Waits for the active download and returns its terminal snapshot. Returns
+@racket[#f] when a finite timeout expires.}
+
 @defproc[(execute-install-plan! [plan install-plan?]
                                 [#:health-check health-check (-> any/c) (lambda () #t)]
                                 [#:commit commit (-> any/c) void]

@@ -9,6 +9,12 @@
   and payloads also reject trailing JSON values and fields outside their
   versioned schemas.
 
+- Add an opaque managed updater for the check/select/download lifecycle shared
+  by downstream applications. It copies mutable configuration inputs and
+  provides deeply immutable, synchronized JSON-safe state,
+  one background worker, progress, explicit cancellation, monotonic manifest,
+  stall, and total deadlines, deterministic destinations, and terminal cleanup
+  while leaving installation and restart with the native host.
 - `download-update` reports download progress: an optional `#:on-progress`
   callback receives cumulative bytes from zero through the final downloaded
   size. Intermediate reports are throttled to about one per percent of the
