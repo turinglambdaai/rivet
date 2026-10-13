@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Add the macOS `RivetUpdate` Swift module: a shared host-side update client
+  for installed `.app` bundles, so applications stop hand-rolling the same
+  security-critical download/verify/swap flow per product. It verifies the
+  family's signed manifest wrapper (Ed25519 over exact payload bytes before
+  any JSON parsing), downloads through a delegate-driven session whose
+  completion callbacks are definitive — byte-iterating `AsyncBytes` can park
+  its continuation forever on a lost end-of-stream flag — enforces signed
+  size during transfer and on the delivered file, confirms the unpacked
+  bundle version, and swaps atomically with rollback and relaunch.
+  Configuration fails closed (HTTPS-only feeds outside loopback drills,
+  raw-32-byte keys, bare `*.app` bundle names), task cancellation always
+  resumes promptly, and progress stays within 0…100. The swap handoff owns
+  two traps verified on a real stalled OTA: the spawned script keeps the
+  work directory (`cleanupStaleWorkDirectories` sweeps crashed attempts at
+  startup), and a presented sheet vetoes `terminate` silently — the module
+  ends every sheet, terminates, and stops the run loop if the quit was
+  deferred.
+
 ## 0.8.0
 
 - Reject self-contradictory signed update manifests before publication or
