@@ -54,6 +54,7 @@ let package = Package(
         .target(
             name: "RivetSystem",
             path: "platform/macos/Sources/RivetSystem",
+            swiftSettings: [.enableExperimentalFeature("IsolatedDeinit")]
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("Security"),

@@ -58,7 +58,7 @@
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>$(RIVET_RACKET_INCLUDE);$(RIVET_ROOT)\runtime\include;$(RIVET_ROOT)\platform\windows\chart;$(RIVET_ROOT)\platform\windows\runtime;$(RIVET_ROOT)\platform\windows\system;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary Condition="'$(RivetRuntimeLibrary)' != ''">$(RivetRuntimeLibrary)</RuntimeLibrary>
-      <PreprocessorDefinitions>WIN32;_WINDOWS;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;NOMINMAX;_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
