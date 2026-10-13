@@ -272,12 +272,11 @@ Native hosts expose equivalent platform APIs in their native system library.}
 @defparam[current-system-adapter adapter system-adapter?]{
 The adapter used by all system-service convenience procedures.}
 
-@defstruct*[settings-store
-            ([path path?]
-             [lock semaphore?]
-             [data hash?])
-            #:mutable]{
-Represents one synchronized, JSON-backed preferences file.}
+@defproc[(settings-store? [value any/c]) boolean?]{
+Recognizes an opaque, synchronized JSON-backed preferences store. Its path,
+lock, and cached data are private so updates cannot bypass the atomic public
+operations. Transactions refresh under an in-process and operating-system
+lock, and returned JSON trees are deeply immutable.}
 
 @defparam[current-rivet-log-sink sink procedure?]{
 Receives each structured log record. The default writes JSON to the current
@@ -297,11 +296,11 @@ secondary-instance activation.}
                                     [body string?]
                                     [#:tag tag (or/c #f string?) #f]) any/c]{
 Displays an operating-system notification.}
-@defproc[(set-tray-menu! [items list?]) any/c]{Configures a Windows tray or macOS menu-bar menu.}
+@defproc[(set-tray-menu! [items list?]) any/c]{Configures a platform tray or menu-bar menu.}
 @defproc[(set-autostart! [enabled? boolean?]) any/c]{Enables or disables login startup.}
 @defproc[(autostart-enabled?) boolean?]{Reports the current login-startup state.}
 @defproc[(secure-store-set! [service string?] [account string?] [secret bytes?]) any/c]{
-Stores a secret through Windows Credential Manager or macOS Keychain.}
+Stores a secret through the platform credential service.}
 @defproc[(secure-store-ref [service string?] [account string?] [default any/c #f]) any/c]{
 Reads a secret, returning @racket[default] when no value is present.}
 @defproc[(secure-store-remove! [service string?] [account string?]) any/c]{Removes a stored secret.}
