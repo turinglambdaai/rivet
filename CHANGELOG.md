@@ -29,6 +29,10 @@
 - Fix the linkable Windows and Linux chart packages to carry the shared
   chart batch codec/model implementation. The pre-release embedded roundtrip
   caught the prior compile-green/link-red package before 0.11.0 shipped.
+- Keep post-release verification compatible with the clean output contract.
+  When the unpacked staging package is gone, `raco rivet verify` now validates
+  the portable ZIP through an isolated temporary extraction with strict root
+  layout checks and unconditional cleanup.
 
 ## 0.10.0
 

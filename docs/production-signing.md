@@ -4,7 +4,7 @@ Rivet keeps development packaging and production trust credentials deliberately 
 
 - `raco rivet package` creates the normal self-contained development distributable. macOS uses ad-hoc signing so the bundle can be validated locally.
 - `raco rivet package --production` requires real platform signing credentials. Windows is Authenticode-signed and RFC 3161 timestamped. macOS is Developer ID signed, submitted to Apple notarization, stapled, and then production-verified. On Linux, production packaging is `raco rivet release`: the final installer is signed with a detached Ed25519 signature instead of OS-level code signing.
-- `raco rivet verify --production` re-checks the platform production trust requirements on an existing artifact. On Linux this re-derives the installer archive from the package directory and validates its Ed25519 signature.
+- `raco rivet verify --production` re-checks the platform production trust requirements on an existing artifact. When release cleanup has removed the unpacked staging directory, Rivet verifies the payload from the portable ZIP. On Linux it then re-derives the installer archive and validates its Ed25519 signature.
 
 Rivet does not store certificate passwords, private keys, Apple credentials, or notary credentials in `rivet.rktd`.
 
@@ -64,7 +64,7 @@ The temporary notarization ZIP is a build artifact, not a credential store.
 Linux has no OS-level code-signing gate, so Rivet defines production trust at the installer level and reuses the distribution layer's audited Ed25519 primitives:
 
 - `raco rivet release` packs the verified self-contained package into a deterministic `.tar.gz` (sorted ustar entries, epoch timestamps, root ownership, timestamp-free gzip) and writes a detached Ed25519 signature beside it as `<installer>.sig` (base64).
-- The same deterministic archive makes verification strong: `raco rivet verify --production` rebuilds the archive from the packaged directory, requires a byte-identical match with the released installer, and validates the detached signature with the configured public key.
+- The same deterministic archive makes verification strong: `raco rivet verify --production` rebuilds the archive from the packaged directory (or the safely extracted portable ZIP after release cleanup), requires a byte-identical match with the released installer, and validates the detached signature with the configured public key.
 
 Set:
 

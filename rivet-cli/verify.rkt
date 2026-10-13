@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require racket/file
+(require file/unzip
+         racket/file
          racket/list
          racket/path
          racket/string
@@ -12,6 +13,7 @@
          "linux-native-package.rkt"
          "linux-package.rkt"
          "project.rkt"
+         "release-layout.rkt"
          "rpm.rkt"
          "signing-options.rkt"
          "tar.rkt"
@@ -504,9 +506,58 @@
       [else
        (error 'verify-project-package!
               "Rivet package verification currently targets Windows, macOS, and Linux")]))
-  (verify-package! project package
-                   #:production? production?
-                   #:launch-smoke? launch-smoke?))
+  (call-with-project-package-for-verification
+   project package
+   (lambda (package-to-verify)
+     (verify-package! project package-to-verify
+                      #:production? production?
+                      #:launch-smoke? launch-smoke?))))
+
+(define (call-with-project-package-for-verification project package verify!)
+  (cond
+    [(directory-exists? package)
+     (verify! package)
+     package]
+    [else
+     (define archive (portable-zip-path project))
+     (unless (file-exists? archive)
+       (required-directory! 'verify-project-package!
+                            package
+                            "platform package or its portable release archive"))
+     (define extraction-root
+       (make-temporary-file "rivet-verify-~a" 'directory))
+     (dynamic-wind
+       void
+       (lambda ()
+         (unzip archive
+                (make-filesystem-entry-reader
+                 #:dest extraction-root
+                 #:exists 'error)
+                #:preserve-attributes? #t)
+         (define entries (directory-list extraction-root #:build? #t))
+         (unless (= (length entries) 1)
+           (raise-arguments-error
+            'verify-project-package!
+            "portable archive must contain exactly one root entry"
+            "archive" archive
+            "entry-count" (length entries)))
+         (define extracted-package (car entries))
+         (define expected-name (file-name-from-path package))
+         (unless (equal? (file-name-from-path extracted-package) expected-name)
+           (raise-arguments-error
+            'verify-project-package!
+            "portable archive root does not match the expected platform package"
+            "archive" archive
+            "expected" expected-name
+            "actual" (file-name-from-path extracted-package)))
+         (required-directory! 'verify-project-package!
+                              extracted-package
+                              "portable release package")
+         (verify! extracted-package)
+         archive)
+       (lambda ()
+         (delete-directory/files extraction-root #:must-exist? #f)))]))
 
 (module+ test-support
-  (provide verify-configured-resources!))
+  (provide verify-configured-resources!
+           call-with-project-package-for-verification))
