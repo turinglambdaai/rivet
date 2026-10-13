@@ -269,6 +269,31 @@ private var testConfiguration: RivetUpdateConfiguration {
         == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
 }
 
+@Test func staleWorkDirectoryCleanupKeepsFreshDirectories() throws {
+    let temporary = FileManager.default.temporaryDirectory
+    let stale = temporary.appendingPathComponent("rivet-update-\(UUID())")
+    let fresh = temporary.appendingPathComponent("rivet-update-\(UUID())")
+    let unrelated = temporary.appendingPathComponent("unrelated-\(UUID())")
+    for directory in [stale, fresh, unrelated] {
+        try FileManager.default.createDirectory(at: directory,
+                                                withIntermediateDirectories: true)
+    }
+    defer {
+        for directory in [stale, fresh, unrelated] {
+            try? FileManager.default.removeItem(at: directory)
+        }
+    }
+    let ancient = Date(timeIntervalSinceNow: -7200)
+    try FileManager.default.setAttributes([.modificationDate: ancient],
+                                          ofItemAtPath: stale.path)
+    try FileManager.default.setAttributes([.modificationDate: ancient],
+                                          ofItemAtPath: unrelated.path)
+    RivetUpdateService.cleanupStaleWorkDirectories()
+    #expect(!FileManager.default.fileExists(atPath: stale.path))
+    #expect(FileManager.default.fileExists(atPath: fresh.path))
+    #expect(FileManager.default.fileExists(atPath: unrelated.path))
+}
+
 // MARK: - Networked tests (serialized: they share the URLProtocol stub)
 
 private enum StubResponse {

@@ -343,7 +343,13 @@ public final class RivetUpdateService: Sendable {
         try FileManager.default.createDirectory(at: workDir,
                                                 withIntermediateDirectories: true)
         let zipURL = workDir.appendingPathComponent("update.zip")
-        defer { try? FileManager.default.removeItem(at: workDir) }
+        var swapLaunched = false
+        defer {
+            // Once the swap script is spawned it owns the work dir (it
+            // unpacks from there after we are gone); deleting it here would
+            // race the script's grace sleep and destroy the payload.
+            if !swapLaunched { try? FileManager.default.removeItem(at: workDir) }
+        }
 
         let downloader = RivetArtifactDownloader(destination: zipURL,
                                                  expectedSize: artifact.size,
@@ -399,11 +405,34 @@ public final class RivetUpdateService: Sendable {
         try await Self.runProcess("/bin/chmod", arguments: ["+x", swapPath.path])
 
         // Launch the swap, then leave through the normal exit path so
-        // AppKit tears the app down cleanly; the script's sleep 1 gives us
-        // time to quit before it moves the bundle.
-        try await Self.runProcess("/bin/bash", arguments: [swapPath.path])
+        // AppKit tears the app down cleanly; the script's grace sleep gives
+        // us time to quit before it moves the bundle.
+        let bash = Process()
+        bash.executableURL = URL(fileURLWithPath: "/bin/bash")
+        bash.arguments = [swapPath.path]
+        do {
+            try bash.run()
+            swapLaunched = true
+        } catch {
+            throw error
+        }
         #if canImport(AppKit)
-        await MainActor.run { NSApplication.shared.terminate(nil) }
+        await MainActor.run {
+            // A presented SwiftUI sheet vetoes NSApplication.terminate
+            // silently; end every sheet first so the quit sequence runs.
+            for window in NSApplication.shared.windows {
+                for sheet in window.sheets {
+                    window.endSheet(sheet)
+                }
+            }
+            NSApplication.shared.terminate(nil)
+        }
+        // If terminate was still vetoed (or deferred), stop the run loop so
+        // the app leaves inside the swap script's sleep window — otherwise
+        // a surviving old process can hold a single-instance lease and
+        // quietly kill the relaunched update.
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        await MainActor.run { NSApplication.shared.stop(nil) }
         #else
         exit(0)
         #endif
@@ -474,6 +503,25 @@ public final class RivetUpdateService: Sendable {
             if x != y { return x > y }
         }
         return false
+    }
+
+    /// Removes work directories left behind by update attempts that died
+    /// before their swap script finished. Call once at application startup;
+    /// fresh directories (an in-flight update from another process) are
+    /// kept.
+    public static func cleanupStaleWorkDirectories(olderThan interval: TimeInterval = 1800) {
+        let temporary = FileManager.default.temporaryDirectory
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: temporary,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: .skipsHiddenFiles) else { return }
+        for entry in entries where entry.lastPathComponent.hasPrefix("rivet-update-") {
+            if let date = try? entry.resourceValues(
+                    forKeys: [.contentModificationDateKey]).contentModificationDate,
+               Date().timeIntervalSince(date) > interval {
+                try? FileManager.default.removeItem(at: entry)
+            }
+        }
     }
 }
 

@@ -13,7 +13,12 @@
   bundle version, and swaps atomically with rollback and relaunch.
   Configuration fails closed (HTTPS-only feeds outside loopback drills,
   raw-32-byte keys, bare `*.app` bundle names), task cancellation always
-  resumes promptly, and progress stays within 0…100.
+  resumes promptly, and progress stays within 0…100. The swap handoff owns
+  two traps verified on a real stalled OTA: the spawned script keeps the
+  work directory (`cleanupStaleWorkDirectories` sweeps crashed attempts at
+  startup), and a presented sheet vetoes `terminate` silently — the module
+  ends every sheet, terminates, and stops the run loop if the quit was
+  deferred.
 
 ## 0.8.0
 

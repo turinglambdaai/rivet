@@ -145,6 +145,8 @@ The downloader is delegate-driven on purpose. Byte-iterating `URLSession.AsyncBy
 - A running transfer always offers an explicit Cancel affordance; task cancellation invalidates the session, so the awaited call always resumes promptly.
 - The update surface stays dismissable by gesture except during the final swap-and-relaunch step, which terminates the process anyway.
 
+The handoff at the end of an install owns two further traps the module encodes: the spawned swap script takes ownership of the work directory (an eager `defer` cleanup would race the script's grace sleep and destroy the payload — call `RivetUpdateService.cleanupStaleWorkDirectories()` at startup to sweep directories left by crashed attempts), and a presented SwiftUI sheet silently vetoes `NSApplication.terminate`, so the module ends every sheet, terminates, and stops the run loop if the quit was deferred — a surviving old process could otherwise hold a single-instance lease and quietly kill the relaunched update.
+
 Windows hosts update through the MSI transaction (`msiexec` with elevation), and Linux AppImage/portable installs should use the engine's verified `prepare-platform-installation` / `execute-platform-installation!` replacement instead of re-implementing atomic swap in the host. Sharing the `RivetUpdate` pattern on those platforms belongs to their host story, not to each product.
 
 ## External validation points
