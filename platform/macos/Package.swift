@@ -48,7 +48,7 @@ let package = Package(
         .target(
             name: "RivetSystem",
             path: "Sources/RivetSystem",
-            swiftSettings: [.enableExperimentalFeature("IsolatedDeinit")]
+            swiftSettings: [.enableExperimentalFeature("IsolatedDeinit")],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("Security"),
