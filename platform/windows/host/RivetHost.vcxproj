@@ -49,10 +49,9 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <PropertyGroup>
-    <!-- Hybrid CRT (see HybridCRT.props): forwarded to the rivet-host
-         library so the static link never mixes RuntimeLibrary flavors. -->
-    <RivetRuntimeLibrary Condition="'$(Configuration)'=='Debug'">MultiThreadedDebug</RivetRuntimeLibrary>
-    <RivetRuntimeLibrary Condition="'$(Configuration)'=='Release'">MultiThreaded</RivetRuntimeLibrary>
+    <!-- Hybrid-CRT products define RivetRuntimeLibrary themselves (their
+         Directory.Build.props owns the CRT story) and forward it through
+         the ProjectReference; the stock template stays MD/MDd. -->
   </PropertyGroup>
   <ImportGroup Label="ExtensionSettings" />
   <ImportGroup Label="PropertySheets">
@@ -67,7 +66,7 @@
       <WarningLevel>Level4</WarningLevel>
       <AdditionalOptions>%(AdditionalOptions) /bigobj /permissive- /utf-8</AdditionalOptions>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(RIVET_RACKET_INCLUDE);$(RIVET_ROOT)\runtime\include;$(RIVET_ROOT)\platform\windows\runtime;$(RIVET_ROOT)\platform\windows\system;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(RIVET_RACKET_INCLUDE);$(RIVET_ROOT)\runtime\include;$(RIVET_ROOT)\platform\windows\runtime;$(RIVET_ROOT)\platform\windows\system;$(RIVET_ROOT)\platform\windows\update;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link><AdditionalDependencies>$(RIVET_RACKET_IMPORT_LIB);%(AdditionalDependencies)</AdditionalDependencies></Link>
   </ItemDefinitionGroup>
@@ -90,6 +89,7 @@
     <ClInclude Include="$(RIVET_ROOT)\platform\windows\runtime\backend.hpp" />
     <ClInclude Include="$(RIVET_ROOT)\platform\windows\runtime\win32_pipe_transport.hpp" />
     <ClInclude Include="$(RIVET_ROOT)\platform\windows\system\system_services.hpp" />
+    <ClInclude Include="$(RIVET_ROOT)\platform\windows\update\update_handoff.hpp" />
     <ClInclude Include="$(RIVET_ROOT)\runtime\include\rivet\protocol.hpp" />
   </ItemGroup>
   <ItemGroup>
@@ -103,8 +103,7 @@
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="$(RIVET_ROOT)\platform\windows\rivet-host.vcxproj"
-                      Properties="RivetRuntimeLibrary=$(RivetRuntimeLibrary)">
+    <ProjectReference Include="$(RIVET_ROOT)\platform\windows\rivet-host.vcxproj">
       <Project>dc7f7b91-5def-4f64-8fdc-06562c2ac64b</Project>
     </ProjectReference>
   </ItemGroup>
