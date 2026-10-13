@@ -5,6 +5,7 @@
 #include "GeneratedBackend.hpp"
 #include <microsoft.ui.xaml.window.h>
 #include "../../../platform/windows/system/system_services.hpp"
+#include "../../../platform/windows/system/winui_window.hpp"
 
 namespace winrt::RivetHost::implementation {
 

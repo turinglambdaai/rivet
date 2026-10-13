@@ -3,6 +3,7 @@
 #include "pch.h"
 #include "MainWindow.g.h"
 #include "system_services.hpp"
+#include "winui_window.hpp"
 
 namespace winrt::RivetHost::implementation {
 

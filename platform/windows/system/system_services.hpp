@@ -1,8 +1,7 @@
 #pragma once
 
 #include <windows.h>
-#include <microsoft.ui.xaml.window.h>
-#include <winrt/Microsoft.UI.Xaml.h>
+#include <winrt/base.h>
 
 #include <cstdint>
 #include <functional>
@@ -12,20 +11,6 @@
 #include <vector>
 
 namespace rivet::system {
-
-// Official WinUI 3 desktop interop bridge. This avoids title-based
-// FindWindowW lookups and centralizes the raw App SDK ABI header required by
-// RegisterHotKey, SetWindowSubclass, clipboard listeners, tray icons, and
-// other HWND-owned platform features. Call only after InitializeComponent.
-template <typename Window>
-[[nodiscard]] HWND NativeWindowHandle(Window const& window) {
-  auto native = window.template try_as<::IWindowNative>();
-  if (!native) winrt::check_hresult(E_NOINTERFACE);
-  HWND handle{};
-  winrt::check_hresult(native->get_WindowHandle(&handle));
-  if (handle == nullptr) winrt::check_hresult(E_HANDLE);
-  return handle;
-}
 
 class SingleInstanceLease final {
  public:
