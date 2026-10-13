@@ -19,6 +19,7 @@
 include_guard(GLOBAL)
 
 set(RIVET_LINUX_PLATFORM_SOURCES
+  "${RIVET_ROOT}/platform/linux/chart/chart_area.cpp"
   "${RIVET_ROOT}/platform/linux/runtime/backend.cpp"
   "${RIVET_ROOT}/platform/linux/system/autostart.cpp"
   "${RIVET_ROOT}/platform/linux/system/clipboard.cpp"
@@ -36,6 +37,7 @@ set(RIVET_LINUX_PLATFORM_SOURCES
 )
 
 set(RIVET_LINUX_INCLUDE_DIRS
+  "${RIVET_ROOT}/platform/linux/chart"
   "${RIVET_ROOT}/platform/linux/runtime"
   "${RIVET_ROOT}/platform/linux/system"
   "${RIVET_ROOT}/platform/linux/theme"

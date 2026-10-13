@@ -9,6 +9,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <StackPanel Orientation="Horizontal" Spacing="12">
@@ -79,7 +80,18 @@
             </Border>
         </Grid>
 
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="10">
+        <StackPanel Grid.Row="3" Spacing="8">
+            <ToggleSwitch
+                x:Name="StreamToggle"
+                Header="Live timing stream (chart data plane)"
+                OnContent="Streaming" OffContent="Stopped"
+                Toggled="StreamToggle_Toggled"
+                AutomationProperties.AutomationId="stream-toggle" />
+            <ContentControl x:Name="ChartHost" MinHeight="170" HorizontalAlignment="Stretch"
+                    AutomationProperties.AutomationId="timing-chart" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="10">
             <Button x:Name="NewButton" Content="New Task" IsEnabled="False"
                     Click="New_Click" AutomationProperties.AutomationId="new-task" />
             <Button x:Name="SamplesButton" Content="Reload Samples" IsEnabled="False"

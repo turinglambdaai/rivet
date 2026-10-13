@@ -3,6 +3,7 @@ project(rivet_runtime LANGUAGES CXX)
 
 add_library(rivet_protocol STATIC
   src/protocol.cpp
+  src/chart_batch.cpp
 )
 
 target_include_directories(rivet_protocol
@@ -69,6 +70,12 @@ if(RIVET_BUILD_TESTS)
   target_compile_features(rivet_backend_completion_registry_test PRIVATE cxx_std_17)
   rivet_enable_test_assertions(rivet_backend_completion_registry_test)
   add_test(NAME rivet_backend_completion_registry_test COMMAND rivet_backend_completion_registry_test)
+
+  add_executable(rivet_chart_batch_test tests/chart_batch_test.cpp)
+  target_link_libraries(rivet_chart_batch_test PRIVATE rivet_protocol)
+  target_compile_features(rivet_chart_batch_test PRIVATE cxx_std_17)
+  rivet_enable_test_assertions(rivet_chart_batch_test)
+  add_test(NAME rivet_chart_batch_test COMMAND rivet_chart_batch_test)
 endif()
 
 if(RIVET_BUILD_FUZZERS)

@@ -242,7 +242,7 @@
 ;; rivet/testing is internal test support and deliberately stays out of the
 ;; user manual.
 (define documented-modules
-  '(rivet rivet/app-info rivet/backend rivet/keel rivet/protocol
+  '(rivet rivet/app-info rivet/backend rivet/chart rivet/keel rivet/protocol
     rivet/resources rivet/system rivet/distribution))
 
 (define ident-chars "A-Za-z0-9_!?<>=/\\+\\-*:.#")

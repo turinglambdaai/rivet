@@ -2,6 +2,7 @@ import SwiftUI
 import RivetEmbedding
 import RivetRuntime
 import RivetSystem
+import RivetUI
 
 @main
 struct RivetHostApp: App {
@@ -65,6 +66,32 @@ final class AppModel: ObservableObject {
             model?.ready = false
             model?.status = "Backend error: \(message)"
         }
+
+        func configureChart(
+            specs: [RivetTypes.TimingSeries],
+            thresholds: [RivetTypes.TimingThreshold]
+        ) {
+            guard let model else { return }
+            model.chartModel.setSeries(
+                specs.map {
+                    RivetChartModel.SeriesSpec(
+                        id: $0.id, label: $0.label, color: $0.color, unit: $0.unit
+                    )
+                }
+            )
+            model.chartModel.setThresholds(
+                thresholds.map {
+                    RivetChartModel.Threshold(value: $0.value, label: $0.label, color: $0.color)
+                }
+            )
+            model.chartModel.onGap = { series in
+                model.repullChartWindow(series)
+            }
+        }
+
+        func markStreaming(_ streaming: Bool) {
+            model?.streaming = streaming
+        }
     }
 
     @Published var status = "Starting embedded Racket CS…"
@@ -72,6 +99,8 @@ final class AppModel: ObservableObject {
     @Published var selectedID: Int64?
     @Published var ready = false
     @Published var generating = false
+    @Published var streaming = false
+    let chartModel = RivetChartModel()
 
     private var backend: EmbeddedRacketBackend?
     private var generationTask: Task<Void, Never>?
@@ -105,8 +134,14 @@ final class AppModel: ObservableObject {
                     let api = RivetAPI(client: backend.client)
                     async let loadedTasks = api.list_tasks()
                     async let selected = api.get_selected_task_id()
-                    let (items, selectedID) = try await (loadedTasks, selected)
+                    async let specs = api.timing_series_specs()
+                    async let thresholds = api.timing_decoration()
+                    let (items, selectedID, seriesSpecs, seriesThresholds) =
+                        try await (loadedTasks, selected, specs, thresholds)
                     await relay.ready(tasks: items, selectedID: selectedID)
+                    await relay.configureChart(specs: seriesSpecs, thresholds: seriesThresholds)
+                    _ = try? await api.timing_start()
+                    await relay.markStreaming(true)
                 } catch {
                     await relay.fail(String(describing: error))
                 }
@@ -197,6 +232,39 @@ final class AppModel: ObservableObject {
         generationTask?.cancel()
     }
 
+    func toggleStream() {
+        guard let backend, ready else { return }
+        streaming.toggle()
+        Task {
+            do {
+                if streaming {
+                    _ = try await RivetAPI(client: backend.client).timing_start()
+                } else {
+                    _ = try await RivetAPI(client: backend.client).timing_stop()
+                }
+            } catch {
+                status = "Stream toggle failed: \(error)"
+                streaming.toggle()
+            }
+        }
+    }
+
+    func repullChartWindow(_ series: String) {
+        guard let backend else { return }
+        Task {
+            do {
+                let window = try await RivetAPI(client: backend.client).timing_window(series_id: series)
+                chartModel.replaceSeries(
+                    series,
+                    window: window.samples.map { RivetChartBatch.Sample(tsNs: $0.ts, value: $0.value) },
+                    watermark: UInt64(bitPattern: window.watermark)
+                )
+            } catch {
+                status = "Chart window pull failed: \(error)"
+            }
+        }
+    }
+
     func stop() {
         generationTask?.cancel()
         generationTask = nil
@@ -255,6 +323,8 @@ final class AppModel: ObservableObject {
             status = progress.message
         case .task_saved(let task):
             replace(task)
+        case .chart_batch(let envelope):
+            chartModel.appendBatch(envelope.batch, series: envelope.series)
         }
     }
 

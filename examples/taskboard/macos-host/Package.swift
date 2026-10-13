@@ -28,7 +28,8 @@ let package = Package(
                 .product(name: "RivetRuntime", package: "macos"),
                 .product(name: "RivetDevice", package: "macos"),
                 .product(name: "RivetEmbedding", package: "macos"),
-                .product(name: "RivetSystem", package: "macos")
+                .product(name: "RivetSystem", package: "macos"),
+                .product(name: "RivetUI", package: "macos")
             ],
             path: "Sources/RivetHost",
             linkerSettings: [

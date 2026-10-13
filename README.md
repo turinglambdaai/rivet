@@ -40,6 +40,7 @@ Rivet fills that gap:
 - **One backend contract** — typed RPC, events, shared state, cancellation, and lifecycle over the same RVT1 protocol
 - **Shared application model** — project the backend schema into [Keel](https://github.com/turinglambdaai/keel), the transport-neutral contract shared with Glaze, without moving RVT1 or native UI ownership
 - **Generated native clients** — Racket declarations become typed Swift and C++ APIs at build time
+- **Real-time charts** — rolling-time-series widgets on every desktop host over one typed data plane (`rivet/chart` ring buffers, gap-detected binary batches); see [docs/chart-series.md](docs/chart-series.md)
 - **Embedded Racket CS** — the Racket runtime lives inside the application process; no external backend process is required
 - **Exact runtime matching** — Rivet stages the installed Racket CS runtime and never silently falls back to a nearby version
 - **Documented ecosystem escape hatches** — generated Agent guidance and `inspect --json` explain when to use a Racket package, a native host API, FFI, an external CLI, or an isolated sidecar, including the release and security checks for each

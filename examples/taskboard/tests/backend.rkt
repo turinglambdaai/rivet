@@ -1,8 +1,10 @@
 #lang racket/base
 
 (require rackunit
+         racket/list
          racket/runtime-path
          rivet/backend
+         rivet/chart
          rivet/protocol
          rivet/resources
          "../app/backend.rkt")
@@ -129,6 +131,54 @@
             (format "1,000-row backend request exceeded 5,000 ms: ~a"
                     generation-elapsed))
 (check-true (>= (length generated-events) 2))
+
+;; -- Real-time chart data plane -------------------------------------------
+;;
+;; The chart demo must hold across the real wire: batches drain through the
+;; chart-batch event with strictly increasing timestamps and a coherent
+;; absolute index, and the window RPC serves the initial-paint pull.
+
+(define-values (started start-events) (call "timing-start"))
+(check-equal? started #t)
+
+(sleep 0.4)
+
+;; Batches buffered in the pipe surface in the next call's event train.
+(define-values (probe probe-events) (call "timing-is-running"))
+(check-equal? probe #t)
+(define chart-batches
+  (for/list ([event (in-list probe-events)]
+             #:when (equal? (car event) "chart-batch"))
+    (cadr event)))
+(check-true (>= (length chart-batches) 2)
+            "expected at least two drained batches after 400ms of stream")
+(for ([envelope (in-list chart-batches)])
+  (check-not-false (member (first envelope) '("offset" "delay")))
+  (define-values (samples first-index) (chart-batch-decode (second envelope)))
+  (check-true (>= first-index 0))
+  (check-true (> (length samples) 0))
+  (for ([sample (in-list samples)]
+        [next (in-list (rest samples))])
+    (check-true (< (car sample) (car next)))))
+
+(define-values (window-offset window-events) (call "timing-window" "offset"))
+(check-equal? (first window-offset) "offset")
+(check-true (> (length (third window-offset)) 0)
+            "expected offset samples after 400ms of stream")
+(check-true (>= (second window-offset) (length (third window-offset))))
+
+(define invalid-window (send-request "timing-window" "ghost"))
+(define-values (unknown unknown-events) (read-terminal invalid-window))
+(check-equal? (frame-type unknown) message:error)
+
+(define-values (decorated decoration-events) (call "timing-decoration"))
+(check-equal? (length decorated) 2)
+
+(define-values (stopped stop-events) (call "timing-stop"))
+(check-equal? stopped #t)
+
+(define-values (running-after after-events) (call "timing-is-running"))
+(check-equal? running-after #f)
 
 (write-frame (frame message:shutdown 0 #"") client-out)
 (thread-wait server-thread)

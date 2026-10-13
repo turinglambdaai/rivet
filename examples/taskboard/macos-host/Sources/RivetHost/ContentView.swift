@@ -1,10 +1,12 @@
 import SwiftUI
+import RivetUI
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        NavigationSplitView {
+        VStack(spacing: 0) {
+            NavigationSplitView {
             VStack(spacing: 0) {
                 if model.tasks.isEmpty && model.ready {
                     ContentUnavailableView(
@@ -102,6 +104,34 @@ struct ContentView: View {
             .padding(.vertical, 8)
             .background(.bar)
         }
+            .frame(minHeight: 260)
+            chartSection
+        }
         .onChange(of: model.selectedID) { _, id in model.persistSelection(id) }
+    }
+
+    private var chartSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Toggle(isOn: Binding(
+                    get: { model.streaming },
+                    set: { _ in model.toggleStream() }
+                )) {
+                    Text("Live timing stream")
+                }
+                .toggleStyle(.switch)
+                .accessibilityIdentifier("stream-toggle")
+                Spacer()
+                Text("chart data plane — rivet/chart + RivetUI")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            RivetChartView(model: model.chartModel)
+                .frame(height: 170)
+                .accessibilityIdentifier("timing-chart")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.bar)
     }
 }

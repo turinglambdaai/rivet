@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "GeneratedBackend.hpp"
+#include "chart_area.hpp"
 #include "system_services.hpp"
 #include "theme.hpp"
 
@@ -45,6 +46,9 @@ struct AppState {
   std::vector<rivet_app::BoardTask> tasks;
   std::optional<std::int64_t> selected_id;
   std::optional<std::uint64_t> generation_request;
+  std::unique_ptr<rivet::ui::ChartArea> chart;
+  GtkButton* stream_toggle{nullptr};
+  bool streaming{false};
 
   void set_status(std::string const& text) {
     gtk_label_set_text(status, text.c_str());
@@ -54,6 +58,7 @@ struct AppState {
 AppState g_state;
 
 void perform_orderly_shutdown();
+void configure_chart();
 
 std::filesystem::path executable_path() {
   return std::filesystem::read_symlink("/proc/self/exe");
@@ -303,7 +308,94 @@ int on_backend_finished(gpointer) {
   }
   g_state.set_status("Embedded Racket CS is ready");
   load_tasks();
+  configure_chart();
   return G_SOURCE_REMOVE;
+}
+
+void on_stream_toggled(GtkButton*, gpointer);
+
+
+// Specs, thresholds, and the initial window come from typed RPCs; the live
+// samples then flow as chart batches. Completions arrive off the main loop
+// and are dispatched with g_idle_add like every other async delivery here.
+void configure_chart() {
+  (void)g_state.api->timing_series_specs_async(
+      [](rivet_app::Result<std::vector<rivet_app::TimingSeries>> result) {
+        if (result.error) {
+          return;
+        }
+        auto const& received = result.get();
+        auto* specs = new std::vector<rivet::ui::ChartSeriesSpec>();
+        for (auto const& timing : received) {
+          specs->push_back({timing.id, timing.label, timing.color, timing.unit});
+        }
+        g_idle_add(
+            [](gpointer data) -> gboolean {
+              std::unique_ptr<std::vector<rivet::ui::ChartSeriesSpec>> owned(
+                  static_cast<std::vector<rivet::ui::ChartSeriesSpec>*>(data));
+              if (g_state.chart) {
+                g_state.chart->set_series(std::move(*owned));
+                g_state.chart->on_gap = [](std::string const& series) {
+                  (void)g_state.api->timing_window_async(
+                      series,
+                      [series](rivet_app::Result<rivet_app::TimingWindow> window) {
+                        if (window.error) {
+                          return;
+                        }
+                        auto const& received = window.get();
+                        struct WindowDelivery {
+                          std::string series;
+                          std::uint64_t watermark;
+                          std::vector<rivet::chart::Sample> samples;
+                        };
+                        auto* delivery = new WindowDelivery{
+                            series, static_cast<std::uint64_t>(received.watermark), {}};
+                        for (auto const& sample : received.samples) {
+                          delivery->samples.push_back({sample.ts, sample.value});
+                        }
+                        g_idle_add(
+                            [](gpointer data) -> gboolean {
+                              std::unique_ptr<WindowDelivery> owned(
+                                  static_cast<WindowDelivery*>(data));
+                              if (g_state.chart) {
+                                g_state.chart->replace_series(owned->series,
+                                                              std::move(owned->samples),
+                                                              owned->watermark);
+                              }
+                              return G_SOURCE_REMOVE;
+                            },
+                            delivery);
+                      });
+                };
+              }
+              return G_SOURCE_REMOVE;
+            },
+            specs);
+      });
+  (void)g_state.api->timing_decoration_async(
+      [](rivet_app::Result<std::vector<rivet_app::TimingThreshold>> result) {
+        if (result.error) {
+          return;
+        }
+        auto const& received = result.get();
+        auto* thresholds = new std::vector<rivet::ui::ChartThreshold>();
+        for (auto const& timing : received) {
+          thresholds->push_back({timing.value, timing.label, timing.color});
+        }
+        g_idle_add(
+            [](gpointer data) -> gboolean {
+              std::unique_ptr<std::vector<rivet::ui::ChartThreshold>> owned(
+                  static_cast<std::vector<rivet::ui::ChartThreshold>*>(data));
+              if (g_state.chart) {
+                g_state.chart->set_thresholds(std::move(*owned));
+              }
+              return G_SOURCE_REMOVE;
+            },
+            thresholds);
+      });
+  (void)g_state.api->timing_start_async([](rivet_app::Result<bool>) {});
+  g_state.streaming = true;
+  gtk_button_set_label(g_state.stream_toggle, "Stop Stream");
 }
 
 void start_backend() {
@@ -328,6 +420,19 @@ void start_backend() {
         auto event = rivet_app::decode_event(name, value);
         if (auto progress = std::get_if<rivet_app::Operation_progressEvent>(&event)) {
           g_idle_add(on_progress_delivered, new std::string(progress->value.message));
+        }
+        if (auto batch = std::get_if<rivet_app::Chart_batchEvent>(&event)) {
+          auto* envelope = new rivet_app::ChartBatchEnvelope(std::move(batch->value));
+          g_idle_add(
+              [](gpointer data) -> gboolean {
+                std::unique_ptr<rivet_app::ChartBatchEnvelope> owned(
+                    static_cast<rivet_app::ChartBatchEnvelope*>(data));
+                if (g_state.chart) {
+                  g_state.chart->append_batch(owned->series, owned->batch);
+                }
+                return G_SOURCE_REMOVE;
+              },
+              envelope);
         }
       } catch (...) {
       }
@@ -411,6 +516,19 @@ void on_advance_clicked(GtkButton*, gpointer) {
       });
 }
 
+void on_stream_toggled(GtkButton*, gpointer) {
+  // Click callbacks arrive on the GLib main loop, so the state flip and the
+  // label update need no extra dispatch; only the async completion does.
+  if (g_state.streaming) {
+    (void)g_state.api->timing_stop_async([](rivet_app::Result<bool>) {});
+  } else {
+    (void)g_state.api->timing_start_async([](rivet_app::Result<bool>) {});
+  }
+  g_state.streaming = !g_state.streaming;
+  gtk_button_set_label(g_state.stream_toggle,
+                       g_state.streaming ? "Stop Stream" : "Start Stream");
+}
+
 void on_delete_clicked(GtkButton*, gpointer) {
   if (!g_state.api || !g_state.selected_id) return;
   set_busy(true);
@@ -471,6 +589,19 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_box_append(GTK_BOX(detail), detail_actions);
   gtk_paned_set_end_child(GTK_PANED(paned), detail);
 
+  auto* chart_frame = gtk_frame_new("Live timing series (chart data plane)");
+  gtk_widget_set_size_request(chart_frame, -1, 190);
+  g_state.chart = std::make_unique<rivet::ui::ChartArea>();
+  g_state.chart->set_title("offsetFromMaster / meanPathDelay");
+  auto* stream_toggle = gtk_button_new_with_label("Start Stream");
+  auto* chart_actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  gtk_box_append(GTK_BOX(chart_actions), stream_toggle);
+  auto* chart_column = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+  gtk_widget_set_vexpand(g_state.chart->widget(), TRUE);
+  gtk_box_append(GTK_BOX(chart_column), GTK_WIDGET(g_state.chart->widget()));
+  gtk_box_append(GTK_BOX(chart_column), chart_actions);
+  gtk_frame_set_child(GTK_FRAME(chart_frame), chart_column);
+
   auto* actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   auto* new_task = gtk_button_new_with_label("New Task");
   auto* samples = gtk_button_new_with_label("Reload Samples");
@@ -489,6 +620,8 @@ void on_activate(GtkApplication* app, gpointer) {
   set_accessible_identity(cancel, "cancel-generation", "Cancel generation");
   set_accessible_identity(advance, "advance-task", "Advance task status");
   set_accessible_identity(remove, "delete-task", "Delete task");
+  set_accessible_identity(g_state.chart->widget(), "timing-chart", "Live timing chart");
+  set_accessible_identity(stream_toggle, "stream-toggle", "Toggle timing stream");
   gtk_box_append(GTK_BOX(actions), new_task);
   gtk_box_append(GTK_BOX(actions), samples);
   gtk_box_append(GTK_BOX(actions), generate);
@@ -497,6 +630,7 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_box_append(GTK_BOX(root), title);
   gtk_box_append(GTK_BOX(root), status);
   gtk_box_append(GTK_BOX(root), paned);
+  gtk_box_append(GTK_BOX(root), chart_frame);
   gtk_box_append(GTK_BOX(root), actions);
   gtk_window_set_child(GTK_WINDOW(window), root);
 
@@ -512,6 +646,7 @@ void on_activate(GtkApplication* app, gpointer) {
   g_state.cancel = GTK_BUTTON(cancel);
   g_state.advance = GTK_BUTTON(advance);
   g_state.remove = GTK_BUTTON(remove);
+  g_state.stream_toggle = GTK_BUTTON(stream_toggle);
 
   gtk_widget_set_sensitive(new_task, FALSE);
   gtk_widget_set_sensitive(samples, FALSE);
@@ -525,6 +660,7 @@ void on_activate(GtkApplication* app, gpointer) {
   g_signal_connect(cancel, "clicked", G_CALLBACK(on_cancel_clicked), nullptr);
   g_signal_connect(advance, "clicked", G_CALLBACK(on_advance_clicked), nullptr);
   g_signal_connect(remove, "clicked", G_CALLBACK(on_delete_clicked), nullptr);
+  g_signal_connect(stream_toggle, "clicked", G_CALLBACK(on_stream_toggled), nullptr);
 
   gtk_window_present(GTK_WINDOW(window));
   start_backend();

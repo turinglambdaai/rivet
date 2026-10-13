@@ -34,6 +34,15 @@ public enum RivetTypes {
         }
     }
 
+    public struct ChartBatchEnvelope: Sendable {
+        public let series: String
+        public let batch: Data
+        public init(series: String, batch: Data) {
+            self.series = series
+            self.batch = batch
+        }
+    }
+
     public struct ImportProgress: Sendable {
         public let completed: Int64
         public let total: Int64
@@ -42,6 +51,59 @@ public enum RivetTypes {
             self.completed = completed
             self.total = total
             self.message = message
+        }
+    }
+
+    public struct TimingMarker: Sendable {
+        public let ts: Int64
+        public let label: String
+        public init(ts: Int64, label: String) {
+            self.ts = ts
+            self.label = label
+        }
+    }
+
+    public struct TimingSample: Sendable {
+        public let ts: Int64
+        public let value: Int64
+        public init(ts: Int64, value: Int64) {
+            self.ts = ts
+            self.value = value
+        }
+    }
+
+    public struct TimingSeries: Sendable {
+        public let id: String
+        public let label: String
+        public let color: String
+        public let unit: String
+        public init(id: String, label: String, color: String, unit: String) {
+            self.id = id
+            self.label = label
+            self.color = color
+            self.unit = unit
+        }
+    }
+
+    public struct TimingThreshold: Sendable {
+        public let value: Int64
+        public let label: String
+        public let color: String
+        public init(value: Int64, label: String, color: String) {
+            self.value = value
+            self.label = label
+            self.color = color
+        }
+    }
+
+    public struct TimingWindow: Sendable {
+        public let series: String
+        public let watermark: Int64
+        public let samples: [RivetTypes.TimingSample]
+        public init(series: String, watermark: Int64, samples: [RivetTypes.TimingSample]) {
+            self.series = series
+            self.watermark = watermark
+            self.samples = samples
         }
     }
 
@@ -54,6 +116,17 @@ private func encode_BoardTask(_ v: RivetTypes.BoardTask) -> RivetValue { .list([
 private func encode_Bool(_ v: Bool) -> RivetValue { .bool(v) }
 private func encode__List_BoardTask_(_ v: [RivetTypes.BoardTask]) -> RivetValue { .list(v.map(encode_BoardTask)) }
 private func encode__Optional_BoardTask_(_ v: RivetTypes.BoardTask?) -> RivetValue { v.map(encode_BoardTask) ?? .null }
+private func encode_TimingThreshold(_ v: RivetTypes.TimingThreshold) -> RivetValue { .list([encode_Int64(v.value), encode_String(v.label), encode_String(v.color)]) }
+private func encode__List_TimingThreshold_(_ v: [RivetTypes.TimingThreshold]) -> RivetValue { .list(v.map(encode_TimingThreshold)) }
+private func encode_TimingMarker(_ v: RivetTypes.TimingMarker) -> RivetValue { .list([encode_Int64(v.ts), encode_String(v.label)]) }
+private func encode__List_TimingMarker_(_ v: [RivetTypes.TimingMarker]) -> RivetValue { .list(v.map(encode_TimingMarker)) }
+private func encode_TimingSeries(_ v: RivetTypes.TimingSeries) -> RivetValue { .list([encode_String(v.id), encode_String(v.label), encode_String(v.color), encode_String(v.unit)]) }
+private func encode__List_TimingSeries_(_ v: [RivetTypes.TimingSeries]) -> RivetValue { .list(v.map(encode_TimingSeries)) }
+private func encode_TimingSample(_ v: RivetTypes.TimingSample) -> RivetValue { .list([encode_Int64(v.ts), encode_Int64(v.value)]) }
+private func encode__List_TimingSample_(_ v: [RivetTypes.TimingSample]) -> RivetValue { .list(v.map(encode_TimingSample)) }
+private func encode_TimingWindow(_ v: RivetTypes.TimingWindow) -> RivetValue { .list([encode_String(v.series), encode_Int64(v.watermark), encode__List_TimingSample_(v.samples)]) }
+private func encode_Bytes(_ v: Data) -> RivetValue { .bytes(v) }
+private func encode_ChartBatchEnvelope(_ v: RivetTypes.ChartBatchEnvelope) -> RivetValue { .list([encode_String(v.series), encode_Bytes(v.batch)]) }
 private func encode_ImportProgress(_ v: RivetTypes.ImportProgress) -> RivetValue { .list([encode_Int64(v.completed), encode_Int64(v.total), encode_String(v.message)]) }
 private func encode__Optional_Int64_(_ v: Int64?) -> RivetValue { v.map(encode_Int64) ?? .null }
 
@@ -64,15 +137,28 @@ private func decode_BoardTask(_ v: RivetValue) throws -> RivetTypes.BoardTask { 
 private func decode_Bool(_ v: RivetValue) throws -> Bool { guard case .bool(let x) = v else { throw RivetGeneratedError.typeMismatch("Bool") }; return x }
 private func decode__List_BoardTask_(_ v: RivetValue) throws -> [RivetTypes.BoardTask] { guard case .list(let xs) = v else { throw RivetGeneratedError.typeMismatch("(List BoardTask)") }; return try xs.map(decode_BoardTask) }
 private func decode__Optional_BoardTask_(_ v: RivetValue) throws -> RivetTypes.BoardTask? { if case .null = v { return nil }; return try decode_BoardTask(v) }
+private func decode_TimingThreshold(_ v: RivetValue) throws -> RivetTypes.TimingThreshold { guard case .list(let xs) = v, xs.count == 3 else { throw RivetGeneratedError.typeMismatch("TimingThreshold") }; return RivetTypes.TimingThreshold(value: try decode_Int64(xs[0]), label: try decode_String(xs[1]), color: try decode_String(xs[2])) }
+private func decode__List_TimingThreshold_(_ v: RivetValue) throws -> [RivetTypes.TimingThreshold] { guard case .list(let xs) = v else { throw RivetGeneratedError.typeMismatch("(List TimingThreshold)") }; return try xs.map(decode_TimingThreshold) }
+private func decode_TimingMarker(_ v: RivetValue) throws -> RivetTypes.TimingMarker { guard case .list(let xs) = v, xs.count == 2 else { throw RivetGeneratedError.typeMismatch("TimingMarker") }; return RivetTypes.TimingMarker(ts: try decode_Int64(xs[0]), label: try decode_String(xs[1])) }
+private func decode__List_TimingMarker_(_ v: RivetValue) throws -> [RivetTypes.TimingMarker] { guard case .list(let xs) = v else { throw RivetGeneratedError.typeMismatch("(List TimingMarker)") }; return try xs.map(decode_TimingMarker) }
+private func decode_TimingSeries(_ v: RivetValue) throws -> RivetTypes.TimingSeries { guard case .list(let xs) = v, xs.count == 4 else { throw RivetGeneratedError.typeMismatch("TimingSeries") }; return RivetTypes.TimingSeries(id: try decode_String(xs[0]), label: try decode_String(xs[1]), color: try decode_String(xs[2]), unit: try decode_String(xs[3])) }
+private func decode__List_TimingSeries_(_ v: RivetValue) throws -> [RivetTypes.TimingSeries] { guard case .list(let xs) = v else { throw RivetGeneratedError.typeMismatch("(List TimingSeries)") }; return try xs.map(decode_TimingSeries) }
+private func decode_TimingSample(_ v: RivetValue) throws -> RivetTypes.TimingSample { guard case .list(let xs) = v, xs.count == 2 else { throw RivetGeneratedError.typeMismatch("TimingSample") }; return RivetTypes.TimingSample(ts: try decode_Int64(xs[0]), value: try decode_Int64(xs[1])) }
+private func decode__List_TimingSample_(_ v: RivetValue) throws -> [RivetTypes.TimingSample] { guard case .list(let xs) = v else { throw RivetGeneratedError.typeMismatch("(List TimingSample)") }; return try xs.map(decode_TimingSample) }
+private func decode_TimingWindow(_ v: RivetValue) throws -> RivetTypes.TimingWindow { guard case .list(let xs) = v, xs.count == 3 else { throw RivetGeneratedError.typeMismatch("TimingWindow") }; return RivetTypes.TimingWindow(series: try decode_String(xs[0]), watermark: try decode_Int64(xs[1]), samples: try decode__List_TimingSample_(xs[2])) }
+private func decode_Bytes(_ v: RivetValue) throws -> Data { guard case .bytes(let x) = v else { throw RivetGeneratedError.typeMismatch("Bytes") }; return x }
+private func decode_ChartBatchEnvelope(_ v: RivetValue) throws -> RivetTypes.ChartBatchEnvelope { guard case .list(let xs) = v, xs.count == 2 else { throw RivetGeneratedError.typeMismatch("ChartBatchEnvelope") }; return RivetTypes.ChartBatchEnvelope(series: try decode_String(xs[0]), batch: try decode_Bytes(xs[1])) }
 private func decode_ImportProgress(_ v: RivetValue) throws -> RivetTypes.ImportProgress { guard case .list(let xs) = v, xs.count == 3 else { throw RivetGeneratedError.typeMismatch("ImportProgress") }; return RivetTypes.ImportProgress(completed: try decode_Int64(xs[0]), total: try decode_Int64(xs[1]), message: try decode_String(xs[2])) }
 private func decode__Optional_Int64_(_ v: RivetValue) throws -> Int64? { if case .null = v { return nil }; return try decode_Int64(v) }
 
 public enum RivetEvent: Sendable {
+    case chart_batch(RivetTypes.ChartBatchEnvelope)
     case operation_progress(RivetTypes.ImportProgress)
     case task_saved(RivetTypes.BoardTask)
 
     public static func decode(name: String, value: RivetValue) throws -> RivetEvent {
         switch name {
+        case "chart-batch": return .chart_batch(try decode_ChartBatchEnvelope(value))
         case "operation-progress": return .operation_progress(try decode_ImportProgress(value))
         case "task-saved": return .task_saved(try decode_BoardTask(value))
         default: throw RivetGeneratedError.unknownEvent(name)
@@ -85,56 +171,88 @@ public struct RivetAPI: Sendable {
     public init(client: RivetClient) { self.client = client }
 
     public func create_task(title: String, notes: String) async throws -> RivetTypes.BoardTask {
-        let result = try await client.call("create-task", arguments: [encode_String(title), encode_String(notes)])
-        return try decode_BoardTask(result)
+        let rivetResult = try await client.call("create-task", arguments: [encode_String(title), encode_String(notes)])
+        return try decode_BoardTask(rivetResult)
     }
     public func delete_task(id: Int64) async throws -> Bool {
-        let result = try await client.call("delete-task", arguments: [encode_Int64(id)])
-        return try decode_Bool(result)
+        let rivetResult = try await client.call("delete-task", arguments: [encode_Int64(id)])
+        return try decode_Bool(rivetResult)
     }
     public func generate_demo_tasks(count: Int64) async throws -> [RivetTypes.BoardTask] {
-        let result = try await client.call("generate-demo-tasks", arguments: [encode_Int64(count)])
-        return try decode__List_BoardTask_(result)
+        let rivetResult = try await client.call("generate-demo-tasks", arguments: [encode_Int64(count)])
+        return try decode__List_BoardTask_(rivetResult)
     }
     public func get_task(id: Int64) async throws -> RivetTypes.BoardTask? {
-        let result = try await client.call("get-task", arguments: [encode_Int64(id)])
-        return try decode__Optional_BoardTask_(result)
+        let rivetResult = try await client.call("get-task", arguments: [encode_Int64(id)])
+        return try decode__Optional_BoardTask_(rivetResult)
     }
     public func list_tasks() async throws -> [RivetTypes.BoardTask] {
-        let result = try await client.call("list-tasks", arguments: [])
-        return try decode__List_BoardTask_(result)
+        let rivetResult = try await client.call("list-tasks", arguments: [])
+        return try decode__List_BoardTask_(rivetResult)
     }
     public func reload_sample_tasks() async throws -> [RivetTypes.BoardTask] {
-        let result = try await client.call("reload-sample-tasks", arguments: [])
-        return try decode__List_BoardTask_(result)
+        let rivetResult = try await client.call("reload-sample-tasks", arguments: [])
+        return try decode__List_BoardTask_(rivetResult)
     }
     public func select_task(id: Int64) async throws -> RivetTypes.BoardTask? {
-        let result = try await client.call("select-task", arguments: [encode_Int64(id)])
-        return try decode__Optional_BoardTask_(result)
+        let rivetResult = try await client.call("select-task", arguments: [encode_Int64(id)])
+        return try decode__Optional_BoardTask_(rivetResult)
+    }
+    public func timing_decoration() async throws -> [RivetTypes.TimingThreshold] {
+        let rivetResult = try await client.call("timing-decoration", arguments: [])
+        return try decode__List_TimingThreshold_(rivetResult)
+    }
+    public func timing_is_running() async throws -> Bool {
+        let rivetResult = try await client.call("timing-is-running", arguments: [])
+        return try decode_Bool(rivetResult)
+    }
+    public func timing_markers_all() async throws -> [RivetTypes.TimingMarker] {
+        let rivetResult = try await client.call("timing-markers-all", arguments: [])
+        return try decode__List_TimingMarker_(rivetResult)
+    }
+    public func timing_series_specs() async throws -> [RivetTypes.TimingSeries] {
+        let rivetResult = try await client.call("timing-series-specs", arguments: [])
+        return try decode__List_TimingSeries_(rivetResult)
+    }
+    public func timing_set_window(span_ms: Int64) async throws -> Bool {
+        let rivetResult = try await client.call("timing-set-window", arguments: [encode_Int64(span_ms)])
+        return try decode_Bool(rivetResult)
+    }
+    public func timing_start() async throws -> Bool {
+        let rivetResult = try await client.call("timing-start", arguments: [])
+        return try decode_Bool(rivetResult)
+    }
+    public func timing_stop() async throws -> Bool {
+        let rivetResult = try await client.call("timing-stop", arguments: [])
+        return try decode_Bool(rivetResult)
+    }
+    public func timing_window(series_id: String) async throws -> RivetTypes.TimingWindow {
+        let rivetResult = try await client.call("timing-window", arguments: [encode_String(series_id)])
+        return try decode_TimingWindow(rivetResult)
     }
     public func update_task(id: Int64, title: String, notes: String, status: RivetTypes.TaskStatus) async throws -> RivetTypes.BoardTask {
-        let result = try await client.call("update-task", arguments: [encode_Int64(id), encode_String(title), encode_String(notes), encode_TaskStatus(status)])
-        return try decode_BoardTask(result)
+        let rivetResult = try await client.call("update-task", arguments: [encode_Int64(id), encode_String(title), encode_String(notes), encode_TaskStatus(status)])
+        return try decode_BoardTask(rivetResult)
     }
 
     // Shared state
     public func get_selected_task_id() async throws -> Int64? {
-        let result = try await client.getState("selected-task-id")
-        return try decode__Optional_Int64_(result)
+        let rivetResult = try await client.getState("selected-task-id")
+        return try decode__Optional_Int64_(rivetResult)
     }
     @discardableResult
     public func set_selected_task_id(_ value: Int64?) async throws -> Int64? {
-        let result = try await client.setState("selected-task-id", value: encode__Optional_Int64_(value))
-        return try decode__Optional_Int64_(result)
+        let rivetResult = try await client.setState("selected-task-id", value: encode__Optional_Int64_(value))
+        return try decode__Optional_Int64_(rivetResult)
     }
     public func get_tasks() async throws -> [RivetTypes.BoardTask] {
-        let result = try await client.getState("tasks")
-        return try decode__List_BoardTask_(result)
+        let rivetResult = try await client.getState("tasks")
+        return try decode__List_BoardTask_(rivetResult)
     }
     @discardableResult
     public func set_tasks(_ value: [RivetTypes.BoardTask]) async throws -> [RivetTypes.BoardTask] {
-        let result = try await client.setState("tasks", value: encode__List_BoardTask_(value))
-        return try decode__List_BoardTask_(result)
+        let rivetResult = try await client.setState("tasks", value: encode__List_BoardTask_(value))
+        return try decode__List_BoardTask_(rivetResult)
     }
 }
 

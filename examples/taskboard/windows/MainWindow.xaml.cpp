@@ -67,6 +67,9 @@ MainWindow::MainWindow() {
   InitializeComponent();
   Title(L"Rivet Taskboard — Racket + WinUI 3");
   TaskList().ItemsSource(task_rows_);
+  chart_ = rivet::win_ui::ChartControl();
+  ChartHost().Content(chart_);
+  chart_.set_title("offsetFromMaster / meanPathDelay");
   try {
     auto const window = rivet::system::NativeWindowHandle(*this);
     std::vector<rivet::system::TrayMenuItem> menu;
@@ -116,6 +119,14 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
           }
         });
       }
+      if (auto batch = std::get_if<rivet_app::Chart_batchEvent>(&event)) {
+        auto envelope = batch->value;
+        dispatcher.TryEnqueue([weak, envelope = std::move(envelope)]() mutable {
+          if (auto window = weak.get()) {
+            window->chart_.append_batch(envelope.series, envelope.batch);
+          }
+        });
+      }
     } catch (...) {
       // Unknown application events are intentionally ignored by this screen.
     }
@@ -134,6 +145,7 @@ winrt::fire_and_forget MainWindow::InitializeBackendAsync() {
           window->backend_ = std::move(backend);
           window->SetReadyUi();
           window->LoadTasksAsync();
+          window->ConfigureChartAsync();
         }
       } else {
         std::thread([backend = std::move(backend)]() mutable { backend->stop(); }).detach();
@@ -364,6 +376,120 @@ void MainWindow::SetReadyUi() {
   StatusBar().Severity(Microsoft::UI::Xaml::Controls::InfoBarSeverity::Success);
   StatusBar().Message(L"Embedded Racket CS is ready");
   SetBusy(false);
+}
+
+// Specs and thresholds come through typed RPCs; the live samples then flow
+// as chart batches through the event handler above. A gap (ring eviction
+// on the Racket side) is repaired by re-pulling the window.
+void MainWindow::ConfigureChartAsync() {
+  if (chart_configured_ || !backend_) {
+    return;
+  }
+  chart_configured_ = true;
+  auto dispatcher = DispatcherQueue();
+  auto weak = get_weak();
+  auto backend = backend_;
+
+  // API objects only need to outlive the synchronous issue call, so each
+  // request gets its own short-lived instance on this stack frame.
+  {
+    rivet_app::API api(*backend);
+    (void)api.timing_series_specs_async(
+        [dispatcher, weak](rivet_app::Result<std::vector<rivet_app::TimingSeries>> result) {
+          if (result.error) {
+            return;
+          }
+          auto const& received = result.get();
+          auto* specs = new std::vector<rivet::ui::ChartSeriesSpec>();
+          for (auto const& timing : received) {
+            specs->push_back({timing.id, timing.label, timing.color, timing.unit});
+          }
+          dispatcher.TryEnqueue([weak, specs] {
+            std::unique_ptr<std::vector<rivet::ui::ChartSeriesSpec>> owned(specs);
+            if (auto window = weak.get()) {
+              window->chart_.set_series(std::move(*owned));
+              window->chart_.on_gap = [weak](std::string const& series) {
+                if (auto window = weak.get()) {
+                  window->RepullChartWindow(series);
+                }
+              };
+            }
+          });
+        });
+  }
+  {
+    rivet_app::API api(*backend);
+    (void)api.timing_decoration_async(
+        [dispatcher, weak](rivet_app::Result<std::vector<rivet_app::TimingThreshold>> result) {
+          if (result.error) {
+            return;
+          }
+          auto const& received = result.get();
+          auto* thresholds = new std::vector<rivet::ui::ChartThreshold>();
+          for (auto const& timing : received) {
+            thresholds->push_back({timing.value, timing.label, timing.color});
+          }
+          dispatcher.TryEnqueue([weak, thresholds] {
+            std::unique_ptr<std::vector<rivet::ui::ChartThreshold>> owned(thresholds);
+            if (auto window = weak.get()) {
+              window->chart_.set_thresholds(std::move(*owned));
+            }
+          });
+        });
+  }
+  {
+    rivet_app::API api(*backend);
+    (void)api.timing_start_async([](rivet_app::Result<bool>) {});
+  }
+}
+
+void MainWindow::RepullChartWindow(std::string const& series) {
+  if (!backend_) {
+    return;
+  }
+  auto dispatcher = DispatcherQueue();
+  auto weak = get_weak();
+  rivet_app::API api(*backend_);
+  (void)api.timing_window_async(
+      series,
+      [dispatcher, weak, series](rivet_app::Result<rivet_app::TimingWindow> window) {
+        if (window.error) {
+          return;
+        }
+        auto const& received = window.get();
+        struct Delivery {
+          std::string series;
+          std::uint64_t watermark;
+          std::vector<rivet::chart::Sample> samples;
+        };
+        auto* delivery =
+            new Delivery{series, static_cast<std::uint64_t>(received.watermark), {}};
+        for (auto const& sample : received.samples) {
+          delivery->samples.push_back({sample.ts, sample.value});
+        }
+        dispatcher.TryEnqueue([weak, delivery] {
+          std::unique_ptr<Delivery> owned(delivery);
+          if (auto window = weak.get()) {
+            window->chart_.replace_series(owned->series, std::move(owned->samples),
+                                          owned->watermark);
+          }
+        });
+      });
+}
+
+void MainWindow::StreamToggle_Toggled(
+    winrt::Windows::Foundation::IInspectable const&,
+    Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  if (!backend_) {
+    return;
+  }
+  auto api = std::make_unique<rivet_app::API>(*backend_);
+  auto starting = StreamToggle().IsOn();
+  if (starting) {
+    (void)api->timing_start_async([](rivet_app::Result<bool>) {});
+  } else {
+    (void)api->timing_stop_async([](rivet_app::Result<bool>) {});
+  }
 }
 
 void MainWindow::SetErrorUi(std::string const& message, bool fatal) {

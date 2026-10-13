@@ -323,6 +323,101 @@ Builds a path inside the resource root. Components must be relative and
 must not contain @litchar{.} or @litchar{..} segments; traversal attempts
 are rejected.}
 
+@section{Real-Time Chart Series}
+
+@defmodule[rivet/chart]
+
+The chart data plane keeps time-series state on the Racket side and exports
+it in the two shapes native chart widgets consume: the recent-window pull
+(an ordinary typed RPC built from @racket[chart-series-window]) and the
+high-rate append push (a @racket[bytes?] batch carried by an application
+event). Samples are @racket[(cons timestamp-nanoseconds value)] pairs of
+exact integers; Rivet's typed surface is integer-native by design, and
+measurement domains (ns offsets, ps offsets, ppm drift) stay exact instead
+of losing precision to floating point.
+
+The batch layout is a cross-language contract with the portable C++ decoder
+in @filepath{runtime/include/rivet/chart_batch.hpp} and the Swift decoder
+in RivetUI; the three implementations are pinned by shared golden bytes in
+their test suites. @secref["top"] links the full convention guide.
+
+@defproc[(make-chart-series [id string?]
+                            [#:capacity capacity exact-positive-integer? 16384])
+         chart-series?]{
+Creates a series ring buffer. Capacity is the retained sample count; when
+the ring overflows, the oldest samples are evicted and the drop is reported
+through @racket[chart-series-dropped] and through the next batch's absolute
+first index.}
+
+@defproc[(chart-series? [value any/c]) boolean?]{
+Predicate for chart series values.}
+
+@defproc[(chart-series-append! [series chart-series?]
+                               [samples (listof (cons/c exact-nonnegative-integer?
+                                                        exact-integer?))])
+         void?]{
+Appends @racket[(ts . value)] samples in order. Timestamps must be strictly
+increasing within the call and against the series tail; a reordered feed
+corrupts window slicing and host index accounting, so it raises instead of
+silently reordering.}
+
+@defproc[(chart-series-window [series chart-series?]
+                              [span-ns (or/c #f exact-nonnegative-integer?)])
+         (listof (cons/c exact-nonnegative-integer? exact-integer?))]{
+Newest-last list of live samples no older than the newest timestamp minus
+@racket[span-ns]; @racket[#f] returns the whole live ring. This is the
+initial-paint and gap-recovery pull behind an ordinary typed RPC.}
+
+@defproc[(chart-series-drain-batch! [series chart-series?]) bytes?]{
+Returns one batch with every sample appended since the previous drain.
+The header's absolute first index lets a host that fell behind detect ring
+eviction and re-pull the window.}
+
+@defproc[(chart-series-latest [series chart-series?])
+         (or/c #f (cons/c exact-nonnegative-integer? exact-integer?))]{
+The newest sample, or @racket[#f] when the series is empty.}
+
+@defproc[(chart-series-count [series chart-series?]) exact-nonnegative-integer?]{
+Number of live samples retained by the ring.}
+
+@defproc[(chart-series-capacity [series chart-series?]) exact-positive-integer?]{
+The ring capacity fixed at creation.}
+
+@defproc[(chart-series-appended [series chart-series?]) exact-nonnegative-integer?]{
+Total samples ever appended; the absolute index space hosts track.}
+
+@defproc[(chart-series-dropped [series chart-series?]) exact-nonnegative-integer?]{
+Live samples evicted from the ring before being drained.}
+
+@defproc[(chart-series-id [series chart-series?]) string?]{
+The series identifier hosts render against.}
+
+@defproc[(chart-series-reset! [series chart-series?]) void?]{
+Clears samples and the absolute index space.}
+
+@defproc[(chart-batch-encode
+          [samples (listof (cons/c exact-nonnegative-integer? exact-integer?))]
+          [first-index exact-nonnegative-integer? 0])
+         bytes?]{
+Encodes samples as a chart batch: little-endian u32 magic, u32 count, i64
+absolute first index, then count times (i64 timestamp-ns, i64 value).}
+
+@defproc[(chart-batch-decode [batch bytes?])
+         (values (listof (cons/c exact-nonnegative-integer? exact-integer?))
+                 exact-nonnegative-integer?)]{
+Decodes a chart batch, validating magic and declared lengths. Raises on
+malformed input.}
+
+@defproc[(chart-batch-sample-count [batch bytes?]) exact-nonnegative-integer?]{
+The sample count declared in the batch header.}
+
+@defproc[(chart-batch-first-index [batch bytes?]) exact-nonnegative-integer?]{
+The absolute first index declared in the batch header.}
+
+@defthing[chart-batch-magic exact-nonnegative-integer?]{
+The RVC1 magic a decoder must verify before trusting a batch
+(@racket[ #x52564331]).}
+
 @section{Application Identity}
 
 @defmodule[rivet/app-info]

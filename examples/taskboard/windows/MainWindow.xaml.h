@@ -4,6 +4,7 @@
 #include "MainWindow.g.h"
 #include "GeneratedBackend.hpp"
 #include <microsoft.ui.xaml.window.h>
+#include "../../../platform/windows/chart/rivet_chart_control.hpp"
 #include "../../../platform/windows/system/system_services.hpp"
 #include "../../../platform/windows/system/winui_window.hpp"
 
@@ -30,6 +31,8 @@ struct MainWindow : MainWindowT<MainWindow> {
                      Microsoft::UI::Xaml::RoutedEventArgs const& args);
   void Delete_Click(winrt::Windows::Foundation::IInspectable const& sender,
                     Microsoft::UI::Xaml::RoutedEventArgs const& args);
+  void StreamToggle_Toggled(winrt::Windows::Foundation::IInspectable const& sender,
+                            Microsoft::UI::Xaml::RoutedEventArgs const& args);
 
  private:
   winrt::fire_and_forget InitializeBackendAsync();
@@ -42,6 +45,8 @@ struct MainWindow : MainWindowT<MainWindow> {
   void SetBusy(bool busy);
   void SetReadyUi();
   void SetErrorUi(std::string const& message, bool fatal = false);
+  void ConfigureChartAsync();
+  void RepullChartWindow(std::string const& series);
 
   std::shared_ptr<rivet::windows::Backend> backend_;
   std::vector<rivet_app::BoardTask> tasks_;
@@ -52,6 +57,8 @@ struct MainWindow : MainWindowT<MainWindow> {
   std::optional<std::int64_t> selected_id_;
   std::optional<std::uint64_t> generation_request_;
   std::unique_ptr<rivet::system::TrayController> tray_controller_;
+  rivet::win_ui::ChartControl chart_{nullptr};
+  bool chart_configured_{false};
   std::atomic<bool> closing_{false};
 };
 
