@@ -23,6 +23,10 @@
   (file->string
    (build-path repository-root "platform" "windows"
                "rivet-host.vcxproj")))
+(define windows-host-template
+  (file->string
+   (build-path repository-root "platform" "windows" "host"
+               "RivetHost.vcxproj")))
 
 (check-true (string-contains? linux-manifest "runtime/src/chart_batch.cpp")
             "Linux rivet::platform must link the shared chart implementation")
@@ -38,3 +42,16 @@
     project-text
     (format "obj\\~a\\</MSBuildProjectExtensionsPath>" project-name))
    (format "~a must have an isolated NuGet assets directory" project-name)))
+
+(check-true
+ (string-contains? windows-host-template
+                   "'$(RivetSelfContained)'=='true'\">MultiThreaded")
+ "self-contained Windows hosts must select the static CRT")
+(check-true
+ (string-contains? windows-host-template
+                   "<RuntimeLibrary>$(RivetRuntimeLibrary)</RuntimeLibrary>")
+ "the Windows executable must apply the same CRT setting as Rivet libraries")
+(check-true
+ (string-contains? windows-host-template
+                   "Properties=\"RivetRuntimeLibrary=$(RivetRuntimeLibrary)\"")
+ "the Windows host must forward its CRT setting to the released library")

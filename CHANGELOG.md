@@ -34,6 +34,10 @@
   so clean downstream builds receive the WinUI/C++/WinRT projection headers;
   canonical directory-valued MSBuild output paths also remove the old MSB8004
   warning from referenced-library builds.
+- Make the Windows host template's CRT selection explicit and consistent.
+  Self-contained packages use MT/MTd while development builds use MD/MDd,
+  and the selected mode is applied to the executable and forwarded to every
+  released static library, preventing clean-package LNK2038 failures.
 - Keep post-release verification compatible with the clean output contract.
   When the unpacked staging package is gone, `raco rivet verify` now validates
   the portable ZIP through an isolated temporary extraction with strict root
