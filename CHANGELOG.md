@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.8.1
+
 - Add the macOS `RivetUpdate` Swift module: a shared host-side update client
   for installed `.app` bundles, so applications stop hand-rolling the same
   security-critical download/verify/swap flow per product. It verifies the
