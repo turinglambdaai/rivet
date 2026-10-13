@@ -91,9 +91,10 @@ The GTK4 host follows the Windows C++ contract but uses a Unix `socketpair` for 
 
 Linux system integration is split by operating-system responsibility under
 `platform/linux/system`: single-instance activation, portal global shortcuts,
-notifications, tray, autostart, secure storage, and crash/shutdown each have one implementation
-unit. `system_services.cpp` only assembles public capability discovery and
-activation arguments; `system_services_internal.*` is a private XDG, D-Bus,
+clipboard, notifications, tray, autostart, secure storage, and crash/shutdown
+each have one implementation unit. `system_services.cpp` only assembles public
+capability discovery and activation arguments; `system_services_internal.*`
+is a private XDG, D-Bus,
 and low-level I/O support layer. Native applications continue to include only
 `system_services.hpp`.
 

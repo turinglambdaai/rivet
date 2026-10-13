@@ -12,6 +12,12 @@ Generated native hosts call the first-party Swift/C++ system libraries directly,
 
 Every adapter reports activations through the same callback shape — shortcut id, platform timestamp in milliseconds, and an activation token (portal platforms only; empty elsewhere) — so hosts share one dispatch path. Direct-registration platforms (macOS, Windows) use a shared trigger grammar: case-insensitive `'+'`-separated modifiers (`ctrl|control`, `alt|option`, `shift`, `cmd|command|meta|super|win`) and exactly one key (`a`–`z`, `0`–`9`, `f1`–`f24`, `space`, `tab`, `enter|return`, `escape|esc`, `backspace`, `delete|del`, `insert`, `home`, `end`, `pageup`, `pagedown`, arrows, and common punctuation names). Both adapters refuse duplicate ids and duplicate live triggers. Linux intentionally differs: Wayland has no global grabs, so binding goes through the compositor's portal prompt and the compositor owns the final trigger.
 
+### Clipboard across platforms
+
+The native adapter contract is deliberately plain text: read the newest text, replace the clipboard with text, and observe ownership/content changes. Embedded NUL characters are rejected because the Win32 and GTK representations are NUL-terminated. A change callback receives no value when the clipboard has no text representation. Native objects belong to the UI thread that created them; observation stops when the object is destroyed.
+
+Linux reads asynchronously because Wayland transfers clipboard content from the current owner on demand. Its callback therefore also carries an error string, separating “not text” from a failed transfer. Windows and macOS reads are synchronous platform calls. Changes faster than the observer can consume may be coalesced; this is a state notification, not a lossless history stream.
+
 ## Windows
 
 `platform/windows/system` uses first-party Win32 surfaces:
@@ -26,6 +32,8 @@ Every adapter reports activations through the same callback shape — shortcut i
   `ParseTrigger` implements the cross-platform trigger grammar; register and
   unregister on the thread that pumps the window's messages (the WinUI
   thread in generated hosts);
+- `Clipboard` on `CF_UNICODETEXT`, with a message-only owner window and
+  `AddClipboardFormatListener` / `WM_CLIPBOARDUPDATE` observation;
 - the current user's `Run` registry value for opt-in autostart;
 - Windows Credential Manager (`CredWriteW`/`CredReadW`) for secrets;
 - `SetUnhandledExceptionFilter` and `RegisterApplicationRestart` as low-level crash/restart hooks.
@@ -56,6 +64,8 @@ private endpoint, or no uploader; Rivet does not bind to any provider.
   main thread's event loop. `parse(_:)` maps ANSI virtual-key codes through
   their Carbon constants — the codes follow the physical QWERTY layout, not
   the alphabet — and is public for tests and trigger rendering;
+- `RivetClipboard` on `NSPasteboard`, with `changeCount` polling on the main
+  run loop (AppKit publishes no pasteboard-change notification);
 - `SMAppService.mainApp` for login-item registration;
 - Security.framework Keychain generic-password items;
 - an activation router that stays on the main actor.
@@ -72,6 +82,9 @@ macOS asks the user for notification and login-item consent as required by the O
 - `ActivationArguments()` from `/proc/self/cmdline` for URL-scheme and file-association payloads registered by installers;
 - `org.freedesktop.Notifications` over the session bus (GDBus), with stable notification ids for tagged replacements;
 - `GlobalShortcuts` — the asynchronous `org.freedesktop.portal.GlobalShortcuts` session API. `support()` exposes the portal version, `bind(...)` reports bound, cancelled, unavailable, and failed outcomes without blocking GTK's main context, and activation callbacks preserve the compositor timestamp and activation token. The compositor owns the final shortcut and may replace or reject an application's preferred trigger. Rivet does not fall back to `XGrabKey`; applications on a session without this portal can expose their existing single-instance activation command (for example, an executable `--toggle` action) for the user to bind in compositor settings;
+- `Clipboard` — GTK4/GDK text read, write, and `changed` observation on the
+  host's GTK main context; capability discovery reports it only after an
+  interactive display is initialized;
 - `TrayIcon` — org.kde.StatusNotifierItem plus a com.canonical.dbusmenu menu, through the session bus (GDBus). This is an explicit opt-in, not an adapter default: desktop hosting is compositor-dependent (GNOME hosts it only through the AppIndicator extension, KDE natively), so the application checks `TrayIcon::available()` (or the `tray` capability) and decides. The icon, tooltip, and flat menu (labelled items, separators, enabled state) update in place; the watcher is re-registered whenever it reappears, so GNOME Shell restarts and extension reloads do not strand a running process without its icon. Methods and menu callbacks run on the thread-default main context the icon was constructed on — for GTK hosts, the main-loop thread;
 - XDG autostart entries under `$XDG_CONFIG_HOME/autostart`;
 - the Secret Service provider (GNOME Keyring, KWallet bridge) through libsecret for binary secrets; the capability is compiled in when libsecret is present and reported at runtime only when a provider is reachable;

@@ -81,6 +81,7 @@ bool secrets_service_available() {
 std::vector<std::string> Capabilities() {
   std::vector<std::string> capabilities{"single-instance"};
   if (GlobalShortcuts::available()) capabilities.push_back("global-shortcuts");
+  if (Clipboard::available()) capabilities.push_back("clipboard");
   if (Notifications::available()) capabilities.push_back("notification");
   if (TrayIcon::available()) capabilities.push_back("tray");
   capabilities.push_back("autostart");

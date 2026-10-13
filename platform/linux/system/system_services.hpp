@@ -19,7 +19,7 @@
 namespace rivet::system {
 
 // Runtime capability names, matching the Racket system-adapter contract:
-// single-instance, global-shortcuts, notification, tray, autostart,
+// single-instance, global-shortcuts, clipboard, notification, tray, autostart,
 // secure-storage, crash-hook.
 // The tray capability reflects a reachable session bus with a
 // StatusNotifierItem watcher (a compositor service: GNOME hosts it through
@@ -158,6 +158,34 @@ class GlobalShortcuts final {
   void bind(std::vector<GlobalShortcutSpec> shortcuts,
             std::string parent_window, BindHandler completion);
   void set_activation_handler(ActivationHandler handler);
+
+ private:
+  struct Impl;
+  std::shared_ptr<Impl> impl_;
+};
+
+// Plain-text clipboard access through the GTK4/GDK clipboard owned by the
+// current display. Construct and use on the GTK main-loop thread. Reads are
+// asynchronous because Wayland clipboard ownership may live in another
+// process; completions and change handlers run on the constructing thread's
+// main context. A missing value means the clipboard has no text, while a
+// non-empty error string reports an actual transfer failure.
+class Clipboard final {
+ public:
+  using TextHandler =
+      std::function<void(std::optional<std::string> text, std::string error)>;
+  using ChangeHandler = TextHandler;
+
+  static bool available();
+
+  Clipboard();
+  ~Clipboard();
+  Clipboard(Clipboard const&) = delete;
+  Clipboard& operator=(Clipboard const&) = delete;
+
+  void read_text(TextHandler completion) const;
+  void write_text(std::string const& text) const;
+  void set_change_handler(ChangeHandler handler);
 
  private:
   struct Impl;

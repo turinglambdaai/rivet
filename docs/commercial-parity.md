@@ -23,7 +23,7 @@ Statuses: **above** (differentiating), **at** (floor met), **below**
 | Accessibility | not exercised by their CI | **above** — accessibility-tree end-to-end suites on all three desktop platforms in CI, plus protocol fuzzing |
 | Docs discipline | versioned docs site | **partial** — full API-reference coverage with two-way drift guards in CI (exports ↔ manual, guide pins ↔ release version); a versioned docs site and zh-CN pairs for newer pages remain **roadmap** |
 | Project templates | create-tauri-app gallery | **partial** — `raco rivet new` starter plus the reference Taskboard; a template gallery is **roadmap** |
-| Clipboard read/write/watch | clipboard-manager plugin | **below** — no adapter yet (products hand-roll); open work item |
+| Clipboard read/write/watch | clipboard-manager plugin | **at** — first-party plain-text read/write/change observation through NSPasteboard, Win32 CF_UNICODETEXT, and GTK4/GDK (async under Wayland) |
 | Native file dialogs | dialog plugin | **below** — no adapter yet; open work item |
 | Mobile hosts | iOS and Android (Tauri 2) | **roadmap** — gated on the family's Rivet Phase 8 mobile-host decision, recorded per product |
 | Delta updates | Electron blockmap (Electron only) | **roadmap** — full-artifact updates first; revisit when artifact sizes make deltas worth their complexity |

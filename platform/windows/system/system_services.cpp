@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <functional>
+#include <limits>
 #include <stdexcept>
 #include <system_error>
 #include <unordered_set>
@@ -633,6 +635,158 @@ bool GlobalShortcuts::Unregister(std::string const& shortcut_id) {
 }
 
 void GlobalShortcuts::SetActivationHandler(ActivationHandler handler) {
+  handler_ = std::move(handler);
+}
+
+namespace {
+
+constexpr wchar_t const* kClipboardWindowClass = L"RivetClipboard";
+
+std::wstring Utf8ToWide(std::string const& text) {
+  if (text.empty()) return {};
+  if (text.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    throw std::invalid_argument("clipboard text exceeds the Win32 size limit");
+  }
+  int const count = ::MultiByteToWideChar(
+      CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()),
+      nullptr, 0);
+  if (count <= 0) ThrowLastError("MultiByteToWideChar");
+  std::wstring result(static_cast<std::size_t>(count), L'\0');
+  if (::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(),
+                            static_cast<int>(text.size()), result.data(),
+                            count) != count) {
+    ThrowLastError("MultiByteToWideChar");
+  }
+  return result;
+}
+
+std::string WideToUtf8(wchar_t const* text, int length) {
+  if (length == 0) return {};
+  int const count = ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text,
+                                          length, nullptr, 0, nullptr, nullptr);
+  if (count <= 0) ThrowLastError("WideCharToMultiByte");
+  std::string result(static_cast<std::size_t>(count), '\0');
+  if (::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text, length,
+                            result.data(), count, nullptr, nullptr) != count) {
+    ThrowLastError("WideCharToMultiByte");
+  }
+  return result;
+}
+
+class ClipboardSession final {
+ public:
+  explicit ClipboardSession(HWND owner) {
+    if (::OpenClipboard(owner) == 0) ThrowLastError("OpenClipboard");
+  }
+  ~ClipboardSession() { ::CloseClipboard(); }
+  ClipboardSession(ClipboardSession const&) = delete;
+  ClipboardSession& operator=(ClipboardSession const&) = delete;
+};
+
+}  // namespace
+
+std::optional<std::string> Clipboard::ReadText() const {
+  ClipboardSession session(window_);
+  if (::IsClipboardFormatAvailable(CF_UNICODETEXT) == 0) return std::nullopt;
+  HANDLE const handle = ::GetClipboardData(CF_UNICODETEXT);
+  if (handle == nullptr) ThrowLastError("GetClipboardData");
+  auto const* text = static_cast<wchar_t const*>(::GlobalLock(handle));
+  if (text == nullptr) ThrowLastError("GlobalLock");
+  std::size_t const capacity = ::GlobalSize(handle) / sizeof(wchar_t);
+  std::size_t length = 0;
+  while (length < capacity && text[length] != L'\0') ++length;
+  try {
+    if (length > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+      throw std::runtime_error("clipboard text exceeds the Win32 size limit");
+    }
+    auto result = WideToUtf8(text, static_cast<int>(length));
+    ::GlobalUnlock(handle);
+    return result;
+  } catch (...) {
+    ::GlobalUnlock(handle);
+    throw;
+  }
+}
+
+void Clipboard::WriteText(std::string const& text) const {
+  if (text.find('\0') != std::string::npos) {
+    throw std::invalid_argument(
+        "clipboard text must not contain NUL characters");
+  }
+  std::wstring const wide = Utf8ToWide(text);
+  std::size_t const bytes = (wide.size() + 1) * sizeof(wchar_t);
+  HGLOBAL memory = ::GlobalAlloc(GMEM_MOVEABLE, bytes);
+  if (memory == nullptr) ThrowLastError("GlobalAlloc");
+  void* destination = ::GlobalLock(memory);
+  if (destination == nullptr) {
+    ::GlobalFree(memory);
+    ThrowLastError("GlobalLock");
+  }
+  std::memcpy(destination, wide.c_str(), bytes);
+  ::GlobalUnlock(memory);
+
+  try {
+    ClipboardSession session(window_);
+    if (::EmptyClipboard() == 0) ThrowLastError("EmptyClipboard");
+    if (::SetClipboardData(CF_UNICODETEXT, memory) == nullptr) {
+      ThrowLastError("SetClipboardData");
+    }
+    // The system owns the allocation after a successful SetClipboardData.
+    memory = nullptr;
+  } catch (...) {
+    if (memory != nullptr) ::GlobalFree(memory);
+    throw;
+  }
+}
+
+LRESULT CALLBACK Clipboard::WndProc(HWND window, UINT message, WPARAM wparam,
+                                    LPARAM lparam) noexcept {
+  if (message == WM_NCCREATE) {
+    auto const* create = reinterpret_cast<CREATESTRUCTW const*>(lparam);
+    ::SetWindowLongPtrW(window, GWLP_USERDATA,
+                        reinterpret_cast<LONG_PTR>(create->lpCreateParams));
+  } else if (message == WM_CLIPBOARDUPDATE) {
+    auto* self = reinterpret_cast<Clipboard*>(
+        ::GetWindowLongPtrW(window, GWLP_USERDATA));
+    if (self != nullptr && self->handler_) {
+      try {
+        auto const text = self->ReadText();
+        auto handler = self->handler_;
+        handler(text);
+      } catch (...) {
+        ::OutputDebugStringW(L"Rivet clipboard callback failed\n");
+      }
+    }
+    return 0;
+  }
+  return ::DefWindowProcW(window, message, wparam, lparam);
+}
+
+Clipboard::Clipboard() {
+  WNDCLASSW window_class{};
+  window_class.lpfnWndProc = &Clipboard::WndProc;
+  window_class.hInstance = ::GetModuleHandleW(nullptr);
+  window_class.lpszClassName = kClipboardWindowClass;
+  ::RegisterClassW(&window_class);
+  window_ = ::CreateWindowExW(0, kClipboardWindowClass, L"", 0, 0, 0, 0, 0,
+                              HWND_MESSAGE, nullptr, window_class.hInstance,
+                              this);
+  if (window_ == nullptr) ThrowLastError("CreateWindowExW");
+  if (::AddClipboardFormatListener(window_) == 0) {
+    ::DestroyWindow(window_);
+    window_ = nullptr;
+    ThrowLastError("AddClipboardFormatListener");
+  }
+}
+
+Clipboard::~Clipboard() {
+  if (window_ != nullptr) {
+    ::RemoveClipboardFormatListener(window_);
+    ::DestroyWindow(window_);
+  }
+}
+
+void Clipboard::SetChangeHandler(ChangeHandler handler) {
   handler_ = std::move(handler);
 }
 

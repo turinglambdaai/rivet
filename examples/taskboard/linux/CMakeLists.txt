@@ -50,6 +50,7 @@ add_executable(RivetHost
   src/main.cpp
   "${RIVET_ROOT}/platform/linux/runtime/backend.cpp"
   "${RIVET_ROOT}/platform/linux/system/autostart.cpp"
+  "${RIVET_ROOT}/platform/linux/system/clipboard.cpp"
   "${RIVET_ROOT}/platform/linux/system/crash_shutdown.cpp"
   "${RIVET_ROOT}/platform/linux/system/global_shortcuts.cpp"
   "${RIVET_ROOT}/platform/linux/system/notifications.cpp"

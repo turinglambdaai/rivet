@@ -30,6 +30,7 @@ add_executable(RivetIntegration
   main.cpp
   ../runtime/backend.cpp
   ../system/autostart.cpp
+  ../system/clipboard.cpp
   ../system/crash_shutdown.cpp
   ../system/global_shortcuts.cpp
   ../system/notifications.cpp
@@ -60,6 +61,7 @@ target_include_directories(RivetGlobalShortcutsTest PRIVATE ../system)
 target_compile_options(RivetGlobalShortcutsTest PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(RivetGlobalShortcutsTest PRIVATE
   Threads::Threads
+  PkgConfig::GTK4
   PkgConfig::GLIB
 )
 

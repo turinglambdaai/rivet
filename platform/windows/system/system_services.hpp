@@ -226,4 +226,32 @@ class GlobalShortcuts final {
   ActivationHandler handler_;
 };
 
+// Plain-text clipboard access and WM_CLIPBOARDUPDATE observation. Construct,
+// configure, and destroy on the thread that pumps the message queue. The
+// change handler runs on that thread and receives std::nullopt when the new
+// clipboard contents do not expose CF_UNICODETEXT.
+class Clipboard final {
+ public:
+  using ChangeHandler =
+      std::function<void(std::optional<std::string> const& text)>;
+
+  static bool available() noexcept { return true; }
+
+  Clipboard();
+  ~Clipboard();
+  Clipboard(Clipboard const&) = delete;
+  Clipboard& operator=(Clipboard const&) = delete;
+
+  std::optional<std::string> ReadText() const;
+  void WriteText(std::string const& text) const;
+  void SetChangeHandler(ChangeHandler handler);
+
+ private:
+  static LRESULT CALLBACK WndProc(HWND window, UINT message, WPARAM wparam,
+                                  LPARAM lparam) noexcept;
+
+  HWND window_{};
+  ChangeHandler handler_;
+};
+
 }  // namespace rivet::system

@@ -23,6 +23,7 @@ platform/linux/
 ├── system/
 │   ├── system_services.hpp  # public rivet::system surface
 │   ├── system_services.cpp  # capability discovery + activation arguments
+│   ├── clipboard.cpp        # GTK4/GDK text clipboard + change observation
 │   ├── single_instance.cpp  # local activation lease and forwarding
 │   ├── notifications.cpp    # freedesktop notifications
 │   ├── global_shortcuts.cpp # XDG GlobalShortcuts portal

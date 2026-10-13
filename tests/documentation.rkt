@@ -190,9 +190,9 @@
                            "TrackPopupMenu"))])
   (check-file-contains system-services-guide expected))
 
-;; The commercial-parity scorecard cannot silently disappear, and its
-;; below-floor rows stay visible until the gap actually closes — closing one
-;; means updating this list in the same change.
+;; The commercial-parity scorecard and its tracked capability rows cannot
+;; silently disappear. Closing a below-floor gap updates the row in place, so
+;; the completed capability remains part of the long-term comparison.
 (define parity-guide (build-path repository-root "docs" "commercial-parity.md"))
 (for ([expected (in-list '("Commercial parity baseline"
                            "Global shortcuts"

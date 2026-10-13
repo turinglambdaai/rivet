@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add first-party plain-text clipboard read/write/change observation across
+  every desktop adapter. macOS uses `NSPasteboard` with main-run-loop
+  `changeCount` polling, Windows uses `CF_UNICODETEXT` plus a message-only
+  clipboard owner and `WM_CLIPBOARDUPDATE`, and Linux uses GTK4/GDK with
+  asynchronous reads suitable for Wayland ownership transfers. Native
+  observation stays on the platform UI thread and outside RVT1.
 - Complete cross-platform global shortcuts. Linux already binds through the
   XDG portal; macOS gains `RivetGlobalShortcuts` (Carbon
   `RegisterEventHotKey`, main-thread event loop, explicit duplicate-trigger
@@ -19,9 +25,9 @@
   and Electron feature floors (above / at / below / roadmap per
   capability), with rules of engagement — a product hand-rolling the same
   capability twice is a library gap, below-floor rows outrank new surface
-  area, and the docs suite keeps the scorecard and its below-floor rows
-  (clipboard, native file dialogs, mobile hosts) from silently
-  disappearing.
+  area, and the docs suite keeps the scorecard's tracked capability rows
+  (global shortcuts, clipboard, native file dialogs, mobile hosts) from
+  silently disappearing.
 - Close the scribble coverage gap: the RVT1 framing and value-codec surface
   (`rivet/protocol` — frames, message-type constants, transport limits,
   read/write/encode/decode), application resources (`rivet/resources`),
