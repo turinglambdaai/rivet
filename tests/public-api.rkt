@@ -48,11 +48,9 @@
       current-system-adapter install-crash-hook! make-settings-store
       register-activation-handler! rivet-log secure-store-ref
       secure-store-remove! secure-store-set! set-autostart!
-      set-settings-store-data! set-settings-store-lock!
-      set-settings-store-path! set-tray-menu! settings-ref settings-remove!
-      settings-set! settings-snapshot settings-store settings-store-data
-      settings-store-lock settings-store-path settings-store?
-      show-system-notification! struct:settings-store struct:system-adapter
+      set-tray-menu! settings-ref settings-remove! settings-set!
+      settings-snapshot settings-store? show-system-notification!
+      struct:system-adapter
       system-adapter system-adapter-acquire-single-instance
       system-adapter-autostart-enabled system-adapter-capabilities
       system-adapter-install-crash-hook system-adapter-name

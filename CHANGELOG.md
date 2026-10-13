@@ -35,6 +35,14 @@
   before it can remove or rename shared staging, backup, marker, or journal
   state; the persistent empty lock file is not a crash marker. The prepared
   installation handle is opaque so callers cannot forge its lock identity.
+
+- Make `settings-store` an opaque synchronized handle. The pre-1.0 API no
+  longer exports its constructor, path/lock/data fields, or mutation setters,
+  which allowed callers to bypass atomic persistence and replace the store's
+  lock. Transactions refresh under shared in-process and operating-system
+  locks to prevent stale handles from losing updates; stored JSON trees and
+  snapshots are deeply immutable. Use `make-settings-store` and the existing
+  controlled operations; `settings-store?` remains public.
 - Add a Windows `rivet::system::TrayController` that owns tray window
   subclassing, localized native menu presentation, command dispatch, and
   automatic `TaskbarCreated` recovery. The reference Taskboard now exercises
