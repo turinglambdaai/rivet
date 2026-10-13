@@ -332,7 +332,9 @@
     (error 'build-project!
            "MSBuild.exe was not found; install Visual Studio Build Tools with C++/WinUI support"))
 
-  (define out-dir (path->string stage))
+  ;; MSBuild requires directory-valued OutDir to end in a separator. Supplying
+  ;; the canonical directory form avoids MSB8004 in every referenced library.
+  (define out-dir (path->string (path->directory-path stage)))
   (with-windows-build-environment
    project runtime import-lib icon-resource
    (lambda ()

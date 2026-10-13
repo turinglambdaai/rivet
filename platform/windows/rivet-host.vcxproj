@@ -19,6 +19,16 @@
 
        RIVET_ROOT and RIVET_RACKET_INCLUDE arrive as environment
        variables from `raco rivet build` (or manual exports). -->
+  <PropertyGroup Label="NuGet">
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+    <NuGetTargetMoniker>native,Version=v0.0</NuGetTargetMoniker>
+    <NuGetTargetPlatformIdentifier>Windows</NuGetTargetPlatformIdentifier>
+    <NuGetTargetPlatformVersion>$(WindowsTargetPlatformVersion)</NuGetTargetPlatformVersion>
+    <!-- Both released libraries live in this directory. NuGet otherwise
+         gives them the same obj/project.assets.json and silently drops one
+         project from the restore graph. -->
+    <MSBuildProjectExtensionsPath>$(MSBuildThisFileDirectory)obj\rivet-host\</MSBuildProjectExtensionsPath>
+  </PropertyGroup>
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>

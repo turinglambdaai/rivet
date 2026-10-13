@@ -14,6 +14,16 @@
 
        CRT must match across the static link; forward the same
        RivetRuntimeLibrary used for rivet-host. -->
+  <PropertyGroup Label="NuGet">
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+    <NuGetTargetMoniker>native,Version=v0.0</NuGetTargetMoniker>
+    <NuGetTargetPlatformIdentifier>Windows</NuGetTargetPlatformIdentifier>
+    <NuGetTargetPlatformVersion>$(WindowsTargetPlatformVersion)</NuGetTargetPlatformVersion>
+    <!-- Keep NuGet's assets separate from the sibling rivet-host project.
+         Sharing platform/windows/obj made restore keep only the first static
+         library and left this library without WinUI projection headers. -->
+    <MSBuildProjectExtensionsPath>$(MSBuildThisFileDirectory)obj\rivet-chart\</MSBuildProjectExtensionsPath>
+  </PropertyGroup>
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>

@@ -19,8 +19,22 @@
   (file->string
    (build-path repository-root "platform" "windows"
                "rivet-chart.vcxproj")))
+(define windows-host
+  (file->string
+   (build-path repository-root "platform" "windows"
+               "rivet-host.vcxproj")))
 
 (check-true (string-contains? linux-manifest "runtime/src/chart_batch.cpp")
             "Linux rivet::platform must link the shared chart implementation")
 (check-true (string-contains? windows-chart "runtime\\src\\chart_batch.cpp")
             "Windows rivet-chart.lib must link the shared chart implementation")
+(for ([project-text (in-list (list windows-host windows-chart))]
+      [project-name (in-list '(rivet-host rivet-chart))])
+  (check-true (string-contains? project-text "<RestoreProjectStyle>PackageReference</RestoreProjectStyle>")
+              (format "~a must participate in the transitive NuGet restore graph"
+                      project-name))
+  (check-true
+   (string-contains?
+    project-text
+    (format "obj\\~a\\</MSBuildProjectExtensionsPath>" project-name))
+   (format "~a must have an isolated NuGet assets directory" project-name)))
