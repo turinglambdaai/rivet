@@ -1,6 +1,6 @@
 # Embedded performance benchmarks
 
-Rivet's first performance baseline measures the same native integration hosts used by the Windows and macOS embedded round-trip tests. The benchmark therefore includes the real in-process Racket CS runtime, RVT1 transport, native client, request lifecycle, and State synchronization path instead of measuring a detached codec microbenchmark.
+Rivet's first performance baseline measures the same native integration hosts used by the Windows, macOS, and Linux embedded round-trip tests. The benchmark therefore includes the real in-process Racket CS runtime, RVT1 transport, native client, request lifecycle, and State synchronization path instead of measuring a detached codec microbenchmark.
 
 ## What is measured
 

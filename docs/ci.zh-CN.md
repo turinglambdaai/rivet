@@ -10,7 +10,7 @@ CI 应使用与发布任务相同类别的 runner 和工具链：
 - Windows：用 `windows-latest` 编译 WinUI 3 宿主；
 - macOS：同时使用 `macos-latest` 与 `macos-15`，分别覆盖当前 Swift 和
   固定的 Xcode 16 发布环境；
-- Linux：用 `ubuntu-24.04`，安装 GTK4 开发文件，并准备可嵌入的 Racket
+- Linux：用 `ubuntu-24.04`，安装 GTK 4.10+ 开发文件，并准备可嵌入的 Racket
   CS runtime。
 
 `raco rivet build` 是必需的宿主编译门禁。若还要验证分发布局，可继续执行
@@ -19,7 +19,7 @@ CI 应使用与发布任务相同类别的 runner 和工具链：
 
 ## 可直接使用的 GitHub Actions 工作流
 
-下面的工作流固定到 Rivet 0.8.1。升级时，应在同一次评审中把每处 Rivet
+下面的工作流固定到 Rivet 0.9.0。升级时，应在同一次评审中把每处 Rivet
 包来源和 Linux setup action 更新到同一个标签（或完整 commit）。这里有意
 使用 Git 来源：Racket Package Catalog 对每个包名只保留一个当前入口，不能
 选择较旧的 Rivet 版本。
@@ -46,7 +46,7 @@ jobs:
           distribution: full
           variant: CS
           version: '9.3'
-      - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.8.1'
+      - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.9.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
       - run: raco rivet build
@@ -65,7 +65,7 @@ jobs:
           distribution: full
           variant: CS
           version: '9.3'
-      - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.8.1'
+      - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.9.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
       - run: raco rivet build
@@ -75,13 +75,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Set up embeddable Racket CS
-        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@v0.8.1
+        uses: turinglambdaai/rivet/.github/actions/setup-embed-racket@v0.9.0
       - name: Install GTK4 development files
         run: |
           sudo apt-get update
           sudo apt-get install --yes libgtk-4-dev
       - name: Install the matching Rivet package and dependencies
-        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.8.1'
+        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.9.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
       - run: raco rivet build

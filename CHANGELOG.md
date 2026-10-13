@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+## 0.9.0
+
+- Close the last below-floor commercial capability gap with first-party
+  native file dialogs on every desktop platform. Windows uses Common Item
+  Dialogs, macOS uses asynchronous AppKit panels, and Linux uses GTK4 native
+  choosers with portal delegation. The adapters cover open, save, folder
+  selection, extension filters, cancellation, and open-file multi-selection
+  without adding file-picker traffic to RVT1.
+
+- Make Linux a first-class product target everywhere users discover Rivet:
+  the English and Chinese READMEs now include its badge, requirements,
+  positioning, and comparison stack; the bilingual landing page includes
+  GTK4 in both the native-UI feature card and comparison table; and the stale
+  unsupported-host remediation no longer claims only Windows and macOS can
+  build. Documentation tests pin all three targets to prevent this class of
+  omission from returning.
+- Fix source-package smoke tests under `set -o pipefail`. Archive entries are
+  now read once and checked from a file, so `grep -q` cannot close a repeated
+  `unzip` pipeline early and turn a successful match into spurious exit 141.
+  Source releases also explicitly omit native build/output trees (the Racket
+  packager does not read `.gitignore`), and the isolated install overrides any
+  maintainer-machine installation-scope link instead of producing a false
+  “already installed” result.
+
 - Add first-party plain-text clipboard read/write/change observation across
   every desktop adapter. macOS uses `NSPasteboard` with main-run-loop
   `changeCount` polling, Windows uses `CF_UNICODETEXT` plus a message-only

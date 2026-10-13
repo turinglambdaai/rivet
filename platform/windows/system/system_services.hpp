@@ -254,4 +254,24 @@ class Clipboard final {
   ChangeHandler handler_;
 };
 
+struct FileDialogFilter final {
+  std::wstring label;
+  std::vector<std::wstring> extensions;
+};
+
+// Native Common Item Dialogs. Call from the UI thread after COM has been
+// initialized (WinUI 3 does this for its application thread). Cancellation is
+// returned as std::nullopt; other HRESULT failures are raised as hresult_error.
+class FileDialogs final {
+ public:
+  static std::optional<std::vector<std::wstring>> OpenFiles(
+      HWND owner, std::wstring const& title = L"",
+      bool allow_multiple = false, bool select_folders = false,
+      std::vector<FileDialogFilter> const& filters = {});
+  static std::optional<std::wstring> SaveFile(
+      HWND owner, std::wstring const& title = L"",
+      std::wstring const& suggested_name = L"",
+      std::vector<FileDialogFilter> const& filters = {});
+};
+
 }  // namespace rivet::system

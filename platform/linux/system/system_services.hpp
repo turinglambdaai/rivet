@@ -16,6 +16,8 @@
 #include <thread>
 #include <vector>
 
+typedef struct _GtkWindow GtkWindow;
+
 namespace rivet::system {
 
 // Runtime capability names, matching the Racket system-adapter contract:
@@ -190,6 +192,31 @@ class Clipboard final {
  private:
   struct Impl;
   std::shared_ptr<Impl> impl_;
+};
+
+struct FileDialogFilter final {
+  std::string label;
+  std::vector<std::string> extensions;
+};
+
+// GTK4's native open/save chooser, which delegates to the desktop portal when
+// the session provides one. Calls and completions stay on the GTK main-loop
+// context. Cancellation is std::nullopt with an empty error string.
+class FileDialogs final {
+ public:
+  using OpenHandler = std::function<void(
+      std::optional<std::vector<std::string>> paths, std::string error)>;
+  using SaveHandler = std::function<void(
+      std::optional<std::string> path, std::string error)>;
+
+  static bool available();
+  static void OpenFiles(
+      GtkWindow* parent, std::string title, bool allow_multiple,
+      bool select_folders, std::vector<FileDialogFilter> filters,
+      OpenHandler completion);
+  static void SaveFile(
+      GtkWindow* parent, std::string title, std::string suggested_name,
+      std::vector<FileDialogFilter> filters, SaveHandler completion);
 };
 
 // One StatusNotifierItem menu entry: a labelled, optionally disabled item

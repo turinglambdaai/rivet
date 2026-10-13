@@ -13,48 +13,58 @@ if [[ ! -f "$archive" ]]; then
 fi
 archive="$(cd "$(dirname "$archive")" && pwd)/$(basename "$archive")"
 
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+archive_entries="$tmp/archive-entries.txt"
+unzip -Z1 "$archive" > "$archive_entries"
+
+if grep -Eq '(^|/)([.]build|[.]rivet|build|dist)/' "$archive_entries"; then
+  echo "source package contains a generated build/output directory" >&2
+  exit 1
+fi
+
 # Mobile protocol foundations are library sources rather than generated desktop
 # scaffolds. Verify them directly in the source archive so a release cannot omit
 # a platform that its package metadata and documentation advertise.
-unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/build.gradle.kts$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/gradle/wrapper/gradle-wrapper.jar$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet/runtime/Protocol.kt$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet/runtime/Client.kt$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet/runtime/State.kt$'
+grep -Eq '(^|/)platform/android/build.gradle.kts$' "$archive_entries"
+grep -Eq '(^|/)platform/android/gradle/wrapper/gradle-wrapper.jar$' "$archive_entries"
+grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet/runtime/Protocol.kt$' "$archive_entries"
+grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet/runtime/Client.kt$' "$archive_entries"
+grep -Eq '(^|/)platform/android/src/main/kotlin/dev/rivet/runtime/State.kt$' "$archive_entries"
 
 # Code generation is split into internal modules.  A package containing only
 # the public facade installs successfully but fails later when a project is
 # generated, so keep the internal dependency closure explicit in this smoke.
-unzip -Z1 "$archive" | grep -Eq '(^|/)rivet-cli/codegen/cpp.rkt$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)rivet-cli/codegen/kotlin.rkt$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)rivet-cli/codegen/model.rkt$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)rivet-cli/codegen/naming.rkt$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)rivet-cli/codegen/snapshot.rkt$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)rivet-cli/codegen/swift.rkt$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)rivet-cli/codegen/type-graph.rkt$'
+grep -Eq '(^|/)rivet-cli/codegen/cpp.rkt$' "$archive_entries"
+grep -Eq '(^|/)rivet-cli/codegen/kotlin.rkt$' "$archive_entries"
+grep -Eq '(^|/)rivet-cli/codegen/model.rkt$' "$archive_entries"
+grep -Eq '(^|/)rivet-cli/codegen/naming.rkt$' "$archive_entries"
+grep -Eq '(^|/)rivet-cli/codegen/snapshot.rkt$' "$archive_entries"
+grep -Eq '(^|/)rivet-cli/codegen/swift.rkt$' "$archive_entries"
+grep -Eq '(^|/)rivet-cli/codegen/type-graph.rkt$' "$archive_entries"
 
 # The canonical learning project and both walkthrough languages are public
 # package content, not files that happen to exist only in the Git checkout.
-unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/app/backend.rkt$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/rivet-schema.json$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/README.md$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/README.zh-CN.md$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/PERFORMANCE.md$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/windows/MainWindow.xaml$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/macos-host/Sources/RivetHost/ContentView.swift$'
-unzip -Z1 "$archive" | grep -Eq '(^|/)examples/taskboard/linux/src/main.cpp$'
-
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
+grep -Eq '(^|/)examples/taskboard/app/backend.rkt$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/rivet-schema.json$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.zh-CN.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/PERFORMANCE.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/windows/MainWindow.xaml$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/macos-host/Sources/RivetHost/ContentView.swift$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/linux/src/main.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/macos/Sources/RivetSystem/FileDialogs.swift$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/system/file_dialogs.cpp$' "$archive_entries"
 user_home="$tmp/racket-user"
 work="$tmp/work"
 mkdir -p "$user_home" "$work"
 
 # Install the exact archive into a fresh user package scope. The repository's
-# linked development package lives in a different PLTUSERHOME, so successful
-# commands below prove the archive itself is complete and installable.
+# Force applies only to the fresh user scope: it lets the archive shadow a
+# maintainer machine's installation-scope link. The pkg-directory assertion
+# below proves all commands resolve this exact archive, not the checkout.
 PLTUSERHOME="$user_home" \
-  raco pkg install --auto --no-docs --name rivet "$archive"
+  raco pkg install --auto --no-docs --scope user --force --name rivet "$archive"
 
 PLTUSERHOME="$user_home" \
   racket -e '(require rivet/backend rivet/protocol rivet/resources)'
@@ -63,6 +73,13 @@ PLTUSERHOME="$user_home" \
 
 installed_root="$(PLTUSERHOME="$user_home" racket -e \
   '(require pkg/lib) (display (path->string (pkg-directory "rivet")))')"
+case "$installed_root" in
+  "$user_home"/*) ;;
+  *)
+    echo "source package did not take precedence in the isolated user scope: $installed_root" >&2
+    exit 1
+    ;;
+esac
 test -f "$installed_root/examples/taskboard/app/backend.rkt"
 test -f "$installed_root/examples/taskboard/README.md"
 test -f "$installed_root/examples/taskboard/README.zh-CN.md"

@@ -120,6 +120,19 @@
                (find-relative-path repository-root path)
                expected))))
 
+;; The three production desktop targets must remain equally visible in the
+;; landing page and both README variants. This catches the class of drift where
+;; Linux support exists in code but disappears from product-facing copy.
+(define readme (build-path repository-root "README.md"))
+(define readme-zh (build-path repository-root "README.zh-CN.md"))
+(define landing-page (build-path repository-root "docs" "index.html"))
+(for ([path (in-list (list readme readme-zh landing-page))])
+  (for ([platform (in-list '("Windows" "macOS" "Linux"))])
+    (check-file-contains path platform)))
+(check-file-contains readme "![Linux]")
+(check-file-contains readme-zh "![Linux]")
+(check-file-contains landing-page "WinUI 3 / SwiftUI / GTK4")
+
 ;; The CI guide must pin the package version this checkout declares, so a
 ;; release that forgets the guide turns this suite red instead of shipping
 ;; instructions for a stale tag.
@@ -129,6 +142,13 @@
 (define pinned-tag (format "v~a" release-version))
 (define pinned-package-url
   (format "https://github.com/turinglambdaai/rivet.git#v~a" release-version))
+
+(define package-info (file->string (build-path repository-root "info.rkt")))
+(for ([generated-path (in-list '("platform/macos/.build" ".rivet" "dist"))])
+  (check-true
+   (string-contains? package-info generated-path)
+   (format "info.rkt source-omit-files must exclude generated path ~a"
+           generated-path)))
 
 (define ci-guide (build-path repository-root "docs" "ci.md"))
 (define ci-guide-zh (build-path repository-root "docs" "ci.zh-CN.md"))
@@ -202,6 +222,9 @@
   (check-file-contains
    parity-guide expected
    (format "docs/commercial-parity.md must keep its ~s row; update the scorecard when a gap closes" expected)))
+(check-false
+ (regexp-match? #px"\\| [^\n]+ \\| [^\n]+ \\| \\*\\*below\\*\\*" (file->string parity-guide))
+ "commercial parity must not retain a known below-floor capability before 1.0")
 
 ;; --- Scribble coverage: every public export documented, no phantom docs ---
 ;;

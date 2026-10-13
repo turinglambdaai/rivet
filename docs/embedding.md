@@ -99,7 +99,7 @@ Rivet therefore uses this rule:
 
 > Convert at the boundary; move protocol bytes/native values between threads, not Racket pointers.
 
-The Racket worker may construct temporary symbols/pairs required to enter the application. The WinUI/SwiftUI layer never sees them.
+The Racket worker may construct temporary symbols/pairs required to enter the application. The WinUI, SwiftUI, and GTK4 layers never see them.
 
 ## Runtime files
 

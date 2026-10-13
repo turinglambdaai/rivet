@@ -64,7 +64,7 @@ rivet: toolchain looks usable
 
 - **Windows：** Racket CS、Visual Studio 2022 或 Build Tools、Desktop development with C++ 和 Windows SDK。Windows App SDK 作为项目依赖由 Rivet 在原生构建时自动恢复。
 - **macOS：** Racket CS 和 Apple/Xcode 开发工具链。
-- **Linux：** CMake、pkg-config、C++20 工具链、GTK4 开发包、zlib、LZ4、curses，以及可嵌入的静态 `libracketcs.a`。如果静态库和 boot files 不在当前 Racket 安装目录中，设置 `RIVET_RACKET_LIBRARY` 与 `RIVET_RACKET_BOOT_DIR`。
+- **Linux：** CMake、pkg-config、C++20 工具链、GTK 4.10+ 开发包、zlib、LZ4、curses，以及可嵌入的静态 `libracketcs.a`。如果静态库和 boot files 不在当前 Racket 安装目录中，设置 `RIVET_RACKET_LIBRARY` 与 `RIVET_RACKET_BOOT_DIR`。
 
 CI 或 Agent 需要结构化结果时：
 
@@ -165,7 +165,7 @@ macos-host/Sources/RivetHost/RivetHostApp.swift
 `ThemePreference::dark` 或 `ThemePreference::system`，再按返回值重载 CSS。
 该调用必须留在 GTK 主线程。
 
-Rivet **不会**再定义一套跨平台 UI DSL。WinUI 3 和 SwiftUI 按各自平台的正常方式开发，真正需要共享的业务逻辑放在 Racket 中。
+Rivet **不会**再定义一套跨平台 UI DSL。WinUI 3、SwiftUI 与 GTK4 都按各自平台的正常方式开发，真正需要共享的业务逻辑放在 Racket 中。
 
 图片、模板、本地化文件等应用数据可以统一声明在 `rivet.rktd` 中，并由 Racket 通过 `resource-path` 读取。Rivet 会在开发和打包布局之间保持相同的相对路径，详见[项目配置](configuration.md#application-resources-and-icons)。
 

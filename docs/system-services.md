@@ -18,6 +18,12 @@ The native adapter contract is deliberately plain text: read the newest text, re
 
 Linux reads asynchronously because Wayland transfers clipboard content from the current owner on demand. Its callback therefore also carries an error string, separating “not text” from a failed transfer. Windows and macOS reads are synchronous platform calls. Changes faster than the observer can consume may be coalesced; this is a state notification, not a lossless history stream.
 
+### Native file dialogs across platforms
+
+Every desktop adapter exposes first-party open, save, and folder-selection dialogs with filename-extension filters and optional open-file multi-selection. Cancellation is a normal empty result; actual platform or transfer failures remain distinguishable. Dialogs belong to the UI thread and may be parented to the native application window.
+
+The adapters return local filesystem paths only. Windows uses the Common Item Dialog (`IFileOpenDialog` / `IFileSaveDialog`), macOS uses asynchronous `NSOpenPanel` / `NSSavePanel`, and Linux uses `GtkFileChooserNative`, which delegates to the desktop portal when available. Linux reports a clear error if a provider returns a non-local resource instead of pretending its URI is a filesystem path.
+
 ## Windows
 
 `platform/windows/system` uses first-party Win32 surfaces:
@@ -34,6 +40,8 @@ Linux reads asynchronously because Wayland transfers clipboard content from the 
   thread in generated hosts);
 - `Clipboard` on `CF_UNICODETEXT`, with a message-only owner window and
   `AddClipboardFormatListener` / `WM_CLIPBOARDUPDATE` observation;
+- `FileDialogs` on the Common Item Dialog, including open-file multi-select,
+  folder selection, save suggestions, and extension filters;
 - the current user's `Run` registry value for opt-in autostart;
 - Windows Credential Manager (`CredWriteW`/`CredReadW`) for secrets;
 - `SetUnhandledExceptionFilter` and `RegisterApplicationRestart` as low-level crash/restart hooks.
@@ -66,6 +74,8 @@ private endpoint, or no uploader; Rivet does not bind to any provider.
   the alphabet — and is public for tests and trigger rendering;
 - `RivetClipboard` on `NSPasteboard`, with `changeCount` polling on the main
   run loop (AppKit publishes no pasteboard-change notification);
+- `RivetFileDialogs` on asynchronous AppKit open/save panels, optionally
+  presented as a sheet for a supplied `NSWindow`;
 - `SMAppService.mainApp` for login-item registration;
 - Security.framework Keychain generic-password items;
 - an activation router that stays on the main actor.
@@ -85,6 +95,8 @@ macOS asks the user for notification and login-item consent as required by the O
 - `Clipboard` — GTK4/GDK text read, write, and `changed` observation on the
   host's GTK main context; capability discovery reports it only after an
   interactive display is initialized;
+- `FileDialogs` — GTK4 native open/save/folder choosers with portal delegation,
+  filters, multi-select, and asynchronous completion on the main context;
 - `TrayIcon` — org.kde.StatusNotifierItem plus a com.canonical.dbusmenu menu, through the session bus (GDBus). This is an explicit opt-in, not an adapter default: desktop hosting is compositor-dependent (GNOME hosts it only through the AppIndicator extension, KDE natively), so the application checks `TrayIcon::available()` (or the `tray` capability) and decides. The icon, tooltip, and flat menu (labelled items, separators, enabled state) update in place; the watcher is re-registered whenever it reappears, so GNOME Shell restarts and extension reloads do not strand a running process without its icon. Methods and menu callbacks run on the thread-default main context the icon was constructed on — for GTK hosts, the main-loop thread;
 - XDG autostart entries under `$XDG_CONFIG_HOME/autostart`;
 - the Secret Service provider (GNOME Keyring, KWallet bridge) through libsecret for binary secrets; the capability is compiled in when libsecret is present and reported at runtime only when a provider is reachable;

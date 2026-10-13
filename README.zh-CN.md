@@ -4,7 +4,7 @@
 
 **Human-first. Agent-native. Local by design. —— 为人而生，为 Agent 原生设计，本地优先。**
 
-[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.8.0-C15F3C)
+[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Linux](https://img.shields.io/badge/Linux-GTK4-FCC624?logo=linux&logoColor=111111) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Version](https://img.shields.io/github/v/release/turinglambdaai/rivet?label=version)](https://github.com/turinglambdaai/rivet/releases/latest)
 
 [English](README.md) · **中文**
 
@@ -31,7 +31,7 @@ raco rivet dev
 
 ## 为什么选择 Rivet？
 
-Racket 非常适合承载应用逻辑，但一直缺少一条直接连接现代第一方桌面 UI 技术栈的路径。要做产品级 Windows/macOS 应用，往往不得不在“放弃 Racket”“接受 WebView”或“换成跨平台控件库”之间做选择。
+Racket 非常适合承载应用逻辑，但一直缺少一条直接连接现代第一方桌面 UI 技术栈的路径。要做产品级 Windows、macOS 或 Linux 应用，往往不得不在“放弃 Racket”“接受 WebView”或“换成跨平台控件库”之间做选择。
 
 Rivet 补上的是这一层：
 
@@ -44,7 +44,7 @@ Rivet 补上的是这一层：
 - **精确 runtime 匹配** —— 构建时使用当前安装的精确 Racket CS 版本，不会静默退回相邻版本
 - **明确的生态扩展路径** —— 新项目的 Agent 指南和 `inspect --json` 会说明何时选择 Racket 包、原生宿主 API、FFI、外部 CLI 或隔离 sidecar，并列出每种选择必须完成的安全与发布检查
 
-Rivet 刻意不做 WebView 框架，也不做统一跨平台控件层。Windows 应用仍然是 Windows 应用，macOS 应用仍然是 macOS 应用。
+Rivet 刻意不做 WebView 框架，也不做统一跨平台控件层。Windows、macOS 与 Linux 都保留各自第一方原生 UI 和平台行为。
 
 ### Hello Rivet
 
@@ -76,7 +76,7 @@ Rivet 刻意不做 WebView 框架，也不做统一跨平台控件层。Windows 
 
 | | Rivet | Glaze |
 |---|---|---|
-| UI 技术栈 | **WinUI 3 / SwiftUI** | HTML/CSS/JS + WebView |
+| UI 技术栈 | **WinUI 3 / SwiftUI / GTK4** | HTML/CSS/JS + WebView |
 | Racket 的角色 | 共享后端 | 后端 + 本地 Web 服务 |
 | 原生控件 | **系统第一方 UI** | 否 |
 | 一套 UI 跨平台 | 否 | 是 |
@@ -159,6 +159,7 @@ X11/XWayland 仅保留 GTK 尽力兼容，不是发布目标。
 | [Racket CS](https://racket-lang.org/) | 应用后端与嵌入 runtime |
 | Visual Studio 2022 / Build Tools + Windows SDK | Windows 原生宿主构建；Windows App SDK 作为项目依赖在构建时自动恢复 |
 | Xcode Command Line Tools / Swift | macOS 原生宿主构建 |
+| CMake、C++20、pkg-config、GTK 4.10+ 开发文件 | Linux 原生宿主构建 |
 
 构建过程中 Rivet 会自动定位当前精确版本的 Racket CS runtime、boot files、headers 与 native libraries。第一次执行 `dev` 之前先运行 `raco rivet doctor`；环境不完整时，它会给出明确的 remediation，而不只是显示 `not found`。
 

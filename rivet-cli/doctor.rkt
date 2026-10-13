@@ -60,7 +60,7 @@
                  (executable-string "g++")
                  (executable-string "clang++"))
         'ldd (executable-string "ldd")
-        'gtk4 (command-success? pkg-config "--exists" "gtk4")))
+        'gtk4 (command-success? pkg-config "--atleast-version=4.10" "gtk4")))
 
 (define (doctor-report)
   (define os (system-type 'os))
@@ -134,7 +134,7 @@
 
   (unless (hash-ref report 'supported)
     (add! "Unsupported host platform"
-          "Rivet currently builds first-party hosts on Windows and macOS. Use one of those systems for `raco rivet dev`, `build`, and `package`."))
+          "Rivet builds first-party hosts on Windows, macOS, and Linux. Use one of those systems for `raco rivet dev`, `build`, and `package`."))
 
   (unless (hash-ref report 'racket-executable)
     (add! "Expose Racket CS on PATH"
@@ -175,7 +175,7 @@
                (missing-tool? tools 'ldd)
                (not (hash-ref tools 'gtk4 #f)))
        (add! "Install the Linux native toolchain"
-             "Install CMake, pkg-config, a C++20 compiler, GTK4 development files, zlib, LZ4, and curses. On Debian/Ubuntu: sudo apt install build-essential cmake pkg-config libgtk-4-dev zlib1g-dev liblz4-dev libncurses-dev."))]
+             "Install CMake, pkg-config, a C++20 compiler, GTK 4.10 or newer development files, zlib, LZ4, and curses. On Debian/Ubuntu: sudo apt install build-essential cmake pkg-config libgtk-4-dev zlib1g-dev liblz4-dev libncurses-dev."))]
     [else (void)])
 
   (reverse fixes))

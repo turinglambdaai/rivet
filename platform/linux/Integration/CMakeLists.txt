@@ -21,7 +21,7 @@ find_package(ZLIB REQUIRED)
 find_library(LZ4_LIBRARY NAMES lz4 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET gio-2.0)
-pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
+pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4>=4.10)
 # The Secret Service adapter is compiled whenever libsecret is present; the
 # capability then reports itself at runtime based on service availability.
 pkg_check_modules(LIBSECRET IMPORTED_TARGET libsecret-1)
@@ -32,6 +32,7 @@ add_executable(RivetIntegration
   ../system/autostart.cpp
   ../system/clipboard.cpp
   ../system/crash_shutdown.cpp
+  ../system/file_dialogs.cpp
   ../system/global_shortcuts.cpp
   ../system/notifications.cpp
   ../system/secure_storage.cpp
@@ -84,6 +85,7 @@ target_link_libraries(RivetIntegration PRIVATE
   ${CURSES_LIBRARIES}
   Threads::Threads
   PkgConfig::GLIB
+  PkgConfig::GTK4
   ${CMAKE_DL_LIBS}
   m
 )

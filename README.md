@@ -4,7 +4,7 @@ Build first-party native desktop apps with [Racket](https://racket-lang.org/). U
 
 **Human-first. Agent-native. Local by design.**
 
-[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![Version](https://img.shields.io/badge/version-0.8.0-C15F3C)
+[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Linux](https://img.shields.io/badge/Linux-GTK4-FCC624?logo=linux&logoColor=111111) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Version](https://img.shields.io/github/v/release/turinglambdaai/rivet?label=version)](https://github.com/turinglambdaai/rivet/releases/latest)
 
 **English** · [中文](README.zh-CN.md)
 
@@ -44,11 +44,11 @@ Rivet fills that gap:
 - **Exact runtime matching** — Rivet stages the installed Racket CS runtime and never silently falls back to a nearby version
 - **Documented ecosystem escape hatches** — generated Agent guidance and `inspect --json` explain when to use a Racket package, a native host API, FFI, an external CLI, or an isolated sidecar, including the release and security checks for each
 
-Rivet is intentionally not a WebView framework and not a cross-platform widget toolkit. The Windows app remains a Windows app; the macOS app remains a macOS app.
+Rivet is intentionally not a WebView framework and not a cross-platform widget toolkit. Windows, macOS, and Linux each keep their first-party native UI and platform behavior.
 
 ### Hello Rivet
 
-The Racket backend declares the API shared by both native hosts:
+The Racket backend declares the API shared by all three native hosts:
 
 ```racket
 #lang racket/base
@@ -76,7 +76,7 @@ The Racket backend declares the API shared by both native hosts:
 
 | | Rivet | Glaze |
 |---|---|---|
-| UI stack | **WinUI 3 / SwiftUI** | HTML/CSS/JS + WebView |
+| UI stack | **WinUI 3 / SwiftUI / GTK4** | HTML/CSS/JS + WebView |
 | Racket role | shared backend | backend + local web server |
 | Native widgets | **first-party OS UI** | no |
 | One UI codebase | no | yes |
@@ -161,6 +161,7 @@ The checked-in Gradle wrapper is version-pinned and checksum-verified. Android c
 | [Racket CS](https://racket-lang.org/) | application backend and embedded runtime |
 | Visual Studio 2022 / Build Tools + Windows SDK | Windows host build; Windows App SDK is restored as a project package |
 | Xcode command line tools / Swift | macOS host build |
+| CMake, C++20, pkg-config, GTK 4.10+ development files | Linux host build |
 
 Rivet discovers the exact installed Racket CS runtime, boot files, headers, and native libraries during the build. Run `raco rivet doctor` before your first `dev`; when the environment is incomplete, it prints the next remediation steps instead of only reporting `not found`.
 

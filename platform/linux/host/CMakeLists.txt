@@ -28,7 +28,7 @@ find_package(Curses REQUIRED)
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 find_library(LZ4_LIBRARY NAMES lz4 REQUIRED)
-pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
+pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4>=4.10)
 pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET gio-2.0)
 # The Secret Service adapter is compiled whenever libsecret is present; the
 # capability then reports itself at runtime based on service availability.
@@ -52,6 +52,7 @@ add_executable(RivetHost
   "${RIVET_ROOT}/platform/linux/system/autostart.cpp"
   "${RIVET_ROOT}/platform/linux/system/clipboard.cpp"
   "${RIVET_ROOT}/platform/linux/system/crash_shutdown.cpp"
+  "${RIVET_ROOT}/platform/linux/system/file_dialogs.cpp"
   "${RIVET_ROOT}/platform/linux/system/global_shortcuts.cpp"
   "${RIVET_ROOT}/platform/linux/system/notifications.cpp"
   "${RIVET_ROOT}/platform/linux/system/secure_storage.cpp"

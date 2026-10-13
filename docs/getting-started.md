@@ -64,7 +64,7 @@ Typical requirements are:
 
 - **Windows:** Racket CS, Visual Studio 2022 or Build Tools with Desktop development with C++, and a Windows SDK. Rivet restores the Windows App SDK package during the native build.
 - **macOS:** Racket CS plus the Apple developer command-line/Xcode toolchain.
-- **Linux:** CMake, pkg-config, a C++20 toolchain, GTK4 development files, zlib, LZ4, curses, and an embeddable static `libracketcs.a`. Set `RIVET_RACKET_LIBRARY` and `RIVET_RACKET_BOOT_DIR` when those artifacts are outside the active Racket installation.
+- **Linux:** CMake, pkg-config, a C++20 toolchain, GTK 4.10+ development files, zlib, LZ4, curses, and an embeddable static `libracketcs.a`. Set `RIVET_RACKET_LIBRARY` and `RIVET_RACKET_BOOT_DIR` when those artifacts are outside the active Racket installation.
 
 For CI or developer agents, use machine-readable diagnostics:
 

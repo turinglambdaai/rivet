@@ -2,6 +2,7 @@
 
 #include <commctrl.h>
 #include <shellapi.h>
+#include <shobjidl.h>
 #include <wincred.h>
 
 #include <algorithm>
@@ -16,6 +17,7 @@
 
 #pragma comment(lib, "Advapi32.lib")
 #pragma comment(lib, "Comctl32.lib")
+#pragma comment(lib, "Ole32.lib")
 #pragma comment(lib, "Shell32.lib")
 #pragma comment(lib, "User32.lib")
 
@@ -37,6 +39,72 @@ CrashCallback g_crash_callback = nullptr;
 LONG WINAPI UnhandledFilter(EXCEPTION_POINTERS* pointers) noexcept {
   if (g_crash_callback != nullptr) g_crash_callback(pointers);
   return EXCEPTION_CONTINUE_SEARCH;
+}
+
+struct DialogFilters final {
+  std::vector<std::wstring> labels;
+  std::vector<std::wstring> patterns;
+  std::vector<COMDLG_FILTERSPEC> specs;
+};
+
+std::wstring NormalizeExtension(std::wstring extension) {
+  extension.erase(0, extension.find_first_not_of(L" \t\r\n"));
+  auto const last = extension.find_last_not_of(L" \t\r\n");
+  if (last == std::wstring::npos) return {};
+  extension.erase(last + 1);
+  if (!extension.empty() && extension.front() == L'.') extension.erase(0, 1);
+  if (extension.empty() || extension.find_first_of(L"/\\*?[];") != std::wstring::npos) {
+    return {};
+  }
+  return extension;
+}
+
+DialogFilters BuildDialogFilters(std::vector<FileDialogFilter> const& filters) {
+  DialogFilters result;
+  result.labels.reserve(filters.size());
+  result.patterns.reserve(filters.size());
+  for (auto const& filter : filters) {
+    std::wstring pattern;
+    for (auto extension : filter.extensions) {
+      extension = NormalizeExtension(std::move(extension));
+      if (extension.empty()) continue;
+      if (!pattern.empty()) pattern += L';';
+      pattern += L"*." + extension;
+    }
+    if (pattern.empty()) continue;
+    result.labels.push_back(filter.label.empty() ? pattern : filter.label);
+    result.patterns.push_back(std::move(pattern));
+  }
+  result.specs.reserve(result.labels.size());
+  for (std::size_t index = 0; index < result.labels.size(); ++index) {
+    result.specs.push_back({result.labels[index].c_str(),
+                            result.patterns[index].c_str()});
+  }
+  return result;
+}
+
+template <typename Dialog>
+winrt::com_ptr<Dialog> CreateDialog(REFCLSID class_id) {
+  winrt::com_ptr<Dialog> dialog;
+  winrt::check_hresult(::CoCreateInstance(
+      class_id, nullptr, CLSCTX_INPROC_SERVER, __uuidof(Dialog),
+      dialog.put_void()));
+  return dialog;
+}
+
+std::wstring ShellItemPath(IShellItem* item) {
+  PWSTR raw = nullptr;
+  winrt::check_hresult(item->GetDisplayName(SIGDN_FILESYSPATH, &raw));
+  std::wstring path(raw);
+  ::CoTaskMemFree(raw);
+  return path;
+}
+
+bool ShowDialog(IFileDialog* dialog, HWND owner) {
+  HRESULT result = dialog->Show(owner);
+  if (result == HRESULT_FROM_WIN32(ERROR_CANCELLED)) return false;
+  winrt::check_hresult(result);
+  return true;
 }
 
 }  // namespace
@@ -644,7 +712,8 @@ constexpr wchar_t const* kClipboardWindowClass = L"RivetClipboard";
 
 std::wstring Utf8ToWide(std::string const& text) {
   if (text.empty()) return {};
-  if (text.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+  if (text.size() >
+      static_cast<std::size_t>((std::numeric_limits<int>::max)())) {
     throw std::invalid_argument("clipboard text exceeds the Win32 size limit");
   }
   int const count = ::MultiByteToWideChar(
@@ -696,7 +765,8 @@ std::optional<std::string> Clipboard::ReadText() const {
   std::size_t length = 0;
   while (length < capacity && text[length] != L'\0') ++length;
   try {
-    if (length > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    if (length >
+        static_cast<std::size_t>((std::numeric_limits<int>::max)())) {
       throw std::runtime_error("clipboard text exceeds the Win32 size limit");
     }
     auto result = WideToUtf8(text, static_cast<int>(length));
@@ -788,6 +858,79 @@ Clipboard::~Clipboard() {
 
 void Clipboard::SetChangeHandler(ChangeHandler handler) {
   handler_ = std::move(handler);
+}
+
+std::optional<std::vector<std::wstring>> FileDialogs::OpenFiles(
+    HWND owner, std::wstring const& title, bool allow_multiple,
+    bool select_folders, std::vector<FileDialogFilter> const& filters) {
+  auto dialog = CreateDialog<IFileOpenDialog>(CLSID_FileOpenDialog);
+  FILEOPENDIALOGOPTIONS options{};
+  winrt::check_hresult(dialog->GetOptions(&options));
+  options |= FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST;
+  if (select_folders) {
+    options |= FOS_PICKFOLDERS;
+  } else {
+    options |= FOS_FILEMUSTEXIST;
+  }
+  if (allow_multiple) options |= FOS_ALLOWMULTISELECT;
+  winrt::check_hresult(dialog->SetOptions(options));
+  if (!title.empty()) winrt::check_hresult(dialog->SetTitle(title.c_str()));
+
+  auto prepared = BuildDialogFilters(filters);
+  if (!select_folders && !prepared.specs.empty()) {
+    winrt::check_hresult(dialog->SetFileTypes(
+        static_cast<UINT>(prepared.specs.size()), prepared.specs.data()));
+  }
+  if (!ShowDialog(dialog.get(), owner)) return std::nullopt;
+
+  winrt::com_ptr<IShellItemArray> items;
+  winrt::check_hresult(dialog->GetResults(items.put()));
+  DWORD count{};
+  winrt::check_hresult(items->GetCount(&count));
+  std::vector<std::wstring> paths;
+  paths.reserve(count);
+  for (DWORD index = 0; index < count; ++index) {
+    winrt::com_ptr<IShellItem> item;
+    winrt::check_hresult(items->GetItemAt(index, item.put()));
+    paths.push_back(ShellItemPath(item.get()));
+  }
+  return paths;
+}
+
+std::optional<std::wstring> FileDialogs::SaveFile(
+    HWND owner, std::wstring const& title,
+    std::wstring const& suggested_name,
+    std::vector<FileDialogFilter> const& filters) {
+  auto dialog = CreateDialog<IFileSaveDialog>(CLSID_FileSaveDialog);
+  FILEOPENDIALOGOPTIONS options{};
+  winrt::check_hresult(dialog->GetOptions(&options));
+  winrt::check_hresult(dialog->SetOptions(
+      options | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_OVERWRITEPROMPT));
+  if (!title.empty()) winrt::check_hresult(dialog->SetTitle(title.c_str()));
+  if (!suggested_name.empty()) {
+    winrt::check_hresult(dialog->SetFileName(suggested_name.c_str()));
+  }
+
+  auto prepared = BuildDialogFilters(filters);
+  if (!prepared.specs.empty()) {
+    winrt::check_hresult(dialog->SetFileTypes(
+        static_cast<UINT>(prepared.specs.size()), prepared.specs.data()));
+    auto const first_dot = prepared.patterns.front().find(L"*.");
+    auto const first_end = prepared.patterns.front().find(L';');
+    if (first_dot == 0) {
+      auto extension = prepared.patterns.front().substr(
+          2, first_end == std::wstring::npos ? std::wstring::npos
+                                             : first_end - 2);
+      if (!extension.empty()) {
+        winrt::check_hresult(dialog->SetDefaultExtension(extension.c_str()));
+      }
+    }
+  }
+  if (!ShowDialog(dialog.get(), owner)) return std::nullopt;
+
+  winrt::com_ptr<IShellItem> item;
+  winrt::check_hresult(dialog->GetResult(item.put()));
+  return ShellItemPath(item.get());
 }
 
 }  // namespace rivet::system
