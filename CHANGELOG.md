@@ -10,6 +10,11 @@
   bounded, redirect-aware downloader. Interrupted or cancelled downloads
   remove their partial file as reliably as ordinary failures.
 
+- Authenticate signed update-manifest payload bytes before parsing their JSON.
+  Malformed, unauthenticated payloads now fail at the Ed25519 boundary instead
+  of entering semantic validation and contradicting the documented trust
+  order. `read-signed-manifest` remains an explicitly unauthenticated
+  inspection API; update clients use `verify-signed-manifest`.
 - Add a Windows `rivet::system::TrayController` that owns tray window
   subclassing, localized native menu presentation, command dispatch, and
   automatic `TaskbarCreated` recovery. The reference Taskboard now exercises
