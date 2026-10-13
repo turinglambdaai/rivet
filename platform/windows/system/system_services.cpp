@@ -84,7 +84,7 @@ DialogFilters BuildDialogFilters(std::vector<FileDialogFilter> const& filters) {
 }
 
 template <typename Dialog>
-winrt::com_ptr<Dialog> CreateDialog(REFCLSID class_id) {
+winrt::com_ptr<Dialog> MakeFileDialog(REFCLSID class_id) {
   winrt::com_ptr<Dialog> dialog;
   winrt::check_hresult(::CoCreateInstance(
       class_id, nullptr, CLSCTX_INPROC_SERVER, __uuidof(Dialog),
@@ -863,7 +863,7 @@ void Clipboard::SetChangeHandler(ChangeHandler handler) {
 std::optional<std::vector<std::wstring>> FileDialogs::OpenFiles(
     HWND owner, std::wstring const& title, bool allow_multiple,
     bool select_folders, std::vector<FileDialogFilter> const& filters) {
-  auto dialog = CreateDialog<IFileOpenDialog>(CLSID_FileOpenDialog);
+  auto dialog = MakeFileDialog<IFileOpenDialog>(CLSID_FileOpenDialog);
   FILEOPENDIALOGOPTIONS options{};
   winrt::check_hresult(dialog->GetOptions(&options));
   options |= FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST;
@@ -901,7 +901,7 @@ std::optional<std::wstring> FileDialogs::SaveFile(
     HWND owner, std::wstring const& title,
     std::wstring const& suggested_name,
     std::vector<FileDialogFilter> const& filters) {
-  auto dialog = CreateDialog<IFileSaveDialog>(CLSID_FileSaveDialog);
+  auto dialog = MakeFileDialog<IFileSaveDialog>(CLSID_FileSaveDialog);
   FILEOPENDIALOGOPTIONS options{};
   winrt::check_hresult(dialog->GetOptions(&options));
   winrt::check_hresult(dialog->SetOptions(
