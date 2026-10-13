@@ -23,6 +23,7 @@ set(RIVET_LINUX_PLATFORM_SOURCES
   "${RIVET_ROOT}/platform/linux/system/tray.cpp"
   "${RIVET_ROOT}/platform/linux/theme/theme.cpp"
   "${RIVET_ROOT}/platform/linux/update/update_handoff.cpp"
+  "${RIVET_ROOT}/runtime/src/chart_batch.cpp"
   "${RIVET_ROOT}/runtime/src/protocol.cpp"
 )
 

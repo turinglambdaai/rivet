@@ -69,9 +69,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="$(RIVET_ROOT)\platform\windows\chart\rivet_chart_control.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\runtime\src\chart_batch.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(RIVET_ROOT)\platform\windows\chart\rivet_chart_control.hpp" />
+    <ClInclude Include="$(RIVET_ROOT)\runtime\include\rivet\chart_batch.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

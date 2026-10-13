@@ -26,6 +26,9 @@
   notices are produced. The canonical Linux source manifest and anti-drift
   guard from #234 remain internal implementation details of the linkable
   package rather than an invitation for downstream source compilation.
+- Fix the linkable Windows and Linux chart packages to carry the shared
+  chart batch codec/model implementation. The pre-release embedded roundtrip
+  caught the prior compile-green/link-red package before 0.11.0 shipped.
 
 ## 0.10.0
 
