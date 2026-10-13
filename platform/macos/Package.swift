@@ -17,7 +17,8 @@ let package = Package(
         .library(name: "RivetDevice", targets: ["RivetDevice"]),
         .library(name: "RivetWatchConnectivity", targets: ["RivetWatchConnectivity"]),
         .library(name: "RivetEmbedding", targets: ["RivetEmbedding"]),
-        .library(name: "RivetSystem", targets: ["RivetSystem"])
+        .library(name: "RivetSystem", targets: ["RivetSystem"]),
+        .library(name: "RivetUpdate", targets: ["RivetUpdate"])
     ],
     targets: [
         .target(
@@ -53,6 +54,13 @@ let package = Package(
                 .linkedFramework("UserNotifications")
             ]
         ),
+        .target(
+            name: "RivetUpdate",
+            path: "Sources/RivetUpdate",
+            linkerSettings: [
+                .linkedFramework("CryptoKit")
+            ]
+        ),
         .testTarget(
             name: "RivetRuntimeTests",
             dependencies: ["RivetRuntime"],
@@ -67,6 +75,11 @@ let package = Package(
             name: "RivetSystemTests",
             dependencies: ["RivetSystem"],
             path: "Tests/RivetSystemTests"
+        ),
+        .testTarget(
+            name: "RivetUpdateTests",
+            dependencies: ["RivetUpdate"],
+            path: "Tests/RivetUpdateTests"
         )
     ]
 )

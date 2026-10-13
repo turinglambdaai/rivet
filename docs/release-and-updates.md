@@ -134,6 +134,19 @@ The lower-level `make-install-plan`, `execute-install-plan!`, and `recover-insta
 
 Build metadata does not affect version precedence.
 
+## Host-side updates on macOS
+
+The engine API above covers applications whose update flow runs in Racket. Applications whose macOS host owns the whole flow natively should not hand-roll it: the Swift package exposes `RivetUpdate` (`platform/macos`), a shared update client for installed `.app` bundles. It performs the authenticated check against the same signed wrapper the engine verifies (`RivetUpdateService.check`), a bounded delegate-driven artifact download with progress and cancellation (`downloadAndInstall`), SHA-256 and size verification against the signed manifest, `ditto` unpacking, a bundle-version confirmation, and an atomic swap-with-rollback that relaunches the application.
+
+Applications configure four facts — feed URL, Ed25519 public key, key id, and bundle name — and keep their own UI. Configuration fails closed at construction: non-HTTPS feeds outside loopback drills, malformed bundle names, empty key ids, and public keys that are not the 32 raw Ed25519 bytes are rejected before any transfer starts. The downloader rejects a definitive `Content-Length` that disagrees with the signed size immediately instead of downloading a wrong artifact to the end, and the file on disk must match the signed size even when the response carried no length.
+
+The downloader is delegate-driven on purpose. Byte-iterating `URLSession.AsyncBytes` can park its continuation forever when the stream's end-of-stream flag never surfaces (observed live against the GitHub CDN: all bytes delivered, the loop never wakes, the update sheet sticks at 100%). Delegate completion callbacks are definitive, and the request/resource timeout intervals bound a silent stall. Two UX rules follow for hosts driving this from SwiftUI:
+
+- A running transfer always offers an explicit Cancel affordance; task cancellation invalidates the session, so the awaited call always resumes promptly.
+- The update surface stays dismissable by gesture except during the final swap-and-relaunch step, which terminates the process anyway.
+
+Windows hosts update through the MSI transaction (`msiexec` with elevation), and Linux AppImage/portable installs should use the engine's verified `prepare-platform-installation` / `execute-platform-installation!` replacement instead of re-implementing atomic swap in the host. Sharing the `RivetUpdate` pattern on those platforms belongs to their host story, not to each product.
+
 ## External validation points
 
 CI can test signing, tampering, selection, hashing, packaging structure, and native compilation without publisher identities. A real release still needs the publisher's Authenticode certificate or Apple Developer ID/notary profile, an Ed25519 update key, an HTTPS artifact origin, and a final install/upgrade/rollback exercise on supported OS versions.
