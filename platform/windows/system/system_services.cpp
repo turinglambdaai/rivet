@@ -5,6 +5,7 @@
 #include <wincred.h>
 
 #include <algorithm>
+#include <cctype>
 #include <functional>
 #include <stdexcept>
 #include <system_error>
@@ -14,6 +15,7 @@
 #pragma comment(lib, "Advapi32.lib")
 #pragma comment(lib, "Comctl32.lib")
 #pragma comment(lib, "Shell32.lib")
+#pragma comment(lib, "User32.lib")
 
 namespace rivet::system {
 namespace {
@@ -435,6 +437,203 @@ void InstallShutdownHook(std::function<void()> callback) {
     g_shutdown_callback = nullptr;
     ThrowLastError("SetConsoleCtrlHandler");
   }
+}
+
+bool GlobalShortcuts::available() {
+  // RegisterHotKey needs a message pump on an interactive desktop, which
+  // every Rivet host already runs; there is no portal or capability gate.
+  return true;
+}
+
+namespace {
+
+std::string LowercaseAscii(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char c) {
+                   return static_cast<char>(::tolower(c));
+                 });
+  return value;
+}
+
+constexpr wchar_t const* kShortcutWindowClass = L"RivetGlobalShortcuts";
+
+bool ParseModifier(std::string const& token, std::uint32_t& modifiers) {
+  if (token == "ctrl" || token == "control") {
+    modifiers |= MOD_CONTROL;
+  } else if (token == "alt" || token == "option") {
+    modifiers |= MOD_ALT;
+  } else if (token == "shift") {
+    modifiers |= MOD_SHIFT;
+  } else if (token == "win" || token == "meta" || token == "super" ||
+             token == "cmd" || token == "command") {
+    modifiers |= MOD_WIN;
+  } else {
+    return false;
+  }
+  return true;
+}
+
+bool ParseKey(std::string const& token, std::uint32_t& virtual_key) {
+  if (token.size() == 1) {
+    char const c = token[0];
+    if (c >= 'a' && c <= 'z') {
+      virtual_key = static_cast<std::uint32_t>('A' + (c - 'a'));
+      return true;
+    }
+    if (c >= '0' && c <= '9') {
+      virtual_key = static_cast<std::uint32_t>(c);
+      return true;
+    }
+    return false;
+  }
+  struct NamedKey {
+    char const* name;
+    std::uint32_t key;
+  };
+  static NamedKey const named[] = {
+      {"space", VK_SPACE},       {"tab", VK_TAB},
+      {"enter", VK_RETURN},      {"return", VK_RETURN},
+      {"escape", VK_ESCAPE},     {"esc", VK_ESCAPE},
+      {"backspace", VK_BACK},    {"delete", VK_DELETE},
+      {"del", VK_DELETE},        {"insert", VK_INSERT},
+      {"home", VK_HOME},         {"end", VK_END},
+      {"pageup", VK_PRIOR},      {"pagedown", VK_NEXT},
+      {"up", VK_UP},             {"down", VK_DOWN},
+      {"left", VK_LEFT},         {"right", VK_RIGHT},
+      {"comma", VK_OEM_COMMA},   {"period", VK_OEM_PERIOD},
+      {"slash", VK_OEM_2},       {"backslash", VK_OEM_5},
+      {"semicolon", VK_OEM_1},   {"quote", VK_OEM_7},
+      {"minus", VK_OEM_MINUS},   {"equal", VK_OEM_PLUS},
+      {"bracketleft", VK_OEM_4}, {"bracketright", VK_OEM_6},
+  };
+  for (auto const& entry : named) {
+    if (token == entry.name) {
+      virtual_key = entry.key;
+      return true;
+    }
+  }
+  if (token.size() >= 2 && token[0] == 'f') {
+    int value = 0;
+    for (std::size_t index = 1; index < token.size(); ++index) {
+      if (token[index] < '0' || token[index] > '9') return false;
+      value = value * 10 + (token[index] - '0');
+    }
+    if (value >= 1 && value <= 24) {
+      virtual_key = (value <= 12) ? VK_F1 + (value - 1) : VK_F13 + (value - 13);
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
+bool GlobalShortcuts::ParseTrigger(std::string const& trigger,
+                                   std::uint32_t& modifiers,
+                                   std::uint32_t& virtual_key) {
+  modifiers = 0;
+  virtual_key = 0;
+  std::uint32_t parsed_modifiers = 0;
+  std::uint32_t parsed_key = 0;
+  bool has_key = false;
+  std::string const text = LowercaseAscii(trigger);
+  std::size_t start = 0;
+  while (start <= text.size()) {
+    std::size_t const separator = text.find('+', start);
+    std::string const token =
+        text.substr(start, separator == std::string::npos
+                               ? std::string::npos
+                               : separator - start);
+    if (token.empty()) return false;
+    if (ParseModifier(token, parsed_modifiers)) {
+      // Modifier consumed; keys accumulate below.
+    } else if (!has_key && ParseKey(token, parsed_key)) {
+      has_key = true;
+    } else {
+      return false;
+    }
+    if (separator == std::string::npos) break;
+    start = separator + 1;
+  }
+  if (!has_key) return false;
+  modifiers = parsed_modifiers;
+  virtual_key = parsed_key;
+  return true;
+}
+
+LRESULT CALLBACK GlobalShortcuts::WndProc(HWND window, UINT message,
+                                          WPARAM wparam,
+                                          LPARAM lparam) noexcept {
+  if (message == WM_HOTKEY) {
+    auto* self = reinterpret_cast<GlobalShortcuts*>(
+        ::GetWindowLongPtrW(window, GWLP_USERDATA));
+    if (self != nullptr) {
+      auto const hotkey_id = static_cast<std::uint32_t>(wparam);
+      for (auto const& entry : self->registered_) {
+        if (entry.first == hotkey_id && self->handler_) {
+          self->handler_(entry.second,
+                         static_cast<std::uint64_t>(
+                             static_cast<unsigned long>(::GetMessageTime())),
+                         std::string());
+        }
+      }
+    }
+    return 0;
+  }
+  return ::DefWindowProcW(window, message, wparam, lparam);
+}
+
+GlobalShortcuts::GlobalShortcuts() {
+  WNDCLASSW window_class{};
+  window_class.lpfnWndProc = &GlobalShortcuts::WndProc;
+  window_class.hInstance = ::GetModuleHandleW(nullptr);
+  window_class.lpszClassName = kShortcutWindowClass;
+  ::RegisterClassW(&window_class);
+  window_ = ::CreateWindowExW(0, kShortcutWindowClass, L"", 0, 0, 0, 0, 0,
+                              HWND_MESSAGE, nullptr, window_class.hInstance,
+                              nullptr);
+  if (window_ == nullptr) ThrowLastError("CreateWindowExW");
+  ::SetWindowLongPtrW(window_, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+}
+
+GlobalShortcuts::~GlobalShortcuts() {
+  for (auto const& entry : registered_) {
+    ::UnregisterHotKey(window_, static_cast<int>(entry.first));
+  }
+  if (window_ != nullptr) ::DestroyWindow(window_);
+}
+
+bool GlobalShortcuts::Register(std::string const& shortcut_id,
+                               std::string const& trigger) {
+  std::uint32_t modifiers = 0;
+  std::uint32_t virtual_key = 0;
+  if (!ParseTrigger(trigger, modifiers, virtual_key)) return false;
+  if (next_hotkey_id_ > 0xBFFF) return false;
+  for (auto const& entry : registered_) {
+    if (entry.second == shortcut_id) return false;
+  }
+  if (::RegisterHotKey(window_, static_cast<int>(next_hotkey_id_), modifiers,
+                       virtual_key) == 0) {
+    return false;
+  }
+  registered_.emplace_back(next_hotkey_id_, shortcut_id);
+  ++next_hotkey_id_;
+  return true;
+}
+
+bool GlobalShortcuts::Unregister(std::string const& shortcut_id) {
+  for (auto entry = registered_.begin(); entry != registered_.end(); ++entry) {
+    if (entry->second == shortcut_id) {
+      ::UnregisterHotKey(window_, static_cast<int>(entry->first));
+      registered_.erase(entry);
+      return true;
+    }
+  }
+  return false;
+}
+
+void GlobalShortcuts::SetActivationHandler(ActivationHandler handler) {
+  handler_ = std::move(handler);
 }
 
 }  // namespace rivet::system

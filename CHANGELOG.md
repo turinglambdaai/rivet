@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Complete cross-platform global shortcuts. Linux already binds through the
+  XDG portal; macOS gains `RivetGlobalShortcuts` (Carbon
+  `RegisterEventHotKey`, main-thread event loop, explicit duplicate-trigger
+  refusal — RegisterHotKey provides it on Windows, Carbon does not) and
+  Windows gains `rivet::system::GlobalShortcuts` (`RegisterHotKey` on a
+  message-only window with `WM_HOTKEY` dispatch). The three adapters share
+  one activation-callback shape (shortcut id, millisecond timestamp,
+  portal-only activation token) and direct-registration platforms share a
+  case-insensitive trigger grammar; ANSI virtual-key codes map through
+  their Carbon constants because the codes follow the physical QWERTY
+  layout, not the alphabet. macOS parse and lifecycle tests are in the
+  Swift suite; the Windows adapter is compile-gated by the WinUI CI host
+  build.
+- Add `docs/commercial-parity.md`: the honest scorecard against the Tauri 2
+  and Electron feature floors (above / at / below / roadmap per
+  capability), with rules of engagement — a product hand-rolling the same
+  capability twice is a library gap, below-floor rows outrank new surface
+  area, and the docs suite keeps the scorecard and its below-floor rows
+  (clipboard, native file dialogs, mobile hosts) from silently
+  disappearing.
 - Close the scribble coverage gap: the RVT1 framing and value-codec surface
   (`rivet/protocol` — frames, message-type constants, transport limits,
   read/write/encode/decode), application resources (`rivet/resources`),

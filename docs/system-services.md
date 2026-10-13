@@ -8,6 +8,10 @@ Commercial desktop features live in `rivet/system` and native platform adapters,
 
 Generated native hosts call the first-party Swift/C++ system libraries directly, on the native UI or lifecycle thread that owns the operation. They do not install Racket procedures into the embedded runtime and system services do not extend RVT1. Racket-side providers and headless tests can parameterize `current-system-adapter`; without such a provider, the Racket convenience procedures fail clearly instead of silently using insecure storage or a fake notification.
 
+### Global shortcuts across platforms
+
+Every adapter reports activations through the same callback shape — shortcut id, platform timestamp in milliseconds, and an activation token (portal platforms only; empty elsewhere) — so hosts share one dispatch path. Direct-registration platforms (macOS, Windows) use a shared trigger grammar: case-insensitive `'+'`-separated modifiers (`ctrl|control`, `alt|option`, `shift`, `cmd|command|meta|super|win`) and exactly one key (`a`–`z`, `0`–`9`, `f1`–`f24`, `space`, `tab`, `enter|return`, `escape|esc`, `backspace`, `delete|del`, `insert`, `home`, `end`, `pageup`, `pagedown`, arrows, and common punctuation names). Both adapters refuse duplicate ids and duplicate live triggers. Linux intentionally differs: Wayland has no global grabs, so binding goes through the compositor's portal prompt and the compositor owns the final trigger.
+
 ## Windows
 
 `platform/windows/system` uses first-party Win32 surfaces:
@@ -17,6 +21,11 @@ Generated native hosts call the first-party Swift/C++ system libraries directly,
 - `Shell_NotifyIconW` for tray presence and notification balloons, plus a
   `TrayController` that owns the window subclass, native popup menu, command
   routing, and `TaskbarCreated` recovery;
+- `GlobalShortcuts` on `RegisterHotKey`: a message-only window per instance
+  with `WM_HOTKEY` dispatch to the shared activation-callback shape.
+  `ParseTrigger` implements the cross-platform trigger grammar; register and
+  unregister on the thread that pumps the window's messages (the WinUI
+  thread in generated hosts);
 - the current user's `Run` registry value for opt-in autostart;
 - Windows Credential Manager (`CredWriteW`/`CredReadW`) for secrets;
 - `SetUnhandledExceptionFilter` and `RegisterApplicationRestart` as low-level crash/restart hooks.
@@ -42,6 +51,11 @@ private endpoint, or no uploader; Rivet does not bind to any provider.
 - SwiftUI `onOpenURL` plus packaged `CFBundleURLTypes`/`CFBundleDocumentTypes` metadata;
 - `UNUserNotificationCenter`;
 - `NSStatusItem` for menu-bar UI;
+- `RivetGlobalShortcuts` on Carbon `RegisterEventHotKey`: direct registration
+  with the shared trigger grammar and callback shape, activations on the
+  main thread's event loop. `parse(_:)` maps ANSI virtual-key codes through
+  their Carbon constants — the codes follow the physical QWERTY layout, not
+  the alphabet — and is public for tests and trigger rendering;
 - `SMAppService.mainApp` for login-item registration;
 - Security.framework Keychain generic-password items;
 - an activation router that stays on the main actor.
