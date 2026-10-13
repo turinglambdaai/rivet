@@ -1,5 +1,3 @@
-#include <windows.h>
-
 #include "rivet_chart_control.hpp"
 
 #include <winrt/Microsoft.UI.Xaml.h>
@@ -68,14 +66,8 @@ winrt::Windows::UI::Color ParseColor(std::string const& text,
   return color;
 }
 
-std::wstring ToWide(std::string const& text) {
-  if (text.empty()) {
-    return std::wstring();
-  }
-  int size = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
-  std::wstring wide(static_cast<size_t>(size), L'\0');
-  MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), wide.data(), size);
-  return wide;
+winrt::hstring ToWide(std::string const& text) {
+  return winrt::to_hstring(text);
 }
 
 std::string FormatScaled(std::int64_t value, std::string const& unit) {
@@ -454,7 +446,7 @@ void ChartControl::RebuildStatic(Geometry const& geometry) {
     line.Stroke(DimBrush());
     line.StrokeThickness(1);
     Children().Append(line);
-    Polygon tick;
+    winrt::Microsoft::UI::Xaml::Shapes::Polygon tick;
     tick.Points().Append(winrt::Windows::Foundation::Point(
         static_cast<float>(x - 4), static_cast<float>(geometry.top)));
     tick.Points().Append(winrt::Windows::Foundation::Point(
@@ -465,7 +457,8 @@ void ChartControl::RebuildStatic(Geometry const& geometry) {
     Children().Append(tick);
   }
 
-  AutomationProperties::SetName(*this, ToWide(title_.empty() ? "rivet chart" : title_));
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetName(
+      *this, ToWide(title_.empty() ? "rivet chart" : title_));
 }
 
 void ChartControl::UpdateSeriesPolylines(Geometry const& geometry) {
@@ -503,7 +496,8 @@ void ChartControl::UpdateSeriesPolylines(Geometry const& geometry) {
                                       entry.spec.unit)
                        : "n/a";
   }
-  AutomationProperties::SetFullDescription(*this, ToWide(description));
+  winrt::Microsoft::UI::Xaml::Automation::AutomationProperties::SetFullDescription(
+      *this, ToWide(description));
 }
 
 }  // namespace rivet::win_ui
