@@ -171,6 +171,14 @@
             (update-environment-key-id update-config)
             out)))
        path)))
+  ;; The unpacked payload (the .app, the <name>-<os>-<arch> tree) lives in
+  ;; dist for the installer builders and the verify pass; a release should
+  ;; leave only release artifacts behind. Delete it so the family-standard
+  ;; artifact globs (`dist/<name>-*`) cannot sweep hundreds of runtime
+  ;; megabytes into CI artifacts — the taskly 0.1.3 publish deadlock was
+  ;; exactly that: two linux legs each shipped a <name>-linux-<arch>/ tree
+  ;; and the gather step died merging them.
+  (delete-directory/files package #:must-exist? #f)
   (values installer manifest-path sbom notices portable-zip))
 
 (module+ test-support
