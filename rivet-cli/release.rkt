@@ -18,7 +18,8 @@
 (provide release-project!
          release-update-environment
          portable-zip-path
-         create-portable-zip!)
+         create-portable-zip!
+         release-update-artifacts)
 
 (define (required-environment name)
   (define value (getenv name))
@@ -115,6 +116,36 @@
   (update-artifact-for-file update-config payload platform architecture
                             (if appimage? 'appimage 'zip)))
 
+;; A single signed feed serves both installation shapes on platforms where
+;; Rivet owns both. Portable installs select the zip; MSI installs select the
+;; MSI and hand it to the shared Windows handoff; AppImage installs select the
+;; self-replacing image. macOS's host client intentionally consumes the zip —
+;; the DMG remains the human installer.
+(define (release-update-artifacts update-config project portable-zip installer
+                                  #:platform [platform (release-platform)]
+                                  #:architecture [architecture (release-architecture)])
+  (define portable
+    (update-artifact-for-file update-config portable-zip
+                              platform architecture 'zip))
+  (define native
+    (case platform
+      [(windows)
+       (and (file-exists? installer)
+            (update-artifact-for-file update-config installer
+                                      platform architecture 'msi))]
+      [(linux)
+       (define appimage? (member "appimage" (project-linux-formats project)))
+       (define payload (and appimage? (appimage-installer-path project)))
+       (and payload
+            (file-exists? payload)
+            (update-artifact-for-file update-config payload
+                                      platform architecture 'appimage))]
+      [else #f]))
+  (if native (list portable native) (list portable)))
+
+(define (cleanup-release-stage! package)
+  (delete-directory/files package #:must-exist? #f))
+
 (define (release-project! project
                           #:production? [production? #t]
                           #:updates? [updates? #t])
@@ -142,8 +173,9 @@
     (and
      update-config
      (let* ([previous (getenv "RIVET_PREVIOUS_VERSION")]
-            [artifact
-             (release-update-artifact update-config project portable-zip)]
+            [artifacts
+             (release-update-artifacts update-config project portable-zip
+                                       installer)]
             [manifest
              (update-manifest
               (project-identifier project)
@@ -156,7 +188,7 @@
               #t
               (let ([configured (getenv "RIVET_UPDATE_ROLLOUT")])
                 (if configured (string->number configured) 100))
-              (list artifact))]
+              artifacts)]
             [path
              (project-path
               project "dist"
@@ -178,9 +210,11 @@
   ;; megabytes into CI artifacts — the taskly 0.1.3 publish deadlock was
   ;; exactly that: two linux legs each shipped a <name>-linux-<arch>/ tree
   ;; and the gather step died merging them.
-  (delete-directory/files package #:must-exist? #f)
+  (cleanup-release-stage! package)
   (values installer manifest-path sbom notices portable-zip))
 
 (module+ test-support
   (provide portable-update-artifact
-           release-update-artifact))
+           release-update-artifact
+           release-update-artifacts
+           cleanup-release-stage!))

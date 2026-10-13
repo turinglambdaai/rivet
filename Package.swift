@@ -4,7 +4,7 @@
 // package (issue #238):
 //
 //     .package(url: "https://github.com/turinglambdaai/rivet.git",
-//              from: "0.10.0")
+//              from: "0.11.0")
 //
 // The in-repo platform packages under platform/ keep their own manifests
 // for path-based consumption from `raco rivet build` environments; this

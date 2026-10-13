@@ -756,7 +756,7 @@ Returns the architecture symbol used by Rivet release manifests.}
           [#:architecture architecture
            (or/c 'x64 'arm64) (current-update-architecture)]
           [#:install-kind install-kind
-           (or/c #f 'portable 'appimage 'package-manager) #f]
+           (or/c #f 'portable 'msi 'appimage 'package-manager) #f]
           [#:public-key public-key any/c]
           [#:key-id key-id string?]
           [#:manifest-url manifest-url string?]
@@ -779,6 +779,12 @@ per-installation value from 0 through 99; do not choose a new random value on
 each check. Unsupported platforms and architectures fail at construction
 instead of silently selecting the wrong artifact. Installation and restart
 remain owned by the native host or platform adapter.}
+
+On Windows, pass @racket['msi] for an MSI-installed copy; release manifests
+carry a signed MSI entry alongside the portable ZIP, and the linked host
+library's @tt{rivet::update::MsiHandoff} owns the bounded
+quit/install/relaunch step. Linux AppImage copies pass @racket['appimage] and
+use the platform adapter for the atomic replacement.
 
 @defproc[(updater? [value any/c]) boolean?]{
 Recognizes an updater created by @racket[make-updater].}

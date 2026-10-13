@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+## 0.11.0
+
+- Make packaging a clean native provenance boundary (#235). Windows package
+  builds use MSBuild `Rebuild`, macOS recreates the SwiftPM scratch tree, and
+  Linux already recreates its CMake tree; incremental caches can no longer
+  produce a valid-looking distributable from older native objects.
+- Finish the shared host-side update story on Windows and Linux (#237) without
+  duplicating the engine's security-critical Ed25519/parser/downloader stack.
+  Signed release feeds now carry portable ZIP plus MSI on Windows and portable
+  ZIP plus AppImage on Linux; `make-updater` selects explicit `portable`, `msi`,
+  or `appimage` install shapes. The released Windows library adds a bounded,
+  failure-reporting `msiexec` quit/install/relaunch handoff with stale-attempt
+  cleanup and lease release, while the Linux library adds install-shape and
+  post-commit AppImage relaunch helpers around the existing atomic adapter.
+- Complete released-package consumption (#238). Generated macOS hosts resolve
+  Rivet from its tagged root SwiftPM package rather than a checkout path;
+  Windows and Linux hosts link the released package's platform targets; the
+  old Linux source fragment is now explicitly private to `rivet::platform`.
+  Both Windows static-library projects now declare ARM64 configurations.
+- Preserve the clean release output contract from #236: the unpacked staging
+  bundle is removed after installers, portable archives, manifests, SBOM, and
+  notices are produced. The canonical Linux source manifest and anti-drift
+  guard from #234 remain internal implementation details of the linkable
+  package rather than an invitation for downstream source compilation.
+
 ## 0.10.0
 
 - Host platforms ship as linkable packages — downstream products never

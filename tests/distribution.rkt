@@ -68,6 +68,24 @@
              (select-update linux-config linux-manifest
                             #:install-kind 'unknown)))
 
+(define windows-config
+  (updater-config "dev.rivet.test" "1.1.0" 'stable 'windows 'x64
+                  #f #f 0 (* 1024 1024)))
+(define windows-zip
+  (update-artifact 'windows 'x64 "https://updates.example/app.zip"
+                   (make-string 64 #\d) 4 'zip '()))
+(define windows-manifest
+  (struct-copy update-manifest sample-manifest
+               [artifacts (list windows-zip sample-artifact)]))
+(check-eq? (update-candidate-artifact
+            (select-update windows-config windows-manifest
+                           #:install-kind 'portable))
+           windows-zip)
+(check-eq? (update-candidate-artifact
+            (select-update windows-config windows-manifest
+                           #:install-kind 'msi))
+           sample-artifact)
+
 (check-exn exn:fail:contract?
            (lambda ()
              (download-update linux-config

@@ -40,3 +40,20 @@
                  "runtime crypto modules must remain declared")
 (check-false (member "crypto" dependency-names)
              "do not reintroduce the crypto documentation meta package")
+
+(define omit-expression (find-definition info-module 'source-omit-files))
+(define omitted-paths
+  (if (and (pair? omit-expression) (eq? (car omit-expression) 'quote))
+      (cadr omit-expression)
+      '()))
+(for ([generated (in-list '(".build"
+                            ".rivet"
+                            "build"
+                            "dist"
+                            "examples/taskboard/.rivet"
+                            "examples/taskboard/macos-host/.build"
+                            "platform/macos/.build"
+                            "platform/macos/host/.build"))])
+  (check-not-false
+   (member generated omitted-paths)
+   (format "source releases must omit generated tree ~a" generated)))

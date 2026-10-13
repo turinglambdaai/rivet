@@ -308,7 +308,8 @@
   (parameterize ([current-environment-variables env])
     (thunk)))
 
-(define (build-windows! project runtime stage configuration self-contained?)
+(define (build-windows! project runtime stage configuration self-contained?
+                        clean-native?)
   (define host-project (project-path project "windows" "RivetHost.vcxproj"))
   (unless (file-exists? host-project)
     (raise-arguments-error 'build-project!
@@ -335,11 +336,11 @@
   (with-windows-build-environment
    project runtime import-lib icon-resource
    (lambda ()
-     (run! 'build-project!
-           msbuild
-           (path->string host-project)
-           "/restore"
-           "/m"
+     (apply run! 'build-project!
+            msbuild
+            (path->string host-project)
+            "/restore"
+            "/m"
            ;; On ARM64 Windows hosts MSBuild otherwise selects the 32-bit
            ;; HostX86 cross compiler, whose address space cannot hold the
            ;; WinUI precompiled header (C3859/C1076). The x64-hosted toolchain
@@ -347,9 +348,16 @@
            "/p:PreferredToolArchitecture=x64"
            (string-append "/p:Configuration=" configuration)
            (string-append "/p:Platform=" (windows-platform))
-           (string-append "/p:RivetSelfContained="
-                          (if self-contained? "true" "false"))
-           (string-append "/p:OutDir=" out-dir))))
+            (append
+             ;; Packaging must never trust MSBuild's incremental decision:
+             ;; timestamp-preserving source restores and a previously built
+             ;; object graph can otherwise produce a perfectly valid but old
+             ;; executable. Rebuild deletes target outputs before compiling.
+             (if clean-native? '("/t:Rebuild") '())
+             (list
+              (string-append "/p:RivetSelfContained="
+                             (if self-contained? "true" "false"))
+              (string-append "/p:OutDir=" out-dir))))))
   (build-path stage "RivetHost.exe"))
 
 (define (with-macos-build-environment project framework-dir thunk)
@@ -464,7 +472,7 @@
 
   frameworks-dir)
 
-(define (build-macos! project runtime stage configuration)
+(define (build-macos! project runtime stage configuration clean-native?)
   (define swift (find-executable-path "swift"))
   (unless swift
     (error 'build-project! "swift was not found; install Xcode command line tools"))
@@ -479,7 +487,14 @@
                            "expected" package-file))
 
   (define build-dir (project-path project ".rivet" "build" "macos"))
-  (make-directory* build-dir)
+  ;; A distributable is worth a clean compile. SwiftPM normally tracks source
+  ;; changes correctly, but restored build caches can preserve mtimes and hand
+  ;; package an older RivetHost to the fresh stage directory. Removing only
+  ;; the native scratch tree keeps generated clients/backend work intact while
+  ;; making the package artifact provenance unambiguous.
+  (if clean-native?
+      (fresh-directory! build-dir)
+      (make-directory* build-dir))
   (define swift-configuration (string-downcase configuration))
 
   (with-macos-build-environment
@@ -567,7 +582,8 @@
 
 (define (build-project! project
                         #:configuration [configuration "Debug"]
-                        #:self-contained? [self-contained? #f])
+                        #:self-contained? [self-contained? #f]
+                        #:clean-native? [clean-native? #f])
   (generate-clients! project)
   (define runtime (discover-racket-runtime))
   (define stage (project-path project ".rivet" "stage"))
@@ -578,9 +594,10 @@
 
   (case (system-type 'os)
     [(windows)
-     (build-windows! project runtime stage configuration self-contained?)]
+     (build-windows! project runtime stage configuration self-contained?
+                     clean-native?)]
     [(macosx)
-     (build-macos! project runtime stage configuration)]
+     (build-macos! project runtime stage configuration clean-native?)]
     [(unix)
      (build-linux! project runtime stage configuration)]
     [else

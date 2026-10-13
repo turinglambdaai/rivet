@@ -15,9 +15,9 @@ RIVET_MINIMUM_UPDATABLE_VERSION=1.0.0        # optional; defaults to 0.0.0
 RIVET_UPDATE_ROLLOUT=100                     # optional; 0..100
 ```
 
-Run `raco rivet release`. The result is a signed MSI on Windows, a signed/notarized DMG on macOS, or an Ed25519-signed self-contained `.tar.gz` on Linux, plus a versioned portable zip, channel manifest, CycloneDX SBOM, and `THIRD_PARTY_NOTICES.txt`. The channel manifest describes the portable zip on Windows/macOS and on Linux without AppImage; when AppImage packaging is enabled, it describes the exact AppImage instead. Other platform installers remain direct-download artifacts. `release --development` exercises the same flow without production platform signing, but the update manifest still requires its independent Ed25519 key.
+Run `raco rivet release`. The result is a signed MSI on Windows, a signed/notarized DMG on macOS, or an Ed25519-signed self-contained `.tar.gz` on Linux, plus a versioned portable zip, channel manifest, CycloneDX SBOM, and `THIRD_PARTY_NOTICES.txt`. The signed channel always includes the portable zip; Windows also includes the exact MSI, and Linux includes the exact AppImage when that format is enabled. One feed therefore serves each supported install shape without deriving sibling URLs or trusting unsigned sidecars. DMG, deb, rpm, and tar.gz remain direct-download or package-manager artifacts. `release --development` exercises the same flow without production platform signing, but the update manifest still requires its independent Ed25519 key.
 
-On Linux the release additionally builds native system installers: a `.deb` (dpkg-deb, unprivileged, installs under `/opt/<name>` with a desktop entry), an `.rpm` (rpmbuild BUILDROOT, distro-independent), and an `.AppImage` (bundled GTK4 dependency closure, so the same file runs on older distributions). Select the set with the `linux-formats` project setting. The signed tar.gz and portable zip are always retained as release assets. When AppImage is enabled, the signed manifest carries its exact URL, size, SHA-256, and `appimage` installer kind, and release also writes a `.AppImage.sha256` sidecar; no product should infer an unsigned sibling URL. Package-manager installs upgrade through the package manager; AppImage installs use Rivet's verified atomic replacement. AppImage packaging requires a `linux-icon` PNG in rivet.rktd — the format mandates a top-level icon and Rivet fails closed rather than shipping a placeholder.
+On Linux the release additionally builds native system installers: a `.deb` (dpkg-deb, unprivileged, installs under `/opt/<name>` with a desktop entry), an `.rpm` (rpmbuild BUILDROOT, distro-independent), and an `.AppImage` (bundled GTK4 dependency closure, so the same file runs on older distributions). Select the set with the `linux-formats` project setting. The signed tar.gz and portable zip are always retained as release assets. When AppImage is enabled, the signed manifest carries both the portable ZIP and AppImage entries, each with its exact URL, size, SHA-256, and installer kind; release also writes a human-facing `.AppImage.sha256` sidecar, but clients trust the signed feed. Package-manager installs upgrade through the package manager; AppImage installs use Rivet's verified atomic replacement. AppImage packaging requires a `linux-icon` PNG in rivet.rktd — the format mandates a top-level icon and Rivet fails closed rather than shipping a placeholder.
 
 Applications that deliberately ship without an online update channel can run `raco rivet release --without-updates`. The command still builds, packages, platform-signs, verifies, and emits the installer, SBOM, and third-party notices; it skips only the channel manifest and does not read any `RIVET_UPDATE_*` credentials. Combine it with `--development` to exercise the unsigned release flow before publisher credentials exist. Omitting `--without-updates` keeps the fail-closed behavior above: all three update settings are required, and a partial configuration is an error.
 
@@ -147,7 +147,37 @@ The downloader is delegate-driven on purpose. Byte-iterating `URLSession.AsyncBy
 
 The handoff at the end of an install owns two further traps the module encodes: the spawned swap script takes ownership of the work directory (an eager `defer` cleanup would race the script's grace sleep and destroy the payload — call `RivetUpdateService.cleanupStaleWorkDirectories()` at startup to sweep directories left by crashed attempts), and a presented SwiftUI sheet silently vetoes `NSApplication.terminate`, so the module ends every sheet, terminates, and stops the run loop if the quit was deferred — a surviving old process could otherwise hold a single-instance lease and quietly kill the relaunched update.
 
-Windows hosts update through the MSI transaction (`msiexec` with elevation), and Linux AppImage/portable installs should use the engine's verified `prepare-platform-installation` / `execute-platform-installation!` replacement instead of re-implementing atomic swap in the host. Sharing the `RivetUpdate` pattern on those platforms belongs to their host story, not to each product.
+## Host-side updates on Windows and Linux
+
+Windows and Linux use the same authenticated client rather than reimplementing
+the macOS Swift module in C++: `make-updater` is the shared trust and transfer
+boundary. It verifies the Ed25519 wrapper before parsing, selects the artifact
+for the current install shape, enforces deadlines and byte limits, and verifies
+the signed size and SHA-256. Release manifests include both the portable ZIP
+and the native MSI on Windows, and both the portable ZIP and AppImage on Linux;
+pass `#:install-kind 'portable`, `'msi`, or `'appimage` so a host never derives
+or sidecar-trusts a sibling URL.
+
+Only the final OS handoff remains native, and Rivet ships that too:
+
+- Windows hosts link `rivet-host.vcxproj` and include
+  `platform/windows/update/update_handoff.hpp`. After the managed updater has
+  produced a verified MSI, `MsiHandoff::LaunchVerifiedInstaller` creates a
+  process-specific handoff, waits a bounded time for the old process to exit,
+  runs `msiexec /passive /norestart`, records a failure for the next launch,
+  and relaunches the application. The release callback runs after the helper
+  exists so single-instance ownership is dropped before the new process starts.
+  `ConsumeFailure` and `CleanupStaleAttempts` complete the startup lifecycle.
+- Linux keeps `prepare-platform-installation` /
+  `execute-platform-installation!` as the blessed AppImage swap path; GTK hosts
+  must not duplicate it. The linked `rivet::platform` target exposes
+  `DetectLinuxInstallKind` for pre-download UI policy and
+  `RelaunchInstalledAppImage` for the post-commit exec handoff, including lease
+  release. deb/rpm installations remain owned by the system package manager.
+
+The product supplies application id, current version, feed URL, public key,
+key id, a persistent rollout bucket, and localized UI. It does not own manifest
+parsing, cryptography, download watchdogs, staging, or installer scripts.
 
 ## External validation points
 

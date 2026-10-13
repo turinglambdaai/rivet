@@ -65,6 +65,12 @@
                     windows-project))
     (check-true (regexp-match? #rx"RIVET_MACOS_MIN_VERSION" macos-package))
     (check-true (regexp-match? #rx"RivetDevice" macos-package))
+    (check-true
+     (string-contains? macos-package
+                       ".package(url: \"https://github.com/turinglambdaai/rivet.git\"")
+     "the scaffold consumes Rivet through its released SwiftPM package")
+    (check-false (string-contains? macos-package ".package(path:")
+                 "the scaffold must not depend on a Rivet checkout path")
     (check-true (regexp-match? #rx"rivet::platform" linux-cmake)
                 "the scaffold links the rivet platform library target")
     (check-false (regexp-match? #px"\\$\\{RIVET_ROOT\\}/platform/linux/[a-z/]+[.]cpp"

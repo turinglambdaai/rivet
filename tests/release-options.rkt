@@ -73,6 +73,23 @@
     (check-true
      (string-suffix? (update-artifact-url artifact) zip-name))
 
+    ;; Windows feeds carry both install shapes. Portable and MSI clients use
+    ;; the same signed wrapper but never infer or sidecar-trust a sibling URL.
+    (define msi (build-path temp-root "dist" "Example-2.3.4-windows-x64.msi"))
+    (call-with-output-file msi
+      #:exists 'truncate/replace #:mode 'binary
+      (lambda (out) (write-bytes #"msi-payload" out)))
+    (define windows-artifacts
+      (parameterize ([current-environment-variables complete-env])
+        (release-update-artifacts (release-update-environment #t)
+                                  project archive msi
+                                  #:platform 'windows
+                                  #:architecture 'x64)))
+    (check-equal? (map update-artifact-installer windows-artifacts)
+                  '(zip msi))
+    (check-equal? (map update-artifact-size windows-artifacts)
+                  (list (file-size archive) (file-size msi)))
+
     ;; AppImage is selected by the signed manifest itself. Products never
     ;; derive a sibling URL or trust a detached sidecar instead of the feed.
     (define appimage-project
@@ -96,6 +113,15 @@
     (check-true
      (string-suffix? (update-artifact-url appimage-artifact)
                      (path->string (file-name-from-path appimage))))
+    (define linux-artifacts
+      (parameterize ([current-environment-variables complete-env])
+        (release-update-artifacts (release-update-environment #t)
+                                  appimage-project archive
+                                  (build-path temp-root "unused.tar.gz")
+                                  #:platform 'linux
+                                  #:architecture 'x64)))
+    (check-equal? (map update-artifact-installer linux-artifacts)
+                  '(zip appimage))
 
     (define deb-only-project
       (rivet-project temp-root
@@ -108,7 +134,17 @@
                                  deb-only-project archive
                                  #:platform 'linux
                                  #:architecture 'x64)))
-    (check-equal? (update-artifact-installer fallback-artifact) 'zip))
+    (check-equal? (update-artifact-installer fallback-artifact) 'zip)
+
+    ;; A successful release leaves only publishable files in dist. The
+    ;; unpacked package is an installer-builder staging input, never output.
+    (define release-stage (build-path temp-root "dist" "Example-linux-x64"))
+    (make-directory* release-stage)
+    (call-with-output-file (build-path release-stage "RivetHost")
+      #:exists 'truncate/replace
+      (lambda (out) (display "stage" out)))
+    (cleanup-release-stage! release-stage)
+    (check-false (directory-exists? release-stage)))
   (lambda ()
     (when (directory-exists? temp-root)
       (delete-directory/files temp-root))))

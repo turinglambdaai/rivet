@@ -390,7 +390,12 @@
   (define executable
     (build-project! project
                     #:configuration "Release"
-                    #:self-contained? #t))
+                    #:self-contained? #t
+                    ;; A release package is a provenance boundary. Do not let
+                    ;; an incremental Swift/MSBuild cache decide which source
+                    ;; revision enters it; Linux already recreates its CMake
+                    ;; build directory for every invocation.
+                    #:clean-native? #t))
   (define stage (path-only executable))
   (define name (project-name project))
 

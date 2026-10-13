@@ -15,7 +15,7 @@ Statuses: **above** (differentiating), **at** (floor met), **below**
 | --- | --- | --- |
 | App foundation | WebView-based UI layer | **above** — native SwiftUI/WinUI/GTK hosts, no WebView: ~30 MB artifacts, native startup and accessibility from the platform toolkits |
 | IPC discipline | `invoke` string commands / `ipcRenderer` channels | **above** — RVT1 typed RPC/event/state contracts with generated Swift, C++, and Kotlin clients and a closed schema |
-| In-app updates | updater plugin / electron-updater, signed feeds | **at** — Ed25519-signed manifests, verify-before-parse, managed watchdogs, install journal + recovery, AppImage atomic replacement, and a shared macOS host client (`RivetUpdate`); no delta downloads (Tauri 2 has none either) |
+| In-app updates | updater plugin / electron-updater, signed feeds | **at** — Ed25519-signed manifests, verify-before-parse, managed watchdogs, install journal + recovery, AppImage atomic replacement, a shared macOS host client (`RivetUpdate`), Windows MSI handoff, and Linux install-shape/relaunch helpers; no delta downloads (Tauri 2 has none either) |
 | Installers | dmg, NSIS/MSI, deb/rpm/AppImage | **at** — DMG, MSI, deb, rpm, AppImage, portable archives, SBOM and third-party notices per release |
 | Single instance / deep links | plugins or manual | **at** — lease per platform, activation routing, `--toggle`-style second-instance handoff |
 | Autostart, tray, notifications, secure storage, crash hooks | plugins / Node APIs | **at** — first-party adapters on every desktop platform, capability-reported, fail-closed without a provider |

@@ -1,8 +1,8 @@
 #lang racket/base
 
-;; The Linux platform source fragment is the single source of truth for
-;; hosts embedding the runtime; hand-copied downstream lists are exactly
-;; what died on global_shortcuts.cpp and clipboard.cpp. Guards:
+;; The Linux platform source fragment is the library's private single source
+;; of truth; hand-copied downstream lists are exactly what died on
+;; global_shortcuts.cpp and clipboard.cpp. Guards:
 ;;
 ;;   1. every source path the fragment lists exists in the package — a
 ;;      rename or deletion must update the fragment in the same commit;
@@ -63,4 +63,7 @@
     (check-false
      (regexp-match? #px"\\$\\{RIVET_ROOT\\}/platform/linux/system/[a-z_]+\\.cpp"
                     host-cmake)
-     "the host template must not carry its own copy of the source list")))
+     "the host template must not carry its own copy of the source list")
+    (check-true
+     (string-contains? fragment "not a downstream integration surface")
+     "the internal fragment must not invite downstream source compilation")))

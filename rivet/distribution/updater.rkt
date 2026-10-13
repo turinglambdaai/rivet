@@ -95,12 +95,13 @@
                               #:key-id key-id))
     (lambda () (close-input-port in))))
 
-(define install-kinds '(portable appimage package-manager))
+(define install-kinds '(portable msi appimage package-manager))
 
 (define (artifact-matches-install-kind? artifact install-kind)
   (or (not install-kind)
       (case install-kind
         [(portable) (eq? (update-artifact-installer artifact) 'zip)]
+        [(msi) (eq? (update-artifact-installer artifact) 'msi)]
         [(appimage) (eq? (update-artifact-installer artifact) 'appimage)]
         [(package-manager)
          (and (memq (update-artifact-installer artifact) '(deb rpm)) #t)])))
@@ -108,7 +109,7 @@
 (define (select-update config manifest #:install-kind [install-kind #f])
   (unless (or (not install-kind) (memq install-kind install-kinds))
     (raise-argument-error 'select-update
-                          "(or/c #f 'portable 'appimage 'package-manager)"
+                          "(or/c #f 'portable 'msi 'appimage 'package-manager)"
                           install-kind))
   (cond
     [(not (string=? (updater-config-application-id config)

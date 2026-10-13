@@ -3,8 +3,8 @@
 (define collection 'multi)
 ;; Racket package versions reject a trailing ".0" component. Release tags and
 ;; native artifacts remain three-component SemVer via `release-version`.
-(define version "0.10")
-(define release-version "0.10.0")
+(define version "0.11")
+(define release-version "0.11.0")
 (define pkg-desc "Native application foundation for Racket")
 (define pkg-authors '(turinglambdaai))
 (define license 'MIT)
@@ -26,9 +26,14 @@
 ;; the release smoke immediately after compiling every platform adapter.
 (define source-omit-files
   '(".rivet"
+    ".build"
     "build"
     "dist"
-    "platform/macos/.build"))
+    "examples/taskboard/.rivet"
+    "examples/taskboard/macos-host/.build"
+    "platform/macos/.build"
+    "platform/macos/host/.build"
+    "platform/macos/Integration/.build"))
 
 (define raco-commands
   '(("rivet" rivet-cli/main "create, build, and run Rivet applications" #f)))

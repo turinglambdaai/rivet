@@ -192,7 +192,7 @@ raco rivet release
 
 For publisher-signed output, use `raco rivet package --production` with the platform signing credentials described in [docs/production-signing.md](docs/production-signing.md).
 
-`release` adds the formal installer, independently signed update manifest, SBOM, and third-party notices. See [Release and updates](docs/release-and-updates.md); update signing keys are separate from Authenticode/Developer ID credentials.
+`release` adds the formal installer, independently signed update manifest, SBOM, and third-party notices. The shared updater covers authenticated check/download plus native macOS bundle swap, Windows MSI handoff, and Linux AppImage replacement, so products provide policy and UI instead of reimplementing security-critical plumbing. See [Release and updates](docs/release-and-updates.md); update signing keys are separate from Authenticode/Developer ID credentials.
 
 ## RPC, Event, State, Cancel
 

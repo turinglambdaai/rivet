@@ -1,20 +1,9 @@
-# The canonical Linux platform source list for hosts embedding the Rivet
-# runtime. This fragment is the single source of truth — rivet adds new
-# platform translation units here (clipboard, global shortcuts, file
-# dialogs, ...) so downstream CMakeLists that include() it cannot drift
-# behind the package and die on undefined references at link time.
-#
-# Usage in a host CMakeLists (RIVET_ROOT must be set first):
-#
-#   include("${RIVET_ROOT}/platform/linux/rivet_linux_sources.cmake")
-#   add_executable(RivetHost src/main.cpp ${RIVET_LINUX_PLATFORM_SOURCES})
-#   target_include_directories(RivetHost PRIVATE
-#     "${CMAKE_CURRENT_SOURCE_DIR}" ${RIVET_LINUX_INCLUDE_DIRS}
-#     "$ENV{RIVET_RACKET_INCLUDE}")
-#
-# Downstreams that hand-copy this list instead take ownership of a file
-# they cannot see change; every past breakage (global_shortcuts.cpp,
-# clipboard.cpp) was that drift.
+# Internal source manifest for the released `rivet::platform` library target.
+# This remains the single source of truth for Rivet's own CMake project, but it
+# is not a downstream integration surface: applications add_subdirectory the
+# installed/released platform package and link `rivet::platform`. They never
+# include this fragment or compile these translation units into their own
+# executable (issue #238 supersedes the transitional #234 contract).
 
 include_guard(GLOBAL)
 
@@ -33,6 +22,7 @@ set(RIVET_LINUX_PLATFORM_SOURCES
   "${RIVET_ROOT}/platform/linux/system/system_services_internal.cpp"
   "${RIVET_ROOT}/platform/linux/system/tray.cpp"
   "${RIVET_ROOT}/platform/linux/theme/theme.cpp"
+  "${RIVET_ROOT}/platform/linux/update/update_handoff.cpp"
   "${RIVET_ROOT}/runtime/src/protocol.cpp"
 )
 
@@ -41,5 +31,6 @@ set(RIVET_LINUX_INCLUDE_DIRS
   "${RIVET_ROOT}/platform/linux/runtime"
   "${RIVET_ROOT}/platform/linux/system"
   "${RIVET_ROOT}/platform/linux/theme"
+  "${RIVET_ROOT}/platform/linux/update"
   "${RIVET_ROOT}/runtime/include"
 )

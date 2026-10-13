@@ -1,12 +1,8 @@
 // swift-tools-version: 6.0
 
-import Foundation
 import PackageDescription
 
-guard let rivetRoot = ProcessInfo.processInfo.environment["RIVET_ROOT"],
-      !rivetRoot.isEmpty else {
-    fatalError("RIVET_ROOT is not set. Build this app through raco rivet build/dev.")
-}
+import Foundation
 
 guard let racketFrameworkDir = ProcessInfo.processInfo.environment["RIVET_RACKET_FRAMEWORK_DIR"],
       !racketFrameworkDir.isEmpty else {
@@ -19,17 +15,17 @@ let package = Package(
     name: "RivetHost",
     platforms: [.macOS(macosMinVersion)],
     dependencies: [
-        .package(path: rivetRoot + "/platform/macos")
+        .package(url: "https://github.com/turinglambdaai/rivet.git", from: "0.10.0")
     ],
     targets: [
         .executableTarget(
             name: "RivetHost",
             dependencies: [
-                .product(name: "RivetRuntime", package: "macos"),
-                .product(name: "RivetDevice", package: "macos"),
-                .product(name: "RivetEmbedding", package: "macos"),
-                .product(name: "RivetSystem", package: "macos"),
-                .product(name: "RivetUI", package: "macos")
+                .product(name: "RivetRuntime", package: "rivet"),
+                .product(name: "RivetDevice", package: "rivet"),
+                .product(name: "RivetEmbedding", package: "rivet"),
+                .product(name: "RivetSystem", package: "rivet"),
+                .product(name: "RivetUI", package: "rivet")
             ],
             path: "Sources/RivetHost",
             linkerSettings: [

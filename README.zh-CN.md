@@ -190,7 +190,7 @@ raco rivet release
 
 需要正式发行签名时，按 [生产签名文档](docs/production-signing.md) 配置凭据后执行 `raco rivet package --production`。
 
-`release` 会继续生成正式 installer、独立 Ed25519 签名的更新 manifest、SBOM 与第三方许可声明。更新私钥和平台发布证书彼此独立，详见[发布与更新](docs/release-and-updates.md)。
+`release` 会继续生成正式 installer、独立 Ed25519 签名的更新 manifest、SBOM 与第三方许可声明。共用 updater 负责可信检查与下载，并覆盖 macOS bundle 换装、Windows MSI 交接和 Linux AppImage 原子替换；产品只需要提供策略与本地化 UI，不再重复实现安全关键流程。更新私钥和平台发布证书彼此独立，详见[发布与更新](docs/release-and-updates.md)。
 
 ## RPC、Event、State、Cancel
 
