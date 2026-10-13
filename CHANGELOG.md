@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.10.0
+
+- Host platforms ship as linkable packages — downstream products never
+  compile Rivet sources into their own build lists (constraint recorded
+  in #238). Linux gains a `rivet::platform` static library under
+  `platform/linux/` that the host template, the integration binary, and
+  the taskboard example `add_subdirectory()` and link; the scaffold's
+  generated CMake does the same. Windows gains
+  `platform/windows/rivet-host.vcxproj` (static library) which the host
+  template references via `ProjectReference`, with hybrid-CRT hosts
+  forwarding their `RuntimeLibrary` choice through
+  `RivetRuntimeLibrary`. A root `Package.swift` exposes the macOS
+  products as a tag-resolvable SwiftPM package
+  (`.package(url: …, from: "0.10.0")`) beside the in-repo path package.
+  The WinUI HWND bridge moves to `winui_window.hpp` so the Windows
+  library compiles without Windows App SDK include paths.
 ## 0.9.0
 
 - Close the last below-floor commercial capability gap with first-party
