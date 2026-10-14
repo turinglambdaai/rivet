@@ -20,6 +20,10 @@ let package = Package(
             targets: ["RivetDeviceAppleSecurity"]
         ),
         .library(name: "RivetDeviceSession", targets: ["RivetDeviceSession"]),
+        .library(
+            name: "RivetDeviceAppleTransport",
+            targets: ["RivetDeviceAppleTransport"]
+        ),
         .library(name: "RivetWatchConnectivity", targets: ["RivetWatchConnectivity"]),
         .library(name: "RivetEmbedding", targets: ["RivetEmbedding"]),
         .library(name: "RivetSystem", targets: ["RivetSystem"]),
@@ -49,6 +53,16 @@ let package = Package(
             path: "Sources/RivetDeviceSession",
             linkerSettings: [
                 .linkedFramework("CryptoKit")
+            ]
+        ),
+        .target(
+            name: "RivetDeviceAppleTransport",
+            dependencies: ["RivetDevice", "RivetDeviceSession"],
+            path: "Sources/RivetDeviceAppleTransport",
+            linkerSettings: [
+                .linkedFramework("CryptoKit"),
+                .linkedFramework("Network"),
+                .linkedFramework("Security")
             ]
         ),
         .target(
@@ -107,6 +121,11 @@ let package = Package(
             name: "RivetDeviceSessionTests",
             dependencies: ["RivetDevice", "RivetDeviceSession"],
             path: "Tests/RivetDeviceSessionTests"
+        ),
+        .testTarget(
+            name: "RivetDeviceAppleTransportTests",
+            dependencies: ["RivetDeviceAppleTransport", "RivetDeviceSession"],
+            path: "Tests/RivetDeviceAppleTransportTests"
         ),
         .testTarget(
             name: "RivetSystemTests",

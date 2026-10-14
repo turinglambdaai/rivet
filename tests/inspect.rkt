@@ -52,6 +52,8 @@
    (check-not-false
     (member "network-listener" (hash-ref device-surface 'pending)))
    (check-not-false
+    (member "tls-adapter" (hash-ref device-surface 'implemented)))
+   (check-false
     (member "tls-adapter" (hash-ref device-surface 'pending)))
    (check-not-false
     (member "discovery" (hash-ref device-surface 'pending)))

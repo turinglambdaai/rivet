@@ -99,9 +99,11 @@ These types do not create trust by themselves. `RivetDeviceAppleSecurity`
 implements the Apple pairing-credential store with service-scoped,
 device-local Keychain items. `RivetDeviceSession` implements the bounded
 `RVD1` preface codec plus the reconnect and pairing state machines for macOS
-and iOS. Platform adapters must still provide authenticated TLS, server-key
-pinning and identity storage, stream integration, and explicit native
-confirmation UI; Windows still needs its Credential Manager adapter.
+and iOS. `RivetDeviceAppleTransport` configures Network.framework TLS, verifies
+the server SPKI pin, bounds connection setup, and keeps preface bytes separate
+from the accepted RVT1 stream. Apple server-identity provisioning, listener
+lifecycle, discovery, and explicit native confirmation UI remain; Windows also
+needs its Credential Manager and transport adapters.
 
 This design follows the core idea in [DSLs for Safe iOS/watchOS Communication](https://defn.io/2025/02/16/type-safe-watchos-communication/): encode the request/response relationship in types and centralize dispatch instead of spreading dictionaries, route strings, and casts throughout both apps. Rivet generates that relationship from the shared Racket schema while keeping the exported device surface explicit.
 

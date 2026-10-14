@@ -187,7 +187,10 @@ jobs:
               CODE_SIGNING_ALLOWED=NO \
               build
           done
-          for scheme in RivetDeviceAppleSecurity RivetDeviceSession; do
+          for scheme in \
+            RivetDeviceAppleSecurity \
+            RivetDeviceSession \
+            RivetDeviceAppleTransport; do
             for platform in iOS macOS; do
               xcodebuild \
                 -workspace . \

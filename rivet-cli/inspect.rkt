@@ -211,10 +211,10 @@
                 "pairing-state-machine"
                 "credential-authentication"
                 "secure-storage-adapter"
-                "session-preface")
+                "session-preface"
+                "tls-adapter")
               'pending
               '("network-listener"
-                "tls-adapter"
                 "discovery"
                 "product-ui"))
         'readiness

@@ -9,6 +9,13 @@
   a credential-persistence gate. Language-neutral golden vectors and
   deterministic malformed-input, ordering, timeout, and authentication tests
   pin the contract before Network.framework integration.
+- Add `RivetDeviceAppleTransport` for the next Apple companion layer. It
+  configures Network.framework for TLS 1.2+, forward-secret AEAD suites, and
+  the `rivet-device/1` ALPN,
+  authenticates either an exact server SPKI SHA-256 pin or an explicit
+  provisional-pairing identity, extracts canonical SPKI DER from X.509, bounds
+  connection setup to 30 seconds, and preserves the one-way `RVD1` to RVT1
+  stream transition without exposing a listener or discovery service.
 
 ## 0.11.0
 

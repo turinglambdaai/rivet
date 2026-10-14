@@ -173,29 +173,35 @@ the secure-storage adapter as implemented. M2b adds `RivetDeviceSession`: the
 byte-exact incremental `RVD1` codec, reconnect HMAC, client/server ordering,
 pairing flow, timeout policy, and the client credential-persistence gate. A
 language-neutral fixture pins all nine record types, the proof, and pairing
-code. Diagnostics now report the session preface as implemented while the
-listener, TLS adapter, discovery, and product UI remain pending. No product
-repository or UI was changed.
+code. M2c adds `RivetDeviceAppleTransport`: TLS 1.2+, forward-secret AEAD
+cipher suites and ALPN policy, canonical X.509 SPKI extraction and SHA-256
+pinning, explicit provisional-pairing trust, a 30-second connection deadline,
+and an ordered Network.framework stream that cannot fall back from malformed
+`RVD1` to RVT1. Diagnostics now report the session preface and TLS adapter as
+implemented while listener, identity provisioning, discovery, and product UI
+remain pending. No product repository or UI was changed.
 
 ## Next implementation handoff
 
-M2a and M2b are complete. Deterministic tests cover secure-store lifecycle and
+M2a through M2c are complete. Deterministic tests cover secure-store lifecycle and
 failure mapping; all session record types and cryptographic vectors;
 fragmented/coalesced reads; size, shape, ordering, duplicate, and timeout
 failures; indistinguishable reconnect failures; dual-confirmation pairing; and
-the persistence-before-acceptance rule. The Swift package passes, both new
-targets build for generic iOS and macOS, and `RivetWatchConnectivity` continues
-to build for generic iOS and watchOS.
+the persistence-before-acceptance rule. Apple transport tests additionally
+cover exact SPKI hashing, malformed DER, invalid pins, fragmented/coalesced
+stream reads, fail-closed protocol errors, and the irreversible transition to
+application bytes. The Swift package passes, all Apple device targets build for
+generic iOS and macOS, and `RivetWatchConnectivity` continues to build for
+generic iOS and watchOS.
 
-The next implementation agent owns bounded M2c: an Apple TLS identity/pinning
-policy and Network.framework stream adapter that feeds `RivetDeviceSession`
-without changing its wire contract. Keep listener lifecycle, Bonjour discovery,
-QR/manual pairing UI, product UI, and product-repository changes out of that
-patch. The adapter must enforce `rivet-device/1`, TLS 1.2+, the SPKI SHA-256
-pin, the 30-second connection budget, fail-closed decoding, and the transition
-to ordinary RVT1 only after the session state machine accepts. Do not add any
-iOS path that downloads or executes Racket code; executable mobile logic must
-remain bundled with the reviewed application.
+The next implementation agent owns bounded M2d: a disabled-by-default macOS
+listener and per-install TLS identity provisioning boundary. It must cap
+accepted connections before session allocation, close all connections on
+disable/termination, use `RivetDeviceAppleTransport` for every accepted stream,
+and expose deterministic state for tests. Keep Bonjour discovery, QR/manual
+pairing UI, product UI, and product-repository changes out of that patch. Do
+not add any iOS path that downloads or executes Racket code; executable mobile
+logic must remain bundled with the reviewed application.
 
 ### M3 — second desktop host and Android client
 
