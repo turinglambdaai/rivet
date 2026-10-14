@@ -46,6 +46,8 @@
    (check-false
     (member "secure-storage-adapter" (hash-ref device-surface 'pending)))
    (check-not-false
+    (member "session-preface" (hash-ref device-surface 'implemented)))
+   (check-false
     (member "session-preface" (hash-ref device-surface 'pending)))
    (check-not-false
     (member "network-listener" (hash-ref device-surface 'pending)))

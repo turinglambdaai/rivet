@@ -22,6 +22,11 @@ let package = Package(
     products: [
         .library(name: "RivetRuntime", targets: ["RivetRuntime"]),
         .library(name: "RivetDevice", targets: ["RivetDevice"]),
+        .library(
+            name: "RivetDeviceAppleSecurity",
+            targets: ["RivetDeviceAppleSecurity"]
+        ),
+        .library(name: "RivetDeviceSession", targets: ["RivetDeviceSession"]),
         .library(name: "RivetWatchConnectivity", targets: ["RivetWatchConnectivity"]),
         .library(name: "RivetEmbedding", targets: ["RivetEmbedding"]),
         .library(name: "RivetSystem", targets: ["RivetSystem"]),
@@ -36,6 +41,22 @@ let package = Package(
         .target(
             name: "RivetDevice",
             path: "platform/macos/Sources/RivetDevice"
+        ),
+        .target(
+            name: "RivetDeviceAppleSecurity",
+            dependencies: ["RivetDevice"],
+            path: "platform/macos/Sources/RivetDeviceAppleSecurity",
+            linkerSettings: [
+                .linkedFramework("Security")
+            ]
+        ),
+        .target(
+            name: "RivetDeviceSession",
+            dependencies: ["RivetDevice", "RivetRuntime"],
+            path: "platform/macos/Sources/RivetDeviceSession",
+            linkerSettings: [
+                .linkedFramework("CryptoKit")
+            ]
         ),
         .target(
             name: "RivetWatchConnectivity",
@@ -83,6 +104,16 @@ let package = Package(
             name: "RivetDeviceTests",
             dependencies: ["RivetDevice"],
             path: "platform/macos/Tests/RivetDeviceTests"
+        ),
+        .testTarget(
+            name: "RivetDeviceAppleSecurityTests",
+            dependencies: ["RivetDevice", "RivetDeviceAppleSecurity"],
+            path: "platform/macos/Tests/RivetDeviceAppleSecurityTests"
+        ),
+        .testTarget(
+            name: "RivetDeviceSessionTests",
+            dependencies: ["RivetDevice", "RivetDeviceSession"],
+            path: "platform/macos/Tests/RivetDeviceSessionTests"
         ),
         .testTarget(
             name: "RivetSystemTests",

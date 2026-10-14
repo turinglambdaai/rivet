@@ -97,13 +97,33 @@ then asks the gateway to close every session owned by that paired device.
 
 These types do not create trust by themselves. `RivetDeviceAppleSecurity`
 implements the Apple pairing-credential store with service-scoped,
-device-local Keychain items. Platform adapters must still provide authenticated
-TLS, server-key pinning and identity storage, bounded preface decoding, and
-explicit native confirmation UI; Windows still needs its Credential Manager
-adapter.
+device-local Keychain items. `RivetDeviceSession` implements the bounded
+`RVD1` preface codec plus the reconnect and pairing state machines for macOS
+and iOS. Platform adapters must still provide authenticated TLS, server-key
+pinning and identity storage, stream integration, and explicit native
+confirmation UI; Windows still needs its Credential Manager adapter.
 
 This design follows the core idea in [DSLs for Safe iOS/watchOS Communication](https://defn.io/2025/02/16/type-safe-watchos-communication/): encode the request/response relationship in types and centralize dispatch instead of spreading dictionaries, route strings, and casts throughout both apps. Rivet generates that relationship from the shared Racket schema while keeping the exported device surface explicit.
 
 ## Platform boundary
 
 The Swift package declares macOS 14, iOS/iPadOS 16, and watchOS 9 as its current baselines. `RivetRuntime` and `RivetDevice` are portable Apple targets. `RivetEmbedding` is the Racket CS embedding layer; bringing it to iPhone/iPad requires the portable-bytecode static runtime and boot artifacts. `RivetSystem` remains the macOS system-services adapter.
+
+For App Store builds, an embedded Racket runtime is an implementation detail,
+not permission to install new application logic after review. Executable
+Racket modules and bytecode that define iOS application behavior must ship in
+the submitted app bundle and be cross-compiled for the iOS target during the
+build. A release build must run on physical devices without JIT, unsigned-
+executable-memory, disabled-library-validation, or similar runtime exceptions.
+Network and WatchConnectivity channels carry typed data, state, and protocol
+messages; they must not download or execute code that introduces or changes
+app functionality. This preserves Rivet's normal native UI architecture while
+respecting [App Review Guideline
+2.5.2](https://developer.apple.com/app-store/review/guidelines/#software-requirements).
+Any future mini-app or plug-in product is a separate architecture and review-
+policy decision, not an extension of the default Rivet runtime.
+
+The first Apple vertical slice does not embed Racket on iPhone or Apple Watch:
+the desktop owns the backend, the iPhone is an authenticated native companion,
+and the watch is a typed companion to the phone. A standalone iOS runtime is a
+later release gate and is not implied by the portable device/session targets.

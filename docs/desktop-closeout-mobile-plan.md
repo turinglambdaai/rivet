@@ -169,30 +169,33 @@ to-live-session revocation. `RivetDeviceAppleSecurity` now implements the
 pairing store with service-scoped generic-password items, a versioned envelope,
 device-local accessibility, disabled synchronization, secret-free stable
 errors, and an injectable Security.framework boundary. `inspect --json` lists
-the secure-storage adapter as implemented while the listener, TLS adapter,
-discovery, and product UI remain pending. No product repository or UI was
-changed.
+the secure-storage adapter as implemented. M2b adds `RivetDeviceSession`: the
+byte-exact incremental `RVD1` codec, reconnect HMAC, client/server ordering,
+pairing flow, timeout policy, and the client credential-persistence gate. A
+language-neutral fixture pins all nine record types, the proof, and pairing
+code. Diagnostics now report the session preface as implemented while the
+listener, TLS adapter, discovery, and product UI remain pending. No product
+repository or UI was changed.
 
 ## Next implementation handoff
 
-M2a is complete. Its deterministic tests cover add/update, exact load,
-service-scoped listing, idempotent removal, corrupt and version-mismatched
-envelopes, metadata and secret lengths, Security status mapping, and secret-
-free errors. The full Swift package passes; the new target builds for generic
-iOS and macOS; and `RivetWatchConnectivity` still builds for generic iOS and
-watchOS.
+M2a and M2b are complete. Deterministic tests cover secure-store lifecycle and
+failure mapping; all session record types and cryptographic vectors;
+fragmented/coalesced reads; size, shape, ordering, duplicate, and timeout
+failures; indistinguishable reconnect failures; dual-confirmation pairing; and
+the persistence-before-acceptance rule. The Swift package passes, both new
+targets build for generic iOS and macOS, and `RivetWatchConnectivity` continues
+to build for generic iOS and watchOS.
 
-The next implementation agent owns the bounded M2b session-preface codec and
-state machine. Implement the byte-exact `RVD1` contract and acceptance evidence
-in `network-device-channel.md` as pure incremental, in-memory components before
-connecting them to Network.framework. Do not add a listener, discovery, TLS,
-pairing UI, product UI, or product-repository changes in the same patch.
-
-M2b must consume the existing pairing/authentication core rather than duplicate
-credential or confirmation policy. Move only a `session-preface` capability to
-the implemented diagnostics inventory after its golden, fragmentation,
-boundary, ordering, timeout, and indistinguishable-authentication-failure tests
-pass. Keep the listener, TLS adapter, discovery, and product UI pending.
+The next implementation agent owns bounded M2c: an Apple TLS identity/pinning
+policy and Network.framework stream adapter that feeds `RivetDeviceSession`
+without changing its wire contract. Keep listener lifecycle, Bonjour discovery,
+QR/manual pairing UI, product UI, and product-repository changes out of that
+patch. The adapter must enforce `rivet-device/1`, TLS 1.2+, the SPKI SHA-256
+pin, the 30-second connection budget, fail-closed decoding, and the transition
+to ordinary RVT1 only after the session state machine accepts. Do not add any
+iOS path that downloads or executes Racket code; executable mobile logic must
+remain bundled with the reviewed application.
 
 ### M3 — second desktop host and Android client
 
@@ -204,7 +207,11 @@ discovery/TLS streams to the existing Kotlin runtime and generated device API.
 Only after the shared contract is stable, pursue Android JNI/portable Racket +
 Compose and the corresponding Apple embedded-runtime application flow. Each
 requires generated projects, lifecycle/process-death tests, signing, packaging,
-and device/emulator round trips before developer-preview status.
+and device/emulator round trips before developer-preview status. The Apple
+flow must cross-compile bundled application modules for the iOS target, pass a
+Release build and physical-device run without JIT or executable-memory runtime
+exceptions, and contain no post-review code-download path before App Store
+submission is considered supported.
 
 ## Completion cleanup
 

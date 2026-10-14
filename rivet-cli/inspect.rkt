@@ -210,10 +210,10 @@
                 "session-revocation"
                 "pairing-state-machine"
                 "credential-authentication"
-                "secure-storage-adapter")
+                "secure-storage-adapter"
+                "session-preface")
               'pending
-              '("session-preface"
-                "network-listener"
+              '("network-listener"
                 "tls-adapter"
                 "discovery"
                 "product-ui"))

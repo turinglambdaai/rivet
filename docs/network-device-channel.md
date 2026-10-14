@@ -1,11 +1,11 @@
 # Network device channel design
 
 Status: active design for [issue #85](https://github.com/turinglambdaai/rivet/issues/85).
-The transport-independent `RivetDeviceGateway` policy/session core and pairing/
-authentication state machine are implemented and tested in memory. The Apple
-pairing-credential Keychain adapter is also implemented. No network listener,
-TLS/pinning adapter, pairing UI, or generated mobile application is shipped
-yet.
+The transport-independent `RivetDeviceGateway` policy/session core, pairing/
+authentication lifecycle, and byte-exact session preface are implemented and
+tested in memory. The Apple pairing-credential Keychain adapter is also
+implemented. No network listener, TLS/pinning adapter, pairing UI, or generated
+mobile application is shipped yet.
 
 ## Problem
 
@@ -135,16 +135,18 @@ omits it. `RivetDeviceSessionAuthenticator` uses one public authentication
 failure for all mismatches, updates last-used metadata, and couples credential
 revocation to `RivetDeviceGateway` session closure. `RivetDeviceAppleSecurity`
 implements that pairing store with service-scoped, device-local Keychain
-generic-password items. Platform TLS identity/pinning, Windows Credential
-Manager storage, QR/manual UI, and wire messages remain unimplemented.
+generic-password items. `RivetDeviceSession` implements the bounded wire
+records, HMAC reconnect, pairing ordering, credential-persistence gate, and
+server/client state machines. Platform TLS identity/pinning, Windows Credential
+Manager storage, QR/manual UI, and stream adapters remain unimplemented.
 
 ## Session protocol
 
 TLS negotiates the application protocol `rivet-device/1`. Before RVT1, a
 bounded device-session preface authenticates the paired credential, identifies
 the requested application and protocol version, and returns the effective
-scopes and limits. The byte-level v1 contract below is approved for M2b but not
-yet implemented.
+scopes and limits. `RivetDeviceSession` implements the byte-level v1 contract
+below as transport-independent Swift code for macOS and iOS.
 
 ### Preface record
 
@@ -299,9 +301,8 @@ pairing flow.
 
 ### M2b acceptance evidence
 
-Implement the preface as a pure incremental codec and explicit state machine
-before connecting it to Network.framework or a listener. M2b is complete only
-when the repository contains:
+The preface is a pure incremental codec and explicit state machine, kept
+separate from Network.framework and listeners. The repository contains:
 
 - a language-neutral golden fixture for every record type, the authentication
   proof, and the pairing code;
@@ -316,9 +317,10 @@ when the repository contains:
 - an inventory update that moves the session-preface finding from pending only
   after the codec and state-machine tests pass.
 
-The golden fixture is the compatibility boundary for later Kotlin and Windows
-implementations. A platform adapter may split or combine stream writes, but it
-must not reinterpret, reorder, or extend these records.
+These checks run in `RivetDeviceSessionTests`, and
+`tests/device-session-golden.txt` is the compatibility boundary for later
+Kotlin and Windows implementations. A platform adapter may split or combine
+stream writes, but it must not reinterpret, reorder, or extend these records.
 
 After authentication the gateway emits the ordinary RVT1 v1 Hello frame. Existing Swift and Kotlin `RivetClient` implementations can then own the ordered byte stream. The network wrapper is responsible for TLS, the preface, reconnect policy, and converting the resulting stream into the input/output handles those clients already accept.
 

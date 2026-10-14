@@ -357,6 +357,26 @@ public actor RivetDevicePairingCoordinator {
         }
     }
 
+    /// Clears a disconnected transport attempt without treating a network
+    /// interruption as a failed user confirmation.
+    public func abandonAttempt(
+        windowID: UUID,
+        attemptID: UUID,
+        now: Date = Date()
+    ) throws {
+        try requireActiveWindow(id: windowID, now: now)
+        guard var window = activeWindow,
+              let attempt = window.attempt,
+              attempt.id == attemptID else {
+            throw RivetDevicePairingError.attemptUnavailable
+        }
+        guard !attempt.finalizing else {
+            throw RivetDevicePairingError.attemptInProgress
+        }
+        window.attempt = nil
+        activeWindow = window
+    }
+
     public func confirmOnDesktop(
         windowID: UUID,
         attemptID: UUID,

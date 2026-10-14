@@ -187,14 +187,16 @@ jobs:
               CODE_SIGNING_ALLOWED=NO \
               build
           done
-          for platform in iOS macOS; do
-            xcodebuild \
-              -workspace . \
-              -scheme RivetDeviceAppleSecurity \
-              -destination "generic/platform=$platform" \
-              -derivedDataPath "$RUNNER_TEMP/rivet-device-security-$platform" \
-              CODE_SIGNING_ALLOWED=NO \
-              build
+          for scheme in RivetDeviceAppleSecurity RivetDeviceSession; do
+            for platform in iOS macOS; do
+              xcodebuild \
+                -workspace . \
+                -scheme "$scheme" \
+                -destination "generic/platform=$platform" \
+                -derivedDataPath "$RUNNER_TEMP/rivet-$scheme-$platform" \
+                CODE_SIGNING_ALLOWED=NO \
+                build
+            done
           done
 
           cd "$GITHUB_WORKSPACE/tests/fixtures/apple-device-codegen"

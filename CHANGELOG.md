@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add the first Apple companion-session security layers. Service-scoped,
+  device-local Keychain storage now persists pairing credentials on macOS and
+  iOS, while `RivetDeviceSession` supplies the bounded `RVD1` preface codec,
+  HMAC reconnect authentication, dual-confirmation pairing state machines, and
+  a credential-persistence gate. Language-neutral golden vectors and
+  deterministic malformed-input, ordering, timeout, and authentication tests
+  pin the contract before Network.framework integration.
+
 ## 0.11.0
 
 - Drop the IsolatedDeinit experimental feature from the released SwiftPM
