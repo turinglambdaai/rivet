@@ -1,6 +1,10 @@
 # Network device channel design
 
-Status: design proposal for [issue #85](https://github.com/turinglambdaai/rivet/issues/85). No network listener, pairing flow, or generated mobile application is shipped yet.
+Status: active design for [issue #85](https://github.com/turinglambdaai/rivet/issues/85).
+The transport-independent `RivetDeviceGateway` policy/session core and pairing/
+authentication state machine are implemented and tested in memory. No network
+listener, platform secure-storage adapter, pairing UI, or generated mobile
+application is shipped yet.
 
 ## Problem
 
@@ -35,13 +39,25 @@ This is not a second Racket backend and it is not a public TCP socket attached t
 
 The existing `RivetDevice` WatchConnectivity request/response API remains supported. A network session is a separate transport product because it has discovery, authentication, long-lived Events, cancellation, and State semantics that WatchConnectivity deliberately does not expose.
 
+The implemented in-memory core deliberately stops before the network boundary.
+`RivetDeviceGateway` owns the bounded set of authenticated sessions, while each
+`RivetDeviceGatewaySession` owns effective scope grants, its remote request-ID
+namespace, host request-ID mappings, cancellation, payload limits, and outbound
+Event/State filtering. A `RivetDeviceGatewayHost` adapter is the only path from
+that core to a host client. TLS, pairing, frame decoding, discovery, persistence,
+and platform UI remain later layers; none is simulated by the in-memory API.
+
 ## Invariants
 
 The implementation must preserve these boundaries:
 
 1. Racket stays the application-logic owner. The device gateway contains transport and authorization policy, not product behavior.
 2. Each UI remains first-party native: SwiftUI/UIKit on iOS, Jetpack Compose on Android, WinUI 3 on Windows, SwiftUI/AppKit on macOS, and GTK4 on Linux.
-3. RVT1 v1 framing and generated schema types stay unchanged. Network-session negotiation is outside RVT1 and completes before the gateway emits the normal RVT1 Hello frame.
+3. RVT1 v1 framing and its closed value-tag set stay unchanged. The first
+   gateway uses the existing generated schema subset; `Float64`, Map, and
+   structured Error wait for explicit protocol negotiation and four-language
+   conformance evidence. Network-session negotiation is outside RVT1 and
+   completes before the gateway emits the normal RVT1 Hello frame.
 4. Network exposure is off by default. No listener or mDNS advertisement exists until the application opts in and the user enables companion access.
 5. Discovery is never authentication. Every request is authorized after a paired session is authenticated.
 6. The network surface is an explicit subset of the application schema. Server-side enforcement is authoritative even if a client bypasses generated code.
@@ -96,12 +112,28 @@ Pairing is an explicit foreground action:
 1. The user opens the desktop's Devices UI and starts a five-minute pairing window.
 2. The phone discovers the service. The preferred path scans a desktop QR code containing the service instance and server public-key fingerprint, so TLS is pinned before the first request.
 3. A manual fallback connects with an untrusted provisional identity and shows the same short authentication string on both devices. The string is derived from the server-certificate fingerprint plus fresh client and server nonces exchanged on that connection. Both screens require confirmation; a man-in-the-middle presents a different server key and therefore produces different strings.
-4. After confirmation, the desktop issues a random 256-bit per-device credential over the authenticated channel and records the device name, granted scopes, creation time, and last-used time. The phone stores the credential and server pin in Keychain/Keystore.
+4. Only after both the desktop user and the phone user confirm the matching string, the desktop issues a random 256-bit per-device credential over the authenticated channel and records the device name, granted scopes, creation time, and last-used time. The phone stores the credential and server pin in Keychain/Keystore.
 5. The pairing window closes after success, expiry, five failed attempts, or an explicit cancel.
 
 The desktop can list and revoke devices. Revocation takes effect for new requests on existing sessions and closes them. Rotating the server identity revokes every pin and credential and therefore requires re-pairing. Logs contain device IDs and stable error codes, never credentials, transcript contents, or raw request payloads.
 
 The pairing user experience is owned by each native application. Rivet supplies the state machine, cryptographic transcript, persistence hooks, and diagnostics; it does not supply a cross-platform pairing screen.
+
+The portable Swift core now implements this non-UI boundary.
+`RivetDevicePairingCoordinator` owns the five-minute window, one active attempt,
+the five-failure cutoff, a required 256-bit client nonce, fresh 256-bit server
+nonce/credential, explicit cancel, and success/expiry close states.
+`RivetDevicePairingTranscript` length-prefixes a
+domain-separated application ID, SHA-256 server fingerprint, client nonce, and
+server nonce before deriving a stable six-digit confirmation code.
+Separate desktop and device confirmation methods make credential issuance
+impossible until both peers have accepted the same attempt.
+`RivetDevicePairingStore` keeps storage platform-neutral while requiring the
+credential to live in secure storage; ordinary device metadata deliberately
+omits it. `RivetDeviceSessionAuthenticator` uses one public authentication
+failure for all mismatches, updates last-used metadata, and couples credential
+revocation to `RivetDeviceGateway` session closure. Platform TLS, Keychain/
+Credential Manager adapters, QR/manual UI, and wire messages remain unimplemented.
 
 ## Session protocol
 
@@ -166,7 +198,9 @@ The first vertical slice targets macOS and Windows desktop hosts with an iOS com
 ## Delivery plan
 
 1. **Contract** — land this design, device-surface schema rules, stable error codes, and cross-language session/gateway golden vectors.
-2. **In-memory gateway** — implement authorization, ID mapping, cancellation, Event filtering, State filtering, limits, and deterministic tests without opening a port.
+2. **In-memory gateway (implemented)** — authorization, ID mapping,
+   cancellation, Event filtering, State filtering, session/request/message
+   limits, disconnect cleanup, and deterministic tests without opening a port.
 3. **Apple vertical slice** — add the macOS host and iOS client transport, pairing, pinning, secure persistence, reconnect, and a minimal native sample.
 4. **Windows host** — implement the same listener/discovery/security contract and run the iOS sample against it.
 5. **Android client** — bind discovery/TLS streams to the existing coroutine client and compile the same generated device API.

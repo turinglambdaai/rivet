@@ -586,6 +586,7 @@
                         #:configuration [configuration "Debug"]
                         #:self-contained? [self-contained? #f]
                         #:clean-native? [clean-native? #f])
+  (check-project-schema-baseline! project)
   (generate-clients! project)
   (define runtime (discover-racket-runtime))
   (define stage (project-path project ".rivet" "stage"))
@@ -620,9 +621,29 @@
     [else
      (error 'dev-project! "development runner is not available on this platform")]))
 
+(define (check-project-schema-baseline! project)
+  (define baseline (project-path project "rivet-schema.json"))
+  (and
+   (file-exists? baseline)
+   (let ([report (check-schema-compatibility! project baseline)])
+     (unless (hash-ref report 'compatible)
+       (raise-arguments-error
+        'build-project!
+        (string-append
+         "the current backend contract is incompatible with rivet-schema.json; "
+         "review the breaking changes or intentionally replace the baseline")
+        "baseline" baseline
+        "breaking changes"
+        (string-join
+         (map (lambda (change) (hash-ref change 'message))
+              (hash-ref report 'breaking-changes))
+         "; ")))
+     report)))
+
 (module+ test-support
   (provide copy-project-resources!
            write-app-info!
            required-project-icon
            prepare-windows-icon-resource!
-           compile-backend-module-bundle!))
+           compile-backend-module-bundle!
+           check-project-schema-baseline!))

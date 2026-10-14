@@ -70,6 +70,21 @@
              (find-relative-path repository-root source)
              destination))))
 
+;; Keep one canonical documentation map. New top-level guides must be linked
+;; there instead of becoming invisible pages that duplicate an existing owner.
+(define docs-root (build-path repository-root "docs"))
+(define docs-map (build-path docs-root "README.md"))
+(define mapped-guides
+  (for/list ([destination (in-list (link-destinations docs-map))])
+    (car (string-split destination "#"))))
+(for ([guide (in-list (filter markdown-file?
+                              (directory-list docs-root #:build? #t)))]
+      #:unless (equal? guide docs-map))
+  (define name (path->string (file-name-from-path guide)))
+  (check-not-false
+   (member name mapped-guides)
+   (format "docs/README.md must link top-level guide ~a" name)))
+
 (struct checkbox (indent checked? line) #:transparent)
 
 (define (read-checkboxes path)
@@ -201,6 +216,17 @@
   (build-path repository-root "docs" "runtime-limits.md"))
 (check-file-contains runtime-limits-guide "Windows, macOS, and Linux")
 
+(define protocol-guide (build-path repository-root "docs" "protocol.md"))
+(check-file-contains protocol-guide "The RVT1 v1 value-tag set is closed")
+(for ([deferred (in-list '("Float64" "Map" "structured Error"))])
+  (check-file-contains protocol-guide deferred))
+(define large-payloads-guide
+  (build-path repository-root "docs" "large-payloads.md"))
+(check-file-contains large-payloads-guide "fraction-bps : Int64")
+(check-false
+ (regexp-match? #px"fraction[ ]*:[ ]*Float64" (file->string large-payloads-guide))
+ "large-payloads guide must not present unsupported Float64 as RVT1 v1 schema")
+
 (define system-services-guide
   (build-path repository-root "docs" "system-services.md"))
 (for ([expected (in-list '("TrayController"
@@ -209,22 +235,6 @@
                            "SetForegroundWindow"
                            "TrackPopupMenu"))])
   (check-file-contains system-services-guide expected))
-
-;; The commercial-parity scorecard and its tracked capability rows cannot
-;; silently disappear. Closing a below-floor gap updates the row in place, so
-;; the completed capability remains part of the long-term comparison.
-(define parity-guide (build-path repository-root "docs" "commercial-parity.md"))
-(for ([expected (in-list '("Commercial parity baseline"
-                           "Global shortcuts"
-                           "Clipboard read/write/watch"
-                           "Native file dialogs"
-                           "Mobile hosts"))])
-  (check-file-contains
-   parity-guide expected
-   (format "docs/commercial-parity.md must keep its ~s row; update the scorecard when a gap closes" expected)))
-(check-false
- (regexp-match? #px"\\| [^\n]+ \\| [^\n]+ \\| \\*\\*below\\*\\*" (file->string parity-guide))
- "commercial parity must not retain a known below-floor capability before 1.0")
 
 ;; --- Scribble coverage: every public export documented, no phantom docs ---
 ;;

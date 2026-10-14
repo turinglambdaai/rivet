@@ -79,7 +79,10 @@ The Linux verifier checks the application directory, executable bit, compiled Ra
 
 In production verification mode, the verifier additionally requires the deterministic `<name>-<version>-linux-<arch>.tar.gz` and its detached signature. It rebuilds that archive from the packaged directory, requires a byte-identical match, and validates the Ed25519 signature against `RIVET_LINUX_SIGN_PUBLIC_KEY`. It also verifies the generated `.deb`, `.rpm`, and AppImage structure, metadata, staged payload, and launcher behavior. Those native formats do not currently receive separate Rivet artifact signatures; the tarball signature does not replace apt/dnf repository metadata trust or a distribution's own signing policy.
 
-These checks prove the artifact produced by Rivet is internally consistent. They do not by themselves prove package-manager transactions or desktop integration on every supported distribution. That evidence is tracked by the [production graduation matrix](production-roadmap.md).
+These checks prove the artifact produced by Rivet is internally consistent.
+They do not by themselves prove package-manager transactions or desktop
+integration on every supported distribution; those require real lifecycle runs
+on the application's declared release matrix.
 
 ## CI
 

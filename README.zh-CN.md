@@ -107,7 +107,7 @@ Racket CS 运行在独立 runtime 线程。原生 UI 代码不会直接操作 Ra
 
 嵌入模型受到 [Noise](https://github.com/Bogdanp/Noise) 的启发，但 Rivet 把 runtime contract、协议、代码生成和生命周期都做成平台无关的统一核心，而不是以 Swift 为中心。
 
-深入设计见 [架构](docs/architecture.md)、[API 稳定性策略](docs/api-stability.zh-CN.md)、[Agent-native 开发](docs/agent-native.md)、[协议](docs/protocol.md)、[嵌入](docs/embedding.md)、[类型安全设备通信](docs/device-communication.md)、尚未实现的[网络设备通道设计](docs/network-device-channel.md)、[Android 架构](docs/android.md)、[项目配置](docs/configuration.md)、[系统服务](docs/system-services.md)、[Linux 显示协议策略](docs/linux-display.md)、[生产晋级路线图](docs/production-roadmap.md)、[大载荷与分页](docs/large-payloads.md)、[Windows 原生窗口 interop](docs/windows-native-window.md)、[发布与更新](docs/release-and-updates.md)、[诊断](docs/diagnostics.md)、[发布物验证](docs/package-verification.md) 与 [生产签名](docs/production-signing.md)。
+架构、协议、平台集成、诊断和发布资料统一从[文档导航](docs/README.md)进入，每个主题只保留一个规范入口。
 
 ## 平台支持状态
 
@@ -151,7 +151,7 @@ X11/XWayland 仅保留 GTK 尽力兼容，不是发布目标。
 | Embedded Racket CS / JNI | 尚未完成 |
 | `raco rivet new/build/package` 应用链 | 尚未完成 |
 
-仓库内的 Gradle wrapper 固定了版本并校验下载摘要。Android 目前具备经过测试的协议、协程客户端与类型化客户端生成基础；JNI runtime 宿主、Compose 脚手架、打包签名和设备/模拟器 round-trip 完成后，才能进入开发者预览。详见 [Android 架构](docs/android.md)。
+仓库内的 Gradle wrapper 固定了版本并校验下载摘要。Android 目前具备经过测试的协议、协程客户端与类型化客户端生成基础；JNI runtime 宿主、Compose 脚手架、打包签名和设备/模拟器 round-trip 完成后，才能进入开发者预览。详见架构文档中的 [Android foundation](docs/architecture.md#android-foundation)。
 
 ## 环境要求
 
@@ -238,6 +238,8 @@ raco rivet schema check rivet-schema.json --json
 
 新增 RPC、Event、State、Record 和 Enum 类型属于兼容扩展。删除接口、修改 RPC 签名或值类型、修改 RVT1 协议版本、修改 Record 字段/顺序，或修改已有 Enum 的 case/顺序，都会被报告为破坏性变化并返回失败状态。只有在版本策略明确允许破坏兼容时，才应重新生成基线。
 
+当项目根目录存在 `rivet-schema.json` 时，`raco rivet build` 以及所有经由它执行构建的命令都会在生成原生客户端前自动运行相同的兼容性检查。CI 中仍应保留显式的 `schema check` 步骤，以便得到聚焦且机器可读的失败信息；没有基线的项目仍可构建，但 `doctor` 和 `inspect` 会将其标记为尚未达到发布就绪状态。
+
 ## CLI
 
 ```text
@@ -316,7 +318,8 @@ raco test tests/
 cmake -S runtime -B runtime/build
 cmake --build runtime/build
 ctest --test-dir runtime/build
-swift test --package-path platform/macos
+racket_include="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
+swift test --package-path platform/macos -Xcc "-I${racket_include}"
 platform/android/gradlew -p platform/android test
 ```
 
@@ -348,9 +351,11 @@ CI 会验证 Racket、C++、Swift 与 Kotlin 协议实现，在三个桌面平�
   - [x] 具名 Enum schema、Swift/C++ 代码生成与兼容性检查
   - [x] Kotlin 类型客户端生成
   - [x] 覆盖每个受支持桌面架构的干净 runner 构建/打包/验证证据
-- [x] **Phase 7 —— 桌面生产晋级** —— 真实 Linux 安装/升级证据、一方更新安装适配器、原生 UI 端到端门禁，以及由特征测试保护的可维护性改造；详见[晋级记录](docs/production-roadmap.md)
+- [x] **Phase 7 —— 桌面生产晋级** —— 真实 Linux 安装/升级证据、一方更新安装适配器、原生 UI 端到端门禁，以及由特征测试保护的可维护性改造
 - [ ] **Phase 8 —— 1.0 契约稳定化** —— 生成客户端统一以 Keel 为规范 Schema；Float64、map、结构化 error 等 RVT1 扩展只有在跨 runtime golden 与 fuzz 证据齐备时才引入；对齐可移植分发元数据，但平台安装器策略不进入 Keel
 - [ ] **Phase 9 —— 一等设备应用交付** —— Windows/macOS/Linux 1.0 主线稳定之后，再提供生成式 iOS/iPadOS/tvOS/visionOS/watchOS 与 Android 项目，明确 embedded-runtime 或 companion 角色，并补齐签名、打包和真机验证
+
+当前执行顺序与退出条件见[桌面收尾与移动端启动计划](docs/desktop-closeout-mobile-plan.md)。
 
 ## 许可证
 

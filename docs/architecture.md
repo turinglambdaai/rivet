@@ -231,12 +231,31 @@ The host bundles:
 
 Target machines should not need a user-installed Racket distribution.
 
+### Android foundation
+
+Android remains native Kotlin/Jetpack Compose rather than a shared UI layer.
+`platform/android` contains the RVT1 v1 codec and coroutine-native
+`RivetClient`; it shares the protocol golden vectors and the 64 MiB payload,
+nesting, node-count, UTF-8, message-type, version, and trailing-byte limits used
+by the Racket, C++, and Swift implementations. The client owns handshake
+validation, bounded multiplexed calls, ordered Events, State helpers,
+cancellation ordering, and deterministic stream shutdown.
+
+`raco rivet build` and `generate` emit the typed Kotlin client under
+`.rivet/generated/kotlin/`. CI compiles it with the pinned Gradle wrapper and
+Java 17. This is a tested protocol and code-generation foundation, not yet an
+Android application host. Developer-preview status still requires a JNI bridge
+to portable Racket CS for supported ABIs, a generated Compose/Gradle project,
+lifecycle and process-death tests, emulator/device round trips, signing,
+packaging, and release automation. Wear OS is outside the current committed
+platform set.
+
 ## Application services boundary
 
 RVT1 remains limited to typed application RPC, Event, State, Cancel, and lifecycle framing. Updates, installers, single-instance routing, deep links, file activation, notifications, tray/menu-bar UI, login items, secrets, settings, logs, and crash reports live above it.
 
 The Racket-facing modules are `rivet/distribution` and `rivet/system`. Native adapters live beside the existing WinUI and Swift runtime code and use platform-first APIs. This separation prevents distribution policy from changing the embedded runtime contract and keeps UI-thread objects under WinUI/AppKit ownership.
 
-Cross-device communication is a second, explicit trust boundary. `RivetDevice` associates every Codable request with its response type, routes bounded/versioned envelopes, and can use WatchConnectivity through `RivetWatchConnectivityTransport`. The default watchOS architecture is therefore watch UI + typed companion channel + phone-hosted backend. A planned desktop-hosted companion direction reuses RVT1 framing only behind an authenticated device gateway that enforces a generated API subset; it does not expose the embedded backend socket. See [typed device communication](device-communication.md) and the unimplemented [network device channel design](network-device-channel.md).
+Cross-device communication is a second, explicit trust boundary. `RivetDevice` associates every Codable request with its response type, routes bounded/versioned envelopes, and can use WatchConnectivity through `RivetWatchConnectivityTransport`. The default watchOS architecture is therefore watch UI + typed companion channel + phone-hosted backend. The desktop-hosted companion direction reuses RVT1 framing only behind an authenticated device gateway that enforces a generated API subset; it does not expose the embedded backend socket. Its transport-independent authorization, session, pairing, authentication, and revocation cores are implemented, while the listener, TLS/pinning adapters, platform secure storage, discovery, and native UI remain planned. See [typed device communication](device-communication.md) and the active [network device channel design](network-device-channel.md).
 
 An update crosses explicit trust boundaries: verify signed manifest, select policy-compatible artifact, download with a bound, verify signed size and SHA-256, invoke the platform installer, then either restart or execute the signed rollback policy. See [Release and updates](release-and-updates.md).

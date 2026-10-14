@@ -107,7 +107,7 @@ Racket CS runs on a dedicated runtime thread. Native UI code never manipulates R
 
 The embedding model is inspired by [Noise](https://github.com/Bogdanp/Noise), but Rivet makes the runtime contract, protocol, code generation, and lifecycle cross-platform instead of Swift-first.
 
-See [architecture](docs/architecture.md), [API stability](docs/api-stability.md), [agent-native development](docs/agent-native.md), [protocol](docs/protocol.md), [embedding](docs/embedding.md), [typed device communication](docs/device-communication.md), the unimplemented [network device channel design](docs/network-device-channel.md), [Android architecture](docs/android.md), [project configuration](docs/configuration.md), [system services](docs/system-services.md), [Linux display policy](docs/linux-display.md), [production roadmap](docs/production-roadmap.md), [large payloads, pagination, and progress](docs/large-payloads.md), [Windows native window interop](docs/windows-native-window.md), [release and updates](docs/release-and-updates.md), [diagnostics](docs/diagnostics.md), [package verification](docs/package-verification.md), and [production signing](docs/production-signing.md) for the details.
+Use the [documentation map](docs/README.md) to find the canonical guide for architecture, protocol, platform integration, diagnostics, and release work.
 
 ## Platform status
 
@@ -153,7 +153,7 @@ The shared Racket schema now generates a default-deny, Codable companion API and
 | Embedded Racket CS / JNI | not yet |
 | `raco rivet new/build/package` app flow | not yet |
 
-The checked-in Gradle wrapper is version-pinned and checksum-verified. Android currently has a tested protocol, coroutine-client, and typed-client-codegen foundation; JNI runtime hosting, Compose scaffolds, packaging, signing, and device/emulator round trips remain before developer-preview status. See [Android architecture](docs/android.md).
+The checked-in Gradle wrapper is version-pinned and checksum-verified. Android currently has a tested protocol, coroutine-client, and typed-client-codegen foundation; JNI runtime hosting, Compose scaffolds, packaging, signing, and device/emulator round trips remain before developer-preview status. See the [Android foundation](docs/architecture.md#android-foundation).
 
 ## Requirements
 
@@ -242,6 +242,8 @@ raco rivet schema check rivet-schema.json --json
 
 New RPCs, Events, States, Records, and Enum types are compatible additions. Removing one, changing an RPC signature or value type, changing the RVT1 protocol version, changing a Record's fields/order, or changing an existing Enum's cases/order is reported as breaking and exits unsuccessfully. Regenerate the baseline only for an intentional, release-governed compatibility break.
 
+When `rivet-schema.json` exists at the project root, `raco rivet build` and every command that builds through it run the same compatibility check automatically before generating native clients. Keep the explicit `schema check` step in CI for a focused, machine-readable failure; projects without a baseline remain buildable but are reported by `doctor` and `inspect` as not release-ready.
+
 ## CLI
 
 ```text
@@ -320,7 +322,8 @@ raco test tests/
 cmake -S runtime -B runtime/build
 cmake --build runtime/build
 ctest --test-dir runtime/build
-swift test --package-path platform/macos
+racket_include="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
+swift test --package-path platform/macos -Xcc "-I${racket_include}"
 platform/android/gradlew -p platform/android test
 ```
 
@@ -356,9 +359,12 @@ against the minimum supported Racket release.
   - [x] named Enum schemas with Swift/C++ code generation and compatibility checks
   - [x] Kotlin typed-client generation
   - [x] clean-runner build/package/verify evidence for every supported desktop architecture
-- [x] **Phase 7 — desktop production graduation** — real Linux install/upgrade evidence, first-party update installation adapters, native UI end-to-end gates, and characterization-protected maintainability work; see the [graduation record](docs/production-roadmap.md)
+- [x] **Phase 7 — desktop production graduation** — real Linux install/upgrade evidence, first-party update installation adapters, native UI end-to-end gates, and characterization-protected maintainability work
 - [ ] **Phase 8 — 1.0 contract stabilization** — use Keel as the canonical generated-client schema, evaluate Float64/map/structured-error RVT1 extensions only with cross-runtime golden and fuzz evidence, and align portable distribution metadata without moving platform installer policy into Keel
 - [ ] **Phase 9 — first-class device application delivery** — after the Windows/macOS/Linux 1.0 line is stable, add generated iOS/iPadOS/tvOS/visionOS/watchOS and Android projects, explicit embedded-runtime or companion roles, signing, packaging, and real-device verification
+
+The active sequencing and exit criteria are recorded in the [desktop closeout
+and mobile start plan](docs/desktop-closeout-mobile-plan.md).
 
 ## License
 

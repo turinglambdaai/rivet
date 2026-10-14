@@ -60,6 +60,12 @@ compatibility-significant. Adding a new declaration is allowed. Regenerating
 the baseline is a release-policy decision, not an automatic repair for a
 failing check.
 
+When `rivet-schema.json` exists, `raco rivet build` and commands that build
+through it run this compatibility check before code generation. Keep the
+explicit `schema check --json` step in CI for a focused report. Projects
+without a baseline remain buildable during development, but `doctor` and
+`inspect` report them as not release-ready.
+
 `doctor --json` is the host-side complement. It reports the exact Racket CS
 runtime, boot files, compiler/build tools, native dependency probes, and a
 top-level `usable` result. It exits unsuccessfully when the current machine is

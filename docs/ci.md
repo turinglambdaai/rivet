@@ -22,7 +22,7 @@ release environment.
 
 ## Copy-paste GitHub Actions workflow
 
-The following workflow pins Rivet 0.9.0. Update every Rivet package source and
+The following workflow pins Rivet 0.11.0. Update every Rivet package source and
 the Linux setup action to the same tag (or full commit) in one review. A direct
 Git source is intentional: the Racket Package Catalog has one current entry
 for a package name and cannot select an older Rivet release.

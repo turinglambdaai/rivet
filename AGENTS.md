@@ -13,6 +13,15 @@ transport, or mix distribution/system services into the embedding lifecycle.
 Mobile support must be described by its actual maturity: a portable runtime or
 typed companion foundation is not yet a generated, packaged application flow.
 
+Before roadmap, desktop-closeout, or mobile-delivery work, read
+`docs/desktop-closeout-mobile-plan.md`. It records the current decision,
+sequencing, exit criteria, evidence, and handoff state.
+
+Treat repository state as the agent-to-agent handoff. Do not rely on prior chat
+history: read the plan's **Next implementation handoff**, implement only that
+bounded slice, update its evidence, run the required tests, and commit the
+coherent change so the next agent can reproduce the same context.
+
 ## Start with evidence
 
 For an application project, run:

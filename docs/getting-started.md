@@ -135,8 +135,9 @@ windows/MainWindow.xaml.cpp
 The generated `MainWindow` also exposes `WindowHandle()` for Win32-owned
 features such as global hotkeys, clipboard listeners, window subclassing,
 positioning, and tray icons. It uses the supported Windows App SDK interop
-bridge; do not locate your own window by title. See
-[Windows native window interop](windows-native-window.md).
+bridge; do not locate your own window by title. The generated non-blocking API
+and threading rules are documented with the handle bridge in
+[Windows host integration](windows-native-window.md).
 
 ### macOS
 
@@ -221,18 +222,8 @@ raco rivet verify     # audit an existing distributable
 raco rivet release    # create the full signed release set
 ```
 
-Then read the deeper documentation only when you need it:
-
-- [Architecture](architecture.md)
-- [Continuous integration](ci.md)
-- [Project configuration](configuration.md)
-- [Diagnostics](diagnostics.md)
-- [Protocol](protocol.md)
-- [Embedding model](embedding.md)
-- [Package verification](package-verification.md)
-- [Production signing](production-signing.md)
-- [Release and updates](release-and-updates.md)
-- [System services](system-services.md)
+Then use the [documentation map](README.md) to open only the canonical guide
+for the boundary you are changing.
 
 ## Troubleshooting rule of thumb
 

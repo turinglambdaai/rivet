@@ -88,14 +88,14 @@ strings:
 
 ```racket
 (define-record Progress
-  ([label : String]      ;; "Indexing ECUC containers"
-   [fraction : Float64])) ;; 0.0 .. 1.0; a sentinel like -1 marks indeterminate
+  ([label : String]         ;; "Indexing ECUC containers"
+   [fraction-bps : Int64])) ;; 0..10000 basis points; -1 is indeterminate
 
 (define-event progress : Progress)
 ```
 
-- `fraction` is a `Float64`, not a percent string; hosts multiply by 100
-  if they want percent text.
+- `fraction-bps` is fixed-point basis points because RVT1 v1 intentionally
+  has no `Float64` value tag. Hosts divide by 100 for percent text.
 - Define the record in your backend and the generated Swift/C++/Kotlin
   clients decode it structurally — no per-app parsing, no stringly-typed
   `"indexing 42%"` smuggling.

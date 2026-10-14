@@ -177,6 +177,22 @@ Code generation rejects declarations that normalize to the same Swift or C++ ide
 
 Rivet will keep framing changes explicit. If a future release cannot decode the v1 frame/value format, it must increment the protocol version and fail the Hello negotiation instead of guessing.
 
+The RVT1 v1 value-tag set is closed. Keel's transport-neutral contract also
+defines `Float64`, string-key Map, and structured Error values, but Rivet does
+not silently assign those tags to RVT1 v1: an older decoder is required to
+reject unknown tags. Adding any of them therefore requires explicit protocol
+or capability negotiation plus matching Racket, C++, Swift, and Kotlin golden,
+property, and fuzz evidence.
+
+Until such a negotiated extension exists:
+
+- use `Int64` fixed-point units for portable fractional quantities;
+- use a named Record for a closed object shape, or a sorted `List` of key/value
+  Records when the key set is dynamic;
+- model expected application failures as typed result Records. RVT1 Error
+  frames remain bounded human-readable diagnostics for rejected requests,
+  cancellation, unexpected backend failures, and protocol failures.
+
 Applications can save their higher-level API contract with `raco rivet schema --output rivet-schema.json` and enforce it with `raco rivet schema check rivet-schema.json --json`. The checker treats new declarations as compatible. Removal, signature/type changes, Record field/order changes, existing Enum case/order changes, and RVT1 version changes are breaking and produce a nonzero exit status plus a structured report.
 
 Resource limits such as maximum frame/value byte size, value nesting, and total value-node count are part of the v1 decoder contract and are tested consistently across the Racket, C++, and Swift implementations.

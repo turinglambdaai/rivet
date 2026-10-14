@@ -25,6 +25,24 @@
    (check-true (hash? (hash-ref (hash-ref report 'backend) 'source)))
    (check-true
     (hash-ref (hash-ref (hash-ref report 'schema) 'baseline) 'exists))
+   (check-true
+    (hash-ref (hash-ref report 'readiness) 'schema-baseline-configured))
+   (check-equal? (hash-ref (hash-ref report 'readiness) 'warnings) '())
+
+   (define transport (hash-ref report 'transport-contract))
+   (check-equal? (hash-ref transport 'rvt1-version) 1)
+   (check-equal? (hash-ref transport 'deferred-keel-types)
+                 '("Float64" "Map" "Error"))
+   (check-regexp-match #rx"explicit protocol negotiation"
+                       (hash-ref transport 'extension-policy))
+   (define device-surface (hash-ref report 'device-surface))
+   (check-true (hash-ref device-surface 'default-deny))
+   (check-equal? (hash-ref device-surface 'configured-rpcs) '())
+   (check-equal? (hash-ref device-surface 'network-gateway-status) "framework-core")
+   (check-not-false
+    (member "pairing-state-machine" (hash-ref device-surface 'implemented)))
+   (check-not-false
+    (member "network-listener" (hash-ref device-surface 'pending)))
 
    (define sourcing (hash-ref report 'capability-sourcing))
    (check-equal? (hash-ref sourcing 'version) 1)
@@ -56,6 +74,31 @@
    (check-equal?
     (map (lambda (entry) (hash-ref entry 'name)) (hash-ref report 'targets))
     '("windows" "macos" "linux" "ios" "ipados" "watchos" "android"))
+   (check-equal?
+    (hash-ref (third (hash-ref report 'targets)) 'status)
+    "production-target")
+
+   ;; Mature applications rename and split the scaffold's native entry files.
+   ;; Inspect the sources that actually exist instead of reporting the old
+   ;; scaffold names as missing.
+   (delete-file (build-path root "macos-host" "Sources" "RivetHost" "ContentView.swift"))
+   (delete-file (build-path root "macos-host" "Sources" "RivetHost" "RivetHostApp.swift"))
+   (call-with-output-file (build-path root "macos-host" "Sources" "RivetHost" "AgentDemoApp.swift")
+     #:exists 'truncate
+     (lambda (out) (display "// custom app entry\n" out)))
+   (define custom-report (project-report project))
+   (define custom-macos (hash-ref (hash-ref custom-report 'edit-points) 'macos-ui))
+   (check-equal? (map (lambda (entry) (hash-ref entry 'path)) custom-macos)
+                 '("macos-host/Sources/RivetHost/AgentDemoApp.swift"))
+   (check-true (andmap (lambda (entry) (hash-ref entry 'exists)) custom-macos))
+
+   (delete-file (build-path root "rivet-schema.json"))
+   (define missing-baseline-report (project-report project))
+   (check-false
+    (hash-ref (hash-ref missing-baseline-report 'readiness) 'schema-baseline-configured))
+   (check-equal?
+    (hash-ref (car (hash-ref (hash-ref missing-baseline-report 'readiness) 'warnings)) 'code)
+    "missing-schema-baseline")
 
    (check-true (file-exists? (build-path root "AGENTS.md")))
    (define instructions (file->string (build-path root "AGENTS.md")))

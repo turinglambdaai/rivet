@@ -7,7 +7,7 @@ Rivet separates two boundaries that solve different problems:
 
 Keeping these layers separate lets an iPhone or iPad embed Racket CS while an Apple Watch remains a lightweight companion. It also leaves room for a future independently embedded watch runtime without making that the default or coupling WatchConnectivity details to RVT1.
 
-A phone can also be a client of a desktop-hosted backend. That direction needs a long-lived authenticated session, Events, State, discovery, pairing, and an explicit API allowlist rather than the request/reply semantics below. It is specified in the [network device channel design](network-device-channel.md); the design is not yet a shipped transport.
+A phone can also be a client of a desktop-hosted backend. That direction needs a long-lived authenticated session, Events, State, discovery, pairing, and an explicit API allowlist rather than the request/reply semantics below. It is specified in the [network device channel design](network-device-channel.md). Its in-memory authorization/session core is implemented, but it is not yet a shipped network transport.
 
 ## Generated companion API
 
@@ -55,6 +55,49 @@ Applications can still implement `RivetDeviceRequest` manually when a device
 message intentionally has no backend RPC equivalent.
 
 `RivetDeviceRouter` rejects duplicate/invalid routes, bounds request and response sizes, validates protocol version and correlation IDs, and converts registered remote errors into stable code/message pairs. `RivetWatchConnectivityTransport` adapts this contract to `WCSession.sendMessageData`; the typed channel itself is transport-neutral and testable with an in-memory transport.
+
+## Desktop gateway policy core
+
+`RivetDeviceGateway` is the transport-independent policy boundary for a future
+desktop-hosted companion. Pairing supplies one or more `RivetDeviceScope`
+values; an empty scope set grants nothing. Scopes independently grant RPCs,
+Events, State reads, and State writes. Unknown and ungranted RPC/State names
+produce the same `forbidden` result so a device cannot enumerate the private
+desktop API.
+
+Each `RivetDeviceGatewaySession` has its own remote request-ID namespace. It
+maps admitted calls onto opaque IDs returned by `RivetDeviceGatewayHost`, and a
+Cancel can affect only a mapping owned by that session. Disconnecting or
+revoking a session cancels all of its pending host calls without closing the
+embedded backend or another session. Event and State-change delivery is
+filtered before fan-out; State-change visibility follows State-read access.
+
+The defaults are 512 KiB per request/response/event payload, 64 pending calls
+per session, and 8 authenticated sessions per gateway. These are defense-in-
+depth limits for the future listener, not permission to expose this type
+directly to untrusted bytes. TLS, RVT1 decoding, and outgoing queue backpressure
+remain required outside the core.
+
+## Pairing and reconnect core
+
+`RivetDevicePairingCoordinator` implements the UI-independent pairing lifecycle:
+a five-minute window, required 256-bit client nonce, fresh 256-bit server nonce,
+one active attempt, a five-failure cutoff, explicit cancel, and a random 256-bit
+per-device credential only after both peers confirm. `RivetDevicePairingTranscript`
+defines a deterministic six-digit
+confirmation code over the application ID, server SHA-256 fingerprint, and
+both nonces so desktop and phone implementations can share golden vectors.
+
+`RivetDevicePairingStore` is the persistence boundary. Its implementations must
+put credentials in platform secure storage; listable `RivetDevicePairedDevice`
+metadata contains no credential. `RivetDeviceSessionAuthenticator` deliberately
+returns the same failure for an unknown device, wrong application, changed
+server identity, or bad credential. Revocation removes the credential first and
+then asks the gateway to close every session owned by that paired device.
+
+These types do not create trust by themselves. A platform adapter must still
+provide authenticated TLS, server-key pinning, Keychain/Credential Manager
+storage, bounded preface decoding, and explicit native confirmation UI.
 
 This design follows the core idea in [DSLs for Safe iOS/watchOS Communication](https://defn.io/2025/02/16/type-safe-watchos-communication/): encode the request/response relationship in types and centralize dispatch instead of spreading dictionaries, route strings, and casts throughout both apps. Rivet generates that relationship from the shared Racket schema while keeping the exported device surface explicit.
 

@@ -26,6 +26,37 @@
             (directory-exists? absolute)
             (file-exists? absolute))))
 
+(define (path-extension-string path)
+  (define extension (path-get-extension path))
+  (and extension
+       (string-downcase (bytes->string/utf-8 extension))))
+
+(define (native-source-reports project directory extensions excluded-names defaults)
+  (define root (rivet-project-root project))
+  (define absolute-directory (project-path project directory))
+  (define discovered
+    (if (directory-exists? absolute-directory)
+        (for/list ([path (in-list (sort (find-files file-exists? absolute-directory)
+                                        string<?
+                                        #:key path-string))]
+                   #:when (and (member (path-extension-string path) extensions)
+                               (not (member (path->string (file-name-from-path path))
+                                            excluded-names))))
+          (source-report project
+                         (path->string (find-relative-path root path))
+                         'file))
+        '()))
+  (if (null? discovered)
+      (for/list ([relative (in-list defaults)])
+        (source-report project relative 'file))
+      discovered))
+
+(define (project-warning code message remediation)
+  (hash 'code code
+        'severity "warning"
+        'message message
+        'remediation remediation))
+
 (define (target name status ui source)
   (hash 'name name 'status status 'ui ui 'source source))
 
@@ -98,9 +129,35 @@
    (hash 'installed "raco docs rivet"
          'source "https://github.com/turinglambdaai/rivet/blob/main/docs/agent-native.md#capability-sourcing")))
 
+;; RVT1 v1 deliberately stays smaller than Keel's transport-neutral value
+;; contract. Keep this boundary machine-readable so agents and mobile tooling
+;; do not infer support from Keel types that the four RVT1 codecs cannot yet
+;; negotiate safely.
+(define transport-contract
+  (hash
+   'rvt1-version 1
+   'value-tags (list "Null" "Bool" "Int64" "String" "Bytes" "List")
+   'schema-types
+   (list "String" "Int64" "Bool" "Bytes" "Void" "Any"
+         "List" "Optional" "Record" "Enum")
+   'deferred-keel-types (list "Float64" "Map" "Error")
+   'extension-policy
+   "New value tags require explicit protocol negotiation plus Racket/C++/Swift/Kotlin golden, property, and fuzz evidence; they are not added silently to RVT1 v1."
+   'application-error-policy
+   "Expected application failures use typed result Records; RVT1 v1 Error frames remain bounded human-readable diagnostics."))
+
 (define (project-report project)
   (define root (rivet-project-root project))
   (define backend (project-ref project 'backend))
+  (define schema-baseline (source-report project "rivet-schema.json" 'file))
+  (define warnings
+    (if (hash-ref schema-baseline 'exists)
+        '()
+        (list
+         (project-warning
+          "missing-schema-baseline"
+          "The project has no committed rivet-schema.json compatibility baseline."
+          "Run `raco rivet schema --output rivet-schema.json`, review the snapshot, commit it, and add `raco rivet schema check rivet-schema.json --json` to CI."))))
   (hash 'contract-version
         contract-version
         'product
@@ -136,9 +193,32 @@
               'entry
               (project-ref project 'entry))
         'schema
-        (hash 'baseline (source-report project "rivet-schema.json" 'file)
+        (hash 'baseline schema-baseline
               'format "rivet-schema"
               'format-version 1)
+        'transport-contract
+        transport-contract
+        'device-surface
+        (hash 'default-deny #t
+              'allowlist-config "device-rpcs"
+              'configured-rpcs
+              (map symbol->string (project-device-rpcs project))
+              'network-gateway-status "framework-core"
+              'implemented
+              '("scope-authorization"
+                "request-id-mapping"
+                "session-revocation"
+                "pairing-state-machine"
+                "credential-authentication")
+              'pending
+              '("network-listener"
+                "tls-adapter"
+                "secure-storage-adapter"
+                "discovery"
+                "product-ui"))
+        'readiness
+        (hash 'schema-baseline-configured (hash-ref schema-baseline 'exists)
+              'warnings warnings)
         'generated-clients
         (hash 'swift
               (source-report project "macos-host/Sources/RivetHost/GeneratedBackend.swift" 'file)
@@ -154,20 +234,34 @@
         (hash 'shared-logic
               (list (source-report project backend 'file))
               'windows-ui
-              (list (source-report project "windows/MainWindow.xaml" 'file)
-                    (source-report project "windows/MainWindow.xaml.cpp" 'file))
+              (native-source-reports
+               project
+               "windows"
+               '(".xaml" ".cpp" ".hpp" ".h")
+               '("GeneratedBackend.hpp" "pch.cpp" "pch.h")
+               '("windows/MainWindow.xaml" "windows/MainWindow.xaml.cpp"))
               'macos-ui
-              (list (source-report project "macos-host/Sources/RivetHost/ContentView.swift" 'file)
-                    (source-report project "macos-host/Sources/RivetHost/RivetHostApp.swift" 'file))
+              (native-source-reports
+               project
+               "macos-host/Sources/RivetHost"
+               '(".swift")
+               '("GeneratedBackend.swift")
+               '("macos-host/Sources/RivetHost/ContentView.swift"
+                 "macos-host/Sources/RivetHost/RivetHostApp.swift"))
               'linux-ui
-              (list (source-report project "linux/src/main.cpp" 'file))
+              (native-source-reports
+               project
+               "linux"
+               '(".cpp" ".hpp" ".h")
+               '("GeneratedBackend.hpp")
+               '("linux/src/main.cpp"))
               'configuration
               (list (source-report project "rivet.rktd" 'file)
                     (source-report project "rivet-schema.json" 'file)))
         'targets
         (list (target "windows" "production-target" "WinUI 3 / C++/WinRT" "windows")
               (target "macos" "production-target" "SwiftUI / AppKit" "macos-host")
-              (target "linux" "developer-preview" "GTK4" "linux")
+              (target "linux" "production-target" "GTK4" "linux")
               (target "ios" "foundation" "SwiftUI" #f)
               (target "ipados" "foundation" "SwiftUI" #f)
               (target "watchos" "typed-companion-foundation" "SwiftUI" #f)
@@ -204,6 +298,13 @@
               group
               (hash-ref entry 'path)
               (if (hash-ref entry 'exists) "present" "missing"))))
+  (define warnings (hash-ref (hash-ref report 'readiness) 'warnings))
+  (unless (null? warnings)
+    (displayln "  readiness warnings:")
+    (for ([warning (in-list warnings)])
+      (printf "    ~a: ~a\n"
+              (hash-ref warning 'code)
+              (hash-ref warning 'message))))
   (displayln "  next:")
   (displayln "    raco rivet doctor --json")
   (displayln "    raco rivet dev")

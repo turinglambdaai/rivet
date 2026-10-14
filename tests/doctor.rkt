@@ -18,6 +18,8 @@
                       racket-version
                       runtime
                       runtime-error
+                      project-readiness
+                      warnings
                       tools))])
   (check-true (hash-has-key? report key)))
 
@@ -27,6 +29,7 @@
 (check-true (boolean? (hash-ref report 'usable)))
 (check-true (string? (hash-ref report 'racket-version)))
 (check-true (hash? (hash-ref report 'tools)))
+(check-true (list? (hash-ref report 'warnings)))
 (check-true (list? (doctor-remediations report)))
 
 ;; Keep remediation logic deterministic and useful even when this test runs on

@@ -1,9 +1,11 @@
 #lang racket/base
 
 (require json
+         racket/file
          racket/path
          racket/port
          racket/system
+         "project.rkt"
          "runtime.rkt"
          "windows-tools.rkt")
 
@@ -112,6 +114,22 @@
        (values #f "unsupported" (hash) #f)]))
 
   (define usable? (and supported? racket-exe raco runtime essential-tools? #t))
+  (define project (find-project))
+  (define project-readiness
+    (and project
+         (let* ([baseline (project-path project "rivet-schema.json")]
+                [configured? (file-exists? baseline)])
+           (hash 'root (path-string (rivet-project-root project))
+                 'schema-baseline-configured configured?))))
+  (define warnings
+    (if (and project-readiness
+             (not (hash-ref project-readiness 'schema-baseline-configured)))
+        (list
+         (hash 'code "missing-schema-baseline"
+               'severity "warning"
+               'message "The project has no committed rivet-schema.json compatibility baseline."
+               'remediation "Run `raco rivet schema --output rivet-schema.json`, review and commit it, then add `raco rivet schema check rivet-schema.json --json` to CI."))
+        '()))
   (hash 'os (symbol->string os)
         'architecture (format "~a" arch)
         'supported supported?
@@ -122,6 +140,8 @@
         'racket-version (version)
         'runtime (and runtime (runtime->report runtime))
         'runtime-error runtime-error
+        'project-readiness project-readiness
+        'warnings warnings
         'tools tools))
 
 (define (missing-tool? tools key)
@@ -148,6 +168,10 @@
            "Rivet could not discover the complete embedded runtime. Install a full Racket CS distribution and reinstall Rivet with that installation's `raco`."
            (let ([reason (hash-ref report 'runtime-error #f)])
              (if reason (format " Discovery error: ~a" reason) "")))))
+
+  (for ([warning (in-list (hash-ref report 'warnings '()))])
+    (add! (hash-ref warning 'message)
+          (hash-ref warning 'remediation)))
 
   (case (string->symbol (hash-ref report 'os))
     [(windows)
@@ -268,9 +292,16 @@
      (display-runtime report)
      (display-tools report)
      (printf "  UI: ~a\n" (hash-ref report 'ui))
+     (define readiness (hash-ref report 'project-readiness #f))
+     (when readiness
+       (printf "  schema baseline: ~a\n"
+               (if (hash-ref readiness 'schema-baseline-configured)
+                   "configured"
+                   "missing")))
      (newline)
      (printf "rivet: toolchain ~a\n"
              (if (hash-ref report 'usable) "looks usable" "is incomplete"))
-     (unless (hash-ref report 'usable)
+     (when (or (not (hash-ref report 'usable))
+               (pair? (hash-ref report 'warnings '())))
        (display-remediations report))])
   (if (hash-ref report 'usable) 0 1))

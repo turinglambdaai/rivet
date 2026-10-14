@@ -141,7 +141,8 @@ windows/MainWindow.xaml.cpp
 生成的 `MainWindow` 还会提供 `WindowHandle()`，供全局快捷键、剪贴板监听、
 窗口子类化、定位和托盘图标等 Win32 能力使用。它走 Windows App SDK 官方
 interop 桥接；不要再按标题查找自己的窗口。详见
-[Windows 原生窗口 interop](windows-native-window.md)。
+[Windows 宿主集成](windows-native-window.md)，其中也说明了生成的非阻塞 API
+与线程规则。
 
 ### macOS
 
@@ -220,18 +221,7 @@ raco rivet verify     # 验证已有分发物
 raco rivet release    # 生成完整签名发布物
 ```
 
-其他文档按需阅读：
-
-- [架构](architecture.md)
-- [持续集成](ci.zh-CN.md)
-- [项目配置](configuration.md)
-- [诊断](diagnostics.md)
-- [协议](protocol.md)
-- [嵌入模型](embedding.md)
-- [发布物验证](package-verification.md)
-- [生产签名](production-signing.md)
-- [发布与更新](release-and-updates.md)
-- [系统服务](system-services.md)
+其他资料统一从[文档导航](README.md)按当前工作边界进入，不必顺序通读。
 
 ## 排查问题的第一原则
 

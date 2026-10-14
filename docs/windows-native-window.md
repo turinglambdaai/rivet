@@ -1,4 +1,6 @@
-# Windows native window interop
+# Windows host integration
+
+## Native window handle
 
 WinUI 3 desktop features often need the native `HWND`: global hotkeys,
 clipboard listeners, `SetWindowSubclass`, precise `SetWindowPos` placement,
@@ -52,3 +54,50 @@ MainWindow::MainWindow() {
   }
 }
 ```
+
+## Non-blocking generated API
+
+The generated C++ client exposes two compatible styles for every RPC and
+shared State operation. The historical API returns `std::future<T>`:
+
+```cpp
+rivet_app::API api(*backend);
+auto value = api.increment(41).get();
+```
+
+WinUI code should normally use the non-blocking completion companion. It
+returns the RVT1 request ID immediately, which also permits cancellation with
+`Backend::cancel(id)`:
+
+```cpp
+auto id = api.increment_async(
+    41,
+    [dispatcher](rivet_app::Result<std::int64_t> result) {
+      try {
+        auto value = result.get();
+        dispatcher.TryEnqueue([value] {
+          // Update WinUI here.
+        });
+      } catch (std::exception const& error) {
+        // Surface the backend or decoding error.
+      }
+    });
+```
+
+Shared State has the same generated shape, such as
+`get_counter_async(...)` and `set_counter_async(value, ...)`.
+
+### Threading
+
+RVT1 responses are decoded on Rivet's native reader thread. Normal completion
+handlers therefore run there; submission failures or shutdown rejection may
+complete on the thread that encountered the failure. Dispatch through
+`DispatcherQueue` before touching WinUI objects. Rivet isolates exceptions
+thrown by completion handlers, and `Result<T>::get()` rethrows backend or
+decoding errors.
+
+The completion path uses the existing pending-request table, request IDs,
+cancellation frames, reader thread, and shutdown behavior; it does not create a
+native thread per RPC. It intentionally does not return `IAsyncOperation<T>`:
+projecting `Bytes`, recursive `List`, `Optional`, and `Any` through a public
+WinRT ABI would force platform container policy into Rivet's schema.
