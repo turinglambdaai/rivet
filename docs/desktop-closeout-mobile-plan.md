@@ -193,11 +193,19 @@ remain pending. M2g adds the explicit iOS Bonjour browser: it accepts only the
 canonical bounded advertisement, reports all candidate-field changes, removes
 vanished results, and clears state on failure or cancellation without opening
 a connection or granting authority. Local-network permission declarations
-remain product-owned. No product repository or UI was changed.
+remain product-owned. M2h adds the framework-only iOS session client: it
+accepts one explicitly selected discovery endpoint, builds a pinned reconnect
+or an explicit provisional-pairing TLS context, drives `RivetDeviceSessionClient`,
+surfaces the pairing code without auto-confirming it, persists each new
+credential through an injected secure-storage boundary before accepting RVT1,
+enforces the post-TLS deadline, and performs idempotent cleanup. Rejected
+authentication closes without a pairing fallback, and discovery identifiers or
+pairing hints never become credentials. No product repository or UI was
+changed.
 
 ## Next implementation handoff
 
-M2a through M2g are complete. Deterministic tests cover secure-store lifecycle and
+M2a through M2h are complete. Deterministic tests cover secure-store lifecycle and
 failure mapping; all session record types and cryptographic vectors;
 fragmented/coalesced reads; size, shape, ordering, duplicate, and timeout
 failures; indistinguishable reconnect failures; dual-confirmation pairing; and
@@ -211,26 +219,27 @@ service removal before cancellation, ephemeral-ID rotation, authenticated
 preface-to-RVT1 handoff, explicit dual-peer pairing confirmation, post-TLS
 timeout, idempotent host cleanup, explicit browser start/stop, canonical-only
 discovery, endpoint/service-name/ephemeral-ID/pairing-hint changes, removal,
-candidate/event bounds, failure, cancellation, and stale-generation isolation.
-The Swift package passes, all Apple device targets build for generic
-iOS and macOS, and `RivetWatchConnectivity` continues to build for generic iOS
-and watchOS.
+candidate/event bounds, failure, cancellation, stale-generation isolation, and
+the client-side mirror: pinned reconnect with proof verification, reconnect
+rejection without pairing fallback, code surfacing without auto-confirmation,
+persistence before acceptance, persistence failure without acceptance,
+post-TLS and pairing-decision timeouts, cancellation, malformed prefaces, pin
+mismatch, and missing fingerprint observations. The Swift package passes, all
+Apple device targets build for generic iOS and macOS, and
+`RivetWatchConnectivity` continues to build for generic iOS and watchOS. The
+framework-side Apple companion foundation (discovery, TLS, preface, session
+host, session client) is complete; `inspect --json` reports the session
+client as implemented.
 
-The next implementation agent owns bounded M2h: a framework-only iOS
-single-connection session client. It must accept one explicitly selected
-discovery endpoint, build either a pinned reconnect or an explicit provisional
-pairing TLS context, drive `RivetDeviceSessionClient`, surface the pairing code
-without auto-confirming it, persist a new credential through an injected secure
-storage boundary before accepting RVT1, enforce the post-TLS deadline, and
-perform idempotent cancellation/cleanup. Authentication failure must not fall
-back to pairing, and discovery identifiers or pairing hints must never become
-credentials. Use injected connection, session-client, persistence, and deadline
-boundaries for deterministic reconnect, pairing accept/reject, persistence
-failure, timeout, cancellation, and malformed-preface tests. Keep product UI,
-automatic connection policy, background lifecycle policy, gateway product
-binding, permission strings/entitlements, and product-repository changes out of
-that patch. Do not add any iOS path that downloads or executes Racket code;
-executable mobile logic must remain bundled with the reviewed application.
+The next framework implementation slice is bounded M3 work: a Windows gateway
+that terminates the same TLS and `RVD1` preface against the existing iOS
+client contract, followed by binding Android discovery/TLS streams to the
+existing Kotlin runtime and generated device API. Read
+`docs/network-device-channel.md` for the wire and timing contract and reuse
+the language-neutral fixtures; do not reinterpret the preface per platform.
+The remaining M2 item — product gateway binding, pairing UI, and the PodLens
+vertical slice — is product-repository work that must be coordinated with the
+active Taskly-standard alignment workstream instead of edited in parallel.
 
 ### M3 — second desktop host and Android client
 

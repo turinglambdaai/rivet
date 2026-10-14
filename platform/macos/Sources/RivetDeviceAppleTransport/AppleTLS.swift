@@ -111,6 +111,10 @@ public final class RivetDeviceAppleClientTLSContext: @unchecked Sendable {
         verifier.fingerprint
     }
 
+    package var configuredAuthentication: RivetDeviceAppleServerAuthentication {
+        verifier.authentication
+    }
+
     package func claimParameters() throws -> NWParameters {
         try lock.withLock {
             guard !claimed else {
@@ -225,7 +229,7 @@ private let allowedCipherSuites: [tls_ciphersuite_t] = [
 ]
 
 private final class PeerVerifier: @unchecked Sendable {
-    private let authentication: RivetDeviceAppleServerAuthentication
+    let authentication: RivetDeviceAppleServerAuthentication
     private let lock = NSLock()
     private var storedFingerprint: Data?
     private var storedFailure: RivetDeviceAppleTransportError?

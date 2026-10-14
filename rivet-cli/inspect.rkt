@@ -216,7 +216,8 @@
                 "server-identity"
                 "network-listener"
                 "discovery"
-                "session-host")
+                "session-host"
+                "session-client")
               'pending
               '("product-ui"))
         'readiness

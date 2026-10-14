@@ -68,6 +68,10 @@
    (check-false
     (member "session-host" (hash-ref device-surface 'pending)))
    (check-not-false
+    (member "session-client" (hash-ref device-surface 'implemented)))
+   (check-false
+    (member "session-client" (hash-ref device-surface 'pending)))
+   (check-not-false
     (member "product-ui" (hash-ref device-surface 'pending)))
 
    (define sourcing (hash-ref report 'capability-sourcing))

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add the framework-only Apple session client for iOS companions.
+  `RivetDeviceAppleSessionClient` connects one explicitly selected endpoint
+  through a pinned reconnect or an explicit provisional-pairing TLS context,
+  drives the `RVD1` session client state machine, surfaces the pairing code
+  without auto-confirming it, persists each new credential through an injected
+  secure-storage boundary before accepting RVT1, enforces the post-TLS
+  deadline, and closes without a pairing fallback when authentication is
+  rejected. Connection, session-client, persistence, and deadline boundaries
+  are injectable for deterministic reconnect, pairing, persistence-failure,
+  timeout, cancellation, and malformed-preface tests; connection policy,
+  background lifecycle, and permission strings stay product-owned.
 - Add the framework-only Apple Bonjour browser for iOS companions. Browsing is
   explicitly started and stopped, accepts only the canonical bounded Rivet TXT
   record, bounds candidates and pending events, reports add/change/remove

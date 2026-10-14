@@ -167,7 +167,16 @@ accepted connection through TLS and `RVD1`, surfaces pairing prompts for an
 explicit desktop decision, enforces the post-TLS deadline, and lends RVT1 bytes
 to an application handler only after the session server accepts the peer. That
 handler must bind the accepted scopes to `RivetDeviceGateway`; the host does not
-create an alternate authorization path.
+create an alternate authorization path. `RivetDeviceAppleSessionClient` is the
+iOS counterpart: it takes one explicitly selected endpoint, pins reconnect
+attempts to the fingerprint stored by the product, pairs only through explicit
+provisional TLS plus the transcript, surfaces the pairing code without
+auto-confirming it, persists each new credential through an injected
+secure-storage boundary before accepting RVT1, enforces the post-TLS deadline,
+and closes without a pairing fallback when authentication is rejected.
+Choosing between reconnect and pairing when no credential exists, background
+lifecycle, and permission strings stay product-owned; the client never treats
+discovery identifiers or pairing hints as credential material.
 
 ## Session protocol
 
