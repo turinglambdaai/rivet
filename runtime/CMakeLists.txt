@@ -37,7 +37,7 @@ if(RIVET_BUILD_TESTS)
   endfunction()
 
   configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/../tests/protocol-golden.txt
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rivet/tests/protocol-golden.txt
     ${CMAKE_CURRENT_BINARY_DIR}/protocol-golden.txt
     COPYONLY
   )

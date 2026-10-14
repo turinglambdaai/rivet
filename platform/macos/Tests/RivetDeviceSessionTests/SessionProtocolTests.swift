@@ -58,7 +58,7 @@ private func loadDeviceSessionGoldenRecords() throws -> [DeviceSessionGoldenReco
     for _ in 0..<5 {
         url.deleteLastPathComponent()
     }
-    url.appendPathComponent("tests/device-session-golden.txt")
+    url.appendPathComponent("rivet/tests/device-session-golden.txt")
     let contents = try String(contentsOf: url, encoding: .utf8)
     return try contents.split(whereSeparator: \.isNewline).compactMap { rawLine in
         let line = rawLine.trimmingCharacters(in: .whitespaces)

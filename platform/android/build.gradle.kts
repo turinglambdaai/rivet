@@ -24,7 +24,7 @@ dependencies {
 }
 
 tasks.processTestResources {
-    from("../../tests/protocol-golden.txt")
+    from("../../rivet/tests/protocol-golden.txt")
 }
 
 tasks.test {
