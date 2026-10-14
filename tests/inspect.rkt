@@ -50,6 +50,10 @@
    (check-false
     (member "session-preface" (hash-ref device-surface 'pending)))
    (check-not-false
+    (member "network-listener" (hash-ref device-surface 'implemented)))
+   (check-not-false
+    (member "server-identity" (hash-ref device-surface 'implemented)))
+   (check-false
     (member "network-listener" (hash-ref device-surface 'pending)))
    (check-not-false
     (member "tls-adapter" (hash-ref device-surface 'implemented)))

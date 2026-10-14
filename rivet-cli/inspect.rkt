@@ -212,10 +212,11 @@
                 "credential-authentication"
                 "secure-storage-adapter"
                 "session-preface"
-                "tls-adapter")
+                "tls-adapter"
+                "server-identity"
+                "network-listener")
               'pending
-              '("network-listener"
-                "discovery"
+              '("discovery"
                 "product-ui"))
         'readiness
         (hash 'schema-baseline-configured (hash-ref schema-baseline 'exists)

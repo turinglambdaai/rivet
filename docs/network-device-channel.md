@@ -3,10 +3,10 @@
 Status: active design for [issue #85](https://github.com/turinglambdaai/rivet/issues/85).
 The transport-independent `RivetDeviceGateway` policy/session core, pairing/
 authentication lifecycle, and byte-exact session preface are implemented and
-tested in memory. The Apple pairing-credential Keychain adapter and bounded
-Network.framework TLS stream adapter are also implemented. No network listener,
-identity provisioning, pairing UI, or generated mobile application is shipped
-yet.
+tested in memory. The Apple pairing-credential Keychain adapter, bounded
+Network.framework TLS stream adapter, per-install identity provider, and
+disabled-by-default macOS listener are also implemented. No discovery,
+pairing UI, product enablement, or generated mobile application is shipped yet.
 
 ## Problem
 
@@ -142,8 +142,13 @@ server/client state machines. `RivetDeviceAppleTransport` enforces TLS 1.2+,
 forward-secret AEAD cipher suites, the `rivet-device/1` ALPN, exact SPKI
 SHA-256 pins or explicit provisional pairing, a 30-second connection deadline,
 fail-closed preface decoding, and a one-way transition to RVT1 bytes. Apple
-server-identity provisioning and listener lifecycle, Windows Credential
-Manager storage, QR/manual UI, and non-Apple adapters remain unimplemented.
+identity provisioning creates a P-256 private key and matching self-signed
+certificate in the application Keychain namespace; explicit rotation changes
+the SPKI pin. Its macOS listener admits at most the configured number of
+connections before allocating transport/session state and closes them all on
+disable, listener failure, or termination. Windows Credential Manager storage,
+Bonjour discovery, QR/manual UI, product enablement, and non-Apple adapters
+remain unimplemented.
 
 ## Session protocol
 

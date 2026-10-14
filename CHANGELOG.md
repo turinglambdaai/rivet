@@ -16,6 +16,12 @@
   provisional-pairing identity, extracts canonical SPKI DER from X.509, bounds
   connection setup to 30 seconds, and preserves the one-way `RVD1` to RVT1
   stream transition without exposing a listener or discovery service.
+- Add the disabled-by-default macOS device listener and per-install P-256 TLS
+  identity lifecycle. Private keys and their self-signed certificates stay in
+  the application Keychain namespace; explicit rotation invalidates the public
+  pin. Listener admission is capped before transport/session allocation, and
+  disable, failure, and termination close every accepted connection. Bonjour
+  discovery and product enablement remain separate future steps.
 
 ## 0.11.0
 
