@@ -176,7 +176,15 @@ secure-storage boundary before accepting RVT1, enforces the post-TLS deadline,
 and closes without a pairing fallback when authentication is rejected.
 Choosing between reconnect and pairing when no credential exists, background
 lifecycle, and permission strings stay product-owned; the client never treats
-discovery identifiers or pairing hints as credential material.
+discovery identifiers or pairing hints as credential material. The portable
+C++ runtime now carries the same contract for the Windows and Linux gateways:
+`rivet/device_session.hpp` implements the RVD1 records, the authentication
+proof and pairing-code transcripts, and the server state machine — including
+the indistinguishable unknown-device challenge, the constant-time proof
+comparison, canonical scopes, the pairing window/attempt boundaries as
+injected interfaces, and the post-TLS deadline — all pinned by
+`rivet/tests/device-session-golden.txt` plus deterministic state-machine
+tests. Windows TLS transport, listener, and discovery remain unimplemented.
 
 ## Session protocol
 

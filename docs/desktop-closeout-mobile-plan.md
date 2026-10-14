@@ -205,41 +205,31 @@ changed.
 
 ## Next implementation handoff
 
-M2a through M2h are complete. Deterministic tests cover secure-store lifecycle and
-failure mapping; all session record types and cryptographic vectors;
-fragmented/coalesced reads; size, shape, ordering, duplicate, and timeout
-failures; indistinguishable reconnect failures; dual-confirmation pairing; and
-the persistence-before-acceptance rule. Apple transport tests additionally
-cover exact SPKI hashing, malformed DER, invalid pins, fragmented/coalesced
-stream reads, fail-closed protocol errors, the irreversible transition to
-application bytes, identity persistence/rotation, generated-certificate SPKI,
-pre-allocation connection caps, listener failure, disable, terminal shutdown,
-canonical bounded TXT encoding, ready-only advertisement, pairing-hint updates,
-service removal before cancellation, ephemeral-ID rotation, authenticated
-preface-to-RVT1 handoff, explicit dual-peer pairing confirmation, post-TLS
-timeout, idempotent host cleanup, explicit browser start/stop, canonical-only
-discovery, endpoint/service-name/ephemeral-ID/pairing-hint changes, removal,
-candidate/event bounds, failure, cancellation, stale-generation isolation, and
-the client-side mirror: pinned reconnect with proof verification, reconnect
-rejection without pairing fallback, code surfacing without auto-confirmation,
-persistence before acceptance, persistence failure without acceptance,
-post-TLS and pairing-decision timeouts, cancellation, malformed prefaces, pin
-mismatch, and missing fingerprint observations. The Swift package passes, all
-Apple device targets build for generic iOS and macOS, and
-`RivetWatchConnectivity` continues to build for generic iOS and watchOS. The
-framework-side Apple companion foundation (discovery, TLS, preface, session
-host, session client) is complete; `inspect --json` reports the session
-client as implemented.
+M3 has started. Its first slice is complete in the portable C++ runtime:
+`runtime/include/rivet/device_session.hpp` implements the RVD1 v1 records,
+the authentication-proof and pairing-code transcripts, and the full
+server-side state machine (reconnect authentication with an
+indistinguishable unknown-device challenge and constant-time comparison,
+dual-confirmation pairing, injected window/attempt, secure-storage, random,
+UUID, and clock boundaries, canonical scopes, stable reject codes, and the
+post-TLS deadline). It is pinned by the shared `device-session-golden.txt`
+vectors and deterministic codec and state-machine tests
+(`rivet_device_session_test` in `runtime/`). The earlier Apple companion
+layers M2a through M2h are complete and reported by diagnostics; the
+remaining M2 item — product gateway binding, pairing UI, and the PodLens
+vertical slice — is product-repository work coordinated with the active
+Taskly-standard alignment workstream.
 
-The next framework implementation slice is bounded M3 work: a Windows gateway
-that terminates the same TLS and `RVD1` preface against the existing iOS
-client contract, followed by binding Android discovery/TLS streams to the
-existing Kotlin runtime and generated device API. Read
-`docs/network-device-channel.md` for the wire and timing contract and reuse
-the language-neutral fixtures; do not reinterpret the preface per platform.
-The remaining M2 item — product gateway binding, pairing UI, and the PodLens
-vertical slice — is product-repository work that must be coordinated with the
-active Taskly-standard alignment workstream instead of edited in parallel.
+The next M3 slice is the Windows host transport: a WinRT
+`StreamSocketListener` TLS server with a generated P-256 self-signed
+identity, SPKI-published for client pinning, DNS-SD advertising equivalent
+to the macOS TXT record, and the admission caps and fail-closed lifecycle
+the macOS listener already enforces — wiring the accepted socket to
+`rivet::DeviceSessionServer`. After that, bind Android discovery/TLS
+streams to the existing Kotlin runtime and the generated device API using
+the same golden fixture. Read `docs/network-device-channel.md` for the wire
+and timing contract and reuse the language-neutral fixtures; do not
+reinterpret the preface per platform.
 
 ### M3 — second desktop host and Android client
 

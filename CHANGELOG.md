@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add the portable C++ device-session preface for the Windows and Linux
+  gateways. `rivet/device_session.hpp` implements the RVD1 v1 records, the
+  HMAC authentication proof and six-digit pairing-code transcripts, and the
+  server-side state machine: reconnect authentication with an
+  indistinguishable unknown-device challenge and constant-time proof
+  comparison, dual-confirmation pairing over injected window/attempt and
+  secure-storage boundaries, canonical scope enforcement, stable reject
+  codes, and the post-TLS deadline. The shared
+  `device-session-golden.txt` vectors plus deterministic codec, transcript,
+  and state-machine tests pin the contract; TLS transport, listeners, and
+  discovery remain platform work.
 - Move the test suite under the `rivet` collection (`rivet/tests/`). A
   top-level `tests/` directory inside a multi-collection package publishes a
   generic `tests` collection that cannot coexist with any other package

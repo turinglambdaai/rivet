@@ -4,6 +4,8 @@ project(rivet_runtime LANGUAGES CXX)
 add_library(rivet_protocol STATIC
   src/protocol.cpp
   src/chart_batch.cpp
+  src/sha256.cpp
+  src/device_session.cpp
 )
 
 target_include_directories(rivet_protocol
@@ -41,11 +43,22 @@ if(RIVET_BUILD_TESTS)
     ${CMAKE_CURRENT_BINARY_DIR}/protocol-golden.txt
     COPYONLY
   )
+  configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/../rivet/tests/device-session-golden.txt
+    ${CMAKE_CURRENT_BINARY_DIR}/device-session-golden.txt
+    COPYONLY
+  )
   add_executable(rivet_protocol_test tests/protocol_test.cpp)
   target_link_libraries(rivet_protocol_test PRIVATE rivet_protocol)
   target_compile_features(rivet_protocol_test PRIVATE cxx_std_17)
   rivet_enable_test_assertions(rivet_protocol_test)
   add_test(NAME rivet_protocol_test COMMAND rivet_protocol_test)
+
+  add_executable(rivet_device_session_test tests/device_session_test.cpp)
+  target_link_libraries(rivet_device_session_test PRIVATE rivet_protocol)
+  target_compile_features(rivet_device_session_test PRIVATE cxx_std_17)
+  rivet_enable_test_assertions(rivet_device_session_test)
+  add_test(NAME rivet_device_session_test COMMAND rivet_device_session_test)
 
   add_executable(rivet_protocol_property_test tests/protocol_property_test.cpp)
   target_link_libraries(rivet_protocol_property_test PRIVATE rivet_protocol)
