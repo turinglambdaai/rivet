@@ -1,11 +1,11 @@
 #lang racket/base
 
 ;; Structural tests for the native Linux installer formats (deb, rpm,
-;; AppImage). Everything here runs on any platform: staging and metadata
-;; generation are pure Racket, so the deb control file, desktop entry, rpm
-;; spec, and AppRun script are validated byte-level. Full builds (dpkg-deb,
-;; rpmbuild, appimagetool) run in the Linux CI package smoke jobs where the
-;; tooling exists.
+;; AppImage). Staging and metadata generation are pure Racket, so the deb
+;; control file, desktop entry, rpm spec, and AppRun script are validated
+;; byte-level on any host. The checksum sidecar needs the pinned libcrypto
+;; provider; full builds (dpkg-deb, rpmbuild, appimagetool) run in the Linux
+;; CI package smoke jobs where the tooling exists.
 
 (require rackunit
          racket/file
@@ -19,6 +19,14 @@
          "../rivet-cli/linux-native-package.rkt"
          "../rivet-cli/project.rkt"
          "../rivet-cli/rpm.rkt")
+
+;; Rivet pins manifest crypto to the libcrypto factory, which desktop
+;; Racket distributions bundle. Package build hosts may not have a native
+;; libcrypto, so the checksum sidecar checks skip there instead of failing.
+(define digests-available?
+  (with-handlers ([exn:fail? (lambda (_) #f)])
+    (sha256-bytes #"")
+    #t))
 
 (define temp-root (make-temporary-file "rivet-linux-native-~a" 'directory))
 
@@ -59,13 +67,14 @@
     (check-true (regexp-match? #rx"(?m:\\.rpm$)" (path->string (rpm-installer-path project))))
     (check-true (regexp-match? #rx"(?m:\\.AppImage$)"
                                (path->string (appimage-installer-path project))))
-    (define checksum-payload (build-path temp-root "Demo_App.AppImage"))
-    (write-bytes/text checksum-payload "appimage-bytes")
-    (define checksum-sidecar (write-appimage-checksum! checksum-payload))
-    (check-equal?
-     (string-trim (file->string checksum-sidecar))
-     (format "~a  Demo_App.AppImage"
-             (sha256-file/hex checksum-payload)))
+    (when digests-available?
+      (define checksum-payload (build-path temp-root "Demo_App.AppImage"))
+      (write-bytes/text checksum-payload "appimage-bytes")
+      (define checksum-sidecar (write-appimage-checksum! checksum-payload))
+      (check-equal?
+       (string-trim (file->string checksum-sidecar))
+       (format "~a  Demo_App.AppImage"
+               (sha256-file/hex checksum-payload))))
 
     ;; ------------------------------------------------------------- deb
     (define deb-root (stage-deb-root! project package-dir

@@ -4,6 +4,7 @@
          racket/file
          racket/path
          racket/string
+         "../rivet/distribution/crypto.rkt"
          "../rivet/distribution/manifest.rkt"
          "../rivet-cli/appimage.rkt"
          "../rivet-cli/project.rkt"
@@ -41,6 +42,18 @@
                             #"release-2026")
 (parameterize ([current-environment-variables complete-env])
   (check-not-false (release-update-environment #t)))
+
+;; Rivet pins manifest crypto to the libcrypto factory. Package build hosts
+;; may not have a native libcrypto, so the digest- and signing-dependent
+;; release sections skip there; they run in rivet's CI.
+(define digests-available?
+  (with-handlers ([exn:fail? (lambda (_) #f)])
+    (sha256-bytes #"")
+    #t))
+(unless digests-available?
+  (displayln
+   "rivet-release-options-tests: skipping digest/signing sections; no libcrypto provider")
+  (exit 0))
 
 (define temp-root (make-temporary-file "rivet-release-options-~a" 'directory))
 (dynamic-wind

@@ -9,6 +9,7 @@
          racket/system
          "codegen.rkt"
          "project.rkt"
+         "racket-executable.rkt"
          "runtime.rkt"
          "windows-tools.rkt")
 
@@ -256,7 +257,7 @@
   core)
 
 (define (compile-backend-module-bundle! backend core [runtime-dir #f])
-  (define raco (find-executable-path "raco"))
+  (define raco (resolve-raco-executable))
   ;; `raco ctool --mods` can consume an existing compiled entry module without
   ;; refreshing its transitive dependencies. Compile the dependency graph first
   ;; so same-length source edits cannot leave stale bytecode in the bundle.

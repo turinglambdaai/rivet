@@ -6,9 +6,23 @@
          racket/string
          racket/system
          rackunit
+         "../rivet/distribution/crypto.rkt"
          "../rivet-cli/installer.rkt"
          "../rivet-cli/project.rkt"
          (submod "../rivet-cli/installer.rkt" test-support))
+
+;; Derived UpgradeCodes are content-addressed through the pinned libcrypto
+;; factory, and every WiX source embeds them. Package build hosts may not
+;; have a native libcrypto, so the whole file skips there; it runs in
+;; rivet's CI and on desktop hosts.
+(define digests-available?
+  (with-handlers ([exn:fail? (lambda (_) #f)])
+    (sha256-bytes #"")
+    #t))
+(unless digests-available?
+  (displayln
+   "rivet-windows-installer-tests: skipping; no libcrypto provider")
+  (exit 0))
 
 ;; ---------------------------------------------------------------------------
 ;; Derived UpgradeCodes

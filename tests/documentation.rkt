@@ -197,13 +197,17 @@
 
 (define embed-action
   (build-path repository-root ".github" "actions" "setup-embed-racket" "action.yml"))
-(for ([expected (in-list '("actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
-                           "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
-                           "sha256sum --check"
-                           "RIVET_RACKET_INCLUDE"
-                           "RIVET_RACKET_LIBRARY"
-                           "RIVET_RACKET_BOOT_DIR"))])
-  (check-file-contains embed-action expected))
+;; Packaged copies of the repository legitimately lack dot-directories (the
+;; package build farm installs one), so the CI-wiring checks only run where
+;; the checkout actually contains them.
+(when (file-exists? embed-action)
+  (for ([expected (in-list '("actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+                             "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+                             "sha256sum --check"
+                             "RIVET_RACKET_INCLUDE"
+                             "RIVET_RACKET_LIBRARY"
+                             "RIVET_RACKET_BOOT_DIR"))])
+    (check-file-contains embed-action expected)))
 
 (define configuration-guide
   (build-path repository-root "docs" "configuration.md"))

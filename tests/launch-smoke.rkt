@@ -1,11 +1,10 @@
 #lang racket/base
 
 (require rackunit
-         "../rivet-cli/launch-smoke.rkt")
+         "../rivet-cli/launch-smoke.rkt"
+         "../rivet-cli/racket-executable.rkt")
 
-(define racket-executable
-  (or (find-executable-path "racket")
-      (error 'launch-smoke-test "racket executable was not found")))
+(define racket-executable (resolve-racket-executable))
 
 (check-true (boolean? (gui-session-available?)))
 

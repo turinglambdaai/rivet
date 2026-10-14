@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Keep the package build farm green on hosts without desktop conveniences.
+  Console executables are now resolved from the running installation's bin
+  directory before PATH, so the build, launch-smoke, and AppImage process
+  tests run on build farms that invoke `bin/racket` by a relative path.
+  Digest- and signing-dependent tests skip with a notice where the pinned
+  libcrypto factory is unavailable, the manifest composer skips without an
+  Ed25519 provider instead of raising, and CI-wiring checks tolerate packaged
+  copies that omit dot-directories.
 - Add the framework-only Apple session client for iOS companions.
   `RivetDeviceAppleSessionClient` connects one explicitly selected endpoint
   through a pinned reconnect or an explicit provisional-pairing TLS context,
