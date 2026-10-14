@@ -111,7 +111,7 @@ Pairing is an explicit foreground action:
 
 1. The user opens the desktop's Devices UI and starts a five-minute pairing window.
 2. The phone discovers the service. The preferred path scans a desktop QR code containing the service instance and server public-key fingerprint, so TLS is pinned before the first request.
-3. A manual fallback connects with an untrusted provisional identity and shows the same short authentication string on both devices. The string is derived from the server-certificate fingerprint plus fresh client and server nonces exchanged on that connection. Both screens require confirmation; a man-in-the-middle presents a different server key and therefore produces different strings.
+3. A manual fallback connects with an untrusted provisional identity and shows the same short authentication string on both devices. The string is derived from the server public-key fingerprint plus fresh client and server nonces exchanged on that connection. Both screens require confirmation; a man-in-the-middle presents a different server key and therefore produces different strings.
 4. Only after both the desktop user and the phone user confirm the matching string, the desktop issues a random 256-bit per-device credential over the authenticated channel and records the device name, granted scopes, creation time, and last-used time. The phone stores the credential and server pin in Keychain/Keystore.
 5. The pairing window closes after success, expiry, five failed attempts, or an explicit cancel.
 
@@ -137,7 +137,185 @@ Credential Manager adapters, QR/manual UI, and wire messages remain unimplemente
 
 ## Session protocol
 
-TLS negotiates the application protocol `rivet-device/1`. Before RVT1, a bounded device-session preface authenticates the paired credential, identifies the requested application and protocol version, and returns the effective scopes and limits. The preface is capped at 8 KiB and has a ten-second deadline.
+TLS negotiates the application protocol `rivet-device/1`. Before RVT1, a
+bounded device-session preface authenticates the paired credential, identifies
+the requested application and protocol version, and returns the effective
+scopes and limits. The byte-level v1 contract below is approved for M2b but not
+yet implemented.
+
+### Preface record
+
+Each preface message is one record. Multi-byte header integers are little-
+endian, matching RVT1:
+
+| Offset | Size | Field |
+|---:|---:|---|
+| 0 | 4 | ASCII magic `RVD1` |
+| 4 | 1 | device-session version, currently `1` |
+| 5 | 1 | message type |
+| 6 | 2 | payload byte length, unsigned 16-bit |
+| 8 | N | payload bytes |
+
+The complete record, including its eight-byte header, is limited to 8 KiB.
+The receiver validates magic, version, type, and `N <= 8184` before allocating
+or invoking a value decoder. An unsupported device-session version closes the
+connection without a response; the server never guesses a compatible version
+or falls back to unprotected RVT1. The payload is exactly one RVT1 v1 value and
+must be the message-specific List below with no trailing bytes. Reusing the closed
+RVT1 value codec avoids a second string/bytes/container format; this does not
+permit ordinary RVT1 frames before authentication.
+
+UUID fields are 16-byte `Bytes` values in RFC 4122 canonical byte order. Nonces,
+credentials, proofs, and the server fingerprint are 32-byte `Bytes` values.
+The fingerprint is SHA-256 over the DER-encoded SubjectPublicKeyInfo (SPKI) of
+the TLS leaf certificate; hashing the whole certificate is not conforming.
+Application IDs, device display names, and scope names are at most 128 UTF-8
+bytes. At most 64 unique scope names may be returned, sorted by their UTF-8
+bytes. Integers in payload shapes are non-negative RVT1 `Int64` values.
+
+| Value | Name | Direction | Payload shape |
+|---:|---|---|---|
+| 1 | Authenticate | client → server | `[application-id, device-id, client-nonce]` |
+| 2 | AuthChallenge | server → client | `[server-nonce]` |
+| 3 | AuthProof | client → server | `[proof]` |
+| 4 | PairStart | client → server | `[application-id, window-id, device-name, client-nonce]` |
+| 5 | PairChallenge | server → client | `[attempt-id, server-nonce]` |
+| 6 | PairDecision | client → server | `[attempt-id, confirmed?]` |
+| 7 | Accept | server → client | `[session-id, scope-names, max-payload, max-pending]` |
+| 8 | Paired | server → client | `[device-id, credential, session-id, scope-names, max-payload, max-pending]` |
+| 9 | Reject | server → client | `[stable-code]` |
+
+`max-payload` is initially 524288 and `max-pending` is initially 64. The
+server remains authoritative if a client advertises or assumes different
+limits. A valid `Accept` or `Paired` is immediately followed by the ordinary
+RVT1 v1 Hello frame on the same ordered TLS stream. The client must persist a
+new pairing credential before accepting that Hello. If persistence fails it
+closes the connection; the resulting unreachable desktop entry is safe but
+must be visible for user revocation and a fresh pairing attempt.
+
+### Reconnect authentication
+
+Reconnect uses this strict sequence, with no pipelining or fallback:
+
+```text
+client Authenticate
+server AuthChallenge
+client AuthProof
+server Accept | Reject
+server RVT1 Hello       # only after Accept
+```
+
+The proof is the full 32-byte result of:
+
+```text
+HMAC-SHA256(credential,
+  "rivet-device-auth-v1" ||
+  LP(application-id UTF-8) ||
+  LP(server SPKI SHA-256 fingerprint) ||
+  LP(device-id bytes) ||
+  LP(client-nonce) ||
+  LP(server-nonce))
+```
+
+Here `LP(x)` is a four-byte **big-endian** unsigned length followed by `x`.
+Cryptographic transcript lengths are intentionally network order even though
+record headers follow RVT1's little-endian convention. Both nonces must be
+fresh for the connection. The credential is never transmitted during a
+reconnect, and a captured proof is unusable with another nonce pair or server
+identity.
+
+For an unknown/revoked device, wrong application ID, changed server identity,
+or malformed stored credential, the server still emits a fresh challenge and
+performs a dummy HMAC before returning the single public code
+`authentication_failed`. The record sequence and public error do not reveal
+which field failed. Implementations compare the proof in constant time.
+
+### Pairing sequence
+
+Pairing uses this strict sequence:
+
+```text
+client PairStart
+server PairChallenge
+client PairDecision(false)  -> server Reject, close
+client PairDecision(true)   -> wait for desktop confirmation
+desktop rejects/expires     -> server Reject, close
+both peers confirm          -> server Paired
+server RVT1 Hello           # only after Paired
+```
+
+The device and desktop independently derive the displayed six-digit code from
+the existing pairing transcript. Its exact bytes are:
+
+```text
+SHA256(
+  "rivet-device-pairing-v1" ||
+  LP(application-id UTF-8) ||
+  LP(server SPKI SHA-256 fingerprint) ||
+  LP(client-nonce) ||
+  LP(server-nonce))
+```
+
+Interpret the first four digest bytes as a big-endian unsigned integer, reduce
+modulo 1,000,000, and render six decimal digits with leading zeroes. The code
+is confirmation evidence, never a credential. `Paired` is emitted exactly once
+and only after both `confirmOnDevice` and `confirmOnDesktop` accept the same
+attempt. Granted scopes come only from the desktop confirmation; the device
+cannot request or widen them.
+
+`PairDecision(false)`, a desktop rejection, or a transcript mismatch consumes
+one of the window's five failures. An invalid/expired unguessable window ID gets
+`pairing_unavailable` without revealing another window. A disconnect abandons
+the attempt; RPCs are never replayed and an attempt ID is never resumed on a
+new TLS connection.
+
+### Reject and timeout behavior
+
+Validly framed semantic failures may use only these v1 codes:
+
+- `authentication_failed`
+- `pairing_unavailable`
+- `pairing_rejected`
+- `pairing_expired`
+- `server_busy`
+- `internal_error`
+
+Reject payloads contain no human message, device name, application declaration,
+credential bytes, proof, nonce, fingerprint, or storage error. After Reject the
+server closes the TLS connection. Bad magic, impossible lengths, malformed
+RVT1 values, wrong field counts/types/sizes, unexpected directions, duplicate
+messages, and ordinary RVT1 bytes before acceptance close immediately without
+a response or protocol fallback.
+
+Normal reconnect must finish TLS plus preface within 30 seconds and the post-
+TLS records within 10 seconds. Pairing must exchange PairStart/PairChallenge
+within 10 seconds, then may wait only until the already-open five-minute pairing
+window expires; individual device decisions still have a 10-second read
+deadline once requested. Each connection permits exactly one authentication or
+pairing flow.
+
+### M2b acceptance evidence
+
+Implement the preface as a pure incremental codec and explicit state machine
+before connecting it to Network.framework or a listener. M2b is complete only
+when the repository contains:
+
+- a language-neutral golden fixture for every record type, the authentication
+  proof, and the pairing code;
+- boundary tests for fragmented and coalesced reads, the 8 KiB record limit,
+  field counts/types/sizes, unexpected message order, duplicate messages, and
+  trailing payload bytes;
+- deterministic timeout tests using an injected clock rather than wall-clock
+  sleeps;
+- negative authentication tests showing that unknown, revoked, wrong-
+  application, and changed-identity cases have the same public record sequence
+  and `authentication_failed` result; and
+- an inventory update that moves the session-preface finding from pending only
+  after the codec and state-machine tests pass.
+
+The golden fixture is the compatibility boundary for later Kotlin and Windows
+implementations. A platform adapter may split or combine stream writes, but it
+must not reinterpret, reorder, or extend these records.
 
 After authentication the gateway emits the ordinary RVT1 v1 Hello frame. Existing Swift and Kotlin `RivetClient` implementations can then own the ordered byte stream. The network wrapper is responsible for TLS, the preface, reconnect policy, and converting the resulting stream into the input/output handles those clients already accept.
 
