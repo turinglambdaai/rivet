@@ -42,7 +42,19 @@
    (check-not-false
     (member "pairing-state-machine" (hash-ref device-surface 'implemented)))
    (check-not-false
+    (member "secure-storage-adapter" (hash-ref device-surface 'implemented)))
+   (check-false
+    (member "secure-storage-adapter" (hash-ref device-surface 'pending)))
+   (check-not-false
+    (member "session-preface" (hash-ref device-surface 'pending)))
+   (check-not-false
     (member "network-listener" (hash-ref device-surface 'pending)))
+   (check-not-false
+    (member "tls-adapter" (hash-ref device-surface 'pending)))
+   (check-not-false
+    (member "discovery" (hash-ref device-surface 'pending)))
+   (check-not-false
+    (member "product-ui" (hash-ref device-surface 'pending)))
 
    (define sourcing (hash-ref report 'capability-sourcing))
    (check-equal? (hash-ref sourcing 'version) 1)

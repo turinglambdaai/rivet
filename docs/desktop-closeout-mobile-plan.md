@@ -165,48 +165,34 @@ implemented in `RivetDevice`. It defines the byte-exact short-code
 transcript, bounded pairing window/attempt state machine, injectable secure-
 storage boundary, credential reconnect authentication, non-secret listable
 metadata, dual-peer confirmation before credential issuance, and credential-
-to-live-session revocation. `inspect --json` reports
-this as `framework-core` and separately lists the listener, TLS adapter,
-platform secure-storage adapter, discovery, and product UI as pending. No
-product repository or UI was changed.
+to-live-session revocation. `RivetDeviceAppleSecurity` now implements the
+pairing store with service-scoped generic-password items, a versioned envelope,
+device-local accessibility, disabled synchronization, secret-free stable
+errors, and an injectable Security.framework boundary. `inspect --json` lists
+the secure-storage adapter as implemented while the listener, TLS adapter,
+discovery, and product UI remain pending. No product repository or UI was
+changed.
 
 ## Next implementation handoff
 
-The next implementation agent owns one bounded M2a slice: the Apple secure-
-storage adapter. Do not add a listener, discovery, TLS, pairing UI, product UI,
-or product-repository changes in the same patch.
+M2a is complete. Its deterministic tests cover add/update, exact load,
+service-scoped listing, idempotent removal, corrupt and version-mismatched
+envelopes, metadata and secret lengths, Security status mapping, and secret-
+free errors. The full Swift package passes; the new target builds for generic
+iOS and macOS; and `RivetWatchConnectivity` still builds for generic iOS and
+watchOS.
 
-Add a `RivetDeviceAppleSecurity` Swift product/target that depends on
-`RivetDevice` and implements `RivetDevicePairingStore` with Security.framework
-generic-password items:
+The next implementation agent owns the bounded M2b session-preface codec and
+state machine. Implement the byte-exact `RVD1` contract and acceptance evidence
+in `network-device-channel.md` as pure incremental, in-memory components before
+connecting them to Network.framework. Do not add a listener, discovery, TLS,
+pairing UI, product UI, or product-repository changes in the same patch.
 
-- namespace items by an initializer-supplied service string; use the paired
-  device UUID as the account and never put the display name or credential in a
-  label, error, or log;
-- store one versioned Codable envelope containing the non-secret metadata and
-  32-byte credential as the Keychain value, with synchronizable disabled and a
-  device-local accessibility class suitable for background reconnect;
-- make save an add-or-update operation, load exact by UUID, list only the
-  configured service, and remove idempotent;
-- reject wrong envelope versions, malformed metadata, wrong fingerprints, and
-  wrong credential lengths with stable typed errors that contain no stored
-  bytes;
-- put Security.framework calls behind an injectable narrow client so unit tests
-  do not mutate or prompt against the developer's real Keychain.
-
-Acceptance evidence for M2a:
-
-1. Deterministic tests cover add, update, exact load, service-scoped listing,
-   idempotent removal, malformed/version-mismatched entries, Security status
-   mapping, and secret-free error descriptions.
-2. The full Swift package tests pass with the documented Racket include path.
-3. `RivetWatchConnectivity` still builds for generic iOS 16 and watchOS 9, and
-   the new security target builds for generic iOS and macOS.
-4. `inspect --json` moves only `secure-storage-adapter` from `pending` to
-   `implemented`; listener/TLS/discovery/product UI remain pending.
-5. The implementation agent updates this section with evidence and commits the
-   patch. A design/review pass should approve it before starting the bounded
-   session-preface codec.
+M2b must consume the existing pairing/authentication core rather than duplicate
+credential or confirmation policy. Move only a `session-preface` capability to
+the implemented diagnostics inventory after its golden, fragmentation,
+boundary, ordering, timeout, and indistinguishable-authentication-failure tests
+pass. Keep the listener, TLS adapter, discovery, and product UI pending.
 
 ### M3 — second desktop host and Android client
 

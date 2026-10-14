@@ -104,7 +104,7 @@ private struct RivetDeviceGatewayGrants: Sendable {
     }
 }
 
-func isValidDeviceAPIName(_ name: String) -> Bool {
+package func isValidDeviceAPIName(_ name: String) -> Bool {
     !name.isEmpty
         && name.utf8.count <= 128
         && name.unicodeScalars.allSatisfy {

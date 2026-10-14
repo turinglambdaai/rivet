@@ -95,9 +95,12 @@ returns the same failure for an unknown device, wrong application, changed
 server identity, or bad credential. Revocation removes the credential first and
 then asks the gateway to close every session owned by that paired device.
 
-These types do not create trust by themselves. A platform adapter must still
-provide authenticated TLS, server-key pinning, Keychain/Credential Manager
-storage, bounded preface decoding, and explicit native confirmation UI.
+These types do not create trust by themselves. `RivetDeviceAppleSecurity`
+implements the Apple pairing-credential store with service-scoped,
+device-local Keychain items. Platform adapters must still provide authenticated
+TLS, server-key pinning and identity storage, bounded preface decoding, and
+explicit native confirmation UI; Windows still needs its Credential Manager
+adapter.
 
 This design follows the core idea in [DSLs for Safe iOS/watchOS Communication](https://defn.io/2025/02/16/type-safe-watchos-communication/): encode the request/response relationship in types and centralize dispatch instead of spreading dictionaries, route strings, and casts throughout both apps. Rivet generates that relationship from the shared Racket schema while keeping the exported device surface explicit.
 

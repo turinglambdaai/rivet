@@ -15,6 +15,10 @@ let package = Package(
     products: [
         .library(name: "RivetRuntime", targets: ["RivetRuntime"]),
         .library(name: "RivetDevice", targets: ["RivetDevice"]),
+        .library(
+            name: "RivetDeviceAppleSecurity",
+            targets: ["RivetDeviceAppleSecurity"]
+        ),
         .library(name: "RivetWatchConnectivity", targets: ["RivetWatchConnectivity"]),
         .library(name: "RivetEmbedding", targets: ["RivetEmbedding"]),
         .library(name: "RivetSystem", targets: ["RivetSystem"]),
@@ -29,6 +33,14 @@ let package = Package(
         .target(
             name: "RivetDevice",
             path: "Sources/RivetDevice"
+        ),
+        .target(
+            name: "RivetDeviceAppleSecurity",
+            dependencies: ["RivetDevice"],
+            path: "Sources/RivetDeviceAppleSecurity",
+            linkerSettings: [
+                .linkedFramework("Security")
+            ]
         ),
         .target(
             name: "RivetWatchConnectivity",
@@ -76,6 +88,11 @@ let package = Package(
             name: "RivetDeviceTests",
             dependencies: ["RivetDevice"],
             path: "Tests/RivetDeviceTests"
+        ),
+        .testTarget(
+            name: "RivetDeviceAppleSecurityTests",
+            dependencies: ["RivetDevice", "RivetDeviceAppleSecurity"],
+            path: "Tests/RivetDeviceAppleSecurityTests"
         ),
         .testTarget(
             name: "RivetSystemTests",

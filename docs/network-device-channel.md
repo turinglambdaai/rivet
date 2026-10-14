@@ -2,9 +2,10 @@
 
 Status: active design for [issue #85](https://github.com/turinglambdaai/rivet/issues/85).
 The transport-independent `RivetDeviceGateway` policy/session core and pairing/
-authentication state machine are implemented and tested in memory. No network
-listener, platform secure-storage adapter, pairing UI, or generated mobile
-application is shipped yet.
+authentication state machine are implemented and tested in memory. The Apple
+pairing-credential Keychain adapter is also implemented. No network listener,
+TLS/pinning adapter, pairing UI, or generated mobile application is shipped
+yet.
 
 ## Problem
 
@@ -132,8 +133,10 @@ impossible until both peers have accepted the same attempt.
 credential to live in secure storage; ordinary device metadata deliberately
 omits it. `RivetDeviceSessionAuthenticator` uses one public authentication
 failure for all mismatches, updates last-used metadata, and couples credential
-revocation to `RivetDeviceGateway` session closure. Platform TLS, Keychain/
-Credential Manager adapters, QR/manual UI, and wire messages remain unimplemented.
+revocation to `RivetDeviceGateway` session closure. `RivetDeviceAppleSecurity`
+implements that pairing store with service-scoped, device-local Keychain
+generic-password items. Platform TLS identity/pinning, Windows Credential
+Manager storage, QR/manual UI, and wire messages remain unimplemented.
 
 ## Session protocol
 

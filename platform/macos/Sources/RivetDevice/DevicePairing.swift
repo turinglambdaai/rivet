@@ -591,7 +591,7 @@ public actor RivetDeviceSessionAuthenticator {
     }
 }
 
-private func isValidDeviceDisplayName(_ name: String) -> Bool {
+package func isValidDeviceDisplayName(_ name: String) -> Bool {
     !name.isEmpty
         && name.utf8.count <= 128
         && name == name.trimmingCharacters(in: .whitespacesAndNewlines)

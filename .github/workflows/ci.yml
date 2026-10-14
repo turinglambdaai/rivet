@@ -144,7 +144,7 @@ jobs:
           set -euo pipefail
           racket_include="$(racket -e '(require setup/dirs) (display (path->string (find-include-dir)))')"
           swift test --package-path platform/macos -Xcc "-I${racket_include}"
-      - name: Compile typed device channel for iOS and watchOS
+      - name: Compile portable Apple device targets
         shell: bash
         run: |
           set -euo pipefail
@@ -184,6 +184,15 @@ jobs:
               -scheme "$scheme" \
               -destination 'generic/platform=watchOS' \
               -derivedDataPath "$RUNNER_TEMP/rivet-${scheme}-watchos" \
+              CODE_SIGNING_ALLOWED=NO \
+              build
+          done
+          for platform in iOS macOS; do
+            xcodebuild \
+              -workspace . \
+              -scheme RivetDeviceAppleSecurity \
+              -destination "generic/platform=$platform" \
+              -derivedDataPath "$RUNNER_TEMP/rivet-device-security-$platform" \
               CODE_SIGNING_ALLOWED=NO \
               build
           done

@@ -209,11 +209,12 @@
                 "request-id-mapping"
                 "session-revocation"
                 "pairing-state-machine"
-                "credential-authentication")
+                "credential-authentication"
+                "secure-storage-adapter")
               'pending
-              '("network-listener"
+              '("session-preface"
+                "network-listener"
                 "tls-adapter"
-                "secure-storage-adapter"
                 "discovery"
                 "product-ui"))
         'readiness
