@@ -215,7 +215,8 @@
                 "tls-adapter"
                 "server-identity"
                 "network-listener"
-                "discovery")
+                "discovery"
+                "session-host")
               'pending
               '("product-ui"))
         'readiness

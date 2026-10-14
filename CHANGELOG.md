@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Connect accepted macOS device transports to a fresh `RivetDeviceSessionServer`
+  through `RivetDeviceAppleSessionHost`. The host enforces post-TLS deadlines,
+  reports pairing codes without auto-approval, switches to RVT1 only after
+  authenticated acceptance, and performs idempotent disconnect cleanup.
+- Repair generated-project package smoke tests after the schema compatibility
+  gate became automatic. Workflows that intentionally replace the scaffold
+  backend now explicitly regenerate and verify their reviewed schema baseline
+  before build/package checks, preserving the gate instead of bypassing it.
 - Add the first Apple companion-session security layers. Service-scoped,
   device-local Keychain storage now persists pairing credentials on macOS and
   iOS, while `RivetDeviceSession` supplies the bounded `RVD1` preface codec,

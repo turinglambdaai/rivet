@@ -166,6 +166,8 @@ jobs:
               raise SystemExit("failed to configure Apple device RPC exports")
           path.write_text(updated, encoding="utf-8")
           PY
+          raco rivet schema --output rivet-schema.json
+          raco rivet schema check rivet-schema.json --json
           raco rivet generate
           fixture="$GITHUB_WORKSPACE/tests/fixtures/apple-device-codegen/Sources/AppleDeviceCodegenFixture"
           cp macos-host/Sources/RivetHost/GeneratedBackend.swift "$fixture/GeneratedBackend.swift"
@@ -244,6 +246,8 @@ jobs:
           raco rivet new KtSmoke
           cd KtSmoke
           cp "$GITHUB_WORKSPACE/tests/fixtures/schema-matrix-backend.rkt" app/backend.rkt
+          raco rivet schema --output rivet-schema.json
+          raco rivet schema check rivet-schema.json --json
           raco rivet generate
           generated=".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
           test -s "$generated"
@@ -293,6 +297,8 @@ jobs:
           $updated = $config.Replace('(resources . ())', '(resources . ("assets"))').Replace('(windows-min-version . "10.0.19041.0")', '(windows-min-version . "10.0.19045.0")')
           if ($updated -eq $config) { throw 'failed to customize windows-min-version smoke value' }
           Set-Content -Path 'rivet.rktd' -Value $updated -NoNewline
+          raco rivet schema --output rivet-schema.json
+          raco rivet schema check rivet-schema.json --json
           raco rivet build
           raco rivet package
           raco rivet verify
@@ -374,6 +380,8 @@ jobs:
               raise SystemExit("failed to customize macos-min-version smoke value")
           path.write_text(updated, encoding="utf-8")
           PY
+          raco rivet schema --output rivet-schema.json
+          raco rivet schema check rivet-schema.json --json
           raco rivet build
           raco rivet package
           raco rivet verify

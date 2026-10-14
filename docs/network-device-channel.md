@@ -5,9 +5,10 @@ The transport-independent `RivetDeviceGateway` policy/session core, pairing/
 authentication lifecycle, and byte-exact session preface are implemented and
 tested in memory. The Apple pairing-credential Keychain adapter, bounded
 Network.framework TLS stream adapter, per-install identity provider, and
-disabled-by-default macOS listener with bounded Bonjour advertising are also
-implemented. No iOS discovery client, pairing UI, product enablement, or
-generated mobile application is shipped yet.
+disabled-by-default macOS listener with bounded Bonjour advertising, and the
+single-connection macOS preface host are also implemented. No iOS discovery
+client, product gateway binding, pairing UI, product enablement, or generated
+mobile application is shipped yet.
 
 ## Problem
 
@@ -154,7 +155,12 @@ disable, listener failure, or termination. While ready, that listener publishes
 only the session version, a per-listener ephemeral ID, and the pairing-window
 bit; it removes the service before shutdown. Windows Credential Manager
 storage, iOS discovery browsing, QR/manual UI, product enablement, and non-Apple
-adapters remain unimplemented.
+adapters remain unimplemented. `RivetDeviceAppleSessionHost` now drives one
+accepted connection through TLS and `RVD1`, surfaces pairing prompts for an
+explicit desktop decision, enforces the post-TLS deadline, and lends RVT1 bytes
+to an application handler only after the session server accepts the peer. That
+handler must bind the accepted scopes to `RivetDeviceGateway`; the host does not
+create an alternate authorization path.
 
 ## Session protocol
 
