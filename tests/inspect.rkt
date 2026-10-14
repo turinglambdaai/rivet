@@ -60,6 +60,8 @@
    (check-false
     (member "tls-adapter" (hash-ref device-surface 'pending)))
    (check-not-false
+    (member "discovery" (hash-ref device-surface 'implemented)))
+   (check-false
     (member "discovery" (hash-ref device-surface 'pending)))
    (check-not-false
     (member "product-ui" (hash-ref device-surface 'pending)))

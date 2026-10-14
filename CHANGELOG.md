@@ -20,8 +20,14 @@
   identity lifecycle. Private keys and their self-signed certificates stay in
   the application Keychain namespace; explicit rotation invalidates the public
   pin. Listener admission is capped before transport/session allocation, and
-  disable, failure, and termination close every accepted connection. Bonjour
-  discovery and product enablement remain separate future steps.
+  disable, failure, and termination close every accepted connection. Product
+  enablement remains a separate future step.
+- Add privacy-bounded Bonjour advertising to the macOS device listener. The
+  `_rivet-device._tcp` service exists only while the listener is ready, carries
+  a deterministic 128-byte-bounded TXT record with the session version, a
+  per-listener ephemeral identifier, and the pairing-window bit, and is removed
+  before shutdown. No API names, account/device identifiers, filenames, or user
+  content enter discovery; iOS browsing and product UI remain separate work.
 
 ## 0.11.0
 

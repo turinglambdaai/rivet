@@ -5,8 +5,9 @@ The transport-independent `RivetDeviceGateway` policy/session core, pairing/
 authentication lifecycle, and byte-exact session preface are implemented and
 tested in memory. The Apple pairing-credential Keychain adapter, bounded
 Network.framework TLS stream adapter, per-install identity provider, and
-disabled-by-default macOS listener are also implemented. No discovery,
-pairing UI, product enablement, or generated mobile application is shipped yet.
+disabled-by-default macOS listener with bounded Bonjour advertising are also
+implemented. No iOS discovery client, pairing UI, product enablement, or
+generated mobile application is shipped yet.
 
 ## Problem
 
@@ -46,8 +47,10 @@ The implemented in-memory core deliberately stops before the network boundary.
 `RivetDeviceGatewaySession` owns effective scope grants, its remote request-ID
 namespace, host request-ID mappings, cancellation, payload limits, and outbound
 Event/State filtering. A `RivetDeviceGatewayHost` adapter is the only path from
-that core to a host client. TLS, pairing, frame decoding, discovery, persistence,
-and platform UI remain later layers; none is simulated by the in-memory API.
+that core to a host client. The Apple TLS, pairing, persistence, preface, host
+listener, and advertisement layers now exist beside this core; their product
+coordination and platform UI remain later layers and are not simulated by the
+in-memory API.
 
 ## Invariants
 
@@ -146,9 +149,12 @@ identity provisioning creates a P-256 private key and matching self-signed
 certificate in the application Keychain namespace; explicit rotation changes
 the SPKI pin. Its macOS listener admits at most the configured number of
 connections before allocating transport/session state and closes them all on
-disable, listener failure, or termination. Windows Credential Manager storage,
-Bonjour discovery, QR/manual UI, product enablement, and non-Apple adapters
-remain unimplemented.
+disable, listener failure, or termination. While ready, that listener publishes
+`_rivet-device._tcp` with a deterministic, 128-byte-bounded TXT record containing
+only the session version, a per-listener ephemeral ID, and the pairing-window
+bit; it removes the service before shutdown. Windows Credential Manager
+storage, iOS discovery browsing, QR/manual UI, product enablement, and non-Apple
+adapters remain unimplemented.
 
 ## Session protocol
 

@@ -214,10 +214,10 @@
                 "session-preface"
                 "tls-adapter"
                 "server-identity"
-                "network-listener")
+                "network-listener"
+                "discovery")
               'pending
-              '("discovery"
-                "product-ui"))
+              '("product-ui"))
         'readiness
         (hash 'schema-baseline-configured (hash-ref schema-baseline 'exists)
               'warnings warnings)

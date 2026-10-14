@@ -126,6 +126,11 @@ private final class FakePendingConnection: RivetDeviceApplePendingConnection,
 
 private final class FakeListenerDriver: RivetDeviceAppleListenerDriver,
     @unchecked Sendable {
+    enum Event: Equatable {
+        case service(RivetDeviceAppleBonjourService?)
+        case cancel
+    }
+
     private let lock = NSLock()
     private let port: UInt16
     private var connectionHandler: (@Sendable (
@@ -135,6 +140,7 @@ private final class FakeListenerDriver: RivetDeviceAppleListenerDriver,
         RivetDeviceAppleListenerDriverStop
     ) -> Void)?
     private var cancelCount = 0
+    private var recordedEvents: [Event] = []
 
     init(port: UInt16) {
         self.port = port
@@ -142,6 +148,10 @@ private final class FakeListenerDriver: RivetDeviceAppleListenerDriver,
 
     var cancellations: Int {
         lock.withLock { cancelCount }
+    }
+
+    var events: [Event] {
+        lock.withLock { recordedEvents }
     }
 
     func start(
@@ -159,8 +169,15 @@ private final class FakeListenerDriver: RivetDeviceAppleListenerDriver,
         return port
     }
 
+    func setBonjourService(_ service: RivetDeviceAppleBonjourService?) {
+        lock.withLock { recordedEvents.append(.service(service)) }
+    }
+
     func cancel() {
-        lock.withLock { cancelCount += 1 }
+        lock.withLock {
+            cancelCount += 1
+            recordedEvents.append(.cancel)
+        }
     }
 
     func emit(_ connection: any RivetDeviceApplePendingConnection) {
@@ -205,9 +222,14 @@ private final class BlockingListenerDriver: RivetDeviceAppleListenerDriver,
         any RivetDeviceApplePendingConnection
     ) -> Void)?
     private var cancelled = false
+    private var recordedServices: [RivetDeviceAppleBonjourService?] = []
 
     var hasStarted: Bool {
         lock.withLock { continuation != nil }
+    }
+
+    var services: [RivetDeviceAppleBonjourService?] {
+        lock.withLock { recordedServices }
     }
 
     func start(
@@ -248,6 +270,10 @@ private final class BlockingListenerDriver: RivetDeviceAppleListenerDriver,
         continuation?.resume(returning: port)
     }
 
+    func setBonjourService(_ service: RivetDeviceAppleBonjourService?) {
+        lock.withLock { recordedServices.append(service) }
+    }
+
     func cancel() {
         let continuation = lock.withLock {
             cancelled = true
@@ -258,6 +284,19 @@ private final class BlockingListenerDriver: RivetDeviceAppleListenerDriver,
         continuation?.resume(
             throwing: RivetDeviceAppleListenerError.startFailed
         )
+    }
+}
+
+private final class AdvertisementIDSequence: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [String]
+
+    init(_ values: [String]) {
+        self.values = values
+    }
+
+    func next() -> String {
+        lock.withLock { values.removeFirst() }
     }
 }
 
@@ -344,6 +383,55 @@ private func waitUntil(
     ) == expectedSPKI)
 }
 
+@Test func bonjourAdvertisementUsesCanonicalPrivacyBoundedTXTRecord() throws {
+    let id = "00112233445566778899aabbccddeeff"
+    let advertisement = try RivetDeviceAppleBonjourAdvertisement(
+        advertisementID: id,
+        pairingWindowOpen: false
+    )
+    let expected = Data([35])
+        + Data("id=\(id)".utf8)
+        + Data([6])
+        + Data("pair=0".utf8)
+        + Data([3])
+        + Data("v=1".utf8)
+
+    #expect(advertisement.txtRecordData == expected)
+    #expect(try RivetDeviceAppleBonjourAdvertisement.decode(
+        txtRecordData: expected
+    ) == advertisement)
+    #expect(expected.count <= rivetDeviceAppleBonjourMaximumTXTRecordSize)
+
+    #expect(throws: RivetDeviceAppleBonjourError.invalidAdvertisementID) {
+        try RivetDeviceAppleBonjourAdvertisement(
+            advertisementID: id.uppercased(),
+            pairingWindowOpen: false
+        )
+    }
+    #expect(throws: RivetDeviceAppleBonjourError.invalidTXTRecord) {
+        try RivetDeviceAppleBonjourAdvertisement.decode(
+            txtRecordData: Data([3]) + Data("v=1".utf8)
+                + Data([35]) + Data("id=\(id)".utf8)
+                + Data([6]) + Data("pair=0".utf8)
+        )
+    }
+    #expect(throws: RivetDeviceAppleBonjourError.unsupportedProtocolVersion) {
+        try RivetDeviceAppleBonjourAdvertisement.decode(
+            txtRecordData: Data([35]) + Data("id=\(id)".utf8)
+                + Data([6]) + Data("pair=0".utf8)
+                + Data([3]) + Data("v=2".utf8)
+        )
+    }
+    #expect(throws: RivetDeviceAppleBonjourError.txtRecordTooLarge) {
+        try RivetDeviceAppleBonjourAdvertisement.decode(
+            txtRecordData: Data(
+                repeating: 0,
+                count: rivetDeviceAppleBonjourMaximumTXTRecordSize + 1
+            )
+        )
+    }
+}
+
 @Test func listenerIsDisabledByDefaultAndCapsBeforeTransportAllocation() async throws {
     let identityClient = MemoryIdentityClient(createValues: [
         try serverIdentity(fingerprint: hostFingerprintA)
@@ -357,6 +445,7 @@ private func waitUntil(
     let listener = try RivetDeviceAppleListener(
         identityStore: identityStore,
         driverFactory: factory,
+        serviceName: "Test Rivet",
         maximumConnections: 2
     ) { _ in
         try? await Task.sleep(for: .seconds(60))
@@ -366,7 +455,9 @@ private func waitUntil(
         state: .disabled,
         activeConnections: 0,
         rejectedConnections: 0,
-        serverFingerprint: nil
+        serverFingerprint: nil,
+        advertisementID: nil,
+        pairingWindowOpen: false
     ))
     #expect(identityClient.calls.isEmpty)
     #expect(factory.created == 0)
@@ -374,6 +465,8 @@ private func waitUntil(
     let enabled = try await listener.enable()
     #expect(enabled.state == .ready(port: 43123))
     #expect(enabled.serverFingerprint == hostFingerprintA)
+    #expect(enabled.advertisementID?.count == 32)
+    #expect(!enabled.pairingWindowOpen)
 
     let first = FakePendingConnection()
     let second = FakePendingConnection()
@@ -394,9 +487,113 @@ private func waitUntil(
     #expect(disabled.state == .disabled)
     #expect(disabled.activeConnections == 0)
     #expect(disabled.serverFingerprint == nil)
+    #expect(disabled.advertisementID == nil)
+    #expect(!disabled.pairingWindowOpen)
     #expect(driver.cancellations >= 1)
     #expect(first.bytes.wasCancelled)
     #expect(second.bytes.wasCancelled)
+}
+
+@Test func listenerRejectsInvalidDiscoveryConfigurationAndIdentifier() async throws {
+    let identityClient = MemoryIdentityClient(createValues: [
+        try serverIdentity(fingerprint: hostFingerprintA)
+    ])
+    let identityStore = try RivetDeviceAppleIdentityStore(
+        applicationID: "com.example.host",
+        client: identityClient
+    )
+    #expect(throws: RivetDeviceAppleListenerError.invalidConfiguration) {
+        try RivetDeviceAppleListener(
+            identityStore: identityStore,
+            driverFactory: FakeListenerFactory(drivers: []),
+            serviceName: " invalid "
+        ) { _ in }
+    }
+
+    let driver = FakeListenerDriver(port: 43132)
+    let listener = try RivetDeviceAppleListener(
+        identityStore: identityStore,
+        driverFactory: FakeListenerFactory(drivers: [driver]),
+        serviceName: "Test Rivet",
+        advertisementIDGenerator: { "not-a-canonical-id" }
+    ) { _ in }
+    await #expect(throws: RivetDeviceAppleListenerError.advertisementFailed) {
+        try await listener.enable()
+    }
+    #expect(await listener.snapshot().state == .failed)
+    #expect(await listener.snapshot().advertisementID == nil)
+    #expect(driver.events == [.cancel])
+}
+
+@Test func listenerAdvertisesOnlyWhileReadyAndRotatesEphemeralID() async throws {
+    let identityClient = MemoryIdentityClient(createValues: [
+        try serverIdentity(fingerprint: hostFingerprintA)
+    ])
+    let identityStore = try RivetDeviceAppleIdentityStore(
+        applicationID: "com.example.host",
+        client: identityClient
+    )
+    let firstDriver = FakeListenerDriver(port: 43130)
+    let secondDriver = FakeListenerDriver(port: 43131)
+    let ids = AdvertisementIDSequence([
+        "00112233445566778899aabbccddeeff",
+        "ffeeddccbbaa99887766554433221100"
+    ])
+    let listener = try RivetDeviceAppleListener(
+        identityStore: identityStore,
+        driverFactory: FakeListenerFactory(drivers: [
+            firstDriver,
+            secondDriver
+        ]),
+        serviceName: "Test Rivet",
+        advertisementIDGenerator: { ids.next() }
+    ) { _ in }
+
+    #expect(firstDriver.events.isEmpty)
+    let firstReady = try await listener.enable()
+    #expect(firstReady.advertisementID == "00112233445566778899aabbccddeeff")
+    #expect(!firstReady.pairingWindowOpen)
+    guard case let .service(firstService)? = firstDriver.events.first,
+          let firstService else {
+        Issue.record("listener did not publish its Bonjour service")
+        return
+    }
+    #expect(firstService.name == "Test Rivet")
+    #expect(firstService.type == rivetDeviceAppleBonjourServiceType)
+    #expect(try RivetDeviceAppleBonjourAdvertisement.decode(
+        txtRecordData: firstService.txtRecord
+    ).pairingWindowOpen == false)
+
+    try await listener.setPairingWindowOpen(true)
+    let pairingReady = await listener.snapshot()
+    #expect(pairingReady.advertisementID == firstReady.advertisementID)
+    #expect(pairingReady.pairingWindowOpen)
+    guard case let .service(pairingService)? = firstDriver.events.last,
+          let pairingService else {
+        Issue.record("listener did not update its Bonjour TXT record")
+        return
+    }
+    let pairingAdvertisement = try RivetDeviceAppleBonjourAdvertisement.decode(
+        txtRecordData: pairingService.txtRecord
+    )
+    #expect(pairingAdvertisement.advertisementID == firstReady.advertisementID)
+    #expect(pairingAdvertisement.pairingWindowOpen)
+
+    await listener.disable()
+    #expect(firstDriver.events.suffix(2) == [
+        .service(nil),
+        .cancel
+    ])
+    let secondReady = try await listener.enable()
+    #expect(secondReady.advertisementID == "ffeeddccbbaa99887766554433221100")
+    #expect(secondReady.advertisementID != firstReady.advertisementID)
+    #expect(!secondReady.pairingWindowOpen)
+
+    await listener.terminate()
+    #expect(secondDriver.events.suffix(2) == [
+        .service(nil),
+        .cancel
+    ])
 }
 
 @Test func connectionArrivingWithReadyIsQueuedUntilListenerStateCommits() async throws {
@@ -411,7 +608,8 @@ private func waitUntil(
     let driver = BlockingListenerDriver()
     let listener = try RivetDeviceAppleListener(
         identityStore: identityStore,
-        driverFactory: FakeListenerFactory(drivers: [driver])
+        driverFactory: FakeListenerFactory(drivers: [driver]),
+        serviceName: "Test Rivet"
     ) { _ in
         try? await Task.sleep(for: .seconds(60))
     }
@@ -426,12 +624,15 @@ private func waitUntil(
         await Task.yield()
     }
     #expect(await listener.snapshot().state == .starting)
+    #expect(driver.services.isEmpty)
     #expect(early.connectionsMade == 0)
     #expect(early.cancellations == 0)
 
     driver.becomeReady(port: 43125)
     let enabled = try await enable.value
     #expect(enabled.state == .ready(port: 43125))
+    #expect(driver.services.count == 1)
+    #expect(driver.services.first! != nil)
     await waitUntil { await listener.snapshot().activeConnections == 1 }
     #expect(early.connectionsMade == 1)
     #expect(early.cancellations == 0)
@@ -450,7 +651,8 @@ private func waitUntil(
     let driver = BlockingListenerDriver()
     let listener = try RivetDeviceAppleListener(
         identityStore: identityStore,
-        driverFactory: FakeListenerFactory(drivers: [driver])
+        driverFactory: FakeListenerFactory(drivers: [driver]),
+        serviceName: "Test Rivet"
     ) { _ in }
     let enable = Task { try await listener.enable() }
     for _ in 0..<200 where !driver.hasStarted {
@@ -485,7 +687,8 @@ private func waitUntil(
     let driver = FakeListenerDriver(port: 43124)
     let listener = try RivetDeviceAppleListener(
         identityStore: identityStore,
-        driverFactory: FakeListenerFactory(drivers: [driver])
+        driverFactory: FakeListenerFactory(drivers: [driver]),
+        serviceName: "Test Rivet"
     ) { _ in
         try? await Task.sleep(for: .seconds(60))
     }
@@ -498,6 +701,7 @@ private func waitUntil(
     await waitUntil { await listener.snapshot().state == .failed }
     #expect(accepted.bytes.wasCancelled)
     #expect(await listener.snapshot().activeConnections == 0)
+    #expect(driver.events.last == .service(nil))
 
     await listener.terminate()
     #expect(await listener.snapshot().state == .terminated)

@@ -16,17 +16,23 @@ public struct RivetDeviceAppleListenerSnapshot: Sendable, Equatable {
     public let activeConnections: Int
     public let rejectedConnections: UInt64
     public let serverFingerprint: Data?
+    public let advertisementID: String?
+    public let pairingWindowOpen: Bool
 
     public init(
         state: RivetDeviceAppleListenerState,
         activeConnections: Int,
         rejectedConnections: UInt64,
-        serverFingerprint: Data?
+        serverFingerprint: Data?,
+        advertisementID: String?,
+        pairingWindowOpen: Bool
     ) {
         self.state = state
         self.activeConnections = activeConnections
         self.rejectedConnections = rejectedConnections
         self.serverFingerprint = serverFingerprint
+        self.advertisementID = advertisementID
+        self.pairingWindowOpen = pairingWindowOpen
     }
 }
 
@@ -35,6 +41,7 @@ public enum RivetDeviceAppleListenerError: Error, Sendable, Equatable,
     case invalidConfiguration
     case invalidState
     case identityUnavailable
+    case advertisementFailed
     case startTimedOut
     case startFailed
 
@@ -46,6 +53,8 @@ public enum RivetDeviceAppleListenerError: Error, Sendable, Equatable,
             "Rivet device listener is in the wrong state"
         case .identityUnavailable:
             "Rivet device listener identity is unavailable"
+        case .advertisementFailed:
+            "Rivet device Bonjour advertisement is invalid"
         case .startTimedOut:
             "Rivet device listener start timed out"
         case .startFailed:
@@ -73,6 +82,7 @@ package protocol RivetDeviceAppleListenerDriver: Sendable {
         ) -> Void,
         onStop: @escaping @Sendable (RivetDeviceAppleListenerDriverStop) -> Void
     ) async throws -> UInt16
+    func setBonjourService(_ service: RivetDeviceAppleBonjourService?)
     func cancel()
 }
 
@@ -106,6 +116,8 @@ public actor RivetDeviceAppleListener {
 
     private let identityStore: RivetDeviceAppleIdentityStore
     private let driverFactory: any RivetDeviceAppleListenerDriverFactory
+    private let serviceName: String
+    private let advertisementIDGenerator: @Sendable () -> String
     private let maximumConnections: Int
     private let connectionTimeout: TimeInterval
     private let startTimeout: TimeInterval
@@ -116,12 +128,14 @@ public actor RivetDeviceAppleListener {
     private var generation = UUID()
     private var driver: (any RivetDeviceAppleListenerDriver)?
     private var fingerprint: Data?
+    private var advertisement: RivetDeviceAppleBonjourAdvertisement?
     private var pendingConnections: [any RivetDeviceApplePendingConnection] = []
     private var active: [UUID: ActiveConnection] = [:]
     private var rejected: UInt64 = 0
 
     public init(
         applicationID: String,
+        serviceName: String,
         maximumConnections: Int = rivetDeviceDefaultMaximumSessions,
         connectionTimeout: TimeInterval = rivetDeviceAppleConnectionTimeout,
         startTimeout: TimeInterval = rivetDeviceAppleConnectionTimeout,
@@ -132,6 +146,8 @@ public actor RivetDeviceAppleListener {
                 applicationID: applicationID
             ),
             driverFactory: RivetDeviceSystemListenerDriverFactory(),
+            serviceName: serviceName,
+            advertisementIDGenerator: Self.makeAdvertisementID,
             maximumConnections: maximumConnections,
             connectionTimeout: connectionTimeout,
             startTimeout: startTimeout,
@@ -143,6 +159,9 @@ public actor RivetDeviceAppleListener {
     package init(
         identityStore: RivetDeviceAppleIdentityStore,
         driverFactory: any RivetDeviceAppleListenerDriverFactory,
+        serviceName: String,
+        advertisementIDGenerator: @escaping @Sendable () -> String =
+            RivetDeviceAppleListener.makeAdvertisementID,
         maximumConnections: Int = rivetDeviceDefaultMaximumSessions,
         connectionTimeout: TimeInterval = rivetDeviceAppleConnectionTimeout,
         startTimeout: TimeInterval = rivetDeviceAppleConnectionTimeout,
@@ -151,7 +170,8 @@ public actor RivetDeviceAppleListener {
         ),
         handler: @escaping ConnectionHandler
     ) throws {
-        guard maximumConnections > 0,
+        guard Self.isValidServiceName(serviceName),
+              maximumConnections > 0,
               maximumConnections <= 64,
               connectionTimeout.isFinite,
               connectionTimeout > 0,
@@ -161,6 +181,8 @@ public actor RivetDeviceAppleListener {
         }
         self.identityStore = identityStore
         self.driverFactory = driverFactory
+        self.serviceName = serviceName
+        self.advertisementIDGenerator = advertisementIDGenerator
         self.maximumConnections = maximumConnections
         self.connectionTimeout = connectionTimeout
         self.startTimeout = startTimeout
@@ -169,6 +191,7 @@ public actor RivetDeviceAppleListener {
     }
 
     deinit {
+        driver?.setBonjourService(nil)
         driver?.cancel()
         for entry in active.values {
             entry.task?.cancel()
@@ -183,7 +206,9 @@ public actor RivetDeviceAppleListener {
             state: state,
             activeConnections: active.count,
             rejectedConnections: rejected,
-            serverFingerprint: fingerprint
+            serverFingerprint: fingerprint,
+            advertisementID: advertisement?.advertisementID,
+            pairingWindowOpen: advertisement?.pairingWindowOpen ?? false
         )
     }
 
@@ -195,6 +220,7 @@ public actor RivetDeviceAppleListener {
         state = .starting
         rejected = 0
         fingerprint = nil
+        advertisement = nil
         let requestedGeneration = UUID()
         generation = requestedGeneration
 
@@ -213,6 +239,18 @@ public actor RivetDeviceAppleListener {
         }
         driver = newDriver
         fingerprint = identity.fingerprint
+        do {
+            advertisement = try RivetDeviceAppleBonjourAdvertisement(
+                advertisementID: advertisementIDGenerator(),
+                pairingWindowOpen: false
+            )
+        } catch {
+            state = .failed
+            driver = nil
+            fingerprint = nil
+            newDriver.cancel()
+            throw RivetDeviceAppleListenerError.advertisementFailed
+        }
 
         do {
             let port = try await newDriver.start(
@@ -240,6 +278,12 @@ public actor RivetDeviceAppleListener {
                 throw RivetDeviceAppleListenerError.invalidState
             }
             state = .ready(port: port)
+            if let advertisement {
+                newDriver.setBonjourService(RivetDeviceAppleBonjourService(
+                    name: serviceName,
+                    advertisement: advertisement
+                ))
+            }
             let queued = pendingConnections
             pendingConnections.removeAll(keepingCapacity: true)
             for pending in queued {
@@ -251,6 +295,7 @@ public actor RivetDeviceAppleListener {
                 state = .failed
                 driver = nil
                 fingerprint = nil
+                advertisement = nil
                 cancelPendingConnections()
             }
             newDriver.cancel()
@@ -272,8 +317,10 @@ public actor RivetDeviceAppleListener {
             return
         }
         generation = UUID()
+        driver?.setBonjourService(nil)
         state = .disabled
         fingerprint = nil
+        advertisement = nil
         driver?.cancel()
         driver = nil
         cancelPendingConnections()
@@ -287,12 +334,38 @@ public actor RivetDeviceAppleListener {
             return
         }
         generation = UUID()
+        driver?.setBonjourService(nil)
         state = .terminated
         fingerprint = nil
+        advertisement = nil
         driver?.cancel()
         driver = nil
         cancelPendingConnections()
         await closeActiveConnections()
+    }
+
+    /// Updates the single non-sensitive pairing hint without restarting the
+    /// listener or rotating its ephemeral advertisement identifier.
+    public func setPairingWindowOpen(_ isOpen: Bool) throws {
+        guard case .ready = state,
+              let current = advertisement,
+              let driver else {
+            throw RivetDeviceAppleListenerError.invalidState
+        }
+        let updated: RivetDeviceAppleBonjourAdvertisement
+        do {
+            updated = try RivetDeviceAppleBonjourAdvertisement(
+                advertisementID: current.advertisementID,
+                pairingWindowOpen: isOpen
+            )
+        } catch {
+            throw RivetDeviceAppleListenerError.advertisementFailed
+        }
+        advertisement = updated
+        driver.setBonjourService(RivetDeviceAppleBonjourService(
+            name: serviceName,
+            advertisement: updated
+        ))
     }
 
     private func accept(
@@ -360,6 +433,7 @@ public actor RivetDeviceAppleListener {
               state != .terminated else {
             return
         }
+        driver?.setBonjourService(nil)
         switch stop {
         case .failed:
             state = .failed
@@ -367,6 +441,7 @@ public actor RivetDeviceAppleListener {
             state = .disabled
         }
         fingerprint = nil
+        advertisement = nil
         driver = nil
         cancelPendingConnections()
         await closeActiveConnections()
@@ -387,6 +462,19 @@ public actor RivetDeviceAppleListener {
             entry.task?.cancel()
             await entry.connection.cancel()
         }
+    }
+
+    private static func isValidServiceName(_ value: String) -> Bool {
+        !value.isEmpty
+            && value.utf8.count <= 63
+            && value == value.trimmingCharacters(in: .whitespacesAndNewlines)
+            && !value.unicodeScalars.contains(
+                where: CharacterSet.controlCharacters.contains
+            )
+    }
+
+    private static func makeAdvertisementID() -> String {
+        UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
     }
 }
 
@@ -463,6 +551,18 @@ private final class RivetDeviceSystemListenerDriver:
             }
         } onCancel: {
             waiter.cancel()
+        }
+    }
+
+    func setBonjourService(_ service: RivetDeviceAppleBonjourService?) {
+        if let service {
+            listener.service = NWListener.Service(
+                name: service.name,
+                type: service.type,
+                txtRecord: service.txtRecord
+            )
+        } else {
+            listener.service = nil
         }
     }
 

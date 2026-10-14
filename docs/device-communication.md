@@ -7,7 +7,7 @@ Rivet separates two boundaries that solve different problems:
 
 Keeping these layers separate lets an iPhone or iPad embed Racket CS while an Apple Watch remains a lightweight companion. It also leaves room for a future independently embedded watch runtime without making that the default or coupling WatchConnectivity details to RVT1.
 
-A phone can also be a client of a desktop-hosted backend. That direction needs a long-lived authenticated session, Events, State, discovery, pairing, and an explicit API allowlist rather than the request/reply semantics below. It is specified in the [network device channel design](network-device-channel.md). Its in-memory authorization/session core is implemented, but it is not yet a shipped network transport.
+A phone can also be a client of a desktop-hosted backend. That direction needs a long-lived authenticated session, Events, State, discovery, pairing, and an explicit API allowlist rather than the request/reply semantics below. It is specified in the [network device channel design](network-device-channel.md). Its authorization/session core and the bounded Apple security, transport, listener, and Bonjour-advertisement primitives are implemented, but they are not yet wired into a shipped product network channel.
 
 ## Generated companion API
 
@@ -103,9 +103,10 @@ and iOS. `RivetDeviceAppleTransport` configures Network.framework TLS, verifies
 the server SPKI pin, bounds connection setup, and keeps preface bytes separate
 from the accepted RVT1 stream. It also provisions a per-install P-256 identity
 in Keychain and supplies a disabled-by-default macOS listener with bounded
-pre-session admission and fail-closed lifecycle handling. Discovery and
-explicit native confirmation UI remain; Windows also needs its Credential
-Manager and transport adapters.
+pre-session admission and fail-closed lifecycle handling. That listener now
+publishes the privacy-bounded Bonjour service while ready. An iOS discovery
+browser and explicit native confirmation UI remain; Windows also needs its
+Credential Manager and transport adapters.
 
 This design follows the core idea in [DSLs for Safe iOS/watchOS Communication](https://defn.io/2025/02/16/type-safe-watchos-communication/): encode the request/response relationship in types and centralize dispatch instead of spreading dictionaries, route strings, and casts throughout both apps. Rivet generates that relationship from the shared Racket schema while keeping the exported device surface explicit.
 
