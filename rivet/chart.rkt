@@ -10,7 +10,7 @@
 ;; The batch layout is the cross-language contract; the portable C++ decoder
 ;; lives in runtime/include/rivet/chart_batch.hpp and the Swift decoder in
 ;; platform/macos/Sources/RivetUI. All three must stay byte-identical and
-;; are pinned by tests/chart.rkt and the native test suites.
+;; are pinned by rivet/tests/chart.rkt and the native test suites.
 ;;
 ;; Samples are (timestamp-nanoseconds . value) pairs of exact integers.
 ;; Values stay integers on purpose: Rivet's typed surface has no Float, and

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Move the test suite under the `rivet` collection (`rivet/tests/`). A
+  top-level `tests/` directory inside a multi-collection package publishes a
+  generic `tests` collection that cannot coexist with any other package
+  doing the same, which the package catalog reports as a conflict. The suite
+  now follows the family layout used by the other Rivet libraries, and
+  `raco test rivet/tests/` is the documented entry point.
 - Keep the package build farm green on hosts without desktop conveniences.
   Console executables are now resolved from the running installation's bin
   directory before PATH, so the build, launch-smoke, and AppImage process

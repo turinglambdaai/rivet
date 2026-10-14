@@ -35,7 +35,7 @@ scenario vocabulary. Keep those identifiers in native source:
 - SwiftUI/AppKit: `.accessibilityIdentifier`, labels, and native roles; and
 - GTK4: `GtkAccessible` properties and meaningful widget roles.
 
-Copy the matching driver under `tests/native-ui/`, replace the reference
+Copy the matching driver under `rivet/tests/native-ui/`, replace the reference
 identifiers and actions with one product-critical scenario, and add the driver
 to a packaging job. A useful minimum scenario has one RPC-driven mutation, one
 Event, a stable accessibility-tree assertion, and orderly close. Test-only

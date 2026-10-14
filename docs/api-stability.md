@@ -3,7 +3,7 @@
 Rivet is pre-1.0, but its public surface is deliberate. Every phase-0 export
 from `rivet`, `rivet/app-info`, `rivet/backend`, `rivet/keel`,
 `rivet/protocol`, `rivet/resources`, `rivet/system`, `rivet/distribution`, and
-`rivet/testing` is covered by `tests/public-api.rkt`.
+`rivet/testing` is covered by `rivet/tests/public-api.rkt`.
 
 An API change must therefore be explicit:
 

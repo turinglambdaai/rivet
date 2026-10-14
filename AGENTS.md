@@ -33,7 +33,7 @@ raco rivet doctor --json
 
 For this repository, inspect the nearest implementation and its tests before
 editing. The shared wire contract is documented in `docs/protocol.md` and
-exercised by `tests/protocol-golden.txt` across Racket, C++, Swift, and Kotlin.
+exercised by `rivet/tests/protocol-golden.txt` across Racket, C++, Swift, and Kotlin.
 
 ## Source map
 
@@ -44,7 +44,7 @@ exercised by `tests/protocol-golden.txt` across Racket, C++, Swift, and Kotlin.
 - `platform/macos/`: Swift runtime, SwiftUI host, embedding, device channels
 - `platform/linux/`: GTK4 host, embedded runtime, and system adapter
 - `platform/android/`: Kotlin protocol and coroutine runtime foundation
-- `tests/`: Racket behavior and CLI regression tests
+- `rivet/tests/`: Racket behavior and CLI regression tests
 - `.github/workflows/`: clean-platform and embedded-runtime gates, plus the
   desktop-architecture matrix (Windows ARM64, macOS Intel, Linux ARM64)
 
@@ -54,7 +54,7 @@ Run the narrowest relevant tests locally, then rely on all platform jobs before
 merging native or packaging changes. At minimum for Racket/CLI changes:
 
 ```bash
-raco test tests/
+raco test rivet/tests/
 ```
 
 For portable native changes:

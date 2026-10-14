@@ -307,14 +307,14 @@ rivet/
 │       ├── Sources/          # Swift protocol/client + C embedding bridge
 │       └── host/             # SwiftUI 模板
 │   └── android/              # Kotlin RVT1 协议/runtime 与 Gradle 构建
-├── tests/
+├── rivet/tests/
 └── docs/
 ```
 
 ## 测试
 
 ```bash
-raco test tests/
+raco test rivet/tests/
 cmake -S runtime -B runtime/build
 cmake --build runtime/build
 ctest --test-dir runtime/build

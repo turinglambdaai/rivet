@@ -45,7 +45,7 @@ Each topic has one canonical owner. Add a new page only when it defines a
 durable boundary that cannot fit an existing owner; status snapshots and
 completed milestones belong in the active plan or changelog, not permanent
 standalone pages. When deleting or merging a page, update all repository links
-and run `raco test tests/documentation.rkt`.
+and run `raco test rivet/tests/documentation.rkt`.
 
 Active plans are temporary. When their exit gates close, move lasting decisions
 and operating instructions into the canonical guides above, record the release

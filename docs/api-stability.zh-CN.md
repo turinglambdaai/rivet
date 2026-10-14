@@ -3,7 +3,7 @@
 Rivet 尚未到 1.0，但它的公开接口必须是有意设计的。`rivet`、
 `rivet/app-info`、`rivet/backend`、`rivet/keel`、`rivet/protocol`、
 `rivet/resources`、`rivet/system`、`rivet/distribution` 与 `rivet/testing`
-的全部 phase-0 导出都由 `tests/public-api.rkt` 固定。
+的全部 phase-0 导出都由 `rivet/tests/public-api.rkt` 固定。
 
 因此，API 变更必须是显式行为：
 

@@ -356,7 +356,7 @@ separate from Network.framework and listeners. The repository contains:
   after the codec and state-machine tests pass.
 
 These checks run in `RivetDeviceSessionTests`, and
-`tests/device-session-golden.txt` is the compatibility boundary for later
+`rivet/tests/device-session-golden.txt` is the compatibility boundary for later
 Kotlin and Windows implementations. A platform adapter may split or combine
 stream writes, but it must not reinterpret, reorder, or extend these records.
 

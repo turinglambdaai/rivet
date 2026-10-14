@@ -54,7 +54,7 @@ Parser exceptions for malformed input are expected. Crashes, sanitizer findings,
 
 ## CI
 
-The `Protocol Fuzz Smoke` workflow builds the harness on Ubuntu with Clang, derives seeds from `tests/protocol-golden.txt`, and executes a bounded 20,000-run smoke campaign on every pull request and `main` push. The libFuzzer seed is derived deterministically from the GitHub Actions run id, so each CI run explores a different mutation sequence while remaining reproducible from its log.
+The `Protocol Fuzz Smoke` workflow builds the harness on Ubuntu with Clang, derives seeds from `rivet/tests/protocol-golden.txt`, and executes a bounded 20,000-run smoke campaign on every pull request and `main` push. The libFuzzer seed is derived deterministically from the GitHub Actions run id, so each CI run explores a different mutation sequence while remaining reproducible from its log.
 
 CI writes crash, timeout, and OOM reproducer inputs to a dedicated libFuzzer artifact directory. If fuzzing fails, the job prints each reproducer's SHA-256 and complete hexadecimal payload before returning the original libFuzzer exit status. That makes a failed CI run self-contained: reconstruct the bytes from the logged hex, rebuild the same revision, and rerun the harness with the printed seed and options.
 

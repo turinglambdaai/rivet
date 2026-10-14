@@ -36,7 +36,7 @@ jobs:
           cd examples/taskboard
           raco rivet package --skip-launch-smoke
           dbus-run-session -- \
-            "$GITHUB_WORKSPACE/tests/native-ui/linux-session.sh" \
+            "$GITHUB_WORKSPACE/rivet/tests/native-ui/linux-session.sh" \
             "$PWD/dist/rivet-taskboard-linux-x64/RivetHost" \
             "$RUNNER_TEMP/rivet-native-ui-linux"
       - name: Upload Linux native UI evidence
@@ -101,7 +101,7 @@ jobs:
           output="$RUNNER_TEMP/rivet-native-ui-macos"
           driver="$RUNNER_TEMP/rivet-macos-ax"
           mkdir -p "$output"
-          swiftc tests/native-ui/macos-ax.swift -o "$driver" \
+          swiftc rivet/tests/native-ui/macos-ax.swift -o "$driver" \
             -framework AppKit -framework ApplicationServices
           cd examples/taskboard
           raco rivet package --skip-launch-smoke

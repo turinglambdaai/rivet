@@ -2,7 +2,7 @@
 
 ;; Event-channel throughput bench for the chart data plane.
 ;;
-;; Drives the real serve path over pipes like tests/backend.rkt: one RPC
+;; Drives the real serve path over pipes like rivet/tests/backend.rkt: one RPC
 ;; bursts N chart-batch events, the client reader drains every frame and
 ;; discards it, and the wall time covers Racket-side encode + frame +
 ;; pipe write on the server and read-frame on the client. Run with:

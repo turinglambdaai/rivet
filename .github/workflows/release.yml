@@ -73,7 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           raco pkg install --auto --no-docs --name rivet --link "$PWD"
-          raco test tests/
+          raco test rivet/tests/
           raco rivet help
 
       - name: Build source package

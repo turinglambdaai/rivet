@@ -28,7 +28,7 @@ jobs:
       - name: Install Rivet
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Test
-        run: raco test tests/
+        run: raco test rivet/tests/
 
   racket:
     name: Racket core
@@ -51,7 +51,7 @@ jobs:
       - name: Install Rivet
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Test
-        run: raco test tests/
+        run: raco test rivet/tests/
       - name: Build Scribble documentation
         shell: bash
         run: |
@@ -153,7 +153,7 @@ jobs:
           cd "$root"
           raco rivet new AppleDeviceSmoke
           cd AppleDeviceSmoke
-          cp "$GITHUB_WORKSPACE/tests/fixtures/schema-matrix-backend.rkt" app/backend.rkt
+          cp "$GITHUB_WORKSPACE/rivet/tests/fixtures/schema-matrix-backend.rkt" app/backend.rkt
           python3 - <<'PY'
           from pathlib import Path
           path = Path("rivet.rktd")
@@ -169,7 +169,7 @@ jobs:
           raco rivet schema --output rivet-schema.json
           raco rivet schema check rivet-schema.json --json
           raco rivet generate
-          fixture="$GITHUB_WORKSPACE/tests/fixtures/apple-device-codegen/Sources/AppleDeviceCodegenFixture"
+          fixture="$GITHUB_WORKSPACE/rivet/tests/fixtures/apple-device-codegen/Sources/AppleDeviceCodegenFixture"
           cp macos-host/Sources/RivetHost/GeneratedBackend.swift "$fixture/GeneratedBackend.swift"
 
           cd "$GITHUB_WORKSPACE/platform/macos"
@@ -204,7 +204,7 @@ jobs:
             done
           done
 
-          cd "$GITHUB_WORKSPACE/tests/fixtures/apple-device-codegen"
+          cd "$GITHUB_WORKSPACE/rivet/tests/fixtures/apple-device-codegen"
           for platform in iOS watchOS; do
             xcodebuild \
               -workspace . \
@@ -245,7 +245,7 @@ jobs:
           cd "$root"
           raco rivet new KtSmoke
           cd KtSmoke
-          cp "$GITHUB_WORKSPACE/tests/fixtures/schema-matrix-backend.rkt" app/backend.rkt
+          cp "$GITHUB_WORKSPACE/rivet/tests/fixtures/schema-matrix-backend.rkt" app/backend.rkt
           raco rivet schema --output rivet-schema.json
           raco rivet schema check rivet-schema.json --json
           raco rivet generate
@@ -368,7 +368,7 @@ jobs:
           cd "$root"
           raco rivet new Smoke
           cd Smoke
-          cp "$GITHUB_WORKSPACE/tests/fixtures/schema-matrix-backend.rkt" app/backend.rkt
+          cp "$GITHUB_WORKSPACE/rivet/tests/fixtures/schema-matrix-backend.rkt" app/backend.rkt
           mkdir -p assets/nested
           printf %s packaged-resource > assets/nested/product.txt
           python3 - <<'PY'
