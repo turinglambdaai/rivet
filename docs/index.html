@@ -160,16 +160,16 @@ backend.onProgress { pct <span class="kw">in</span>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
                     </div>
                     <h3 data-en="One backend contract" data-zh="一个后端契约">One backend contract</h3>
-                    <p data-en="Typed RPC, events, shared state, cancellation and lifecycle — all over the same RVT1 protocol, for every native host."
-                       data-zh="类型化 RPC、事件、共享状态、取消与生命周期——全部走同一套 RVT1 协议，所有原生宿主共用。">Typed RPC, events, shared state, cancellation and lifecycle over the same RVT1 protocol.</p>
+                    <p data-en="Typed RPC, events, shared state, cancellation and lifecycle — all over the same RVT1 protocol, for every native host. The same schema projects into Keel, the transport-neutral contract shared with Glaze."
+                       data-zh="类型化 RPC、事件、共享状态、取消与生命周期——全部走同一套 RVT1 协议，所有原生宿主共用；同一份 schema 还可投影到 Keel——与 Glaze 共享的传输无关契约。">Typed RPC, events, shared state, cancellation and lifecycle over the same RVT1 protocol, projected into the shared Keel contract.</p>
                 </div>
                 <div class="bento-card animate-on-scroll">
                     <div class="card-icon">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
                     </div>
                     <h3 data-en="Generated native clients" data-zh="生成的原生客户端">Generated native clients</h3>
-                    <p data-en="raco rivet build reads RPC, Event, State, Record, and Enum schemas and generates typed Swift and C++ APIs. A versioned JSON baseline catches breaking changes in CI."
-                       data-zh="raco rivet build 读取 RPC、Event、State、Record 与 Enum schema，生成类型化 Swift/C++ API；带版本的 JSON 基线可在 CI 中拦截破坏性变更。">raco rivet build generates typed Swift and C++ APIs from your declarations.</p>
+                    <p data-en="raco rivet build reads RPC, Event, State, Record, and Enum schemas and generates typed Swift, C++, and Kotlin APIs. A versioned JSON baseline catches breaking changes in CI."
+                       data-zh="raco rivet build 读取 RPC、Event、State、Record 与 Enum schema，生成类型化 Swift/C++/Kotlin API；带版本的 JSON 基线可在 CI 中拦截破坏性变更。">raco rivet build generates typed Swift, C++, and Kotlin APIs from your declarations.</p>
                 </div>
                 <div class="bento-card animate-on-scroll">
                     <div class="card-icon">
@@ -194,6 +194,30 @@ backend.onProgress { pct <span class="kw">in</span>
                     <h3 data-en="Safe threading by design" data-zh="线程安全是设计出来的">Safe threading by design</h3>
                     <p data-en="Native UI code never manipulates Racket/Chez values directly — the native side only sees framed RVT1 messages and generated values."
                        data-zh="原生 UI 代码从不直接操作 Racket/Chez 值——原生侧看到的只有分帧的 RVT1 消息与生成值。">The native side only sees framed RVT1 messages and generated values.</p>
+                </div>
+                <div class="bento-card animate-on-scroll">
+                    <div class="card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>
+                    </div>
+                    <h3 data-en="Real-time charts" data-zh="实时图表">Real-time charts</h3>
+                    <p data-en="Rolling-time-series native chart widgets on every desktop host, over one typed data plane: rivet/chart ring buffers and gap-detected binary batches."
+                       data-zh="三端桌面宿主的滚动时序原生图表控件，走同一条类型化数据面：rivet/chart 环形缓冲与缺口检测的二进制批。">Rolling-time-series native chart widgets on every desktop host, over one typed data plane.</p>
+                </div>
+                <div class="bento-card animate-on-scroll">
+                    <div class="card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    </div>
+                    <h3 data-en="Updates built in" data-zh="内置更新器">Updates built in</h3>
+                    <p data-en="Signed release feeds with installers, SBOM and notices; the shared updater covers macOS bundle swap, Windows MSI handoff and Linux AppImage replacement. Products provide policy and UI — not security-critical plumbing."
+                       data-zh="签名发布 feed 带安装包、SBOM 与第三方声明；共享更新器覆盖 macOS bundle 换装、Windows MSI 交接与 Linux AppImage 替换——产品只提供策略与 UI，无需重造安全关键管线。">Signed release feeds on every desktop — bundle swap on macOS, MSI handoff on Windows, AppImage replacement on Linux.</p>
+                </div>
+                <div class="bento-card animate-on-scroll">
+                    <div class="card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                    </div>
+                    <h3 data-en="Linkable packages" data-zh="可链接的发布包">Linkable packages</h3>
+                    <p data-en="Hosts consume Rivet as released packages — a tag-resolvable SwiftPM package on macOS, static libraries on Windows and Linux — and never compile Rivet sources into their own build."
+                       data-zh="宿主以发布包方式接入 Rivet——macOS 走可按 tag 解析的 SwiftPM 包，Windows 与 Linux 走静态库——绝不把 Rivet 源码编进自己的构建。">Hosts link released packages — SwiftPM on macOS, static libraries on Windows and Linux — never compiled sources.</p>
                 </div>
             </div>
         </div>
