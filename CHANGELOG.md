@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add the framework-only Apple Bonjour browser for iOS companions. Browsing is
+  explicitly started and stopped, accepts only the canonical bounded Rivet TXT
+  record, bounds candidates and pending events, reports add/change/remove
+  lifecycle events, and clears candidates on failure or cancellation.
+  Discovery remains unauthenticated and never opens a connection; local-network
+  usage strings and Bonjour declarations stay owned by the consuming
+  application.
 - Connect accepted macOS device transports to a fresh `RivetDeviceSessionServer`
   through `RivetDeviceAppleSessionHost`. The host enforces post-TLS deadlines,
   reports pairing codes without auto-approval, switches to RVT1 only after

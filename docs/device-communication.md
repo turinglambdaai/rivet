@@ -104,8 +104,11 @@ the server SPKI pin, bounds connection setup, and keeps preface bytes separate
 from the accepted RVT1 stream. It also provisions a per-install P-256 identity
 in Keychain and supplies a disabled-by-default macOS listener with bounded
 pre-session admission and fail-closed lifecycle handling. That listener now
-publishes the privacy-bounded Bonjour service while ready. An iOS discovery
-browser and explicit native confirmation UI remain. The macOS session host
+publishes the privacy-bounded Bonjour service while ready. The framework-only
+Bonjour browser discovers that service on iOS, rejects non-canonical TXT
+records, and reports endpoint and advertisement changes without connecting or
+granting authority. An iOS client-session coordinator and explicit native
+confirmation UI remain. The macOS session host
 drives `RVD1`, exposes the stream only after authenticated acceptance, and
 leaves product gateway dispatch to an explicit application handler; Windows
 also needs its Credential Manager and transport adapters.

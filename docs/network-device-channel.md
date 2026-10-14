@@ -6,9 +6,11 @@ authentication lifecycle, and byte-exact session preface are implemented and
 tested in memory. The Apple pairing-credential Keychain adapter, bounded
 Network.framework TLS stream adapter, per-install identity provider, and
 disabled-by-default macOS listener with bounded Bonjour advertising, and the
-single-connection macOS preface host are also implemented. No iOS discovery
-client, product gateway binding, pairing UI, product enablement, or generated
-mobile application is shipped yet.
+single-connection macOS preface host are also implemented. The explicit iOS
+Bonjour browser accepts only the privacy-bounded canonical advertisement and
+does not connect or authorize a peer. No iOS client-session coordinator,
+product gateway binding, pairing UI, product enablement, or generated mobile
+application is shipped yet.
 
 ## Problem
 
@@ -154,8 +156,13 @@ disable, listener failure, or termination. While ready, that listener publishes
 `_rivet-device._tcp` with a deterministic, 128-byte-bounded TXT record containing
 only the session version, a per-listener ephemeral ID, and the pairing-window
 bit; it removes the service before shutdown. Windows Credential Manager
-storage, iOS discovery browsing, QR/manual UI, product enablement, and non-Apple
-adapters remain unimplemented. `RivetDeviceAppleSessionHost` now drives one
+storage, QR/manual UI, product enablement, and non-Apple adapters remain
+unimplemented. `RivetDeviceAppleBonjourBrowser` explicitly starts and stops
+Network.framework browsing, accepts only records validated by the shared
+canonical decoder, reports endpoint/service-name/ephemeral-ID/pairing-hint
+changes, bounds its candidate set and event queue, and removes vanished
+candidates. A result is never treated as proof of identity or permission.
+`RivetDeviceAppleSessionHost` now drives one
 accepted connection through TLS and `RVD1`, surfaces pairing prompts for an
 explicit desktop decision, enforces the post-TLS deadline, and lends RVT1 bytes
 to an application handler only after the session server accepts the peer. That

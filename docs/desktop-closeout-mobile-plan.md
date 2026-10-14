@@ -189,11 +189,15 @@ service before cancelling the listener. M2f adds the single-connection macOS
 session host: it drives TLS and `RVD1`, reports pairing prompts without
 auto-approval, enforces the post-TLS deadline, enters RVT1 only after server
 acceptance, and performs idempotent cleanup. Product gateway binding and UI
-remain pending. No product repository or UI was changed.
+remain pending. M2g adds the explicit iOS Bonjour browser: it accepts only the
+canonical bounded advertisement, reports all candidate-field changes, removes
+vanished results, and clears state on failure or cancellation without opening
+a connection or granting authority. Local-network permission declarations
+remain product-owned. No product repository or UI was changed.
 
 ## Next implementation handoff
 
-M2a through M2f are complete. Deterministic tests cover secure-store lifecycle and
+M2a through M2g are complete. Deterministic tests cover secure-store lifecycle and
 failure mapping; all session record types and cryptographic vectors;
 fragmented/coalesced reads; size, shape, ordering, duplicate, and timeout
 failures; indistinguishable reconnect failures; dual-confirmation pairing; and
@@ -205,23 +209,28 @@ pre-allocation connection caps, listener failure, disable, terminal shutdown,
 canonical bounded TXT encoding, ready-only advertisement, pairing-hint updates,
 service removal before cancellation, ephemeral-ID rotation, authenticated
 preface-to-RVT1 handoff, explicit dual-peer pairing confirmation, post-TLS
-timeout, and idempotent host cleanup. The Swift package passes, all Apple
-device targets build for generic
+timeout, idempotent host cleanup, explicit browser start/stop, canonical-only
+discovery, endpoint/service-name/ephemeral-ID/pairing-hint changes, removal,
+candidate/event bounds, failure, cancellation, and stale-generation isolation.
+The Swift package passes, all Apple device targets build for generic
 iOS and macOS, and `RivetWatchConnectivity` continues to build for generic iOS
 and watchOS.
 
-The next implementation agent owns bounded M2g: a framework-only iOS Bonjour
-browser for `_rivet-device._tcp`. It must start and stop explicitly, accept
-only canonical bounded TXT records through
-`RivetDeviceAppleBonjourAdvertisement.decode`, report endpoint/service-name/
-ephemeral-ID/pairing-hint changes, remove vanished results, and never connect or
-treat discovery as authorization. Use an injected browser driver for
-deterministic add/change/remove/failure/cancellation tests. Keep local-network
-permission strings and entitlements in the consuming product, and keep QR/
-manual pairing UI, product UI, gateway product binding, and product-repository
-changes out of that patch. Do not add any iOS path that downloads or executes
-Racket code; executable mobile logic must remain bundled with the reviewed
-application.
+The next implementation agent owns bounded M2h: a framework-only iOS
+single-connection session client. It must accept one explicitly selected
+discovery endpoint, build either a pinned reconnect or an explicit provisional
+pairing TLS context, drive `RivetDeviceSessionClient`, surface the pairing code
+without auto-confirming it, persist a new credential through an injected secure
+storage boundary before accepting RVT1, enforce the post-TLS deadline, and
+perform idempotent cancellation/cleanup. Authentication failure must not fall
+back to pairing, and discovery identifiers or pairing hints must never become
+credentials. Use injected connection, session-client, persistence, and deadline
+boundaries for deterministic reconnect, pairing accept/reject, persistence
+failure, timeout, cancellation, and malformed-preface tests. Keep product UI,
+automatic connection policy, background lifecycle policy, gateway product
+binding, permission strings/entitlements, and product-repository changes out of
+that patch. Do not add any iOS path that downloads or executes Racket code;
+executable mobile logic must remain bundled with the reviewed application.
 
 ### M3 — second desktop host and Android client
 
