@@ -7,6 +7,8 @@ add_library(rivet_protocol STATIC
   src/sha256.cpp
   src/device_session.cpp
   src/device_session_host.cpp
+  src/discovery_advertisement.cpp
+  src/utf8.cpp
 )
 
 target_include_directories(rivet_protocol
@@ -66,6 +68,12 @@ if(RIVET_BUILD_TESTS)
   target_compile_features(rivet_device_session_host_test PRIVATE cxx_std_17)
   rivet_enable_test_assertions(rivet_device_session_host_test)
   add_test(NAME rivet_device_session_host_test COMMAND rivet_device_session_host_test)
+
+  add_executable(rivet_discovery_advertisement_test tests/discovery_advertisement_test.cpp)
+  target_link_libraries(rivet_discovery_advertisement_test PRIVATE rivet_protocol)
+  target_compile_features(rivet_discovery_advertisement_test PRIVATE cxx_std_17)
+  rivet_enable_test_assertions(rivet_discovery_advertisement_test)
+  add_test(NAME rivet_discovery_advertisement_test COMMAND rivet_discovery_advertisement_test)
 
   add_executable(rivet_protocol_property_test tests/protocol_property_test.cpp)
   target_link_libraries(rivet_protocol_property_test PRIVATE rivet_protocol)
