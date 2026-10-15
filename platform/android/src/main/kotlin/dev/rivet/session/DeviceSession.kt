@@ -387,7 +387,11 @@ fun decodeSessionRecord(record: ByteArray): SessionMessage {
     val rawType = reader.byte()
     val type = SessionMessageType.entries.firstOrNull { it.wireValue == rawType }
         ?: throw SessionProtocolException(SessionProtocolFailure.UNKNOWN_MESSAGE_TYPE, "unknown Rivet device session message type")
-    val payloadLength = RecordReader.checkedLength(reader.uint32())
+    val payloadLength =
+        (reader.byte() and 0xff) or ((reader.byte() and 0xff) shl 8)
+    if (payloadLength > SESSION_MAXIMUM_PAYLOAD_SIZE) {
+        throw SessionProtocolException(SessionProtocolFailure.RECORD_TOO_LARGE, "Rivet device session record exceeds its size limit")
+    }
     val payload = RecordReader(reader.bytes(payloadLength))
 
     fun fields(): List<Any> {
