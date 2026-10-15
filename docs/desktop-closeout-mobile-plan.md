@@ -225,6 +225,13 @@ drives the preface over any `rivet::Transport` with injectable clock and
 thread-safe desktop decisions, pinned by deterministic pipe and multi-thread
 tests (`rivet_device_session_host_test`).
 
+M3's Android companion binding is also implemented: the Kotlin
+`dev.rivet.session` package carries the RVD1 records, the client state
+machine with its credential-persistence gate, a blocking runner over any
+byte stream, and the canonical discovery advertisement behind a driver
+interface, all pinned by the shared golden fixture. The remaining M3 work
+is product binding and real-device acceptance on both platforms.
+
 M3's Windows transport slice is also implemented: a CNG-persisted P-256
 self-signed identity with deletion-based rotation, an SChannel TLS server
 requiring the `rivet-device/1` ALPN and failing closed on renegotiation, a

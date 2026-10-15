@@ -197,7 +197,11 @@ requires the `rivet-device/1` ALPN, a bounded listener whose admission cap
 rejects sockets before any transport state exists, and a DNS-SD
 publication of the shared canonical advertisement while the listener is
 ready (Windows offers no explicit deregistration, so the record decays
-with its TTL after shutdown).
+with its TTL after shutdown). The Android companion runs the client side
+through the Kotlin `dev.rivet.session` package: the same records,
+transcripts, state machine, and canonical advertisement codec, pinned by
+the shared fixture, with NSD supplied by the application behind a driver
+interface.
 
 ## Session protocol
 

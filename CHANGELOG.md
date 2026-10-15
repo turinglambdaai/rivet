@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add the Kotlin device-session client for Android companions. The RVD1
+  records, the HMAC authentication proof and six-digit pairing-code
+  transcripts, and the client state machine with its credential-persistence
+  gate live beside the existing RVT1 runtime, pinned by the shared
+  device-session-golden fixture now shipped into the Kotlin test resources.
+  A blocking runner drives the state machine over any byte stream with
+  injectable clocks, enforces the post-TLS deadline, surfaces pairing codes
+  without auto-confirming them, and accepts the desktop user's decision from
+  another thread. Discovery binds the canonical advertisement codec behind
+  a driver interface so applications supply their own NSD stack while the
+  browser keeps the canonical-only, bounded, vanished-result semantics.
+  TLS transport and product integration remain platform work.
 - Document the product-level Permit composition boundary: Rivet remains a
   framework with general secure storage and update integrity, not a built-in
   entitlement, trial, activation, payment, or account system.
