@@ -16,6 +16,7 @@ add_executable(RivetIntegration
   ../runtime/backend.cpp
   ../runtime/win32_pipe_transport.cpp
   ${RIVET_ROOT}/runtime/src/protocol.cpp
+  ${RIVET_ROOT}/runtime/src/utf8.cpp
 )
 
 target_compile_features(RivetIntegration PRIVATE cxx_std_17)
