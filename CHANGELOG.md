@@ -32,6 +32,9 @@
   executable postinst/postrm scripts that refresh the desktop database.
   All behavior is opt-in per project key; projects without the keys build
   byte-identical installers to before.
+- Recreate the Windows package destination before copying release payloads, so
+  build/package/release retries over a dirty `dist/` tree are idempotent and
+  cannot retain stale files or fail with `copy-file: destination exists`.
 - Add leaf-loadable distribution identity helpers for the canonical manifest
   platform, architecture, installer-extension, and UTC RFC 3339 vocabulary.
   Release tooling and the managed updater now consume the same implementation
