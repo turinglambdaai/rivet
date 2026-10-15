@@ -220,16 +220,25 @@ remaining M2 item — product gateway binding, pairing UI, and the PodLens
 vertical slice — is product-repository work coordinated with the active
 Taskly-standard alignment workstream.
 
+M3's second slice is also complete: `runtime/include/rivet/device_session_host.hpp`
+drives the preface over any `rivet::Transport` with injectable clock and
+thread-safe desktop decisions, pinned by deterministic pipe and multi-thread
+tests (`rivet_device_session_host_test`).
+
 The next M3 slice is the Windows host transport: a WinRT
 `StreamSocketListener` TLS server with a generated P-256 self-signed
 identity, SPKI-published for client pinning, DNS-SD advertising equivalent
 to the macOS TXT record, and the admission caps and fail-closed lifecycle
-the macOS listener already enforces — wiring the accepted socket to
-`rivet::DeviceSessionServer`. After that, bind Android discovery/TLS
-streams to the existing Kotlin runtime and the generated device API using
-the same golden fixture. Read `docs/network-device-channel.md` for the wire
-and timing contract and reuse the language-neutral fixtures; do not
-reinterpret the preface per platform.
+the macOS listener already enforces. It only has to implement
+`rivet::Transport` over the accepted socket and feed it to
+`rivet::DeviceSessionHost`; the preface and host semantics are already
+pinned. Because that slice compiles only under the Windows SDK, land it on
+a branch and iterate CI to green before merging; do not push it blind to
+`main`. After that, bind Android discovery/TLS streams to the existing
+Kotlin runtime and the generated device API using the same golden fixture.
+Read `docs/network-device-channel.md` for the wire and timing contract and
+reuse the language-neutral fixtures; do not reinterpret the preface per
+platform.
 
 ### M3 — second desktop host and Android client
 

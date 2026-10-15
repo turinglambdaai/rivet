@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add the portable C++ device-session host driver. Over any
+  `rivet::Transport`, `rivet::DeviceSessionHost` runs the RVD1 preface for
+  one accepted desktop connection, enforces the post-TLS deadline, surfaces
+  pairing codes without auto-approving, accepts the desktop user's
+  confirm/reject decision from another thread with transport writes
+  serialized against the run loop, waits on the pairing-window clock, and
+  hands the accepted stream to an application handler only after
+  acceptance. Deterministic pipe, clock, and multi-thread tests pin the
+  reconnect, pairing, rejection, timeout, cancellation, and malformed-preface
+  behavior; the Windows and Linux gateways become thin transports over it.
 - Add the portable C++ device-session preface for the Windows and Linux
   gateways. `rivet/device_session.hpp` implements the RVD1 v1 records, the
   HMAC authentication proof and six-digit pairing-code transcripts, and the

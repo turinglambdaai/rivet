@@ -184,7 +184,14 @@ the indistinguishable unknown-device challenge, the constant-time proof
 comparison, canonical scopes, the pairing window/attempt boundaries as
 injected interfaces, and the post-TLS deadline — all pinned by
 `rivet/tests/device-session-golden.txt` plus deterministic state-machine
-tests. Windows TLS transport, listener, and discovery remain unimplemented.
+tests. `rivet/device_session_host.hpp` is the portable host driver shared
+by both desktop gateways: it runs the preface on one thread over any
+`rivet::Transport`, serializes decision-thread pairing writes with the run
+loop, waits for the desktop decision with the pairing-window clock, ends
+the run through the state machine's Close actions, and lends the accepted
+stream to an application handler before any RVT1 byte reaches the preface
+decoder. Windows TLS transport, listener, and discovery remain
+unimplemented; they are thin adapters over this driver.
 
 ## Session protocol
 

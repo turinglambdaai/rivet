@@ -6,6 +6,7 @@ add_library(rivet_protocol STATIC
   src/chart_batch.cpp
   src/sha256.cpp
   src/device_session.cpp
+  src/device_session_host.cpp
 )
 
 target_include_directories(rivet_protocol
@@ -59,6 +60,12 @@ if(RIVET_BUILD_TESTS)
   target_compile_features(rivet_device_session_test PRIVATE cxx_std_17)
   rivet_enable_test_assertions(rivet_device_session_test)
   add_test(NAME rivet_device_session_test COMMAND rivet_device_session_test)
+
+  add_executable(rivet_device_session_host_test tests/device_session_host_test.cpp)
+  target_link_libraries(rivet_device_session_host_test PRIVATE rivet_protocol)
+  target_compile_features(rivet_device_session_host_test PRIVATE cxx_std_17)
+  rivet_enable_test_assertions(rivet_device_session_host_test)
+  add_test(NAME rivet_device_session_host_test COMMAND rivet_device_session_host_test)
 
   add_executable(rivet_protocol_property_test tests/protocol_property_test.cpp)
   target_link_libraries(rivet_protocol_property_test PRIVATE rivet_protocol)
