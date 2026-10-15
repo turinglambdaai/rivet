@@ -1,21 +1,17 @@
 #lang racket/base
 
-(require "project.rkt")
+(require "../rivet/distribution/identity.rkt"
+         "project.rkt")
 
 (provide release-platform
          release-architecture
          portable-zip-path)
 
 (define (release-platform)
-  (case (system-type 'os)
-    [(windows) 'windows]
-    [(macosx) 'macos]
-    [(unix) 'linux]))
+  (platform-symbol))
 
 (define (release-architecture)
-  (case (system-type 'arch)
-    [(aarch64 arm64) 'arm64]
-    [else 'x64]))
+  (architecture-symbol))
 
 (define (portable-zip-path project)
   (project-path

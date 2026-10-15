@@ -60,17 +60,17 @@
       system-adapter-set-tray-menu system-adapter-show-notification
       system-adapter? system-capabilities))
     (rivet/distribution
-     (base64-string->bytes bytes->base64-string bytes->ed25519-public-key
+     (architecture-symbol base64-string->bytes bytes->base64-string bytes->ed25519-public-key
       channel-accepts-version? current-install-kind current-update-platform
       current-update-architecture download-update ed25519-sign ed25519-verify
       execute-install-plan!
       execute-platform-installation! fetch-update-manifest install-plan
       install-plan-backup-path install-plan-candidate
       install-plan-downloaded-path install-plan-install install-plan-restart
-      install-plan-rollback install-plan? make-install-plan
+      install-plan-rollback install-plan? installer-extension make-install-plan
       manifest->payload-bytes manifest-schema-version payload-bytes->manifest
       make-updater platform-installation? platform-installer-policy
-      prepare-platform-installation read-ed25519-private-key
+      platform-symbol prepare-platform-installation read-ed25519-private-key
       read-ed25519-public-key read-signed-manifest recover-install-plan!
       recover-platform-installation! select-update sha256-bytes sha256-file
       sha256-file/hex struct:install-plan
@@ -91,10 +91,12 @@
       updater-config-current-version updater-config-expected-key-id
       updater-config-maximum-download-bytes updater-config-platform
       updater-config-public-key updater-config-rollout-bucket updater-config?
-      updater-wait updater?
+      updater-wait updater? rfc3339-now
       valid-channel? verify-platform-payload! verify-signed-manifest
       verify-update-artifact! version-compare version<=? version<? version=?
       version>=? version>? version? write-signed-manifest))
+    (rivet/distribution/identity
+     (architecture-symbol installer-extension platform-symbol rfc3339-now))
     (rivet/testing
      (ephemeral-http-listener fake-request fake-request-body
       fake-request-headers fake-request-method fake-request-path fake-request?

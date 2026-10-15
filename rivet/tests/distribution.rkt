@@ -24,6 +24,24 @@
 (check-true (channel-accepts-version? 'beta "1.0.0-beta.1"))
 (check-true (channel-accepts-version? 'dev "1.0.0-nightly.5"))
 
+(check-equal? (platform-symbol 'windows) 'windows)
+(check-equal? (platform-symbol 'macosx) 'macos)
+(check-equal? (platform-symbol 'unix) 'linux)
+(check-exn #rx"unsupported operating system"
+           (lambda () (platform-symbol 'plan9)))
+(check-equal? (architecture-symbol 'x86_64) 'x64)
+(check-equal? (architecture-symbol 'amd64) 'x64)
+(check-equal? (architecture-symbol 'aarch64) 'arm64)
+(check-equal? (architecture-symbol 'arm64) 'arm64)
+(check-exn #rx"unsupported architecture"
+           (lambda () (architecture-symbol 'riscv64)))
+(check-equal? (installer-extension 'zip) ".zip")
+(check-equal? (installer-extension 'targz) ".tar.gz")
+(check-equal? (installer-extension 'appimage) ".AppImage")
+(check-exn #rx"unsupported installer kind"
+           (lambda () (installer-extension 'unknown)))
+(check-equal? (rfc3339-now 0) "1970-01-01T00:00:00Z")
+
 (define ed25519-impl
   (get-pk 'eddsa (list libcrypto-factory sodium-factory decaf-factory)))
 (define private-key

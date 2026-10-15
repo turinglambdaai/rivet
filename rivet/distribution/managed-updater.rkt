@@ -10,6 +10,7 @@
          racket/path
          racket/string
          "crypto.rkt"
+         "identity.rkt"
          "manifest.rkt"
          "platform-adapter.rkt"
          "updater.rkt"
@@ -37,13 +38,13 @@
 (define current-managed-download (make-parameter download-update))
 
 (define (update-architecture-for machine)
-  (case machine
-    [(x86_64 amd64) 'x64]
-    [(aarch64 arm64) 'arm64]
-    [else
-     (raise-arguments-error 'current-update-architecture
-                            "unsupported update architecture"
-                            "architecture" machine)]))
+  (with-handlers ([exn:fail:contract?
+                   (lambda (_)
+                     (raise-arguments-error
+                      'current-update-architecture
+                      "unsupported update architecture"
+                      "architecture" machine))])
+    (architecture-symbol machine)))
 
 (define (current-update-architecture)
   (update-architecture-for (system-type 'arch)))
@@ -70,12 +71,12 @@
   (build-path
    data-directory
    "updates"
-   (format "~a-~a-~a-~a.~a"
+   (format "~a-~a-~a-~a~a"
            (safe-component application-id)
            (update-manifest-version manifest)
            (update-artifact-platform artifact)
            (update-artifact-architecture artifact)
-           (update-artifact-installer artifact))))
+           (installer-extension (update-artifact-installer artifact)))))
 
 (define (initial-state current-version)
   (hasheq 'phase "idle"

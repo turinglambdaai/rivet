@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add leaf-loadable distribution identity helpers for the canonical manifest
+  platform, architecture, installer-extension, and UTC RFC 3339 vocabulary.
+  Release tooling and the managed updater now consume the same implementation
+  instead of maintaining private mappings.
 - Add the Windows device-gateway transport. A CNG-persisted P-256
   self-signed identity (rotatable by deletion), an SChannel TLS server over
   any accepted socket with the `rivet-device/1` ALPN requirement, the

@@ -1,6 +1,7 @@
 #lang racket/base
 
 (require "distribution/crypto.rkt"
+         "distribution/identity.rkt"
          "distribution/managed-updater.rkt"
          "distribution/manifest.rkt"
          "distribution/platform-adapter.rkt"
@@ -8,6 +9,7 @@
          "distribution/version.rkt")
 
 (provide (all-from-out "distribution/crypto.rkt"
+                       "distribution/identity.rkt"
                        "distribution/managed-updater.rkt"
                        "distribution/manifest.rkt"
                        "distribution/platform-adapter.rkt"
