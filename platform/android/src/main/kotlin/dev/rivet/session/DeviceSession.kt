@@ -395,6 +395,8 @@ fun decodeSessionRecord(record: ByteArray): SessionMessage {
     val payload = RecordReader(reader.bytes(payloadLength))
 
     fun fields(): List<Any> {
+        // The payload opens with the RVT1 list tag before its count.
+        if (payload.byte() != 0x06) RecordReader.failMalformed()
         val count = payload.uint32()
         if (count > payload.remaining) RecordReader.failMalformed()
         return List(count.toInt()) {
@@ -637,7 +639,8 @@ fun sessionPairingCode(
     val digest = java.security.MessageDigest.getInstance("SHA-256").digest(transcript.toByteArray())
     var prefix = 0u
     for (index in 0 until 4) {
-        prefix = (prefix shl 8) or digest[index].toUInt()
+        // Zero-extend: Byte.toUInt() sign-extends negative bytes.
+        prefix = (prefix shl 8) or (digest[index].toInt() and 0xff).toUInt()
     }
     return "%06d".format((prefix % 1_000_000u).toInt())
 }
