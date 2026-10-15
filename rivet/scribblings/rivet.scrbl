@@ -614,6 +614,33 @@ Reports SemVer precedence; equivalent to a negative
 @defproc[(channel-accepts-version? [channel symbol?] [version string?]) boolean?]{
 Checks whether a version is allowed by a release channel.}
 
+@subsection{Release Target Metadata}
+
+These helpers live in the leaf module @racketmodname[rivet/distribution/identity]
+and are also re-exported by @racketmodname[rivet/distribution]. Requiring the
+leaf module does not initialize cryptographic factories or platform adapters.
+
+@defproc[(platform-symbol [os symbol? (system-type 'os)])
+         (or/c 'windows 'macos 'linux)]{
+Maps Racket's @racket['windows], @racket['macosx], and @racket['unix]
+operating-system symbols to the exact platform vocabulary used by release
+manifests. Unsupported values fail instead of being classified as Linux.}
+
+@defproc[(architecture-symbol [machine symbol? (system-type 'arch)])
+         (or/c 'x64 'arm64)]{
+Maps @racket['x86_64]/@racket['amd64] and
+@racket['aarch64]/@racket['arm64] to the manifest architecture vocabulary.
+Unsupported architectures fail instead of being classified as x64.}
+
+@defproc[(installer-extension [installer symbol?]) string?]{
+Returns the canonical filename extension for @racket['zip], @racket['targz],
+@racket['msi], @racket['msix], @racket['exe], @racket['dmg], @racket['pkg],
+@racket['deb], @racket['rpm], or @racket['appimage].}
+
+@defproc[(rfc3339-now [seconds real? (current-seconds)]) string?]{
+Formats @racket[seconds] in UTC at second precision, using the RFC 3339 form
+stored in a manifest's @racket[published-at] field.}
+
 @subsection{Signed Manifests}
 
 @racket[update-artifact] values describe one platform artifact using the fields

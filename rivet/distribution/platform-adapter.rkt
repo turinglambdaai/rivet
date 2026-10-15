@@ -10,6 +10,7 @@
          racket/path
          racket/string
          racket/system
+         "identity.rkt"
          "manifest.rkt"
          "updater.rkt")
 
@@ -25,14 +26,7 @@
 (struct platform-installation (plan health-check commit transaction-lock))
 
 (define (current-update-platform)
-  (case (system-type 'os)
-    [(windows) 'windows]
-    [(macosx) 'macos]
-    [(unix) 'linux]
-    [else
-     (raise-arguments-error 'current-update-platform
-                            "unsupported operating system"
-                            "system-type" (system-type 'os))]))
+  (platform-symbol))
 
 (define (detect-install-kind platform executable appimage)
   (cond

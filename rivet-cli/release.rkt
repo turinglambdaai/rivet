@@ -1,12 +1,11 @@
 #lang racket/base
 
-(require racket/date
-         file/zip
+(require file/zip
          racket/file
-         racket/format
          racket/path
          racket/string
          "../rivet/distribution/crypto.rkt"
+         "../rivet/distribution/identity.rkt"
          "../rivet/distribution/manifest.rkt"
          "appimage.rkt"
          "compliance.rkt"
@@ -36,16 +35,6 @@
         (required-environment "RIVET_UPDATE_BASE_URL")
         (string->path (required-environment "RIVET_UPDATE_PRIVATE_KEY"))
         (required-environment "RIVET_UPDATE_KEY_ID"))))
-
-(define (rfc3339-now)
-  (define d (seconds->date (current-seconds) #t))
-  (format "~a-~a-~aT~a:~a:~aZ"
-          (~r (date-year d) #:min-width 4 #:pad-string "0")
-          (~r (date-month d) #:min-width 2 #:pad-string "0")
-          (~r (date-day d) #:min-width 2 #:pad-string "0")
-          (~r (date-hour d) #:min-width 2 #:pad-string "0")
-          (~r (date-minute d) #:min-width 2 #:pad-string "0")
-          (~r (date-second d) #:min-width 2 #:pad-string "0")))
 
 ;; Portable zip beside the installer: the family update feed consumes
 ;; it and it runs on locked-down machines. Deterministic input tree,
