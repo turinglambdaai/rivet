@@ -356,6 +356,7 @@
            "\ttell disk \"~a\"\n"
            "\t\topen\n"
            "\t\tset current view of container window to icon view\n"
+           "\t\tset statusbar visible of container window to false\n"
            "\t\tset theViewOptions to the icon view options of container window\n"
            "\t\tset arrangement of theViewOptions to not arranged\n"
            "\t\tset icon size of theViewOptions to ~a\n"
