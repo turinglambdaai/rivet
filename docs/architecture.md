@@ -256,6 +256,15 @@ RVT1 remains limited to typed application RPC, Event, State, Cancel, and lifecyc
 
 The Racket-facing modules are `rivet/distribution` and `rivet/system`. Native adapters live beside the existing WinUI and Swift runtime code and use platform-first APIs. This separation prevents distribution policy from changing the embedded runtime contract and keeps UI-thread objects under WinUI/AppKit ownership.
 
+Commercial product rights stay outside that application-services boundary. A
+product may compose Rivet with
+[Permit](https://github.com/turinglambdaai/permit/blob/main/docs/framework-integration.md),
+but Rivet does not depend on Permit and does not define entitlement, trial,
+activation, seat, subscription, payment, or account policy. Rivet secure
+storage remains general-purpose even when a product uses it for Permit state.
+Update-manifest signing, OS publisher credentials, and Permit credential
+signing are separate trust domains with separate keys and rotation procedures.
+
 Cross-device communication is a second, explicit trust boundary. `RivetDevice` associates every Codable request with its response type, routes bounded/versioned envelopes, and can use WatchConnectivity through `RivetWatchConnectivityTransport`. The default watchOS architecture is therefore watch UI + typed companion channel + phone-hosted backend. The desktop-hosted companion direction reuses RVT1 framing only behind an authenticated device gateway that enforces a generated API subset; it does not expose the embedded backend socket. Its transport-independent authorization, session, pairing, authentication, revocation, secure Apple credential storage, byte-exact session preface, Apple TLS/SPKI stream adapter, per-install identity, disabled-by-default macOS listener, privacy-bounded Bonjour advertisement, macOS preface-session host, and explicit iOS Bonjour browser are implemented. The Apple client-session coordinator, product coordinator/gateway binding, native UI, and Windows secure storage/transport/discovery remain planned. See [typed device communication](device-communication.md) and the active [network device channel design](network-device-channel.md).
 
 An update crosses explicit trust boundaries: verify signed manifest, select policy-compatible artifact, download with a bound, verify signed size and SHA-256, invoke the platform installer, then either restart or execute the signed rollback policy. See [Release and updates](release-and-updates.md).

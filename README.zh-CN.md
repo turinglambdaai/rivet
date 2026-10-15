@@ -192,6 +192,13 @@ raco rivet release
 
 `release` 会继续生成正式 installer、独立 Ed25519 签名的更新 manifest、SBOM 与第三方许可声明。共用 updater 负责可信检查与下载，并覆盖 macOS bundle 换装、Windows MSI 交接和 Linux AppImage 原子替换；产品只需要提供策略与本地化 UI，不再重复实现安全关键流程。更新私钥和平台发布证书彼此独立，详见[发布与更新](docs/release-and-updates.md)。
 
+### 产品权益授权
+
+商业权益有意放在 Rivet 框架边界之外。需要离线可验证权益的产品可以将 Rivet 与
+[Permit](https://github.com/turinglambdaai/permit/blob/main/docs/framework-integration.md)
+或其他独立权益库组合使用；Rivet 本身不依赖它。产品可以使用 Rivet 的通用安全存储
+保存凭证状态，但产品权益签名、更新签名和平台代码签名必须保持独立密钥与信任策略。
+
 ## RPC、Event、State、Cancel
 
 ### Typed RPC

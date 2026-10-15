@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Document the product-level Permit composition boundary: Rivet remains a
+  framework with general secure storage and update integrity, not a built-in
+  entitlement, trial, activation, payment, or account system.
 - Give the installers a commercial first-run experience. The macOS DMG
   switches to the branded drag-to-install layout when the project declares
   `dmg-background`: the volume stages the bundle next to an `/Applications`
