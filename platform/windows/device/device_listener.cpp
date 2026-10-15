@@ -1,6 +1,6 @@
 #include "device_listener.hpp"
 
-#include <dnsapi.h>
+#include <windns.h>
 
 #include <stdexcept>
 #include <utility>
