@@ -194,6 +194,16 @@ For publisher-signed output, use `raco rivet package --production` with the plat
 
 `release` adds the formal installer, independently signed update manifest, SBOM, and third-party notices. The shared updater covers authenticated check/download plus native macOS bundle swap, Windows MSI handoff, and Linux AppImage replacement, so products provide policy and UI instead of reimplementing security-critical plumbing. See [Release and updates](docs/release-and-updates.md); update signing keys are separate from Authenticode/Developer ID credentials.
 
+### Product entitlements
+
+Commercial entitlements are deliberately outside Rivet's framework boundary.
+Products that need offline-verifiable rights can compose Rivet with
+[Permit](https://github.com/turinglambdaai/permit/blob/main/docs/framework-integration.md)
+or another independent entitlement library; Rivet does not depend on it.
+Products may use Rivet's general secure storage for credential state, while
+product-rights signing, update signing, and platform code signing keep separate
+keys and trust policies.
+
 ## RPC, Event, State, Cancel
 
 ### Typed RPC

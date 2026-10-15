@@ -13,6 +13,23 @@ transport, or mix distribution/system services into the embedding lifecycle.
 Mobile support must be described by its actual maturity: a portable runtime or
 typed companion foundation is not yet a generated, packaged application flow.
 
+### Commercial entitlement boundary
+
+Rivet owns application runtime, native UI, general secure storage,
+distribution, and update integrity. It does not own product entitlements,
+trials, activations, seats, subscriptions, payments, or accounts. Commercial
+products may depend on Rivet and
+[Permit](https://github.com/turinglambdaai/permit) independently, but Rivet
+must not depend on Permit or grow a built-in licensing subsystem.
+
+A product may store Permit credentials, local-trial state, or an
+`installation_id` through Rivet's general secure-storage API. That does not
+move their semantics into Rivet. Rivet update-signing keys, platform publisher
+credentials, and Permit credential-signing keys are separate trust domains and
+must use separate keys and rotation procedures. The shared integration
+contract lives at
+[`Permit/docs/framework-integration.md`](https://github.com/turinglambdaai/permit/blob/main/docs/framework-integration.md).
+
 Before roadmap, desktop-closeout, or mobile-delivery work, read
 `docs/desktop-closeout-mobile-plan.md`. It records the current decision,
 sequencing, exit criteria, evidence, and handoff state.
