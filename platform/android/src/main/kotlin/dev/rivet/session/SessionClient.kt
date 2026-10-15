@@ -87,7 +87,7 @@ class DeviceSessionClient private constructor(
             clientNonce: ByteArray,
             timeoutSeconds: Double = SESSION_POST_TLS_TIMEOUT_SECONDS,
             startedAt: Date = Date(),
-            clock: () -> Date = Date::new,
+            clock: () -> Date = { Date() },
         ): DeviceSessionClient {
             validateCommon(applicationID, serverFingerprint, clientNonce, timeoutSeconds)
             requireBytes(credential, SESSION_CREDENTIAL_SIZE)
@@ -113,7 +113,7 @@ class DeviceSessionClient private constructor(
             timeoutSeconds: Double = SESSION_POST_TLS_TIMEOUT_SECONDS,
             pairingResponseTimeoutSeconds: Double = SESSION_DEFAULT_PAIRING_WINDOW_SECONDS,
             startedAt: Date = Date(),
-            clock: () -> Date = Date::new,
+            clock: () -> Date = { Date() },
         ): DeviceSessionClient {
             validateCommon(applicationID, serverFingerprint, clientNonce, timeoutSeconds)
             if (!validDeviceDisplayName(deviceName) || pairingResponseTimeoutSeconds <= 0) {
