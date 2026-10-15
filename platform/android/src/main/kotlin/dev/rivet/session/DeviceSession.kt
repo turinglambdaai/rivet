@@ -306,7 +306,12 @@ private fun Int.toLittleEndianByteArray(): ByteArray =
     ByteBuffer.allocate(Int.SIZE_BYTES).order(ByteOrder.LITTLE_ENDIAN).putInt(this).array()
 
 fun encodeSessionRecord(message: SessionMessage): ByteArray {
-    val payload = message.payloadFields().map(::encodePayloadField).reduce { a, b -> a + b }
+    // The payload is one complete RVT1 list value: tag, count, then fields.
+    val encodedFields = message.payloadFields().map(::encodePayloadField)
+    var payload = byteArrayOf(0x06) + encodedFields.size.toLittleEndianByteArray()
+    for (field in encodedFields) {
+        payload += field
+    }
     if (payload.size > SESSION_MAXIMUM_PAYLOAD_SIZE) {
         throw SessionProtocolException(SessionProtocolFailure.RECORD_TOO_LARGE, "Rivet device session record exceeds its size limit")
     }

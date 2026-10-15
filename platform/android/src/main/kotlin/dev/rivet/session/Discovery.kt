@@ -17,8 +17,11 @@ data class DeviceAdvertisement(
     val protocolVersion: Int = SESSION_VERSION
 
     init {
-        require(validDiscoveryAdvertisementID(advertisementID)) {
-            "invalid Rivet device advertisement identifier"
+        if (!validDiscoveryAdvertisementID(advertisementID)) {
+            throw SessionProtocolException(
+                SessionProtocolFailure.INVALID_FIELD,
+                "invalid Rivet device advertisement identifier",
+            )
         }
     }
 }
