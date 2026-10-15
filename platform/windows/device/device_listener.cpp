@@ -112,7 +112,7 @@ void DeviceListener::publish() {
     registration_->instance =
         winrt::Windows::Networking::ServiceDiscovery::Dnssd::DnssdServiceInstance(
             instance_name, nullptr, port_);
-    auto& attributes = registration_->instance.TextAttributes();
+    auto attributes = registration_->instance.TextAttributes();
     attributes.Insert(L"id", winrt::to_hstring(advertisement_id_));
     attributes.Insert(
         L"pair",

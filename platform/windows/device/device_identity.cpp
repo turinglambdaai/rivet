@@ -19,6 +19,12 @@
 namespace rivet::windows {
 namespace {
 
+// Pin the macros this file passes to wincrypt so a missing or redefined
+// value fails here with a clear message instead of as a shifted argument
+// count inside the CertStrToNameW calls below.
+static_assert(X509_ASN_ENCODING == 0x00000001, "unexpected X509_ASN_ENCODING");
+static_assert(CERT_X500_NAME_STR == 3, "unexpected CERT_X500_NAME_STR");
+
 constexpr DWORD kFriendlyNameProperty = CERT_FRIENDLY_NAME_PROP_ID;
 constexpr DWORD kKeyProvInfoProperty = CERT_KEY_PROV_INFO_PROP_ID;
 
