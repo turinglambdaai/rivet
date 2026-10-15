@@ -23,11 +23,14 @@ std::wstring instance_name(std::string const& id) {
 
 // The DNS-SD registration handle for DnsServiceDeRegister. The classic
 // dnsapi service registration is a plain C structure, so no WinRT state
-// lives in the listener.
+// lives in the listener; every pointer field targets storage owned by the
+// other members.
 struct DeviceListener::Registration {
   std::wstring name;
   std::vector<std::wstring> text;
-  std::vector<LPCWSTR> text_pointers;
+  std::vector<LPWSTR> text_pointers;
+  DNS_SERVICE_INSTANCE instance{};
+  DNS_SERVICE_REGISTER_REQUEST request{};
   bool registered = false;
 };
 
@@ -121,18 +124,23 @@ void DeviceListener::publish() {
   }
   registration->text_pointers.reserve(registration->text.size());
   for (auto const& entry : registration->text) {
-    registration->text_pointers.push_back(entry.c_str());
+    registration->text_pointers.push_back(
+        const_cast<LPWSTR>(entry.c_str()));
   }
 
-  DNS_SERVICE_REGISTER_REQUEST request{};
-  request.Version = DNS_QUERY_REQUEST_VERSION1;
-  request.ullFlags = 0;
-  request.pszServiceName = registration->name.data();
-  request.wPort = port_;
-  request.dwCount = static_cast<DWORD>(registration->text_pointers.size());
-  request.pszText = const_cast<LPWSTR*>(registration->text_pointers.data());
-  DNS_SERVICE_CANCEL cancel{};
-  DWORD status = DnsServiceRegister(&request, &cancel);
+  registration->instance.pszInstanceName = registration->name.data();
+  registration->instance.wPort = port_;
+  registration->instance.dwCount =
+      static_cast<DWORD>(registration->text_pointers.size());
+  registration->instance.pszText = registration->text_pointers.data();
+
+  registration->request.Version = DNS_QUERY_REQUEST_VERSION1;
+  registration->request.InterfaceIndex = 0;  // all interfaces
+  registration->request.pServiceInstance = &registration->instance;
+  // A null completion callback makes the registration synchronous.
+  registration->request.pRegisterCompletionCallback = nullptr;
+
+  DWORD status = DnsServiceRegister(&registration->request, nullptr);
   if (status != ERROR_SUCCESS) {
     throw std::runtime_error("registering the device advertisement failed ("
                              + std::to_string(status) + ")");
@@ -146,10 +154,13 @@ void DeviceListener::unpublish() {
     registration_.reset();
     return;
   }
+  // DnsServiceDeRegister only needs the service identity; a null callback
+  // keeps it synchronous.
   DNS_SERVICE_REGISTER_REQUEST request{};
   request.Version = DNS_QUERY_REQUEST_VERSION1;
-  request.pszServiceName = registration_->name.data();
-  request.wPort = port_;
+  request.InterfaceIndex = 0;
+  request.pServiceInstance = &registration_->instance;
+  request.pRegisterCompletionCallback = nullptr;
   (void)DnsServiceDeRegister(&request, nullptr);
   registration_.reset();
 }
