@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <utility>
 
+#include "rivet/discovery_advertisement.hpp"
 #include "schannel_transport.hpp"
 
 namespace rivet::windows {

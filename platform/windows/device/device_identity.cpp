@@ -134,15 +134,14 @@ const CERT_CONTEXT* create_identity(std::wstring const& friendly_name) {
   if (status != ERROR_SUCCESS) {
     throw_ncrypt_status("creating the persisted identity key", status);
   }
-  status = NCryptFinalizeKey(key.key);
+  status = NCryptFinalizeKey(key.key, 0);
   if (status != ERROR_SUCCESS) {
     throw_ncrypt_status("finalizing the persisted identity key", status);
   }
 
   DWORD subject_size = 0;
   if (!CertStrToNameW(X509_ASN_ENCODING, L"CN=Rivet Device",
-                      CERT_X500_NAME_STR, nullptr, nullptr, &subject_size,
-                      nullptr)) {
+                      CERT_X500_NAME_STR, nullptr, nullptr, &subject_size)) {
     throw_last_error("encoding the identity subject name");
   }
   LocalBuffer subject;
@@ -152,7 +151,7 @@ const CERT_CONTEXT* create_identity(std::wstring const& friendly_name) {
   }
   if (!CertStrToNameW(X509_ASN_ENCODING, L"CN=Rivet Device",
                       CERT_X500_NAME_STR, nullptr, subject.data(),
-                      &subject_size, nullptr)) {
+                      &subject_size)) {
     throw_last_error("encoding the identity subject name");
   }
   CERT_NAME_BLOB subject_blob;
