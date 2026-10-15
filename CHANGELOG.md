@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add the Windows device-gateway transport. A CNG-persisted P-256
+  self-signed identity (rotatable by deletion), an SChannel TLS server over
+  any accepted socket with the `rivet-device/1` ALPN requirement, the
+  fail-closed `rivet-device._tcp` advertisement through DNS-SD, and a
+  bounded single-connection listener come together in
+  `rivet::windows::DeviceSessionService`, which feeds accepted sockets to
+  the portable `rivet::DeviceSessionHost`. X.509 SubjectPublicKeyInfo
+  extraction joined the portable runtime so companion pins are
+  byte-identical across platforms.
 - Add the portable C++ device-session host driver. Over any
   `rivet::Transport`, `rivet::DeviceSessionHost` runs the RVD1 preface for
   one accepted desktop connection, enforces the post-TLS deadline, surfaces

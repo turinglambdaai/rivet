@@ -225,20 +225,22 @@ drives the preface over any `rivet::Transport` with injectable clock and
 thread-safe desktop decisions, pinned by deterministic pipe and multi-thread
 tests (`rivet_device_session_host_test`).
 
-The next M3 slice is the Windows host transport: a WinRT
-`StreamSocketListener` TLS server with a generated P-256 self-signed
-identity, SPKI-published for client pinning, DNS-SD advertising equivalent
-to the macOS TXT record, and the admission caps and fail-closed lifecycle
-the macOS listener already enforces. It only has to implement
-`rivet::Transport` over the accepted socket and feed it to
-`rivet::DeviceSessionHost`; the preface and host semantics are already
-pinned. Because that slice compiles only under the Windows SDK, land it on
-a branch and iterate CI to green before merging; do not push it blind to
-`main`. After that, bind Android discovery/TLS streams to the existing
-Kotlin runtime and the generated device API using the same golden fixture.
-Read `docs/network-device-channel.md` for the wire and timing contract and
-reuse the language-neutral fixtures; do not reinterpret the preface per
-platform.
+M3's Windows transport slice is also implemented: a CNG-persisted P-256
+self-signed identity with deletion-based rotation, an SChannel TLS server
+requiring the `rivet-device/1` ALPN and failing closed on renegotiation, a
+bounded listener, and a DNS-SD publication of the shared canonical
+advertisement, all behind `rivet::windows::DeviceSessionService`, which
+feeds accepted TLS transports to the portable `rivet::DeviceSessionHost`.
+The portable X.509 SubjectPublicKeyInfo extractor keeps companion pins
+byte-identical across platforms. This code compiles only under the
+Windows SDK, so it has not run on real hardware yet: acceptance requires a
+Windows machine to verify identity creation, listener start, DNS-SD
+visibility (`dns-sd -B _rivet-device._tcp` from another host), and an iOS
+provisional-pairing handshake. After that, bind Android discovery/TLS
+streams to the existing Kotlin runtime and the generated device API using
+the same golden fixture. Read `docs/network-device-channel.md` for the
+wire and timing contract and reuse the language-neutral fixtures; do not
+reinterpret the preface per platform.
 
 ### M3 — second desktop host and Android client
 

@@ -190,8 +190,14 @@ by both desktop gateways: it runs the preface on one thread over any
 loop, waits for the desktop decision with the pairing-window clock, ends
 the run through the state machine's Close actions, and lends the accepted
 stream to an application handler before any RVT1 byte reaches the preface
-decoder. Windows TLS transport, listener, and discovery remain
-unimplemented; they are thin adapters over this driver.
+decoder. The Windows gateway is that thin adapter today: a CNG-persisted
+P-256 self-signed identity with friendly-name lookup and deletion-based
+rotation, an SChannel TLS server that fails closed on renegotiation and
+requires the `rivet-device/1` ALPN, a bounded listener whose admission cap
+rejects sockets before any transport state exists, and a DNS-SD
+publication of the shared canonical advertisement while the listener is
+ready (Windows offers no explicit deregistration, so the record decays
+with its TTL after shutdown).
 
 ## Session protocol
 

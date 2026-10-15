@@ -89,13 +89,27 @@
     <PackageReference Include="Microsoft.Windows.CppWinRT" Version="$(RivetCppWinRTVersion)" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="$(RIVET_ROOT)\platform\windows\device\device_identity.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\platform\windows\device\device_listener.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\platform\windows\device\device_session_service.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\platform\windows\device\schannel_transport.cpp" />
     <ClCompile Include="$(RIVET_ROOT)\platform\windows\runtime\backend.cpp" />
     <ClCompile Include="$(RIVET_ROOT)\platform\windows\runtime\win32_pipe_transport.cpp" />
     <ClCompile Include="$(RIVET_ROOT)\platform\windows\system\system_services.cpp" />
     <ClCompile Include="$(RIVET_ROOT)\platform\windows\update\update_handoff.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\runtime\src\device_session.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\runtime\src\device_session_host.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\runtime\src\discovery_advertisement.cpp" />
     <ClCompile Include="$(RIVET_ROOT)\runtime\src\protocol.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\runtime\src\sha256.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\runtime\src\utf8.cpp" />
+    <ClCompile Include="$(RIVET_ROOT)\runtime\src\x509_spki.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="$(RIVET_ROOT)\platform\windows\device\device_identity.hpp" />
+    <ClInclude Include="$(RIVET_ROOT)\platform\windows\device\device_listener.hpp" />
+    <ClInclude Include="$(RIVET_ROOT)\platform\windows\device\device_session_service.hpp" />
+    <ClInclude Include="$(RIVET_ROOT)\platform\windows\device\schannel_transport.hpp" />
     <ClInclude Include="$(RIVET_ROOT)\platform\windows\runtime\backend.hpp" />
     <ClInclude Include="$(RIVET_ROOT)\platform\windows\runtime\win32_pipe_transport.hpp" />
     <ClInclude Include="$(RIVET_ROOT)\platform\windows\system\system_services.hpp" />
