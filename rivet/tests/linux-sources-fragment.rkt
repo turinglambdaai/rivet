@@ -17,7 +17,7 @@
          (for-syntax racket/base)
          racket/runtime-path)
 
-;; tests/ sits directly under the package root
+;; rivet/tests/ sits inside the rivet collection
 (define-runtime-path repository-root-reference "../..")
 (define package-root (simplify-path repository-root-reference))
 

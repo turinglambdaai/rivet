@@ -290,7 +290,7 @@ jobs:
           Set-Location $root
           raco rivet new Smoke
           Set-Location (Join-Path $root 'Smoke')
-          Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'tests\fixtures\schema-matrix-backend.rkt') 'app\backend.rkt' -Force
+          Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'rivet\tests\fixtures\schema-matrix-backend.rkt') 'app\backend.rkt' -Force
           New-Item -ItemType Directory -Force -Path 'assets\nested' | Out-Null
           Set-Content -Path 'assets\nested\product.txt' -Value 'packaged-resource' -NoNewline
           $config = Get-Content 'rivet.rktd' -Raw

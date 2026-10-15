@@ -68,7 +68,7 @@ jobs:
         run: |
           Set-Location (Join-Path $env:GITHUB_WORKSPACE 'examples\taskboard')
           raco rivet package --skip-launch-smoke
-          & (Join-Path $env:GITHUB_WORKSPACE 'tests\native-ui\windows-uia.ps1') `
+          & (Join-Path $env:GITHUB_WORKSPACE 'rivet\tests\native-ui\windows-uia.ps1') `
             -Executable (Join-Path $PWD 'dist\rivet-taskboard-windows-x64\RivetHost.exe') `
             -OutputDirectory (Join-Path $env:RUNNER_TEMP 'rivet-native-ui-windows')
       - name: Upload Windows native UI evidence

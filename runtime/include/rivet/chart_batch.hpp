@@ -6,7 +6,7 @@
 // rivet/chart.rkt: little-endian u32 magic 0x52564331 ("RVC1"), u32 sample
 // count, i64 absolute first index, then count x (i64 timestamp-ns, i64
 // value). The Swift decoder in platform/macos/Sources/RivetUI mirrors this
-// file; tests/chart.rkt pins the shared golden bytes.
+// file; rivet/tests/chart.rkt pins the shared golden bytes.
 
 #include "rivet/protocol.hpp"
 

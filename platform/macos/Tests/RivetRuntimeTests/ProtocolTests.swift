@@ -30,7 +30,7 @@ private func loadGoldenRecords() throws -> [GoldenRecord] {
     for _ in 0..<5 {
         url.deleteLastPathComponent()
     }
-    url.appendPathComponent("tests/protocol-golden.txt")
+    url.appendPathComponent("rivet/tests/protocol-golden.txt")
 
     let contents = try String(contentsOf: url, encoding: .utf8)
     return try contents.split(whereSeparator: \.isNewline).compactMap { rawLine in

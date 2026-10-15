@@ -18,7 +18,7 @@ def main() -> int:
     parser.add_argument(
         "--fixture",
         type=Path,
-        default=Path(__file__).resolve().parents[2] / "tests" / "protocol-golden.txt",
+        default=Path(__file__).resolve().parents[2] / "rivet" / "tests" / "protocol-golden.txt",
         help="shared protocol-golden.txt fixture",
     )
     args = parser.parse_args()
