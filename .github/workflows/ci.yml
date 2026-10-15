@@ -273,7 +273,7 @@ jobs:
         shell: pwsh
         run: |
           $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
-          & $msbuild "platform\windows\rivet-device-smoke.vcxproj" /p:RIVET_ROOT="$env:GITHUB_WORKSPACE" /m /nologo /v:m
+          & $msbuild "platform\windows\rivet-device-smoke.vcxproj" /p:RIVET_ROOT="$env:GITHUB_WORKSPACE" /p:Configuration=Release /p:Platform=x64 /m /nologo /v:m
       - name: Install Rivet
         shell: pwsh
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
