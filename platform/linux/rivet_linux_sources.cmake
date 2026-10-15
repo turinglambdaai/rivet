@@ -25,6 +25,7 @@ set(RIVET_LINUX_PLATFORM_SOURCES
   "${RIVET_ROOT}/platform/linux/update/update_handoff.cpp"
   "${RIVET_ROOT}/runtime/src/chart_batch.cpp"
   "${RIVET_ROOT}/runtime/src/protocol.cpp"
+  "${RIVET_ROOT}/runtime/src/utf8.cpp"
 )
 
 set(RIVET_LINUX_INCLUDE_DIRS
