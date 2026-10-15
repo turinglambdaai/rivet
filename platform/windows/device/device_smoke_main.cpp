@@ -12,6 +12,7 @@
 //
 // Exit code 0 means every step succeeded.
 
+#include <winsock2.h>
 #include <windows.h>
 #include <bcrypt.h>
 

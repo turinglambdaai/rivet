@@ -4,6 +4,7 @@
 #include <ncrypt.h>
 #include <wincrypt.h>
 
+#include <array>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -27,6 +28,7 @@ std::wstring key_container_name(std::wstring const& friendly_name) {
 
 struct StoreHandle {
   HCERTSTORE store = nullptr;
+  operator HCERTSTORE() const noexcept { return store; }
   ~StoreHandle() {
     if (store) CertCloseStore(store, 0);
   }
@@ -132,7 +134,7 @@ const CERT_CONTEXT* create_identity(std::wstring const& friendly_name) {
   if (status != ERROR_SUCCESS) {
     throw_ncrypt_status("creating the persisted identity key", status);
   }
-  status = NCryptFinalizeOperation(key.key);
+  status = NCryptFinalizeKey(key.key);
   if (status != ERROR_SUCCESS) {
     throw_ncrypt_status("finalizing the persisted identity key", status);
   }
@@ -251,9 +253,10 @@ void DeviceIdentity::delete_identity(std::wstring const& friendly_name) {
 }
 
 std::vector<std::uint8_t> DeviceIdentity::spki_sha256() const {
-  return x509_spki_sha256(std::vector<std::uint8_t>(
-      context_->pbCertEncoded,
-      context_->pbCertEncoded + context_->cbCertEncoded));
+  std::array<std::uint8_t, 32> digest = x509_spki_sha256(
+      std::vector<std::uint8_t>(context_->pbCertEncoded,
+                                context_->pbCertEncoded + context_->cbCertEncoded));
+  return std::vector<std::uint8_t>(digest.begin(), digest.end());
 }
 
 DeviceIdentity::DeviceIdentity(const CERT_CONTEXT* context)
