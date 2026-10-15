@@ -100,7 +100,7 @@ class SessionClientTest {
         val decisionActions = client.confirmPairing(true, clock.now())
         assertEquals(listOf(SessionClientAction.Send(SessionMessage.PairDecision(attemptID, true))), decisionActions)
 
-        val newCredential = ByteArray(SESSION_CREDENTIAL_SIZE) { 0xb5 }
+        val newCredential = ByteArray(SESSION_CREDENTIAL_SIZE) { 0xb5.toByte() }
         val persistActions = client.receive(
             SessionMessage.Paired(deviceID, newCredential, sessionID, listOf("reader"), 524288L, 64L),
             clock.now(),
