@@ -315,6 +315,9 @@
 
   (define configured-icon
     (required-project-icon project (project-macos-icon project) 'macos))
+  (unless configured-icon
+    (eprintf
+     "rivet: warning: no `macos-icon` declared in rivet.rktd — the macOS bundle will ship without a Dock/Finder icon\n"))
   (define packaged-icon-name (and configured-icon "AppIcon.icns"))
   (when configured-icon
     (copy-file configured-icon

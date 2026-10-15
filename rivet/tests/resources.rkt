@@ -90,6 +90,17 @@
     (check-true
      (regexp-match? #rx"VALUE \"OriginalFilename\", \"Demo_App\\.exe\"" rc-text))
 
+    ;; An omitted windows-icon still builds, but must say so: the generic
+    ;; icon only surfaces after a user installs, never during CI.
+    (define iconless-stderr (open-output-string))
+    (define iconless-rc
+      (parameterize ([current-error-port iconless-stderr])
+        (prepare-windows-icon-resource! (rivet-project temp-root #hasheq((name . "Demo_App"))))))
+    (check-false
+     (regexp-match? #rx"IDI_RIVET_APP_ICON" (file->string iconless-rc)))
+    (check-true
+     (regexp-match? #rx"no `windows-icon`" (get-output-string iconless-stderr)))
+
     (define plist (build-path temp-root "Info.plist"))
     (write-macos-info! plist
                        "Demo & Test"

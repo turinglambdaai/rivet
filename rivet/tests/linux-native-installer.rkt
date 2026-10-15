@@ -141,6 +141,14 @@
                (lambda ()
                  (stage-appdir! iconless package-dir)))
 
+    ;; deb and rpm install without an icon rather than failing, but the
+    ;; desktop entry has to say so at build time.
+    (define iconless-stderr (open-output-string))
+    (parameterize ([current-error-port iconless-stderr])
+      (write-desktop-entry! iconless (build-path temp-root "iconless.desktop")))
+    (check-true
+     (regexp-match? #rx"no `linux-icon`" (get-output-string iconless-stderr)))
+
     ;; ------------------------------------------------ linux-formats config
     (check-equal? (project-linux-formats project) '("deb" "rpm" "appimage"))
     (define deb-only
