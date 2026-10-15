@@ -43,6 +43,17 @@
 ;; Stages the full deb root: DEBIAN/control, the payload under /opt/<name>,
 ;; the desktop entry, and the pixmaps icon when the project declares one.
 ;; Returns the staged root directory.
+;; Desktop database refresh after install and removal. The desktop entry
+;; works without it on GNOME and KDE, but the maintainer scripts keep the
+;; application database current on every desktop environment.
+(define deb-desktop-maintainer-script
+  (string-append
+   "#!/bin/sh\n"
+   "set -e\n"
+   "if command -v update-desktop-database >/dev/null 2>&1; then\n"
+   "    update-desktop-database -q || true\n"
+   "fi\n"))
+
 (define (stage-deb-root! project package [destination #f])
   (define name (project-name project))
   (define root
@@ -68,6 +79,13 @@
   (make-directory* (build-path root "DEBIAN"))
   (write-deb-control! project (build-path root "DEBIAN" "control")
                       (installed-size-kib root))
+  (for ([script-name (in-list '("postinst" "postrm"))])
+    (define script (build-path root "DEBIAN" script-name))
+    (call-with-output-file script
+      #:exists 'truncate/replace
+      (lambda (out) (display deb-desktop-maintainer-script out)))
+    (run! 'stage-deb-root! (find-executable-path "chmod")
+          "755" (path->string script)))
   root)
 
 (define (control-field key value)

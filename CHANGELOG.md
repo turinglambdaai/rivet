@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Give the installers a commercial first-run experience. The macOS DMG
+  switches to the branded drag-to-install layout when the project declares
+  `dmg-background`: the volume stages the bundle next to an `/Applications`
+  symlink, a read/write image is attached, Finder is scripted to size the
+  660x400 window, set the background, and place both icons, and the styled
+  volume converts back to the compressed image. The Windows MSI now authors
+  the stock install-dir wizard sequence (welcome, license agreement,
+  install directory, progress, exit) through the UI extension, with a
+  launch-app checkbox on the finish page driven by the Util extension's
+  WixShellExec; the license page shows the configured `windows-license`
+  RTF or renders the repository license text automatically, and optional
+  `windows-installer-bitmaps` replace the wizard artwork. The deb ships
+  executable postinst/postrm scripts that refresh the desktop database.
+  All behavior is opt-in per project key; projects without the keys build
+  byte-identical installers to before.
 - Add leaf-loadable distribution identity helpers for the canonical manifest
   platform, architecture, installer-extension, and UTC RFC 3339 vocabulary.
   Release tooling and the managed updater now consume the same implementation

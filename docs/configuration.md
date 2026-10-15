@@ -22,6 +22,10 @@ Example:
   (device-rpcs . (current-score refresh-score))
   (windows-icon . "branding/app.ico")
   (macos-icon . "branding/app.icns")
+  (dmg-background . "branding/dmg-background.png")
+  (windows-license . "branding/license-page.rtf")
+  (windows-installer-bitmaps . (hasheq 'banner "branding/wizard-banner.bmp"
+                                       'dialog "branding/wizard-dialog.bmp"))
   (macos-min-version . "14.0")
   (windows-min-version . "10.0.19041.0")
   (backend . "app/backend.rkt")
@@ -97,6 +101,9 @@ breaking change, while adding one is compatible. See
 - `macos-icon` — an optional project-relative `.icns` file copied into the app bundle and declared through `CFBundleIconFile`. A package without the key warns: the bundle then ships without a Dock/Finder icon.
 - `linux-icon` — an optional project-relative `.png` file installed as the desktop icon (`/usr/share/pixmaps`, referenced by the generated `.desktop` entry) and used as the AppImage top-level icon. AppImage packaging fails closed without it; deb and rpm warn and install without a desktop icon when the key is omitted.
 - `linux-formats` — an optional subset of `("deb" "rpm" "appimage")` selecting which native Linux installer formats `raco rivet release` builds. The default builds all three; the signed tar.gz update payload is always produced regardless.
+- `dmg-background` — an optional project-relative `.png` used as the DMG window background. Declaring it switches `raco rivet release` to the branded drag-to-install layout: the volume carries an `/Applications` symlink and the DMG window gets a fixed 660x400 geometry with both icons placed. Render the PNG at 1320x800 (2x) so it stays sharp on Retina displays; Finder scales it to the window. Without the key the DMG stays a plain single-folder image.
+- `windows-license` — an optional project-relative `.rtf` file shown on the MSI wizard's license page. Without the key, the release pipeline renders the repository `LICENSE` text (or `LICENSE.txt`/`COPYING`) into an RTF automatically; a project with neither ships a neutral notice pointing at the license that installs with the application.
+- `windows-installer-bitmaps` — an optional hash with `banner` and `dialog` values naming project-relative `.bmp` files for the MSI wizard (493x58 and 493x312 respectively). Unset values keep the wizard's built-in artwork.
 
 Packaged resources live under `app/` inside the platform resource root. Racket code should use `resource-path` from `rivet/resources` (also re-exported by `rivet`) instead of guessing an executable-relative path. The filename `rivet-app-info.rktd` at this root is reserved for Rivet's generated application identity:
 

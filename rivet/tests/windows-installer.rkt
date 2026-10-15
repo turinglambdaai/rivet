@@ -111,6 +111,96 @@
 (check-false (regexp-match? #rx"ARPPRODUCTICON" plain-source)
              "projects without a windows icon must not pin an ARP icon")
 
+;; The wizard UI is unconditional: every MSI gets the standard install-dir
+;; sequence with a launch checkbox on the finish page.
+(check-regexp-match #rx"<ui:WixUI Id=\"WixUI_InstallDir\" />" plain-source
+                    "the MSI must author the install-dir wizard sequence through the UI extension")
+(check-regexp-match #rx"xmlns:ui=\"http://wixtoolset.org/schemas/v4/wxs/ui\"" plain-source)
+(check-regexp-match #rx"<Property Id=\"WIXUI_INSTALLDIR\" Value=\"INSTALLFOLDER\" />" plain-source
+                    "the wizard must target the real install folder")
+(check-regexp-match #rx"<Property Id=\"WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT\" Value=\"Launch Smoke\" />" plain-source
+                    "the finish page must offer launching the app")
+(check-regexp-match
+ #rx"<Property Id=\"WixShellExecTarget\" Value=\"\\[INSTALLFOLDER\\]RivetHost.exe\" />"
+ plain-source)
+(check-regexp-match
+ #rx"<CustomAction Id=\"LaunchApplication\" BinaryRef=\"Wix4UtilCA_(X64|ARM64)\" DllEntry=\"WixShellExec\" Impersonate=\"yes\" />"
+ plain-source
+ "the launch action must come from the architecture-appropriate Util CA")
+(check-regexp-match
+ #rx"<Publish Dialog=\"ExitDialog\" Control=\"Finish\" Event=\"DoAction\" Value=\"LaunchApplication\" Condition=\"WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed\" Order=\"2\" />"
+ plain-source
+ "the checkbox must launch only on a fresh install")
+(check-regexp-match #rx"<WixVariable Id=\"WixUILicenseRtf\" Value=\"[^\"]+license[.]rtf\" />"
+                    plain-source
+                    "the license page always resolves to an RTF")
+(check-false (regexp-match? #rx"WixUIBannerBmp|WixUIDialogBmp" plain-source)
+             "wizard bitmaps stay unauthored unless the project configures them")
+
+;; A repository LICENSE renders into the wizard RTF, ASCII-safe with RTF
+;; paragraph breaks and unicode escapes.
+(void
+ (call-with-output-file (build-path package-root "LICENSE")
+   #:exists 'truncate/replace
+   (lambda (out) (display "Smoke License\nsecond line with ünïcode ✓\n" out))))
+(void (wix-source-for (hasheq)))
+(define generated-rtf
+  (file->string (build-path package-root ".rivet" "installer" "license.rtf")))
+(check-regexp-match #rx"^\\{\\\\rtf1\\\\ansi" generated-rtf
+                    "the generated license must be RTF")
+(check-regexp-match #rx"Smoke License\\\\par" generated-rtf
+                    "license line breaks must become RTF paragraph breaks")
+(check-regexp-match #rx"\\\\u252\\?" generated-rtf
+                    "non-ASCII license characters must become unicode escapes")
+(check-false (regexp-match? #rx"ünïcode" generated-rtf)
+             "the generated RTF must stay ASCII so WiX never re-decodes it")
+(delete-file (build-path package-root "LICENSE"))
+
+;; A configured RTF replaces the generated one verbatim.
+(define license-page (build-path package-root "branding" "license-page.rtf"))
+(make-parent-directory* license-page)
+(void
+ (call-with-output-file license-page #:exists 'truncate/replace
+   (lambda (out) (display "{\\rtf1\\ansi configured license page}" out))))
+(define configured-license-source
+  (wix-source-for (hasheq 'windows-license "branding/license-page.rtf")))
+(check-regexp-match #rx"<WixVariable Id=\"WixUILicenseRtf\" Value=\"[^\"]*license-page[.]rtf\" />"
+                    configured-license-source
+                    "a configured license page must win over the generated one")
+
+;; Wizard bitmaps ride in through WixVariables when configured. The fixtures
+;; are real 24bpp BMPs at the exact wizard sizes (the binder validates them).
+(define (minimal-bmp width height fill)
+  (define row-size (* 4 (ceiling (/ (* width 24) 32))))
+  (define pixel-size (* row-size height))
+  (define (u16-le n)
+    (bytes (bitwise-and n #xFF) (bitwise-and (arithmetic-shift n -8) #xFF)))
+  (define (u32-le n)
+    (bytes (bitwise-and n #xFF) (bitwise-and (arithmetic-shift n -8) #xFF)
+           (bitwise-and (arithmetic-shift n -16) #xFF)
+           (bitwise-and (arithmetic-shift n -24) #xFF)))
+  (bytes-append #"BM"
+                (u32-le (+ 14 40 pixel-size)) (u16-le 0) (u16-le 0) (u32-le 54)
+                (u32-le 40) (u32-le width) (u32-le height)
+                (u16-le 1) (u16-le 24) (u32-le 0) (u32-le pixel-size)
+                (u32-le 2835) (u32-le 2835) (u32-le 0) (u32-le 0)
+                (make-bytes pixel-size fill)))
+(define banner-file (build-path package-root "branding" "wizard-banner.bmp"))
+(define dialog-file (build-path package-root "branding" "wizard-dialog.bmp"))
+(void
+ (call-with-output-file banner-file #:exists 'truncate/replace
+   (lambda (out) (write-bytes (minimal-bmp 493 58 #xC8) out)))
+ (call-with-output-file dialog-file #:exists 'truncate/replace
+   (lambda (out) (write-bytes (minimal-bmp 493 312 #xC8) out))))
+(define bitmap-source
+  (wix-source-for (hasheq 'windows-installer-bitmaps
+                          (hasheq 'banner "branding/wizard-banner.bmp"
+                                  'dialog "branding/wizard-dialog.bmp"))))
+(check-regexp-match #rx"<WixVariable Id=\"WixUIBannerBmp\" Value=\"[^\"]*wizard-banner[.]bmp\" />"
+                    bitmap-source)
+(check-regexp-match #rx"<WixVariable Id=\"WixUIDialogBmp\" Value=\"[^\"]*wizard-dialog[.]bmp\" />"
+                    bitmap-source)
+
 ;; A minimal but structurally valid 16x16 32bpp ICO (WiX's binder parses the
 ;; icon when embedding it, so the fixture has to be the real format).
 (define (minimal-16x16-ico)
@@ -156,7 +246,9 @@
  "the pinned ARP icon must reference the embedded icon")
 
 ;; ---------------------------------------------------------------------------
-;; Real MSI build (only where WiX is installed; release CI covers this too)
+;; Real MSI build (Windows hosts only: the WiX 5 binder needs the Windows
+;; Installer API for the final database, and its Directory-name validation
+;; rejects every value on POSIX hosts; release CI builds MSIs on Windows)
 
 (define wix (or (find-executable-path "wix") (find-executable-path "wix.exe")))
 (define (build-smoke-msi! overrides msi-name)
@@ -168,6 +260,8 @@
   (define exit-code
     (parameterize ([current-directory package-root])
       (system*/exit-code wix "build" "-arch" "x64"
+                         "-ext" "WixToolset.UI.wixext"
+                         "-ext" "WixToolset.Util.wixext"
                          "-o" (path->string msi) (path->string source))))
   (check-equal? exit-code 0 "wix must accept the generated source")
   (when (file-exists? msi)
@@ -175,10 +269,17 @@
     (check-true (> size 1024) "the built MSI must not be empty")
     (delete-file msi)))
 
-(when wix
+(when (and wix (equal? 'windows (system-type 'os)))
+  (ensure-wix-extensions! 'build-smoke wix)
   (build-smoke-msi! (hasheq) "Smoke-plain-windows-x64.msi")
   ;; the icon variant validates the ARP-icon fragment against the real schema
   (build-smoke-msi! (hasheq 'windows-icon "shared/assets/app.ico")
-                    "Smoke-icon-windows-x64.msi"))
+                    "Smoke-icon-windows-x64.msi")
+  ;; the branded variant validates wizard bitmaps and the configured license
+  (build-smoke-msi! (hasheq 'windows-installer-bitmaps
+                            (hasheq 'banner "branding/wizard-banner.bmp"
+                                    'dialog "branding/wizard-dialog.bmp")
+                            'windows-license "branding/license-page.rtf")
+                    "Smoke-branded-windows-x64.msi"))
 
 (delete-directory/files package-root)

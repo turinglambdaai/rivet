@@ -26,6 +26,11 @@
              'device-rpcs '(greet sync-profile)
              'windows-icon "branding/app.ico"
              'macos-icon "branding/app.icns"
+             'dmg-background "branding/dmg-background.png"
+             'windows-license "branding/license-page.rtf"
+             'windows-installer-bitmaps
+             (hasheq 'banner "branding/wizard-banner.bmp"
+                     'dialog "branding/wizard-dialog.bmp")
              'macos-min-version "14.1"
              'windows-min-version "10.0.19045.0"
              'backend "app/backend.rkt"
@@ -43,6 +48,13 @@
     (check-equal? (project-device-rpcs project) '(greet sync-profile))
     (check-equal? (project-windows-icon project) "branding/app.ico")
     (check-equal? (project-macos-icon project) "branding/app.icns")
+    (check-equal? (project-dmg-background project)
+                  "branding/dmg-background.png")
+    (check-equal? (project-windows-license project)
+                  "branding/license-page.rtf")
+    (check-equal? (project-windows-installer-bitmaps project)
+                  (hasheq 'banner "branding/wizard-banner.bmp"
+                          'dialog "branding/wizard-dialog.bmp"))
     (check-equal? (project-macos-min-version project) "14.1")
     (check-equal? (project-windows-min-version project) "10.0.19045.0")
     (check-equal? (find-project temp-root) project)
@@ -72,6 +84,10 @@
     (check-equal? (project-device-rpcs legacy-project) '())
     (check-false (project-windows-icon legacy-project))
     (check-false (project-macos-icon legacy-project))
+    (check-false (project-dmg-background legacy-project))
+    (check-false (project-windows-license legacy-project))
+    (check-equal? (project-windows-installer-bitmaps legacy-project)
+                  (hasheq))
 
     (write-config
      (hasheq 'name "demo"
@@ -187,7 +203,16 @@
                         (list (cons 'windows-icon "branding/app.png")
                               (cons 'windows-icon "../app.ico")
                               (cons 'macos-icon "branding/app.png")
-                              (cons 'macos-icon ".rivet/app.icns")))])
+                              (cons 'macos-icon ".rivet/app.icns")
+                              (cons 'dmg-background "branding/app.jpg")
+                              (cons 'dmg-background "/absolute/bg.png")
+                              (cons 'dmg-background "dist/bg.png")
+                              (cons 'windows-license "branding/license.txt")
+                              (cons 'windows-installer-bitmaps "branding/banner.bmp")
+                              (cons 'windows-installer-bitmaps
+                                    (hasheq 'thumbnail "branding/thumb.bmp"))
+                              (cons 'windows-installer-bitmaps
+                                    (hasheq 'banner "branding/banner.png"))))])
       (write-config
        (hasheq 'name "demo"
                (car icon-config) (cdr icon-config)

@@ -29,6 +29,9 @@
          project-windows-icon
          project-macos-icon
          project-linux-icon
+         project-dmg-background
+         project-windows-license
+         project-windows-installer-bitmaps
          project-linux-formats
          project-linux-binary-name
          project-macos-min-version
@@ -199,6 +202,19 @@
   (optional 'macos-icon
             (lambda (v) (path-string-has-extension? v ".icns"))
             "project-relative .icns path")
+  (optional 'dmg-background
+            (lambda (v) (path-string-has-extension? v ".png"))
+            "project-relative .png path")
+  (optional 'windows-license
+            (lambda (v) (path-string-has-extension? v ".rtf"))
+            "project-relative .rtf path")
+  (optional 'windows-installer-bitmaps
+            (lambda (v)
+              (and (hash? v)
+                   (for/and ([(key item) (in-hash v)])
+                     (and (memq key '(banner dialog))
+                          (path-string-has-extension? item ".bmp")))))
+            "hash whose optional banner and dialog values are project-relative .bmp paths")
 
   (optional 'linux-icon
             (lambda (v) (path-string-has-extension? v ".png"))
@@ -310,6 +326,19 @@
 
 (define (project-macos-icon project)
   (project-ref project 'macos-icon (lambda () #f)))
+
+;; The branded DMG layout switches on this key; projects without it keep the
+;; plain single-folder image.
+(define (project-dmg-background project)
+  (project-ref project 'dmg-background (lambda () #f)))
+
+;; The MSI license page shows this RTF verbatim. Projects that do not
+;; configure one get their repository LICENSE text rendered into RTF.
+(define (project-windows-license project)
+  (project-ref project 'windows-license (lambda () #f)))
+
+(define (project-windows-installer-bitmaps project)
+  (project-ref project 'windows-installer-bitmaps (lambda () (hasheq))))
 
 
 (define (project-linux-icon project)

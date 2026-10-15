@@ -96,6 +96,15 @@
     (check-true (regexp-match? #rx"(?m:^Version: 1\\.2\\.0-7$)" control))
     (check-true (regexp-match? #rx"(?m:^Depends: libgtk-4-1$)" control))
     (check-true (regexp-match? #rx"(?m:^Architecture: (amd64|arm64)$)" control))
+    (for ([script-name (in-list '("postinst" "postrm"))])
+      (define script (build-path deb-root "DEBIAN" script-name))
+      (check-true (file-exists? script)
+                  "desktop database refresh scripts must ship with the deb")
+      (check-true
+       (regexp-match? #rx"update-desktop-database" (file->string script))
+       "maintainer scripts must refresh the desktop database")
+      (check-equal? (file-or-directory-permissions script 'bits) 493
+                    "maintainer scripts must be executable (0o755)"))
 
     ;; ------------------------------------------------------------- rpm
     (define spec-path (build-path temp-root "demo.spec"))
