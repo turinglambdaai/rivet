@@ -27,8 +27,12 @@ std::wstring instance_name(std::string const& id) {
 // other members.
 struct DeviceListener::Registration {
   std::wstring name;
-  std::vector<std::wstring> text;
-  std::vector<LPWSTR> text_pointers;
+  std::wstring host_name;
+  std::vector<std::wstring> keys;
+  std::vector<std::wstring> values;
+  std::vector<PWSTR> key_pointers;
+  std::vector<PWSTR> value_pointers;
+  IP4_ADDRESS ipv4{};
   DNS_SERVICE_INSTANCE instance{};
   DNS_SERVICE_REGISTER_REQUEST request{};
   bool registered = false;
@@ -112,27 +116,38 @@ void DeviceListener::publish() {
   DeviceAdvertisement advertisement(advertisement_id_,
                                     pairing_window_open_.load());
   Bytes record = encode_discovery_txt(advertisement);
-  // Split the canonical record back into entries so the published TXT is
-  // exactly the shared encoding, entry for entry.
+  // Split the canonical record back into key/value pairs so the published
+  // TXT is exactly the shared encoding, property for property.
   std::size_t offset = 0;
   while (offset < record.size()) {
     std::size_t length = record[offset];
     ++offset;
     auto const* begin = reinterpret_cast<char const*>(record.data() + offset);
-    registration->text.emplace_back(begin, begin + length);
+    std::wstring entry(begin, begin + length);
+    std::size_t separator = entry.find(L'=');
+    registration->keys.push_back(entry.substr(0, separator));
+    registration->values.push_back(entry.substr(separator + 1));
     offset += length;
   }
-  registration->text_pointers.reserve(registration->text.size());
-  for (auto const& entry : registration->text) {
-    registration->text_pointers.push_back(
-        const_cast<LPWSTR>(entry.c_str()));
+  registration->key_pointers.reserve(registration->keys.size());
+  registration->value_pointers.reserve(registration->values.size());
+  for (auto const& key : registration->keys) {
+    registration->key_pointers.push_back(
+        const_cast<PWSTR>(key.c_str()));
+  }
+  for (auto const& value : registration->values) {
+    registration->value_pointers.push_back(
+        const_cast<PWSTR>(value.c_str()));
   }
 
   registration->instance.pszInstanceName = registration->name.data();
+  registration->instance.pszHostName = registration->host_name.data();
+  registration->instance.ip4Address = &registration->ipv4;
   registration->instance.wPort = port_;
-  registration->instance.dwCount =
-      static_cast<DWORD>(registration->text_pointers.size());
-  registration->instance.pszText = registration->text_pointers.data();
+  registration->instance.dwPropertyCount =
+      static_cast<DWORD>(registration->keys.size());
+  registration->instance.keys = registration->key_pointers.data();
+  registration->instance.values = registration->value_pointers.data();
 
   registration->request.Version = DNS_QUERY_REQUEST_VERSION1;
   registration->request.InterfaceIndex = 0;  // all interfaces
