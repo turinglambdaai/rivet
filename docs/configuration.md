@@ -93,9 +93,9 @@ breaking change, while adding one is compatible. See
 ## Application resources and icons
 
 - `resources` — a list of project-relative files or directories copied into the application resource root while preserving their relative paths. Generated/control roots (`.git`, `.rivet`, `build`, and `dist`) and symbolic links are rejected so a release cannot accidentally capture repository metadata, stale output, or files outside the project.
-- `windows-icon` — an optional project-relative `.ico` file compiled into newly generated Windows hosts.
-- `macos-icon` — an optional project-relative `.icns` file copied into the app bundle and declared through `CFBundleIconFile`.
-- `linux-icon` — an optional project-relative `.png` file installed as the desktop icon (`/usr/share/pixmaps`, referenced by the generated `.desktop` entry) and used as the AppImage top-level icon. AppImage packaging fails closed without it.
+- `windows-icon` — an optional project-relative `.ico` file compiled into newly generated Windows hosts. A build without the key warns: the exe then ships without an embedded icon.
+- `macos-icon` — an optional project-relative `.icns` file copied into the app bundle and declared through `CFBundleIconFile`. A package without the key warns: the bundle then ships without a Dock/Finder icon.
+- `linux-icon` — an optional project-relative `.png` file installed as the desktop icon (`/usr/share/pixmaps`, referenced by the generated `.desktop` entry) and used as the AppImage top-level icon. AppImage packaging fails closed without it; deb and rpm warn and install without a desktop icon when the key is omitted.
 - `linux-formats` — an optional subset of `("deb" "rpm" "appimage")` selecting which native Linux installer formats `raco rivet release` builds. The default builds all three; the signed tar.gz update payload is always produced regardless.
 
 Packaged resources live under `app/` inside the platform resource root. Racket code should use `resource-path` from `rivet/resources` (also re-exported by `rivet`) instead of guessing an executable-relative path. The filename `rivet-app-info.rktd` at this root is reserved for Rivet's generated application identity:

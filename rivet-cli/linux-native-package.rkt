@@ -77,8 +77,10 @@
       (entry "TryExec" (format "/opt/~a/~a" name executable))
       (entry "Terminal" "false")
       (entry "Categories" "Utility;")
-      (when (project-linux-icon project)
-        (entry "Icon" name)))))
+      (if (project-linux-icon project)
+          (entry "Icon" name)
+          (eprintf
+           "rivet: warning: no `linux-icon` declared in rivet.rktd — the Linux desktop entry will ship without an icon\n")))))
 
 (define (stage-native-icon! project destination)
   ;; Returns #t when an icon was staged. Sized hicolor themes are not used

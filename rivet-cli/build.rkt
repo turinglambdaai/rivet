@@ -187,6 +187,9 @@
 (define (prepare-windows-icon-resource! project)
   (define source
     (required-project-icon project (project-windows-icon project) 'windows))
+  (unless source
+    (eprintf
+     "rivet: warning: no `windows-icon` declared in rivet.rktd — the Windows exe will ship without an embedded icon\n"))
   ;; The resource script always carries a VERSIONINFO block so the shipped
   ;; exe has an identity even for projects without an icon; the ICON line
   ;; rides along when one is declared.
