@@ -12,7 +12,7 @@ let package = Package(
         .library(name: "AppleDeviceCodegenFixture", targets: ["AppleDeviceCodegenFixture"])
     ],
     dependencies: [
-        .package(path: "../../../platform/macos")
+        .package(path: "../../../../platform/macos")
     ],
     targets: [
         .target(
