@@ -1,8 +1,10 @@
 #include "device_listener.hpp"
 
 #include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Networking.h>
 #include <winrt/Windows.Networking.ServiceDiscovery.Dnssd.h>
+#include <winrt/impl/Windows.Foundation.Collections.h>
 
 #include <stdexcept>
 #include <utility>

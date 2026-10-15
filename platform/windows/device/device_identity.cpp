@@ -54,13 +54,6 @@ struct KeyHandle {
   }
 };
 
-struct LocalBuffer {
-  BYTE* data = nullptr;
-  ~LocalBuffer() {
-    if (data) LocalFree(data);
-  }
-};
-
 void throw_last_error(char const* what) {
   throw std::runtime_error(std::string(what) + " failed (error " +
                            std::to_string(GetLastError()) + ")");
@@ -145,24 +138,17 @@ const CERT_CONTEXT* create_identity(std::wstring const& friendly_name) {
     throw_ncrypt_status("finalizing the persisted identity key", status);
   }
 
-  DWORD subject_size = 0;
-  if (!CertStrToNameW(X509_ASN_ENCODING, L"CN=Rivet Device",
-                      CERT_X500_NAME_STR, nullptr, nullptr, &subject_size)) {
-    throw_last_error("encoding the identity subject name");
-  }
-  LocalBuffer subject;
-  subject.data = static_cast<BYTE*>(LocalAlloc(LMEM_FIXED, subject_size));
-  if (!subject.data) {
-    throw std::bad_alloc();
-  }
-  if (!CertStrToNameW(X509_ASN_ENCODING, L"CN=Rivet Device",
-                      CERT_X500_NAME_STR, nullptr, subject.data(),
-                      &subject_size)) {
-    throw_last_error("encoding the identity subject name");
-  }
+  // CN="Rivet Device" as a canonical DER RDN sequence: SEQUENCE(23)
+  // { SET(21) { SEQ(19) { OID 2.5.4.3 commonName, UTF8String "Rivet
+  // Device" } } }. Hand-assembled because CertStrToNameW argument counts
+  // shifted under the current SDK and the name is a fixed internal value.
+  static BYTE const kSubjectDER[] = {
+      0x30, 0x17, 0x31, 0x15, 0x30, 0x13, 0x06, 0x03, 0x55, 0x04,
+      0x03, 0x0c, 0x0c, 0x52, 0x69, 0x76, 0x65, 0x74, 0x20, 0x44,
+      0x65, 0x76, 0x69, 0x63, 0x65};
   CERT_NAME_BLOB subject_blob;
-  subject_blob.cbData = subject_size;
-  subject_blob.pbData = subject.data;
+  subject_blob.cbData = static_cast<DWORD>(sizeof(kSubjectDER));
+  subject_blob.pbData = const_cast<BYTE*>(kSubjectDER);
 
   CRYPT_KEY_PROV_INFO prov_info{};
   prov_info.pwszContainerName = container.data();
