@@ -384,7 +384,8 @@ fun decodeSessionRecord(record: ByteArray): SessionMessage {
     if (version != SESSION_VERSION) {
         throw SessionProtocolException(SessionProtocolFailure.UNSUPPORTED_VERSION, "unsupported Rivet device session version $version")
     }
-    val type = SessionMessageType.entries.firstOrNull { it.wireValue == reader.byte() }
+    val rawType = reader.byte()
+    val type = SessionMessageType.entries.firstOrNull { it.wireValue == rawType }
         ?: throw SessionProtocolException(SessionProtocolFailure.UNKNOWN_MESSAGE_TYPE, "unknown Rivet device session message type")
     val payloadLength = RecordReader.checkedLength(reader.uint32())
     val payload = RecordReader(reader.bytes(payloadLength))
