@@ -153,7 +153,7 @@ sealed interface SessionMessage {
 
 private val SESSION_MAGIC = byteArrayOf(0x52, 0x56, 0x44, 0x31) // RVD1
 
-private enum class SessionMessageType(val wireValue: Int) {
+internal enum class SessionMessageType(val wireValue: Int) {
     AUTHENTICATE(1),
     AUTH_CHALLENGE(2),
     AUTH_PROOF(3),
@@ -196,9 +196,19 @@ fun validScopeNames(names: List<String>): Boolean =
         names.toSet().size == names.size &&
         names.all(::validDeviceApiName)
 
-/** Canonical scope form: deduplicated, sorted by UTF-8 byte order. */
+/** Canonical scope form: deduplicated, sorted by unsigned UTF-8 byte order. */
 fun canonicalScopeNames(names: List<String>): List<String> =
-    names.distinct().sortedWith(compareBy { it.encodeToByteArray().toList() })
+    names.distinct().sortedWith { lhs, rhs ->
+        val left = lhs.encodeToByteArray()
+        val right = rhs.encodeToByteArray()
+        val count = minOf(left.size, right.size)
+        var difference = 0
+        for (index in 0 until count) {
+            difference = (left[index].toInt() and 0xff) - (right[index].toInt() and 0xff)
+            if (difference != 0) return@sortedWith difference
+        }
+        left.size - right.size
+    }
 
 private fun requireBytes(value: ByteArray, size: Int) {
     if (value.size != size) {
