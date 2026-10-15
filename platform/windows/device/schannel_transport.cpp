@@ -70,8 +70,8 @@ SchannelTransport::SchannelTransport(SOCKET socket, CERT_CONTEXT const* identity
   cred.dwFlags = SCH_CRED_NO_SYSTEM_MAPPER | SCH_USE_STRONG_CRYPTO;
 
   SECURITY_STATUS status = AcquireCredentialsHandleW(
-      nullptr, UNISP_NAME_W, SECPKG_CRED_INBOUND, nullptr, &cred, nullptr,
-      nullptr, &credentials_, nullptr);
+      nullptr, const_cast<LPWSTR>(UNISP_NAME_W), SECPKG_CRED_INBOUND, nullptr,
+      &cred, nullptr, nullptr, &credentials_, nullptr);
   if (status != SEC_E_OK) {
     throw_status("acquiring TLS credentials", status);
   }

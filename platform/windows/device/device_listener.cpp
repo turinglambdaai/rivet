@@ -1,10 +1,6 @@
 #include "device_listener.hpp"
 
-#include <winrt/Windows.Foundation.h>
-#include <winrt/Windows.Foundation.Collections.h>
-#include <winrt/Windows.Networking.h>
-#include <winrt/Windows.Networking.ServiceDiscovery.Dnssd.h>
-#include <winrt/impl/Windows.Foundation.Collections.h>
+#include <dnsapi.h>
 
 #include <stdexcept>
 #include <utility>
@@ -12,23 +8,27 @@
 #include "rivet/discovery_advertisement.hpp"
 #include "schannel_transport.hpp"
 
+#pragma comment(lib, "dnsapi")
+
 namespace rivet::windows {
 namespace {
 
-std::vector<std::uint8_t> advertisement_bytes(std::string const& id,
-                                              bool pairing_open) {
-  DeviceAdvertisement advertisement(id, pairing_open);
-  return encode_discovery_txt(advertisement);
+std::wstring instance_name(std::string const& id) {
+  // <instance>._rivet-device._tcp.local
+  std::string name = "Rivet-" + id.substr(0, 8) + "._rivet-device._tcp.local";
+  return std::wstring(name.begin(), name.end());
 }
 
 }  // namespace
 
-// The DNS-SD registration and its async bookkeeping. C++/WinRT objects stay
-// here so the rest of the gateway never depends on the WinRT projection.
+// The DNS-SD registration handle for DnsServiceDeRegister. The classic
+// dnsapi service registration is a plain C structure, so no WinRT state
+// lives in the listener.
 struct DeviceListener::Registration {
-  winrt::Windows::Networking::ServiceDiscovery::Dnssd::DnssdServiceInstance
-      instance{nullptr};
-  winrt::Windows::Foundation::IAsyncAction action{nullptr};
+  std::wstring name;
+  std::vector<std::wstring> text;
+  std::vector<LPCWSTR> text_pointers;
+  bool registered = false;
 };
 
 DeviceListener::DeviceListener(DeviceIdentity& identity,
@@ -40,8 +40,7 @@ DeviceListener::DeviceListener(DeviceIdentity& identity,
       handler_(std::move(handler)),
       admission_cap_(admission_cap) {
   if (!handler_ || !valid_discovery_advertisement_id(advertisement_id_)) {
-    throw std::runtime_error(
-        "invalid Rivet device listener configuration");
+    throw std::runtime_error("invalid Rivet device listener configuration");
   }
 }
 
@@ -105,36 +104,53 @@ void DeviceListener::start() {
 }
 
 void DeviceListener::publish() {
-  registration_ = std::make_unique<Registration>();
-  try {
-    winrt::init_apartment(winrt::apartment_type::multi_threaded);
-    auto instance_name = winrt::to_hstring("Rivet-" +
-                                           advertisement_id_.substr(0, 8) +
-                                           "._rivet-device._tcp.local");
-    registration_->instance =
-        winrt::Windows::Networking::ServiceDiscovery::Dnssd::DnssdServiceInstance(
-            instance_name, nullptr, port_);
-    auto attributes = registration_->instance.TextAttributes();
-    attributes.Insert(L"id", winrt::to_hstring(advertisement_id_));
-    attributes.Insert(
-        L"pair",
-        pairing_window_open_.load() ? winrt::hstring(L"1") : winrt::hstring(L"0"));
-    attributes.Insert(L"v", winrt::hstring(L"1"));
-    registration_->action = registration_->instance.RegisterAsync();
-    // The registration completes almost immediately; block briefly so a
-    // failure surfaces from start() instead of disappearing into the async
-    // world.
-    (void)registration_->action.get();
-  } catch (...) {
-    registration_.reset();
-    throw std::runtime_error("publishing the device advertisement failed");
+  auto registration = std::make_unique<Registration>();
+  registration->name = instance_name(advertisement_id_);
+  DeviceAdvertisement advertisement(advertisement_id_,
+                                    pairing_window_open_.load());
+  Bytes record = encode_discovery_txt(advertisement);
+  // Split the canonical record back into entries so the published TXT is
+  // exactly the shared encoding, entry for entry.
+  std::size_t offset = 0;
+  while (offset < record.size()) {
+    std::size_t length = record[offset];
+    ++offset;
+    auto const* begin = reinterpret_cast<char const*>(record.data() + offset);
+    registration->text.emplace_back(begin, begin + length);
+    offset += length;
   }
+  registration->text_pointers.reserve(registration->text.size());
+  for (auto const& entry : registration->text) {
+    registration->text_pointers.push_back(entry.c_str());
+  }
+
+  DNS_SERVICE_REGISTER_REQUEST request{};
+  request.Version = DNS_QUERY_REQUEST_VERSION1;
+  request.ullFlags = 0;
+  request.pszServiceName = registration->name.data();
+  request.wPort = port_;
+  request.dwCount = static_cast<DWORD>(registration->text_pointers.size());
+  request.pszText = const_cast<LPWSTR*>(registration->text_pointers.data());
+  DNS_SERVICE_CANCEL cancel{};
+  DWORD status = DnsServiceRegister(&request, &cancel);
+  if (status != ERROR_SUCCESS) {
+    throw std::runtime_error("registering the device advertisement failed ("
+                             + std::to_string(status) + ")");
+  }
+  registration->registered = true;
+  registration_ = std::move(registration);
 }
 
 void DeviceListener::unpublish() {
-  // WinRT Dnssd exposes no explicit deregistration: the record decays with
-  // its TTL once the process and its sockets close. Drop the registration
-  // objects so nothing renews it.
+  if (!registration_ || !registration_->registered) {
+    registration_.reset();
+    return;
+  }
+  DNS_SERVICE_REGISTER_REQUEST request{};
+  request.Version = DNS_QUERY_REQUEST_VERSION1;
+  request.pszServiceName = registration_->name.data();
+  request.wPort = port_;
+  (void)DnsServiceDeRegister(&request, nullptr);
   registration_.reset();
 }
 
@@ -150,9 +166,8 @@ void DeviceListener::accept_loop() {
       break;  // listener closed by stop()
     }
     // Admission is capped before any transport or session state exists.
-    // The handler runs on this thread, so "live" is exactly one at a time
-    // per accepted socket handed off; the cap bounds sockets admitted while
-    // a previous handler is still finishing.
+    // The handler runs on this thread, so the cap bounds sockets admitted
+    // while a previous handler is still finishing.
     if (live + 1 > admission_cap_) {
       closesocket(accepted);
       continue;
