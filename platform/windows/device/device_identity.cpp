@@ -171,14 +171,6 @@ const CERT_CONTEXT* create_identity(std::wstring const& friendly_name) {
   expires.wYear += 10;
 
   CERT_EXTENSIONS extensions{};
-  CERT_CREATE_SELF_SIGN_CERT_PARAM self_sign{};
-  self_sign.pSubjectIssuerBlob = &subject_blob;
-  self_sign.pSignatureAlgorithm = &signature;
-  self_sign.pNotBefore = &now;
-  self_sign.pNotAfter = &expires;
-  self_sign.pKeyProvInfo = &prov_info;
-  self_sign.cExtension = 0;
-  self_sign.rgExtension = &extensions.rgExtension[0];
   const CERT_CONTEXT* context = CertCreateSelfSignCertificate(
       key.key, &subject_blob, 0, &prov_info, &signature, &now, &expires,
       &extensions);

@@ -1,10 +1,11 @@
 #pragma once
 
+#include <windows.h>
+#include <wincrypt.h>
+
 #include <memory>
 #include <string>
 #include <vector>
-
-struct CERT_CONTEXT;
 
 namespace rivet::windows {
 
