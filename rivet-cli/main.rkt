@@ -182,11 +182,18 @@
            [(list* "--update-payload" spec tail)
             (loop tail (cons spec payloads))]
            [(cons _ tail) (loop tail payloads)])))
+     ;; Passing #:update-payloads only when payloads exist keeps a stale
+     ;; compiled release.rkt (same-second mtime can fool raco make's
+     ;; freshness check) working for the default release flow.
      (define-values (installer manifest sbom notices portable-zip)
-       (release-project! (current-project!)
-                         #:production? production?
-                         #:updates? updates?
-                         #:update-payloads update-payloads))
+       (if (null? update-payloads)
+           (release-project! (current-project!)
+                             #:production? production?
+                             #:updates? updates?)
+           (release-project! (current-project!)
+                             #:production? production?
+                             #:updates? updates?
+                             #:update-payloads update-payloads)))
      (say "release installer: ~a" installer)
      (say "portable zip: ~a" portable-zip)
      (when (eq? (system-type 'os) 'unix)
