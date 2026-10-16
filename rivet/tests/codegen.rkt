@@ -133,6 +133,9 @@
 (define-rpc (echo-user [user : User] : User)
   user)
 
+(define-rpc (log-line [message String] : Void)
+  (displayln message))
+
 (define (start in-fd out-fd)
   (serve-fds in-fd out-fd))
 RKT
@@ -140,7 +143,7 @@ RKT
 
     (define project (load-project project-root))
     (define schema (generate-clients! project))
-    (check-equal? (length (first schema)) 3)
+    (check-equal? (length (first schema)) 4)
     (check-equal? (length (second schema)) 1)
     (check-equal? (length (third schema)) 1)
 
@@ -180,7 +183,21 @@ RKT
                    "macos-host" "Sources" "RivetHost" "GeneratedBackend.swift")))
     (define cpp
       (file->string
-       (build-path project-root "windows" "GeneratedBackend.hpp")))
+       (build-path project-root "windows" "GeneratedBackend.hpp")))    ;; Bounded-wait companions (issue #252): every RPC gains a _within
+    ;; variant that resolves through a promise, waits up to the timeout,
+    ;; and cancels the pending request on a miss. Void RPCs return bool;
+    ;; other results return std::nullopt on timeout.
+    (check-true
+     (string-contains?
+      cpp "std::optional<std::int64_t> increment_within(std::int64_t value, std::chrono::milliseconds rivet_timeout)"))
+    (check-true (string-contains? cpp "backend_.cancel(rivet_id); return std::nullopt;"))
+    (check-true (string-contains? cpp "bool log_line_within(std::string message, std::chrono::milliseconds rivet_timeout)"))
+    (check-true (string-contains? cpp "backend_.cancel(rivet_id); return false;"))
+    (check-true (string-contains? cpp "rivet_done->set_value(detail::decode_Int64(*rivet_result.value));"))
+    ;; A Void async handler must not assign into Result<void>, which has no
+    ;; value member — the decode only validates arrival.
+    (check-false (string-contains? cpp "result.value = detail::decode_void"))
+
     (define linux-cpp
       (file->string
        (build-path project-root "linux" "GeneratedBackend.hpp")))
@@ -287,7 +304,7 @@ RKT
     (check-equal? (length (hash-ref baseline 'records)) 1)
     (check-equal?
      (map (lambda (entry) (hash-ref entry 'name)) (hash-ref baseline 'rpcs))
-     '("echo-user" "greet" "increment"))
+     '("echo-user" "greet" "increment" "log-line"))
     ;; Enum support extends snapshot format v1 additively. A baseline written
     ;; by the pre-Enum v1 tool omitted the key and means an empty enum set.
     (define pre-enum-baseline-path
@@ -315,6 +332,7 @@ RKT
 (define-rpc (greet [name String] : String) name)
 (define-rpc (increment [value Int64] : Int64) (add1 value))
 (define-rpc (echo-user [user : User] : User) user)
+(define-rpc (log-line [message String] : Void) (displayln message))
 (define-rpc (health : Bool) #t)
 (define (start in-fd out-fd) (serve-fds in-fd out-fd))
 RKT
@@ -344,6 +362,7 @@ RKT
 (define-rpc (greet [name String] : Bytes) #"")
 (define-rpc (increment [value Int64] : Int64) (add1 value))
 (define-rpc (echo-user [user : User] : User) user)
+(define-rpc (log-line [message String] : Void) (displayln message))
 (define (start in-fd out-fd) (serve-fds in-fd out-fd))
 RKT
      )
@@ -372,6 +391,7 @@ RKT
 (define-rpc (greet [name String] : String) name)
 (define-rpc (increment [value Int64] : Int64) (add1 value))
 (define-rpc (echo-user [user : User] : User) user)
+(define-rpc (log-line [message String] : Void) (displayln message))
 (define (start in-fd out-fd) (serve-fds in-fd out-fd))
 RKT
      )

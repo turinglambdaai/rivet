@@ -287,7 +287,9 @@
        (define name (cpp-id (schema-rpc-name info)))
        (list (cons name (format "RPC ~a" (schema-rpc-name info)))
              (cons (string-append name "_async")
-                   (format "RPC async companion ~a" (schema-rpc-name info))))))
+                   (format "RPC async companion ~a" (schema-rpc-name info)))
+             (cons (string-append name "_within")
+                   (format "RPC bounded-wait companion ~a" (schema-rpc-name info))))))
     (append*
      (for/list ([state (in-list states)])
        (define name (cpp-id (schema-state-name state)))

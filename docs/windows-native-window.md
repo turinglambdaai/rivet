@@ -87,6 +87,30 @@ auto id = api.increment_async(
 Shared State has the same generated shape, such as
 `get_counter_async(...)` and `set_counter_async(value, ...)`.
 
+### Polling the backend
+
+Every RPC also gains a bounded-wait companion, `name_within(arguments,
+std::chrono::milliseconds)`. Its completion resolves a promise, so the call
+waits up to the timeout and **cancels the pending request on a miss**; Void
+RPCs return `bool` (false = timed out), other results return
+`std::optional<T>`. Backend and decoding errors still throw from the final
+get, matching the blocking call's contract.
+
+```cpp
+// A 400 ms UI tick polls without spawning a thread and without blocking
+// past the frame budget:
+if (auto value = api.increment_within(41, std::chrono::milliseconds{0})) {
+  counter_label().Text(std::to_wstring(*value));
+}
+```
+
+This is the sanctioned shape for long-lived polling UIs. Do not spawn a
+detached `std::thread` per tick: each one races the reader thread, leaks
+past teardown, and churns a native thread per frame. Prefer completions
+when an update push model works; use `_within` when the UI owns a tick
+loop, with a zero timeout for a pure poll or a small budget when a
+bounded wait is acceptable.
+
 ### Threading
 
 RVT1 responses are decoded on Rivet's native reader thread. Normal completion
