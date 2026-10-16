@@ -57,6 +57,13 @@ add_executable(RivetUpdateHandoffTest
 target_compile_features(RivetUpdateHandoffTest PRIVATE cxx_std_17)
 target_link_libraries(RivetUpdateHandoffTest PRIVATE rivet::platform)
 target_compile_options(RivetUpdateHandoffTest PRIVATE -Wall -Wextra -Wpedantic)
+
+add_executable(RivetLayoutTest
+  layout_test.cpp
+)
+target_compile_features(RivetLayoutTest PRIVATE cxx_std_17)
+target_link_libraries(RivetLayoutTest PRIVATE rivet::platform)
+target_compile_options(RivetLayoutTest PRIVATE -Wall -Wextra -Wpedantic)
 target_compile_features(RivetGlobalShortcutsTest PRIVATE cxx_std_17)
 target_include_directories(RivetGlobalShortcutsTest PRIVATE ../system)
 target_compile_options(RivetGlobalShortcutsTest PRIVATE -Wall -Wextra -Wpedantic)
@@ -86,3 +93,4 @@ endif()
 
 enable_testing()
 add_test(NAME RivetUpdateHandoffTest COMMAND RivetUpdateHandoffTest)
+add_test(NAME RivetLayoutTest COMMAND RivetLayoutTest)

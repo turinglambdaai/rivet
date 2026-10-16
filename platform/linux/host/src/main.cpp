@@ -7,15 +7,14 @@
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
-#include <filesystem>
-#include <functional>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <string>
 #include <thread>
 
 #include "GeneratedBackend.hpp"
+#include "layout.hpp"
+#include "rpc_bridge.hpp"
 #include "system_services.hpp"
 #include "theme.hpp"
 
@@ -51,67 +50,19 @@ AppState g_state;
 
 void perform_orderly_shutdown();
 
-std::filesystem::path executable_path() {
-  return std::filesystem::read_symlink("/proc/self/exe");
-}
-
-// Rivet keeps runtime/res beside the executable in development and packages.
-struct RuntimeLayout {
-  std::filesystem::path petite_boot;
-  std::filesystem::path scheme_boot;
-  std::filesystem::path racket_boot;
-  std::filesystem::path core;
-};
-
-std::optional<RuntimeLayout> discover_runtime_layout() {
-  std::filesystem::path const exe = executable_path();
-  std::filesystem::path const roots[] = {exe.parent_path()};
-  for (auto const& root : roots) {
-    RuntimeLayout layout{
-        root / "runtime" / "petite.boot",
-        root / "runtime" / "scheme.boot",
-        root / "runtime" / "racket.boot",
-        root / "res" / "core.zo",
-    };
-    if (std::filesystem::exists(layout.petite_boot) &&
-        std::filesystem::exists(layout.scheme_boot) &&
-        std::filesystem::exists(layout.racket_boot) &&
-        std::filesystem::exists(layout.core)) {
-      return layout;
-    }
-  }
-  return std::nullopt;
-}
-
-struct IntResult {
-  bool ok{false};
-  std::int64_t value{0};
-  std::string error;
-};
-
-int on_count_delivered(gpointer user_data) {
-  std::unique_ptr<IntResult> result(static_cast<IntResult*>(user_data));
-  if (result->ok) {
-    g_state.set_count(result->value);
-    gtk_widget_set_sensitive(GTK_WIDGET(g_state.increment), TRUE);
-  } else {
-    g_state.set_status("State error: " + result->error);
-    gtk_widget_set_sensitive(GTK_WIDGET(g_state.increment), TRUE);
-  }
-  return G_SOURCE_REMOVE;
-}
-
+// One completion, flattened once, dispatched once: unpack() runs on the
+// backend reader thread, post_to_main moves the flattened result to the
+// GTK main loop, and the closure frees itself there (issue #247).
 void deliver_count_result(rivet_app::Result<std::int64_t> result) {
-  auto* delivered = new IntResult;
-  try {
-    delivered->value = result.get();
-    delivered->ok = true;
-  } catch (std::exception const& error) {
-    delivered->error = error.what();
-  } catch (...) {
-    delivered->error = "unknown backend failure";
-  }
-  g_idle_add(on_count_delivered, delivered);
+  rivet_app::post_to_main(
+      [flat = rivet_app::unpack(std::move(result))]() mutable {
+        if (flat.ok) {
+          g_state.set_count(flat.value);
+        } else {
+          g_state.set_status("State error: " + flat.error);
+        }
+        gtk_widget_set_sensitive(GTK_WIDGET(g_state.increment), TRUE);
+      });
 }
 
 int on_backend_finished(gpointer) {
@@ -165,16 +116,17 @@ int on_backend_finished(gpointer) {
 }
 
 void start_backend() {
-  auto layout = discover_runtime_layout();
+  // The runtime library owns the layout contract (issue #246); hosts locate
+  // stage roots through it instead of re-deriving the paths.
+  auto layout = rivet::linux_runtime::discover_layout();
   if (!layout.has_value()) {
-    g_state.set_status(
-        "Missing Rivet runtime layout (runtime/*.boot, res/core.zo) next to "
-        "the executable. Build with raco rivet build/dev.");
+    g_state.set_status(rivet::linux_runtime::layout_error_hint());
     return;
   }
 
   rivet::linux_runtime::RacketRuntimeConfig config;
-  config.executable_path = executable_path().string();
+  config.executable_path =
+      rivet::linux_runtime::executable_path().string();
   config.petite_boot = layout->petite_boot.string();
   config.scheme_boot = layout->scheme_boot.string();
   config.racket_boot = layout->racket_boot.string();
