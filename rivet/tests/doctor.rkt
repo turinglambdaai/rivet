@@ -1,9 +1,13 @@
 #lang racket/base
 
 (require json
+         racket/file
          racket/port
          rackunit
-         "../../rivet-cli/doctor.rkt")
+         "../../rivet-cli/codegen.rkt"
+         "../../rivet-cli/doctor.rkt"
+         "../../rivet-cli/project.rkt"
+         "../../rivet-cli/scaffold.rkt")
 
 (define report (doctor-report))
 
@@ -105,3 +109,134 @@
 (check-equal? (hash-ref decoded 'supported) (hash-ref report 'supported))
 (check-equal? (hash-ref decoded 'usable) (hash-ref report 'usable))
 (check-equal? (hash-ref decoded 'racket-version) (hash-ref report 'racket-version))
+
+;; ---- Release gate (issues #245 and #255) ----
+;;
+;; The gate is exercised against a real scaffolded project: fresh generated
+;; files and honest update-API calls must pass; a hand-edited generated
+;; file, a drifted keyword, and an empty pin ref must each fail with a
+;; finding that names the cause.
+
+(define (release-check-named report name)
+  (for/first ([check (in-list (hash-ref report 'checks))]
+              #:when (string=? (hash-ref check 'name) name))
+    check))
+
+(define (release-check-passed? report name)
+  (define check (release-check-named report name))
+  (check-true (and check (string=? (hash-ref check 'status) "pass"))
+              (format "~a did not pass: ~a"
+                      name (and check (hash-ref check 'detail)))))
+
+(define (release-check-failed? report name expected-rx)
+  (define check (release-check-named report name))
+  (check-true (and check (string=? (hash-ref check 'status) "fail"))
+              (format "~a did not fail" name))
+  (when check
+    (check-true (regexp-match? expected-rx (or (hash-ref check 'detail) ""))
+                (format "~a failed with unexpected detail: ~a"
+                        name (hash-ref check 'detail)))))
+
+(define temp-gate-root (make-temporary-file "rivet-release-gate-~a" 'directory))
+(dynamic-wind
+  void
+  (lambda ()
+    (define project-root (create-project! "gate" temp-gate-root))
+    (define project (load-project project-root))
+    (write-schema-snapshot! project "rivet-schema.json")
+    (generate-clients! project)
+    ;; A stray good-shaped updater call and a workflow pin keep the green
+    ;; path realistic: the scanner and pin check run on every report.
+    (call-with-output-file
+     (build-path project-root "updater-usage.rkt")
+     #:exists 'truncate
+     (lambda (out)
+       (displayln #<<RKT
+#lang racket/base
+(require rivet/distribution)
+(define (check manifest-url key)
+  (fetch-update-manifest manifest-url key
+                         #:key-id "gate-2026-10"
+                         #:maximum-bytes 4096))
+RKT
+       out)))
+    (define installed (installed-rivet-release-version))
+    (when installed
+      (make-directory* (build-path project-root ".github" "workflows"))
+      (call-with-output-file
+       (build-path project-root ".github" "workflows" "ci.yml")
+       #:exists 'truncate
+       (lambda (out)
+         (displayln
+          (format "packages: 'https://github.com/turinglambdaai/rivet.git#v~a'"
+                  installed)
+          out))))
+
+    (define green (release-doctor-report project))
+    (check-equal? (hash-ref green 'failed) 0)
+    (release-check-passed? green "generated clients are fresh")
+    (release-check-passed? green "schema baseline exists and is compatible")
+    (release-check-passed?
+     green "host sources call the update API with accepted keywords")
+    (release-check-passed?
+     green "dependency pins are non-empty and match the installed release")
+
+    ;; Red 1: hand-edited generated file (the taskly/fulcrum/syncpilot stamp
+    ;; drift class). Doctor regenerates in memory, so a version-literal edit
+    ;; cannot hide.
+    (call-with-output-file
+     (build-path project-root "windows" "GeneratedBackend.hpp")
+     #:exists 'truncate
+     (lambda (out) (display "// hand-edited stamp\n" out)))
+    (define stale-report (release-doctor-report project))
+    (release-check-failed? stale-report
+                           "generated clients are fresh"
+                           #rx"run `raco rivet generate`")
+
+    ;; Red 2: the payback #:redirections class — a keyword the installed
+    ;; rivet does not accept, caught against the live procedure contract.
+    (call-with-output-file
+     (build-path project-root "updater-usage.rkt")
+     #:exists 'truncate
+     (lambda (out)
+       (displayln #<<RKT
+#lang racket/base
+(require rivet/distribution)
+(define (check manifest-url key)
+  (fetch-update-manifest manifest-url key #:redirections 10))
+RKT
+       out)))
+    (define drift-report (release-doctor-report project))
+    (release-check-failed? drift-report
+                           "host sources call the update API with accepted keywords"
+                           #rx"does not accept #:redirections")
+
+    ;; Red 3: the autarx empty-ref incident.
+    (when (directory-exists? (build-path project-root ".github" "workflows"))
+      (call-with-output-file
+       (build-path project-root ".github" "workflows" "ci.yml")
+       #:exists 'truncate
+       (lambda (out)
+         (displayln
+          "packages: 'https://github.com/turinglambdaai/rivet.git#'"
+          out)))
+      (define empty-ref-report (release-doctor-report project))
+      (release-check-failed? empty-ref-report
+                             "dependency pins are non-empty and match the installed release"
+                             #rx"empty ref"))
+
+    ;; The scanner itself is exported so products can run just this check.
+    ;; updater-usage.rkt still holds the red-2 drifted call here, so the
+    ;; direct scan must report the violation against the live contract.
+    (define direct-violations
+      (update-api-contract-violations
+       (hash 'fetch-update-manifest
+             (dynamic-require 'rivet/distribution 'fetch-update-manifest))
+       (build-path project-root "updater-usage.rkt")))
+    (check-equal? (length direct-violations) 1)
+    (check-true
+     (regexp-match? #rx"does not accept #:redirections"
+                    (car direct-violations))))
+  (lambda ()
+    (when (directory-exists? temp-gate-root)
+      (delete-directory/files temp-gate-root))))

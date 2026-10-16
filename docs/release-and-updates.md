@@ -134,6 +134,35 @@ The lower-level `make-install-plan`, `execute-install-plan!`, and `recover-insta
 
 Build metadata does not affect version precedence.
 
+## Update API keyword contract
+
+The hand-written Racket side of the updater is a small, stable surface. These
+are the complete keyword contracts; a keyword not listed here is rejected at
+runtime, which is exactly how shipped releases have failed on user machines.
+`raco rivet doctor --release` scans host source against the installed rivet's
+own contracts, so drift fails in CI instead:
+
+- `fetch-update-manifest` accepts `#:key-id` `#:maximum-bytes` `#:connect-timeout-seconds` `#:idle-timeout-seconds`.
+- `select-update` accepts `#:install-kind`.
+- `download-update` accepts `#:on-progress` `#:progress-every` `#:stall-timeout-seconds` `#:total-timeout-seconds`.
+- `fetch-sibling-asset` accepts `#:sha256` `#:maximum-bytes` `#:on-progress` `#:connect-timeout-seconds` `#:idle-timeout-seconds`.
+
+Adding a keyword to one of these functions is a compatible addition for the
+contract scanner; removing or renaming one is breaking and needs a release
+note.
+
+## Release gate
+
+Run `raco rivet doctor --release` in release CI before building installers.
+One command and one exit code cover: generated client files match a fresh
+regeneration (`raco rivet generate --check` runs that single check
+standalone), the committed schema baseline accepts the current backend,
+hand-written host sources call the update API only with keywords the
+installed rivet accepts, and every `rivet.git#...` pin in the repository is
+non-empty and consistent with the installed rivet release. A failing gate
+means the release would otherwise ship a stale version stamp, a schema
+break, or an updater call that fails only on user machines.
+
 ## Host-side updates on macOS
 
 The engine API above covers applications whose update flow runs in Racket. Applications whose macOS host owns the whole flow natively should not hand-roll it: the Swift package exposes `RivetUpdate` (`platform/macos`), a shared update client for installed `.app` bundles. It performs the authenticated check against the same signed wrapper the engine verifies (`RivetUpdateService.check`), a bounded delegate-driven artifact download with progress and cancellation (`downloadAndInstall`), SHA-256 and size verification against the signed manifest, `ditto` unpacking, a bundle-version confirmation, and an atomic swap-with-rollback that relaunches the application.

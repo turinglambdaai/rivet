@@ -329,3 +329,58 @@
    (set-member? exported-name-strings identifier)
    (format "rivet.scrbl documents ~a, which is not a public export; the manual entry is stale"
            identifier)))
+
+;; --- Update API keyword contract doc (issue #255) ---
+;;
+;; docs/release-and-updates.md lists the keyword contracts of the update API
+;; as the stable surface hosts call into. This guard parses those bullets
+;; and compares them against the installed procedures' own
+;; procedure-keywords contract, so the documented surface cannot drift from
+;; the code in either direction.
+
+(define contract-doc-text
+  (file->string
+   (build-path repository-root "docs" "release-and-updates.md")))
+
+(define contract-doc-line-rx
+  #px"^\\s*-\\s+`([a-z0-9-]+)` accepts((?: `#:[a-z0-9-]+`)*)[.]\\s*$")
+
+(define documented-contracts
+  (for/hash ([line (in-list (string-split contract-doc-text "\n"))]
+             #:when (regexp-match? contract-doc-line-rx line))
+    (define match (regexp-match contract-doc-line-rx line))
+    (define name (string->symbol (list-ref match 1)))
+    (define keywords
+      (map (lambda (token) (string->symbol (substring token 2)))
+           (regexp-match* #px"`(#[a-z0-9:-]+)`" (list-ref match 2)
+                          #:match-select cadr)))
+    (values name keywords)))
+
+(define contract-procedures
+  '(fetch-update-manifest select-update download-update fetch-sibling-asset))
+
+(for ([name (in-list contract-procedures)])
+  (define proc
+    (dynamic-require 'rivet/distribution name))
+  (define-values (_required allowed-keywords) (procedure-keywords proc))
+  ;; procedure-keywords returns keyword objects; the documentation bullets
+  ;; compare as symbols for readability.
+  (define allowed
+    (map (lambda (kw) (string->symbol (keyword->string kw))) allowed-keywords))
+  (check-true
+   (hash-has-key? documented-contracts name)
+   (format "docs/release-and-updates.md has no keyword-contract bullet for ~a" name))
+  (when (hash-has-key? documented-contracts name)
+    ;; Keyword order is not part of the contract; compare as sets.
+    (check-equal?
+     (sort (hash-ref documented-contracts name) symbol<?)
+     (sort allowed symbol<?)
+     (format "docs/release-and-updates.md keyword contract for ~a drifted from the installed rivet"
+             name))))
+
+(for ([name (in-hash-keys documented-contracts)])
+  ;; memq returns a truthy tail, not #t — assert truthiness.
+  (check-not-false
+   (memq name contract-procedures)
+   (format "docs/release-and-updates.md documents a keyword contract for ~a, which the release gate does not scan"
+           name)))
