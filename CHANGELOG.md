@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bound the updater's network legs. `fetch-update-manifest` runs its
+  blocking connect inside a custodian-owned worker with configurable
+  connect and idle deadlines, and `download-update` enforces a stall
+  deadline (no bytes for N seconds) plus an optional total cap on the copy
+  loop, so a black-holed peer raises a retryable error instead of parking
+  the backend serve thread forever.
 - Add the Kotlin device-session client for Android companions. The RVD1
   records, the HMAC authentication proof and six-digit pairing-code
   transcripts, and the client state machine with its credential-persistence

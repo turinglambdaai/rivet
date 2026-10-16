@@ -10,7 +10,9 @@
          (rename-in (submod "../../rivet/distribution/updater.rkt" test)
                     [copy-limited! copy-limited!/test]
                     [call-with-partial-cleanup
-                     call-with-partial-cleanup/test]))
+                     call-with-partial-cleanup/test]
+                    [call-with-fetch-deadline
+                     call-with-fetch-deadline/test]))
 
 (use-all-factories!)
 
@@ -479,3 +481,47 @@
                           (current-continuation-marks)
                           escape)))))))
 (check-false (file-exists? interrupted-partial))
+
+;; Stalled and slow peers must raise instead of parking the backend serve
+;; thread forever (#249/#253). The stall case holds a pipe open without
+;; writing; the total case drips bytes fast enough to defeat the stall bound
+;; but slow enough to hit the overall cap.
+(let ([values (make-pipe)]
+      [out (open-output-bytes)])
+  (check-exn #rx"download stalled: no bytes for 0.2 seconds"
+             (lambda ()
+               (copy-limited!/test values out (* 1024 1024)
+                                   #:stall-seconds 0.2)))
+  (close-output-port values))
+
+(let ([values (make-pipe)]
+      [out (open-output-bytes)]
+      [writer (void)])
+  (set! writer
+        (thread
+         (lambda ()
+           (let loop ([i 0])
+             (when (< i 200)
+               (write-byte 65 values)
+               (flush-output values)
+               (sleep 0.03)
+               (loop (add1 i)))))))
+  (check-exn #rx"download exceeded its 0.3 second total deadline"
+             (lambda ()
+               (copy-limited!/test values out (* 1024 1024)
+                                   #:stall-seconds 0.5
+                                   #:total-seconds 0.3)))
+  (kill-thread writer))
+
+;; The manifest fetch wraps the blocking connect in a custodian-owned
+;; worker; a deadline past connect + idle must kill it and raise instead of
+;; parking the caller on a black-holed peer.
+(check-exn #rx"update fetch exceeded its 0.3 second deadline"
+           (lambda ()
+             (call-with-fetch-deadline/test
+              'fetch-update-manifest 0.1 0.2
+              (lambda () (sync never-evt) (error "unreachable")))))
+(check-equal?
+ (call-with-fetch-deadline/test
+  'fetch-update-manifest 0.1 0.2 (lambda () 'completed))
+ 'completed)

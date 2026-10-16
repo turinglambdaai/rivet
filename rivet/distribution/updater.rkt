@@ -35,18 +35,52 @@
   '(prepared installing installed restarting restarted checking healthy
              committing committed rollback-started rolled-back rollback-failed))
 
+(define (wait-for-download-bytes! in buffer
+                                  #:stall-seconds stall-seconds
+                                  #:total-deadline total-deadline)
+  ;; Blocks until at least one byte is available, the peer reaches EOF, the
+  ;; stall deadline passes, or the total deadline fires. Returns the byte
+  ;; count, eof, 'stall, or 'total respectively.
+  (define ready
+    (sync/timeout stall-seconds
+                  (peek-bytes-avail!-evt (make-bytes 1) 0 in)
+                  total-deadline))
+  (cond
+    [(not ready) 'stall]
+    [(eq? ready total-deadline) 'total]
+    [else (read-bytes-avail! buffer in)]))
+
 (define (copy-limited! in out limit
                        #:who [who 'copy-limited!]
                        #:on-progress [on-progress void]
-                       #:progress-every [progress-every 1])
+                       #:progress-every [progress-every 1]
+                       #:stall-seconds [stall-seconds 60]
+                       #:total-seconds [total-seconds #f])
   ;; Report the initial zero and the final byte count. Intermediate reports are
   ;; separated by at least progress-every bytes so fast links do not flood UI
   ;; pollers. This helper stays private; download-update is the public contract.
+  ;; A stalled peer (no bytes for stall-seconds) and an optional total deadline
+  ;; raise instead of parking the backend serve thread forever.
+  (unless (and (real? stall-seconds) (> stall-seconds 0))
+    (raise-argument-error who "positive real?" stall-seconds))
+  (unless (or (not total-seconds) (and (real? total-seconds) (> total-seconds 0)))
+    (raise-argument-error who "(or/c #f positive real?)" total-seconds))
   (define buffer (make-bytes 65536))
+  (define total-deadline
+    (and total-seconds
+         (alarm-evt (+ (current-inexact-milliseconds) (* total-seconds 1000)))))
   (on-progress 0)
   (let loop ([total 0] [last-reported 0])
-    (define count (read-bytes-avail! buffer in))
+    (define count
+      (wait-for-download-bytes! in buffer
+                                #:stall-seconds stall-seconds
+                                #:total-deadline
+                                (or total-deadline never-evt)))
     (cond
+      [(eq? count 'stall)
+       (error who "download stalled: no bytes for ~a seconds" stall-seconds)]
+      [(eq? count 'total)
+       (error who "download exceeded its ~a second total deadline" total-seconds)]
       [(eof-object? count)
        (unless (= last-reported total) (on-progress total))
        total]
@@ -69,31 +103,75 @@
 
 (module+ test
   (provide copy-limited!
-           call-with-partial-cleanup))
+           call-with-partial-cleanup
+           call-with-fetch-deadline))
 
 ;; GitHub release assets — the dominant update origin — answer with a 302
 ;; to their CDN, so every fetch must follow redirections or the updater
 ;; verifies an empty body and fails.
 (define update-fetch-redirections 10)
 
+(define update-fetch-connect-timeout-seconds 30)
+(define update-fetch-idle-timeout-seconds 60)
+
+;; get-pure-port blocks on the TCP connect with no interruptible event, so
+;; the whole fetch runs in a custodian-owned worker and a deadline past
+;; connect + idle shutdowns the worker and its socket instead of parking the
+;; backend serve thread on a black-holed peer.
+(define (call-with-fetch-deadline who connect-seconds idle-seconds thunk)
+  (define custodian (make-custodian))
+  (define result-channel (make-channel))
+  (define worker
+    (parameterize ([current-custodian custodian])
+      (thread
+       (lambda ()
+         (with-handlers ([exn? (lambda (error) (channel-put result-channel error))])
+           (channel-put result-channel (thunk)))))))
+  (define outcome
+    (sync/timeout (+ connect-seconds idle-seconds) result-channel))
+  (cond
+    [(not outcome)
+     (custodian-shutdown-all custodian)
+     (error who
+            "update fetch exceeded its ~a second deadline"
+            (+ connect-seconds idle-seconds))]
+    [else
+     (custodian-shutdown-all custodian)
+     (if (exn? outcome) (raise outcome) outcome)]))
+
 (define (fetch-update-manifest manifest-url public-key
                                #:key-id [key-id #f]
-                               #:maximum-bytes [maximum-bytes (* 1024 1024)])
+                               #:maximum-bytes [maximum-bytes (* 1024 1024)]
+                               #:connect-timeout-seconds
+                               [connect-timeout-seconds
+                                update-fetch-connect-timeout-seconds]
+                               #:idle-timeout-seconds
+                               [idle-timeout-seconds
+                                update-fetch-idle-timeout-seconds])
   (unless (and (string? manifest-url)
                (regexp-match? #px"^https://" manifest-url))
     (raise-argument-error 'fetch-update-manifest "HTTPS URL string" manifest-url))
-  (define in (get-pure-port (string->url manifest-url)
-                            '("User-Agent: Rivet-Updater/1")
-                            #:redirections update-fetch-redirections))
-  (dynamic-wind
-    void
-    (lambda ()
-      (define out (open-output-bytes))
-      (copy-limited! in out maximum-bytes #:who 'fetch-update-manifest)
-      (verify-signed-manifest (open-input-bytes (get-output-bytes out))
-                              public-key
-                              #:key-id key-id))
-    (lambda () (close-input-port in))))
+  (unless (and (real? connect-timeout-seconds) (> connect-timeout-seconds 0))
+    (raise-argument-error 'fetch-update-manifest "positive real?" connect-timeout-seconds))
+  (unless (and (real? idle-timeout-seconds) (> idle-timeout-seconds 0))
+    (raise-argument-error 'fetch-update-manifest "positive real?" idle-timeout-seconds))
+  (call-with-fetch-deadline
+   'fetch-update-manifest connect-timeout-seconds idle-timeout-seconds
+   (lambda ()
+     (define in (get-pure-port (string->url manifest-url)
+                               '("User-Agent: Rivet-Updater/1")
+                               #:redirections update-fetch-redirections))
+     (dynamic-wind
+       void
+       (lambda ()
+         (define out (open-output-bytes))
+         (copy-limited! in out maximum-bytes
+                        #:who 'fetch-update-manifest
+                        #:stall-seconds idle-timeout-seconds)
+         (verify-signed-manifest (open-input-bytes (get-output-bytes out))
+                                 public-key
+                                 #:key-id key-id))
+       (lambda () (close-input-port in))))))
 
 (define install-kinds '(portable msi appimage package-manager))
 
@@ -151,12 +229,23 @@
 
 (define (download-update config candidate destination
                          #:on-progress [on-progress void]
-                         #:progress-every [configured-progress-every #f])
+                         #:progress-every [configured-progress-every #f]
+                         #:stall-timeout-seconds [stall-timeout-seconds 60]
+                         #:total-timeout-seconds [total-timeout-seconds #f])
   (unless (and (procedure? on-progress)
                (procedure-arity-includes? on-progress 1))
     (raise-argument-error 'download-update
                           "procedure accepting one argument"
                           on-progress))
+  (unless (and (real? stall-timeout-seconds) (> stall-timeout-seconds 0))
+    (raise-argument-error 'download-update
+                          "positive real?"
+                          stall-timeout-seconds))
+  (unless (or (not total-timeout-seconds)
+              (and (real? total-timeout-seconds) (> total-timeout-seconds 0)))
+    (raise-argument-error 'download-update
+                          "(or/c #f positive real?)"
+                          total-timeout-seconds))
   (unless (or (not configured-progress-every)
               (exact-positive-integer? configured-progress-every))
     (raise-argument-error 'download-update
@@ -194,7 +283,9 @@
                                 (max 1
                                      (quotient
                                       (update-artifact-size artifact)
-                                      100)))))))
+                                      100)))
+                            #:stall-seconds stall-timeout-seconds
+                            #:total-seconds total-timeout-seconds))))
        (lambda () (close-input-port in)))
      (verify-update-artifact! candidate temporary)
      (rename-file-or-directory temporary destination #t)
