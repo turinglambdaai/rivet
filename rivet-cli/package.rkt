@@ -60,7 +60,8 @@
                            minimum-version
                            icon-name
                            url-schemes
-                           file-associations)
+                           file-associations
+                           [localizations '()])
   (define (xml-escape value)
     (regexp-replace*
      #px"[&<>\"]" value
@@ -95,11 +96,22 @@
         (format "  <key>CFBundleIconFile</key><string>~a</string>\n"
                 (xml-escape icon-name))
         ""))
+  ;; Declared localizations make CFBundleCopyBundleLocalizations (and thus
+  ;; the system-provided chrome: About/Hide/Quit menus, standard alerts)
+  ;; resolve to the user's language instead of the development region.
+  (define localization-fragment
+    (if (null? localizations)
+        ""
+        (format
+         "  <key>CFBundleLocalizations</key><array>~a</array>\n"
+         (apply string-append
+                (for/list ([language (in-list localizations)])
+                  (format "<string>~a</string>" (xml-escape language)))))))
   (call-with-output-file path
     #:exists 'truncate/replace
     (lambda (out)
       (fprintf out
-               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>CFBundleDevelopmentRegion</key><string>en</string>\n  <key>CFBundleExecutable</key><string>~a</string>\n  <key>CFBundleIdentifier</key><string>~a</string>\n  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>\n  <key>CFBundleName</key><string>~a</string>\n  <key>CFBundleDisplayName</key><string>~a</string>\n  <key>CFBundlePackageType</key><string>APPL</string>\n  <key>CFBundleShortVersionString</key><string>~a</string>\n  <key>CFBundleVersion</key><string>~a</string>\n  <key>LSMinimumSystemVersion</key><string>~a</string>\n~a~a~a  <key>NSHighResolutionCapable</key><true/>\n</dict>\n</plist>\n"
+               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>CFBundleDevelopmentRegion</key><string>en</string>\n  <key>CFBundleExecutable</key><string>~a</string>\n  <key>CFBundleIdentifier</key><string>~a</string>\n  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>\n  <key>CFBundleName</key><string>~a</string>\n  <key>CFBundleDisplayName</key><string>~a</string>\n  <key>CFBundlePackageType</key><string>APPL</string>\n  <key>CFBundleShortVersionString</key><string>~a</string>\n  <key>CFBundleVersion</key><string>~a</string>\n  <key>LSMinimumSystemVersion</key><string>~a</string>\n~a~a~a~a  <key>NSHighResolutionCapable</key><true/>\n</dict>\n</plist>\n"
                (xml-escape executable)
                (xml-escape identifier)
                (xml-escape display-name)
@@ -109,7 +121,8 @@
                (xml-escape minimum-version)
                icon-fragment
                url-fragment
-               association-fragment))))
+               association-fragment
+               localization-fragment))))
 
 (define (write-entitlements! path)
   (call-with-output-file path
@@ -354,6 +367,7 @@
             "docs/configuration.md, \"Application resources and icons\".")
       (string-join swiftpm-bundles ", ")))
 
+  (define localizations (project-macos-localizations project))
   (write-macos-info! (build-path contents "Info.plist")
                      display-name
                      executable-name
@@ -363,7 +377,18 @@
                      (project-macos-min-version project)
                      packaged-icon-name
                      (project-url-schemes project)
-                     (project-file-associations project))
+                     (project-file-associations project)
+                     localizations)
+  ;; Marker .lproj directories plus an empty InfoPlist.strings make the
+  ;; bundle resolve every declared language. Injection happens before
+  ;; sign-macos!, so no re-sign is needed. Projects without the
+  ;; declaration build a byte-identical bundle to before.
+  (for ([language (in-list localizations)])
+    (define lproj (build-path contents "Resources" (format "~a.lproj" language)))
+    (make-parent-directory* (build-path lproj "InfoPlist.strings"))
+    (call-with-output-file (build-path lproj "InfoPlist.strings")
+      #:exists 'truncate/replace
+      void))
 
   (define entitlements
     (project-path project ".rivet" "macos-entitlements.plist"))

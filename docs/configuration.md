@@ -94,6 +94,24 @@ The exported names are included in `rivet-schema.json`: removing one is a
 breaking change, while adding one is compatible. See
 [typed device communication](device-communication.md).
 
+## macOS bundle localizations
+
+Apps whose in-app strings already follow the user language declare
+
+```
+(macos-localizations "zh-Hans" "en")
+```
+
+in `rivet.rktd` (BCP 47 identifiers). Without a declaration the bundle
+builds byte-identical to before, and AppKit renders every system-provided
+string — About / Hide / Quit, standard alerts, SwiftUI navigation
+tooltips — in the development region's language. With the declaration,
+`CFBundleLocalizations` lands in Info.plist and packaging stages marker
+`Contents/Resources/<lang>.lproj/InfoPlist.strings` files before signing
+(no re-sign needed), so `CFBundleCopyBundleLocalizations` resolves the
+user's language and the system chrome localizes to match the in-app
+strings. Only declare languages the application itself already ships.
+
 ## Application resources and icons
 
 - `resources` — a list of project-relative files or directories copied into the application resource root while preserving their relative paths. Generated/control roots (`.git`, `.rivet`, `build`, and `dist`) and symbolic links are rejected so a release cannot accidentally capture repository metadata, stale output, or files outside the project.

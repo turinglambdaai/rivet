@@ -117,6 +117,42 @@
      (regexp-match? #rx"<key>CFBundleIconFile</key><string>AppIcon.icns</string>"
                     plist-text))
     (check-true (regexp-match? #rx"Demo &amp; Test" plist-text))
+    ;; Without a declaration there is no CFBundleLocalizations key — the
+    ;; byte-identical behavior projects without the key have always had.
+    (check-false (regexp-match? #rx"CFBundleLocalizations" plist-text))
+
+    ;; Declared localizations land in Info.plist and marker lproj
+    ;; directories; the declaration also rejects malformed language tags.
+    (define localized-plist (build-path temp-root "Localized-Info.plist"))
+    (write-macos-info! localized-plist
+                       "Demo"
+                       "Demo"
+                       "dev.rivet.demo"
+                       "1.2.3"
+                       7
+                       "14.0"
+                       #f
+                       '()
+                       '()
+                       '("zh-Hans" "en"))
+    (define localized-text (file->string localized-plist))
+    (check-true
+     (regexp-match?
+      #rx"<key>CFBundleLocalizations</key><array><string>zh-Hans</string><string>en</string></array>"
+      localized-text))
+    (check-false
+     (regexp-match? #rx"CFBundleLocalizations</key><array><string>zh"
+                    (file->string plist)))
+    ;; Malformed language tags fail at the declaration, not the writer.
+    (define bad-loc-root (build-path temp-root "bad-loc"))
+    (make-directory* bad-loc-root)
+    (call-with-output-file (build-path bad-loc-root "rivet.rktd")
+      (lambda (out)
+        (displayln
+         "#hasheq((name . \"Demo_App\") (backend . \"app/backend.rkt\") (module . \"backend\") (entry . \"start\") (protocol . 1) (macos-localizations . (\"zh_Hans\")))"
+         out)))
+    (check-exn #rx"BCP 47"
+               (lambda () (load-project bad-loc-root)))
 
     (define missing-project
       (rivet-project temp-root #hasheq((resources . ("missing.txt")))))

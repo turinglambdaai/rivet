@@ -28,6 +28,7 @@
          project-device-rpcs
          project-windows-icon
          project-macos-icon
+         project-macos-localizations
          project-linux-icon
          project-dmg-background
          project-windows-license
@@ -202,6 +203,18 @@
   (optional 'macos-icon
             (lambda (v) (path-string-has-extension? v ".icns"))
             "project-relative .icns path")
+  (optional 'macos-localizations
+            (lambda (v)
+              (define valid-language?
+                (lambda (item)
+                  (and (string? item)
+                       (regexp-match? #px"^[A-Za-z]{1,8}(-[A-Za-z0-9]{1,8})*$"
+                                      item))))
+              (and (list? v)
+                   (not (null? v))
+                   (andmap valid-language? v)
+                   (= (length v) (length (remove-duplicates v)))))
+            "BCP 47 language identifiers that already ship in-app, e.g. (macos-localizations \"zh-Hans\" \"en\")")
   (optional 'dmg-background
             (lambda (v) (path-string-has-extension? v ".png"))
             "project-relative .png path")
@@ -326,6 +339,12 @@
 
 (define (project-macos-icon project)
   (project-ref project 'macos-icon (lambda () #f)))
+
+;; Languages the application itself already localizes. Declaring them makes
+;; AppKit localize the system-provided chrome (About/Quit menus, standard
+;; alerts) into the user's language instead of the development region's.
+(define (project-macos-localizations project)
+  (project-ref project 'macos-localizations (lambda () '())))
 
 ;; The branded DMG layout switches on this key; projects without it keep the
 ;; plain single-folder image.
