@@ -19,7 +19,7 @@
 (define temp-root (make-temporary-file "rivet-manifest-compose-~a" 'directory))
 
 (define (artifact platform architecture url)
-  (update-artifact platform architecture url (make-string 64 #\a) 1 'msi '()))
+  (update-artifact platform architecture url (make-string 64 #\a) 1 'msi '() #f))
 (define (manifest #:artifacts artifacts #:version [version "1.4.0"])
   (update-manifest "dev.rivet.smoke" version 7 'stable
                    "2026-10-09T10:00:00Z" "0.0.0" #f #t 100 artifacts))

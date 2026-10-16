@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Let one update feed carry multiple installables per platform. Artifacts
+  gain an optional `component` discriminator (`app`, `cli`, or `tool`) that
+  participates in the manifest's duplicate-identity rule, writers emit the
+  legacy shape when no component is set, and `updater-config` selects by
+  component; a config without one keeps matching component-less entries
+  only. `raco rivet release --update-payload <installer>:<glob>[:<component>]`
+  (repeatable) expands project-relative globs into component-tagged feed
+  entries, so products shipping an app and a CLI — or a portable tar.gz
+  instead of the zip — stop splitting into two feeds. The
+  `updater-config` struct gains the component field as its last argument.
+
 - Add `fetch-sibling-asset` to `rivet/distribution` and the
   `raco rivet sign-manifest` subcommand. The sibling helper checks the HTTP
   status before saving, enforces the declared Content-Length against the

@@ -7,7 +7,7 @@
 
 (define artifact
   (update-artifact 'windows 'x64 "https://updates.example/app.zip"
-                   (make-string 64 #\a) 100 'zip '()))
+                   (make-string 64 #\a) 100 'zip '() #f))
 (define manifest
   (update-manifest "dev.rivet.managed-test" "2.0.0" 2 'stable
                    "2026-10-13T00:00:00Z" "0.0.0" "1.0.0"

@@ -1,7 +1,9 @@
 #lang racket/base
 
-(require file/zip
+(require file/glob
+         file/zip
          racket/file
+         racket/list
          racket/path
          racket/string
          "../rivet/distribution/crypto.rkt"
@@ -19,7 +21,8 @@
          release-update-environment
          portable-zip-path
          create-portable-zip!
-         release-update-artifacts)
+         release-update-artifacts
+         parse-update-payload-spec)
 
 (define (required-environment name)
   (define value (getenv name))
@@ -63,7 +66,8 @@
    (sha256-file/hex payload)
    (file-size payload)
    installer
-   '()))
+   '()
+   #f))
 
 (define (portable-update-artifact update-config portable-zip)
   (update-artifact-for-file update-config portable-zip
@@ -91,9 +95,54 @@
 ;; MSI and hand it to the shared Windows handoff; AppImage installs select the
 ;; self-replacing image. macOS's host client intentionally consumes the zip —
 ;; the DMG remains the human installer.
+;;
+;; Products that publish additional update payloads per platform (a CLI next
+;; to the app, a tar.gz instead of the zip) declare them with
+;; `--update-payload <installer>:<glob>[:<component>]`, repeatable. Globs
+;; expand relative to the project root; each match joins the feed with the
+;; component discriminator, and a triple without a component keeps the
+;; legacy shape.
+(define (parse-update-payload-spec who spec)
+  (define parts (string-split spec ":"))
+  (unless (and (>= (length parts) 2) (<= (length parts) 3))
+    (raise-arguments-error who
+                           "--update-payload expects <installer>:<glob>[:<component>]"
+                           "value" spec))
+  (define installer (string->symbol (list-ref parts 0)))
+  (unless (memq installer '(zip msi deb rpm appimage))
+    (raise-arguments-error who
+                           "update payload installer must be zip, msi, deb, rpm, or appimage"
+                           "value" spec))
+  (define component
+    (and (= (length parts) 3)
+         (let ([name (string->symbol (list-ref parts 2))])
+           (unless (memq name '(app cli tool))
+             (raise-arguments-error who
+                                    "update payload component must be app, cli, or tool"
+                                    "value" spec))
+           name)))
+  (values installer (list-ref parts 1) component))
+
+(define (expand-update-payloads update-config project platform architecture specs)
+  (append*
+   (for/list ([spec (in-list specs)])
+     (define-values (installer pattern component)
+       (parse-update-payload-spec 'release-project! spec))
+     (define matches
+       (sort (glob (project-path project pattern)) path<?))
+     (when (null? matches)
+       (raise-arguments-error 'release-project!
+                              "update payload pattern matched no files"
+                              "pattern" pattern))
+     (for/list ([path (in-list matches)])
+       (define artifact
+         (update-artifact-for-file update-config path platform architecture installer))
+       (struct-copy update-artifact artifact [component component])))))
+
 (define (release-update-artifacts update-config project portable-zip installer
                                   #:platform [platform (release-platform)]
-                                  #:architecture [architecture (release-architecture)])
+                                  #:architecture [architecture (release-architecture)]
+                                  #:extra-payloads [extra-payloads '()])
   (define portable
     (update-artifact-for-file update-config portable-zip
                               platform architecture 'zip))
@@ -111,7 +160,11 @@
             (update-artifact-for-file update-config payload
                                       platform architecture 'appimage))]
       [else #f]))
-  (if native (list portable native) (list portable)))
+  (append
+   (list portable)
+   (if native (list native) '())
+   (expand-update-payloads update-config project platform architecture
+                           extra-payloads)))
 
 (define (cleanup-release-stage! package)
   (delete-directory/files package #:must-exist? #f))
@@ -187,4 +240,7 @@
   (provide portable-update-artifact
            release-update-artifact
            release-update-artifacts
+           parse-update-payload-spec
+           expand-update-payloads
+           (struct-out update-environment)
            cleanup-release-stage!))

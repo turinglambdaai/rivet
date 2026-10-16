@@ -11,6 +11,7 @@
          racket/path
          racket/string
          "../rivet/distribution/crypto.rkt"
+         "../rivet/distribution/identity.rkt"
          "../rivet/distribution/manifest.rkt")
 
 (provide sign-manifest!
@@ -139,7 +140,7 @@
     (update-manifest
      application-id version build channel
      (or (hash-ref options 'published-at #f)
-         (number->string (current-seconds)))
+         (rfc3339-now))
      (hash-ref options 'minimum-version "0.0.0")
      (hash-ref options 'previous-version #f)
      (hash-ref options 'rollback-allowed? #f)
@@ -157,7 +158,8 @@
         (sha256-file/hex path)
         (file-size path)
         (requested-artifact-installer artifact)
-        '()))))
+        '()
+        #f))))
   (make-parent-directory* output)
   (call-with-output-file output
     #:exists 'truncate/replace
