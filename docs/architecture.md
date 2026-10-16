@@ -262,8 +262,14 @@ product may compose Rivet with
 but Rivet does not depend on Permit and does not define entitlement, trial,
 activation, seat, subscription, payment, or account policy. Rivet secure
 storage remains general-purpose even when a product uses it for Permit state.
-Update-manifest signing, OS publisher credentials, and Permit credential
+Online products may separately use
+[Commerce](https://github.com/turinglambdaai/commerce) for provider events,
+commercial projections, and credential delivery; Rivet supplies no Commerce
+client semantics and never imports it. Provider secrets, Commerce secrets,
+update-manifest signing, OS publisher credentials, and Permit credential
 signing are separate trust domains with separate keys and rotation procedures.
+The cross-repository dependency and change-routing rules are defined by the
+[family architecture](https://github.com/turinglambdaai/keel/blob/main/docs/family-architecture.md).
 
 Cross-device communication is a second, explicit trust boundary. `RivetDevice`
 associates every Codable request with its response type, routes

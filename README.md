@@ -200,9 +200,14 @@ Commercial entitlements are deliberately outside Rivet's framework boundary.
 Products that need offline-verifiable rights can compose Rivet with
 [Permit](https://github.com/turinglambdaai/permit/blob/main/docs/framework-integration.md)
 or another independent entitlement library; Rivet does not depend on it.
+Products that need online checkout, payment-event handling, or credential
+claim delivery may additionally use
+[Commerce](https://github.com/turinglambdaai/commerce); Commerce remains a
+product/service dependency, never a Rivet subsystem. Products that sell
+manually or operate fully offline do not need it.
 Products may use Rivet's general secure storage for credential state, while
-product-rights signing, update signing, and platform code signing keep separate
-keys and trust policies.
+provider secrets, Commerce secrets, product-rights signing, update signing, and
+platform code signing keep separate keys and trust policies.
 
 ## RPC, Event, State, Cancel
 

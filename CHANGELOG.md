@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Extend the family boundary to Commerce: online payment orchestration and
+  credential delivery remain optional product/service concerns and never
+  become Rivet dependencies.
 - Bound the updater's network legs. `fetch-update-manifest` runs its
   blocking connect inside a custodian-owned worker with configurable
   connect and idle deadlines, and `download-update` enforces a stall

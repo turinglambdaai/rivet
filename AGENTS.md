@@ -16,11 +16,13 @@ typed companion foundation is not yet a generated, packaged application flow.
 ### Commercial entitlement boundary
 
 Rivet does not own product entitlements, trials, activations, seats,
-subscriptions, payments, or accounts — Permit does, as a sibling dependency
-of the product, never of Rivet (`product -> rivet`, `product -> permit`,
-`rivet -X-> permit`). Update-signing keys, platform publisher credentials,
-and Permit credential-signing keys are separate trust domains with separate
-keys and rotation procedures. The normative shared contract is
+subscriptions, payments, checkout, or accounts. Permit owns signed-rights
+semantics; Commerce owns optional online commercial orchestration. Both are
+composed by the product: `product -> rivet`, `product -> permit`, and optional
+`product -> commerce client`. Rivet depends on neither Permit nor Commerce.
+Update-signing keys, platform publisher credentials, Permit
+credential-signing keys, and Commerce secrets are separate trust domains. The
+normative local rights boundary is
 [`permit/docs/framework-integration.md`](https://github.com/turinglambdaai/permit/blob/main/docs/framework-integration.md);
 do not restate it here.
 
@@ -35,9 +37,9 @@ coherent change so the next agent can reproduce the same context.
 
 ## Family contracts
 
-The family dependency graph, repository ownership, change routing, and release
-order are maintained in Keel's
-[`CONTRIBUTING.md`](https://github.com/turinglambdaai/keel/blob/main/CONTRIBUTING.md#family-operating-model).
+The five-repository dependency graph, repository ownership, change routing,
+release order, and trust boundaries are maintained in Keel's
+[`docs/family-architecture.md`](https://github.com/turinglambdaai/keel/blob/main/docs/family-architecture.md).
 Rivet's active milestones remain owned by
 `docs/desktop-closeout-mobile-plan.md`; do not copy its queue into a family
 document.

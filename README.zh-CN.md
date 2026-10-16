@@ -197,7 +197,10 @@ raco rivet release
 商业权益有意放在 Rivet 框架边界之外。需要离线可验证权益的产品可以将 Rivet 与
 [Permit](https://github.com/turinglambdaai/permit/blob/main/docs/framework-integration.md)
 或其他独立权益库组合使用；Rivet 本身不依赖它。产品可以使用 Rivet 的通用安全存储
-保存凭证状态，但产品权益签名、更新签名和平台代码签名必须保持独立密钥与信任策略。
+保存凭证状态。需要在线结账、支付事件处理或凭证领取时，产品还可以接入
+[Commerce](https://github.com/turinglambdaai/commerce)；Commerce 是产品/服务层依赖，
+绝不进入 Rivet。手工交付或完全离线销售的产品不需要 Commerce。支付渠道密钥、
+Commerce 密钥、产品权益签名、更新签名和平台代码签名必须保持独立密钥与信任策略。
 
 ## RPC、Event、State、Cancel
 
