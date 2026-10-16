@@ -35,6 +35,13 @@ coherent change so the next agent can reproduce the same context.
 
 ## Family contracts
 
+The family dependency graph, repository ownership, change routing, and release
+order are maintained in Keel's
+[`CONTRIBUTING.md`](https://github.com/turinglambdaai/keel/blob/main/CONTRIBUTING.md#family-operating-model).
+Rivet's active milestones remain owned by
+`docs/desktop-closeout-mobile-plan.md`; do not copy its queue into a family
+document.
+
 Rivet and Glaze share the transport-neutral contract package `keel`. Family
 packages are consumed only as published catalog packages, never vendored or
 copied, and every family dependency declares a `#:version` floor equal to

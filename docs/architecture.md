@@ -265,6 +265,22 @@ storage remains general-purpose even when a product uses it for Permit state.
 Update-manifest signing, OS publisher credentials, and Permit credential
 signing are separate trust domains with separate keys and rotation procedures.
 
-Cross-device communication is a second, explicit trust boundary. `RivetDevice` associates every Codable request with its response type, routes bounded/versioned envelopes, and can use WatchConnectivity through `RivetWatchConnectivityTransport`. The default watchOS architecture is therefore watch UI + typed companion channel + phone-hosted backend. The desktop-hosted companion direction reuses RVT1 framing only behind an authenticated device gateway that enforces a generated API subset; it does not expose the embedded backend socket. Its transport-independent authorization, session, pairing, authentication, revocation, secure Apple credential storage, byte-exact session preface, Apple TLS/SPKI stream adapter, per-install identity, disabled-by-default macOS listener, privacy-bounded Bonjour advertisement, macOS preface-session host, and explicit iOS Bonjour browser are implemented. The Apple client-session coordinator, product coordinator/gateway binding, native UI, and Windows secure storage/transport/discovery remain planned. See [typed device communication](device-communication.md) and the active [network device channel design](network-device-channel.md).
+Cross-device communication is a second, explicit trust boundary. `RivetDevice`
+associates every Codable request with its response type, routes
+bounded/versioned envelopes, and can use WatchConnectivity through
+`RivetWatchConnectivityTransport`. The default watchOS architecture is watch
+UI + typed companion channel + phone-hosted backend. A desktop-hosted companion
+reuses RVT1 framing only behind an authenticated device gateway that enforces a
+generated API subset; it never exposes the embedded backend socket.
+
+The companion foundation now spans portable Swift, C++, and Kotlin session
+state machines plus Apple client/server transport and Windows identity,
+SChannel listener, and DNS-SD publication. The remaining milestone is not
+another protocol layer: it is product coordinator/gateway binding, pairing UI,
+Android discovery/TLS binding, and real-device acceptance on Apple, Windows,
+and Android. See [typed device communication](device-communication.md), the
+active [network device channel design](network-device-channel.md), and the
+evidence sequence in
+[the desktop/mobile plan](desktop-closeout-mobile-plan.md).
 
 An update crosses explicit trust boundaries: verify signed manifest, select policy-compatible artifact, download with a bound, verify signed size and SHA-256, invoke the platform installer, then either restart or execute the signed rollback policy. See [Release and updates](release-and-updates.md).
