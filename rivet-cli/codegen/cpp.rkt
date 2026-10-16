@@ -188,11 +188,17 @@
     (if void?
         "rivet_done->get_future().get(); return true;"
         "return rivet_done->get_future().get();"))
+  ;; A zero-argument RPC has no parameter list; the timeout must not follow
+  ;; a stray comma.
+  (define within-params
+    (if (string=? params "")
+        "std::chrono::milliseconds rivet_timeout"
+        (format "~a, std::chrono::milliseconds rivet_timeout" params)))
   (format
-   "  ~a ~a_within(~a, std::chrono::milliseconds rivet_timeout) { auto rivet_done = std::make_shared<std::promise<~a>>(); auto rivet_id = backend_.request_async(~a, rivet::Value::List{~a}, ~a); if (rivet_done->get_future().wait_for(rivet_timeout) != std::future_status::ready) { backend_.cancel(rivet_id); return ~a; } ~a }\n"
+   "  ~a ~a_within(~a) { auto rivet_done = std::make_shared<std::promise<~a>>(); auto rivet_id = backend_.request_async(~a, rivet::Value::List{~a}, ~a); if (rivet_done->get_future().wait_for(rivet_timeout) != std::future_status::ready) { backend_.cancel(rivet_id); return ~a; } ~a }\n"
    return-type
    (cpp-id (schema-rpc-name info))
-   params
+   within-params
    (cpp-type result-type)
    rpc-name encoded
    (cpp-promise-handler result-type backend-namespace)

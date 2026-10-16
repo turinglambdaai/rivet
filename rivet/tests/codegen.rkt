@@ -337,6 +337,16 @@ RKT
 (define (start in-fd out-fd) (serve-fds in-fd out-fd))
 RKT
      )
+    ;; Zero-argument RPCs must not emit a stray comma before the timeout
+    ;; (the taskboard's timing-start family broke CI before this pin).
+    (void (generate-clients! project))
+    (define zero-arg-cpp
+      (file->string (build-path project-root "windows" "GeneratedBackend.hpp")))
+    (check-true
+     (string-contains?
+      zero-arg-cpp
+      "std::optional<bool> health_within(std::chrono::milliseconds rivet_timeout)"))
+
     (define compatible-report
       (check-schema-compatibility! project baseline-path))
     (check-true (hash-ref compatible-report 'compatible))
