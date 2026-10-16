@@ -172,6 +172,10 @@
         (regexp-match? pattern entry))))
 
 (define (copy-windows-release! stage destination)
+  ;; Packaging may be retried in the same workspace after a partial publish.
+  ;; Recreate the target so copy-file never collides with stale payloads and
+  ;; removed files from the new stage cannot survive in the package.
+  (remove-path! destination)
   (make-directory* destination)
   (for ([entry (in-list (directory-list stage))])
     (define source (build-path stage entry))
@@ -196,6 +200,9 @@
     ;; remain byte-for-byte upstream artifacts instead of being re-signed.
     (sign-windows-production! (build-path destination "RivetHost.exe") settings))
   destination)
+
+(module+ test-support
+  (provide copy-windows-release!))
 
 (define (package-linux! project stage name)
   (define destination
