@@ -106,6 +106,15 @@ checksum and there is no `raco pkg install rivet@<version>` selector. The
 standard hold-back form is the tag-pinned Git source shown above. Racket treats
 the fragment as the Git revision while retaining normal dependency resolution.
 
+Never leave the fragment empty. `...rivet.git#` with a bare `#` does not fail
+the install: Racket resolves it to the default branch, so CI compiles against
+moving `main` while the workflow believed it was pinned — an undefined
+workflow variable has shipped releases built this way. Always pin a tag or a
+commit SHA after `#`, and run `raco rivet doctor --release` before publishing;
+the release gate fails on empty refs, on tag refs that do not match the
+installed rivet release, on stale generated files, and on host source that
+calls the update API with keywords the installed rivet does not accept.
+
 Rivet itself additionally launches the generated GTK4 package inside a
 headless Weston compositor with `GDK_BACKEND=wayland`. This is a native
 Wayland gate: `DISPLAY` is unset, so the application cannot silently pass by

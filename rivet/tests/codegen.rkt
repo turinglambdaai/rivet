@@ -144,6 +144,36 @@ RKT
     (check-equal? (length (second schema)) 1)
     (check-equal? (length (third schema)) 1)
 
+    ;; Release freshness gate (issue #245): a fresh regeneration matches the
+    ;; tree; a hand-edited generated file or a stale version stamp is reported
+    ;; as stale, and a deleted file as missing. Running the writer repairs it
+    ;; because both sides share one regeneration.
+    (define fresh-report (check-generated-clients project))
+    (check-equal? (hash-ref fresh-report 'stale) '())
+    (check-equal? (hash-ref fresh-report 'missing) '())
+    (check-true (pair? (hash-ref fresh-report 'fresh)))
+
+    (define windows-header
+      (build-path project-root "windows" "GeneratedBackend.hpp"))
+    (call-with-output-file windows-header
+      #:exists 'truncate
+      (lambda (out) (display "// hand-edited stamp\n" out)))
+    (define stale-report (check-generated-clients project))
+    (check-equal? (hash-ref stale-report 'stale) (list windows-header))
+
+    (define kotlin-generated
+      (build-path project-root ".rivet" "generated" "kotlin" "dev" "rivet"
+                  "generated" "GeneratedBackend.kt"))
+    (delete-file kotlin-generated)
+    (define missing-report (check-generated-clients project))
+    (check-equal? (hash-ref missing-report 'missing) (list kotlin-generated))
+    (check-equal? (hash-ref missing-report 'stale) (list windows-header))
+
+    (void (generate-clients! project))
+    (define repaired-report (check-generated-clients project))
+    (check-equal? (hash-ref repaired-report 'stale) '())
+    (check-equal? (hash-ref repaired-report 'missing) '())
+
     (define swift
       (file->string
        (build-path project-root

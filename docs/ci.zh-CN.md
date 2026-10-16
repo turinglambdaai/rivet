@@ -100,6 +100,13 @@ checksum，也不存在 `raco pkg install rivet@<version>` 这种历史版本选
 标准的版本保留方式就是上面带标签的 Git 来源；Racket 会把片段解释为 Git
 revision，同时照常解析依赖。
 
+绝不要让片段留空。`...rivet.git#` 这种裸 `#` 不会让安装失败：Racket 会把它
+解析到默认分支，CI 于是对着移动的 `main` 编译，而工作流却以为自己在用固定
+版本——曾经有过未定义的工作流变量产生空片段、并以此发版的事故。`#` 之后
+永远固定到标签或 commit SHA，并在发布前运行 `raco rivet doctor --release`；
+发布门禁会对空片段、与已安装 rivet 版本不符的标签片段、过期的生成文件、
+以及用已安装 rivet 不接受的关键字调用更新 API 的宿主源码报错。
+
 对安全要求高的产品，应把 action 标签换成该标签对应的完整 commit SHA，并在
 包 URL 片段中使用同一个 commit。该 action 会下载官方 minimal Racket CS
 源码归档、校验 SHA-256、按

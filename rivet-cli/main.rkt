@@ -34,6 +34,8 @@
     "  raco rivet new <name>              create a new Rivet application\n"
     "  raco rivet doctor                  inspect the local native toolchain\n"
     "  raco rivet doctor --json           emit machine-readable toolchain diagnostics\n"
+    "  raco rivet doctor --release        run the release gate: generated-file freshness,\n"
+    "                                     schema baseline, update-API keyword contracts, pins\n"
     "  raco rivet inspect                 show the current project's edit and verification map\n"
     "  raco rivet inspect --json          emit the agent-readable project contract\n"
     "  raco rivet schema --json           emit the current versioned API schema\n"
@@ -42,6 +44,8 @@
     "  raco rivet schema check <file> --json  emit a machine-readable compatibility report\n"
     "  raco rivet clean                   remove generated .rivet/build/dist artifacts\n"
     "  raco rivet build                   compile backend and native host\n"
+    "  raco rivet generate                regenerate Swift, C++, and Kotlin clients\n"
+    "  raco rivet generate --check        fail if generated clients differ from the tree\n"
     "  raco rivet dev                     build and run the current app\n"
     "  raco rivet package                 create and verify a development distributable\n"
     "  raco rivet package --production    create, sign, and verify a production distributable\n"
@@ -89,6 +93,9 @@
     [(list "doctor" "--json")
      (define run-doctor (command "doctor" 'run-doctor))
      (exit (run-doctor #:json? #t))]
+    [(list "doctor" "--release")
+     (define run-release-doctor (command "doctor" 'run-release-doctor))
+     (exit (run-release-doctor))]
     [(list "inspect")
      (define run-inspect (command "inspect" 'run-inspect))
      (exit (run-inspect (current-project!)))]
@@ -142,6 +149,22 @@
      (define generate-clients! (command "codegen" 'generate-clients!))
      (generate-clients! (current-project!))
      (say "generated Swift, C++, and Kotlin clients")]
+    [(list "generate" "--check")
+     ;; CI freshness gate: regenerate in memory and compare with the tree,
+     ;; so hand-edited generated files or stale version stamps cannot merge.
+     (define check-generated-clients (command "codegen" 'check-generated-clients))
+     (define result (check-generated-clients (current-project!)))
+     (define stale (hash-ref result 'stale))
+     (define missing (hash-ref result 'missing))
+     (for ([path (in-list stale)])
+       (say "stale: ~a (differs from a fresh regeneration)" path))
+     (for ([path (in-list missing)])
+       (say "missing: ~a" path))
+     (if (and (null? stale) (null? missing))
+         (say "generated clients are fresh")
+         (begin
+           (say "run `raco rivet generate` to refresh the generated files")
+           (exit 1)))]
     [(list "build")
      (define build-project! (command "build" 'build-project!))
      (define output (build-project! (current-project!)))
