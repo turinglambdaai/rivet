@@ -26,7 +26,7 @@
 (define (candidate installer [version "2.0.0"])
   (define artifact
     (update-artifact platform 'x64 "https://updates.example/application.zip"
-                     (make-string 64 #\a) 1 installer '()))
+                     (make-string 64 #\a) 1 installer '() #f))
   (update-candidate
    (update-manifest "dev.rivet.adapter-test" version 2 'stable
                     "2026-10-10T00:00:00Z" "1.0.0" "1.0.0"

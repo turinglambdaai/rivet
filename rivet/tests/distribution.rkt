@@ -55,7 +55,7 @@
 
 (define sample-artifact
   (update-artifact 'windows 'x64 "https://updates.example/app.msi"
-                   (make-string 64 #\a) 4 'msi '("/quiet")))
+                   (make-string 64 #\a) 4 'msi '("/quiet") #f))
 (define sample-manifest
   (update-manifest "dev.rivet.test" "1.2.0" 12 'stable
                    "2026-09-28T00:00:00Z" "1.0.0" "1.1.0"
@@ -63,13 +63,13 @@
 
 (define linux-config
   (updater-config "dev.rivet.test" "1.1.0" 'stable 'linux 'x64
-                  #f #f 0 (* 1024 1024)))
+                  #f #f 0 (* 1024 1024) #f))
 (define linux-zip
   (update-artifact 'linux 'x64 "https://updates.example/app.zip"
-                   (make-string 64 #\b) 4 'zip '()))
+                   (make-string 64 #\b) 4 'zip '() #f))
 (define linux-appimage
   (update-artifact 'linux 'x64 "https://updates.example/app.AppImage"
-                   (make-string 64 #\c) 4 'appimage '()))
+                   (make-string 64 #\c) 4 'appimage '() #f))
 (define linux-manifest
   (struct-copy update-manifest sample-manifest
                [artifacts (list linux-zip linux-appimage)]))
@@ -90,10 +90,10 @@
 
 (define windows-config
   (updater-config "dev.rivet.test" "1.1.0" 'stable 'windows 'x64
-                  #f #f 0 (* 1024 1024)))
+                  #f #f 0 (* 1024 1024) #f))
 (define windows-zip
   (update-artifact 'windows 'x64 "https://updates.example/app.zip"
-                   (make-string 64 #\d) 4 'zip '()))
+                   (make-string 64 #\d) 4 'zip '() #f))
 (define windows-manifest
   (struct-copy update-manifest sample-manifest
                [artifacts (list windows-zip sample-artifact)]))
@@ -220,7 +220,7 @@
 
   (define config
     (updater-config "dev.rivet.test" "1.1.0" 'stable 'windows 'x64
-                    public-key "release-2026" 0 (* 1024 1024)))
+                    public-key "release-2026" 0 (* 1024 1024) #f))
   (check-true (update-candidate? (select-update config sample-manifest)))
   (check-false
    (select-update (struct-copy updater-config config [current-version "1.2.0"])

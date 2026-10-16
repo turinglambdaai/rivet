@@ -49,6 +49,8 @@
     "  raco rivet release                 build signed installer, update manifest, SBOM, and notices\n"
     "  raco rivet release --development   exercise release flow without platform production signing\n"
     "  raco rivet release --without-updates  release without an update manifest or update key\n"
+    "  raco rivet release --update-payload <installer>:<glob>[:<component>]\n"
+    "                                      add a per-platform update payload to the feed\n"
     "  raco rivet manifest-compose <inputs...> [--output <file>]\n"
     "  raco rivet sign-manifest --application-id <id> --version <v> --build <n>\n"
     "                           --channel <stable|beta|dev> --base-url <url>\n"
@@ -169,18 +171,22 @@
      (say "production packaged, signed, and verified ~a~a"
           output
           (if launch-smoke? "" " (launch smoke skipped)"))]
-    [(or (list "release")
-         (list "release" "--development")
-         (list "release" "--without-updates")
-         (list "release" "--development" "--without-updates")
-         (list "release" "--without-updates" "--development"))
+    [(cons "release" release-args)
      (define release-project! (command "release" 'release-project!))
-     (define production? (not (member "--development" args)))
-     (define updates? (not (member "--without-updates" args)))
+     (define production? (not (member "--development" release-args)))
+     (define updates? (not (member "--without-updates" release-args)))
+     (define update-payloads
+       (let loop ([remaining release-args] [payloads '()])
+         (match remaining
+           ['() (reverse payloads)]
+           [(list* "--update-payload" spec tail)
+            (loop tail (cons spec payloads))]
+           [(cons _ tail) (loop tail payloads)])))
      (define-values (installer manifest sbom notices portable-zip)
        (release-project! (current-project!)
                          #:production? production?
-                         #:updates? updates?))
+                         #:updates? updates?
+                         #:update-payloads update-payloads))
      (say "release installer: ~a" installer)
      (say "portable zip: ~a" portable-zip)
      (when (eq? (system-type 'os) 'unix)

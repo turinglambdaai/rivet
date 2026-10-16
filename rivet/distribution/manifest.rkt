@@ -20,7 +20,7 @@
 (define manifest-schema-version 1)
 
 (struct update-artifact
-  (platform architecture url sha256 size installer arguments)
+  (platform architecture url sha256 size installer arguments component)
   #:transparent)
 
 (struct update-manifest
@@ -32,7 +32,11 @@
   '(schema application_id version build channel published_at minimum_version
            previous_version rollback_allowed rollout artifacts))
 (define artifact-fields
-  '(platform architecture url sha256 size installer arguments))
+  '(platform architecture url sha256 size installer arguments component))
+;; Components discriminate multiple installables per (platform, architecture,
+;; installer): a product may ship an app and a CLI built from one release.
+;; Legacy manifests carry no component; those entries are the plain artifact.
+(define artifact-components '(app cli tool))
 (define wrapper-fields '(schema payload signature))
 (define signature-fields '(algorithm key_id value))
 
@@ -69,13 +73,18 @@
   value)
 
 (define (artifact->jsexpr artifact)
-  (hasheq 'platform (symbol->string (update-artifact-platform artifact))
-          'architecture (symbol->string (update-artifact-architecture artifact))
-          'url (update-artifact-url artifact)
-          'sha256 (string-downcase (update-artifact-sha256 artifact))
-          'size (update-artifact-size artifact)
-          'installer (symbol->string (update-artifact-installer artifact))
-          'arguments (update-artifact-arguments artifact)))
+  (define base
+    (hasheq 'platform (symbol->string (update-artifact-platform artifact))
+            'architecture (symbol->string (update-artifact-architecture artifact))
+            'url (update-artifact-url artifact)
+            'sha256 (string-downcase (update-artifact-sha256 artifact))
+            'size (update-artifact-size artifact)
+            'installer (symbol->string (update-artifact-installer artifact))
+            'arguments (update-artifact-arguments artifact)))
+  (if (update-artifact-component artifact)
+      (hash-set base 'component
+                (symbol->string (update-artifact-component artifact)))
+      base))
 
 (define (manifest->payload-bytes manifest)
   (unless (update-manifest? manifest)
@@ -106,6 +115,19 @@
                         (lambda (v) (and (string? v)
                                          (regexp-match? #px"^[0-9A-Fa-f]{64}$" v)))
                         "64 hexadecimal SHA-256 characters"))
+  (define component
+    (cond
+      [(not (hash-has-key? value 'component)) #f]
+      [(eq? (hash-ref value 'component) 'null) #f]
+      [else
+       (define name (required value 'component string? "string"))
+       (define symbol-name (string->symbol name))
+       (unless (memq symbol-name artifact-components)
+         (raise-arguments-error 'payload-bytes->manifest
+                                "artifact component is not supported"
+                                "component" name
+                                "supported" artifact-components))
+       symbol-name]))
   (update-artifact
    (string->symbol (required value 'platform string? "string"))
    (string->symbol (required value 'architecture string? "string"))
@@ -118,7 +140,8 @@
    (string->symbol (required value 'installer string? "string"))
    (required value 'arguments
              (lambda (v) (and (list? v) (andmap string? v)))
-             "array of strings")))
+             "array of strings")
+   component))
 
 (define (payload-bytes->manifest payload)
   (define value
@@ -183,9 +206,13 @@
   (define duplicate-identity
     (check-duplicates
      (map (lambda (artifact)
+            ;; The component discriminator is part of the identity: one feed
+            ;; may carry an app and a CLI built from the same release, while
+            ;; component-less legacy entries stay unique per triple.
             (list (update-artifact-platform artifact)
                   (update-artifact-architecture artifact)
-                  (update-artifact-installer artifact)))
+                  (update-artifact-installer artifact)
+                  (update-artifact-component artifact)))
           artifacts)
      equal?))
   (when duplicate-identity

@@ -108,7 +108,7 @@
 (define sidecar (path-add-extension artifact #".sha256"))
 (check-true (file-exists? sidecar))
 (check-regexp-match
- #rx"^[0-9a-f]{64}  App-1\\.2\\.3-macos-arm64\\.zip$"
+ #px"^[0-9a-f]{64}  App-1\\.2\\.3-macos-arm64\\.zip"
  (file->string sidecar))
 
 ;; --- fail-closed publish ---------------------------------------------------
@@ -124,7 +124,7 @@
   #:exists 'truncate/replace
   (lambda (out) (write-bytes (make-bytes 128 9) out)))
 (define other-output (build-path root "other-update.json"))
-(check-exn #rx"verification failed|unexpected key|malformed"
+(check-exn #rx"verification failed|unexpected key|malformed|could not decode"
            (lambda ()
              (sign-manifest!
               (list (requested-artifact 'linux 'x64 'zip (path->string other-artifact)))

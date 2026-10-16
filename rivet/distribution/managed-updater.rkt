@@ -221,7 +221,8 @@
                   key
                   (updater-key-id instance)
                   (updater-rollout-bucket instance)
-                  (updater-maximum-download-bytes instance)))
+                  (updater-maximum-download-bytes instance)
+                  #f))
 
 (define (available-result instance candidate)
   (define manifest (update-candidate-manifest candidate))

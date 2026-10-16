@@ -25,7 +25,8 @@
 
 (struct updater-config
   (application-id current-version channel platform architecture
-                  public-key expected-key-id rollout-bucket maximum-download-bytes)
+                  public-key expected-key-id rollout-bucket maximum-download-bytes
+                  component)
   #:transparent)
 
 (struct update-candidate (manifest artifact) #:transparent)
@@ -289,12 +290,14 @@
     [(>= (updater-config-rollout-bucket config)
          (update-manifest-rollout manifest)) #f]
     [else
+     (define component (updater-config-component config))
      (define artifact
        (for/first ([item (in-list (update-manifest-artifacts manifest))]
                    #:when (and (eq? (update-artifact-platform item)
                                     (updater-config-platform config))
                                (eq? (update-artifact-architecture item)
                                     (updater-config-architecture config))
+                               (eq? (update-artifact-component item) component)
                                (artifact-matches-install-kind? item install-kind)))
          item))
      (and artifact (update-candidate manifest artifact))]))
