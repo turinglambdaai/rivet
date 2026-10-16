@@ -64,7 +64,8 @@
       channel-accepts-version? current-install-kind current-update-platform
       current-update-architecture download-update ed25519-sign ed25519-verify
       execute-install-plan!
-      execute-platform-installation! fetch-update-manifest install-plan
+      execute-platform-installation! fetch-sibling-asset
+      fetch-update-manifest install-plan
       install-plan-backup-path install-plan-candidate
       install-plan-downloaded-path install-plan-install install-plan-restart
       install-plan-rollback install-plan? installer-extension make-install-plan
@@ -77,7 +78,8 @@
       struct:update-artifact struct:update-candidate struct:update-manifest
       struct:updater-config update-artifact update-artifact-architecture
       update-artifact-arguments update-artifact-installer
-      update-artifact-platform update-artifact-sha256 update-artifact-size
+      update-artifact-component update-artifact-platform
+      update-artifact-sha256 update-artifact-size
       update-artifact-url update-artifact? update-candidate
       update-candidate-artifact update-candidate-manifest update-candidate?
       update-manifest update-manifest-application-id update-manifest-artifacts
@@ -88,7 +90,8 @@
       updater-cancel! updater-check! updater-download! updater-state
       updater-config updater-config-application-id
       updater-config-architecture updater-config-channel
-      updater-config-current-version updater-config-expected-key-id
+      updater-config-component updater-config-current-version
+      updater-config-expected-key-id
       updater-config-maximum-download-bytes updater-config-platform
       updater-config-public-key updater-config-rollout-bucket updater-config?
       updater-wait updater? rfc3339-now
