@@ -15,6 +15,7 @@
          (struct-out update-candidate)
          (struct-out install-plan)
          fetch-update-manifest
+         fetch-sibling-asset
          select-update
          download-update
          verify-update-artifact!
@@ -177,6 +178,86 @@
          (verify-signed-manifest (open-input-bytes (get-output-bytes out))
                                  public-key
                                  #:key-id key-id))
+       (lambda () (close-input-port in))))))
+
+;; Release sidecars and sibling artifacts (sha256 files, extra installers)
+;; live next to the update feed on the same host. Every private copy of
+;; this helper skipped the HTTP status check, so a 404 page was saved as
+;; the payload and only failed later with a misleading checksum error.
+;; This shared helper fails fast instead: non-2xx statuses name the URL and
+;; status, Content-Length mismatches are rejected, and the download runs
+;; under the same deadlines as the manifest fetch.
+(define (fetch-sibling-asset url destination
+                             #:sha256 [expected-sha256 #f]
+                             #:maximum-bytes [maximum-bytes (* 1024 1024 1024)]
+                             #:on-progress [on-progress void]
+                             #:connect-timeout-seconds
+                             [connect-timeout-seconds
+                              update-fetch-connect-timeout-seconds]
+                             #:idle-timeout-seconds
+                             [idle-timeout-seconds
+                              update-fetch-idle-timeout-seconds])
+  (unless (and (string? url) (regexp-match? #px"^https://" url))
+    (raise-argument-error 'fetch-sibling-asset "HTTPS URL string" url))
+  (unless (real? maximum-bytes)
+    (raise-argument-error 'fetch-sibling-asset "real?" maximum-bytes))
+  (call-with-fetch-deadline
+   'fetch-sibling-asset connect-timeout-seconds idle-timeout-seconds
+   (lambda ()
+     (define-values (response in)
+       (get-pure-port/headers
+        (string->url url)
+        '("User-Agent: Rivet-Updater/1")
+        #:redirections update-fetch-redirections))
+     (dynamic-wind
+       void
+       (lambda ()
+         ;; The status line is the first response header: "HTTP/1.1 200 OK".
+         (define status-line (read-line in 'return))
+         (define status
+           (let ([match (regexp-match #rx"^HTTP/[0-9.]+ ([0-9]{3})" status-line)])
+             (and match (string->number (list-ref match 1)))))
+         (unless (and status (<= 200 status 299))
+           (error 'fetch-sibling-asset
+                  "sibling asset request failed: HTTP ~a for ~a"
+                  (or status "unknown") url))
+         ;; Consume the header block; only Content-Length is load-bearing.
+         (define content-length
+           (let loop ()
+             (define line (read-line in 'return))
+             (cond
+               [(or (eof-object? line) (string=? line "")) #f]
+               [(regexp-match #rx"(?i:^content-length:[ ]*([0-9]+)[ ]*$)" line)
+                => (lambda (match) (string->number (list-ref match 1)))]
+               [else (loop)])))
+         (when (exact-positive-integer? content-length)
+           (when (> content-length maximum-bytes)
+             (error 'fetch-sibling-asset
+                    "sibling asset declares ~a bytes beyond the ~a byte limit"
+                    content-length maximum-bytes)))
+         (make-parent-directory* destination)
+         (define temporary (path-add-extension destination #".partial"))
+         (when (file-exists? temporary) (delete-file temporary))
+         (call-with-partial-cleanup
+          temporary
+          (lambda ()
+            (call-with-output-file temporary
+              #:exists 'truncate/replace
+              #:mode 'binary
+              (lambda (out)
+                (copy-limited! in out maximum-bytes
+                               #:who 'fetch-sibling-asset
+                               #:on-progress on-progress
+                               #:stall-seconds idle-timeout-seconds)))
+            (when expected-sha256
+              (define actual (sha256-file/hex temporary))
+              (unless (string=? actual expected-sha256)
+                (error 'fetch-sibling-asset
+                       "sibling asset SHA-256 does not match the expected value"
+                       "expected" expected-sha256
+                       "actual" actual)))
+            (rename-file-or-directory temporary destination #t)
+            destination)))
        (lambda () (close-input-port in))))))
 
 (define install-kinds '(portable msi appimage package-manager))
