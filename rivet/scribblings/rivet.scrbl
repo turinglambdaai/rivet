@@ -551,8 +551,12 @@ platform, and architecture.
              [sha256 string?]
              [size exact-nonnegative-integer?]
              [installer symbol?]
-             [arguments (listof string?)])]{
-Describes one installer artifact bound into the signed manifest.}
+             [arguments (listof string?)]
+             [component (or/c #f symbol?)])]{
+Describes one installer artifact bound into the signed manifest. The
+component discriminates several installables built from one release
+(@racket['app], @racket['cli], or @racket['tool]); @racket[#f] keeps the
+legacy single-artifact shape.}
 
 @defstruct*[update-manifest
             ([application-id string?]
@@ -576,8 +580,11 @@ Represents the parsed payload covered by an Ed25519 signature.}
              [public-key any/c]
              [expected-key-id (or/c #f string?)]
              [rollout-bucket exact-nonnegative-integer?]
-             [maximum-download-bytes exact-positive-integer?])]{
-Holds local identity, trust, rollout, and resource-limit policy.}
+             [maximum-download-bytes exact-positive-integer?]
+             [component (or/c #f symbol?)])]{
+Holds local identity, trust, rollout, and resource-limit policy. The
+component selects between several installables on the same platform; a
+config without one matches component-less artifacts only.}
 
 @defstruct*[update-candidate
             ([manifest update-manifest?]
@@ -726,9 +733,29 @@ rollout bucket, and maximum download size.
 @defproc[(fetch-update-manifest [manifest-url string?]
                                 [public-key any/c]
                                 [#:key-id key-id (or/c #f string?) #f]
-                                [#:maximum-bytes maximum-bytes exact-positive-integer? (* 1024 1024)])
+                                [#:maximum-bytes maximum-bytes exact-positive-integer? (* 1024 1024)]
+                                [#:connect-timeout-seconds connect-timeout-seconds (real-in 0.001 3600) 30]
+                                [#:idle-timeout-seconds idle-timeout-seconds (real-in 0.001 3600) 60])
          update-manifest?]{
-Downloads a bounded manifest from HTTPS and verifies its Ed25519 signature.}
+Downloads a bounded manifest from HTTPS and verifies its Ed25519 signature.
+The blocking connect and the body read run inside a custodian-owned worker:
+a peer that never completes TLS or stops sending bytes raises a retryable
+error after the configured connect and idle deadlines instead of parking the
+caller.}
+
+@defproc[(fetch-sibling-asset [url string?]
+                              [destination path-string?]
+                              [#:sha256 expected-sha256 (or/c #f string?) #f]
+                              [#:maximum-bytes maximum-bytes exact-positive-integer? (* 1024 1024 1024)]
+                              [#:on-progress on-progress procedure? void]
+                              [#:connect-timeout-seconds connect-timeout-seconds (real-in 0.001 3600) 30]
+                              [#:idle-timeout-seconds idle-timeout-seconds (real-in 0.001 3600) 60])
+         path?]{
+Downloads a release sidecar or sibling artifact next to the update feed.
+The response status is checked before anything is saved, a declared
+Content-Length beyond the byte limit is rejected, the stream honors the
+stall deadline, and an expected SHA-256 is verified before the download is
+moved into place. A failed checksum leaves no output file.}
 @defproc[(select-update [config updater-config?] [manifest update-manifest?])
          (or/c #f update-candidate?)]{
 Applies identity, channel, version, minimum-version, rollout, platform, and
@@ -738,10 +765,14 @@ architecture policy.}
                           [destination path-string?]
                           [#:on-progress on-progress procedure? void]
                           [#:progress-every progress-every
-                           (or/c #f exact-positive-integer?) #f])
+                           (or/c #f exact-positive-integer?) #f]
+                          [#:stall-timeout-seconds stall-timeout-seconds (real-in 0.001 3600) 60]
+                          [#:total-timeout-seconds total-timeout-seconds (or/c #f (real-in 0.001 86400)) #f])
          path?]{
 Downloads to a partial file, enforces the signed size and configured bound,
-verifies SHA-256, and atomically moves the verified artifact into place.
+verifies SHA-256, and atomically moves the verified artifact into place. A
+peer that sends no bytes for @racket[stall-timeout-seconds] raises a
+retryable error; @racket[total-timeout-seconds] caps the whole transfer.
 @racket[on-progress] receives cumulative downloaded bytes, starting at zero
 and ending at the downloaded size. Intermediate reports are throttled to about
 one per percent of the signed artifact size. The callback runs synchronously
