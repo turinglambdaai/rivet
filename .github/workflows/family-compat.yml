@@ -1,0 +1,73 @@
+name: Family compatibility
+
+on:
+  schedule:
+    # Weekly, Monday 04:41 UTC.
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: family-compat-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  compat:
+    name: Family packages at latest
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Racket CS
+        uses: Bogdanp/setup-racket@2466913449df77df2bad149d1f2fc4e1ea4795dd # v1.15
+        with:
+          architecture: x64
+          distribution: full
+          variant: CS
+          version: '9.3'
+      - name: Install Rivet
+        run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
+      - name: Update family packages to latest
+        run: raco pkg update --auto --no-docs keel
+      - name: Test
+        run: raco test rivet/tests/
+
+  file-issue:
+    name: File a family-compat issue
+    needs: compat
+    if: ${{ needs.compat.result == 'failure' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+    steps:
+      - name: File the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          open_issues="$(gh issue list -R "$GITHUB_REPOSITORY" --state open \
+            --search 'Family compat red in:title' --json number --jq 'length')"
+          if [ "$open_issues" -gt 0 ]; then
+            echo "An open family-compat issue already exists; not duplicating."
+            exit 0
+          fi
+          gh issue create -R "$GITHUB_REPOSITORY" \
+            --title "Family compat red ($(date -u +%F))" \
+            --body "$(cat <<'EOF'
+          The weekly family compatibility run failed: a family package
+          (currently `keel`) published a version this repository's suite does
+          not pass against.
+
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          Reproduce locally:
+
+              raco pkg update --auto --no-docs keel
+              raco test rivet/tests/
+
+          Then either adapt here and raise the dependency floor in the same
+          CHANGELOG entry, or fix the upstream package and link the upstream
+          issue here. See AGENTS.md ("Family contracts") for the rule.
+          EOF
+          )"
