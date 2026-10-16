@@ -5,6 +5,7 @@
 // compiles before the first build, mirroring the Linux scaffold header.
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <exception>
 #include <functional>
@@ -67,6 +68,52 @@ class API {
                       });
   }
 
+  // Bounded-wait companions: the completion resolves a promise, so a
+  // poller waits up to the timeout and cancels the pending request on a
+  // miss. Poll a long-lived UI from one call site instead of spawning a
+  // detached thread per tick.
+  std::optional<std::string> greet_within(
+      std::string name, std::chrono::milliseconds rivet_timeout) {
+    auto rivet_done = std::make_shared<std::promise<std::string>>();
+    auto rivet_id = backend_.request_async(
+        "greet", rivet::windows::Value::List{rivet::Value(std::move(name))},
+        [rivet_done](rivet::windows::CallResult call) mutable {
+          auto result = unbox_string(std::move(call));
+          if (result.error) {
+            rivet_done->set_exception(result.error);
+          } else {
+            rivet_done->set_value(*result.value);
+          }
+        });
+    if (rivet_done->get_future().wait_for(rivet_timeout) !=
+        std::future_status::ready) {
+      backend_.cancel(rivet_id);
+      return std::nullopt;
+    }
+    return rivet_done->get_future().get();
+  }
+
+  std::optional<std::int64_t> increment_within(
+      std::int64_t value, std::chrono::milliseconds rivet_timeout) {
+    auto rivet_done = std::make_shared<std::promise<std::int64_t>>();
+    auto rivet_id = backend_.request_async(
+        "increment", rivet::windows::Value::List{rivet::Value(value)},
+        [rivet_done](rivet::windows::CallResult call) mutable {
+          auto result = unbox_int64(std::move(call));
+          if (result.error) {
+            rivet_done->set_exception(result.error);
+          } else {
+            rivet_done->set_value(*result.value);
+          }
+        });
+    if (rivet_done->get_future().wait_for(rivet_timeout) !=
+        std::future_status::ready) {
+      backend_.cancel(rivet_id);
+      return std::nullopt;
+    }
+    return rivet_done->get_future().get();
+  }
+
   // State accessors: completion callbacks run on the backend reader thread
   // and must dispatch to the UI thread before touching widgets.
   void get_counter_async(
@@ -89,6 +136,22 @@ class API {
   }
 
  private:
+  static rivet_app::Result<std::string> unbox_string(rivet::windows::CallResult call) {
+    rivet_app::Result<std::string> result;
+    if (!call.succeeded()) {
+      result.error = call.error ? call.error :
+          std::make_exception_ptr(std::runtime_error("unknown backend failure"));
+      return result;
+    }
+    if (auto text = std::get_if<std::string>(&call.value->data)) {
+      result.value = *text;
+      return result;
+    }
+    result.error = std::make_exception_ptr(
+        std::runtime_error("Rivet result type mismatch: String"));
+    return result;
+  }
+
   static rivet_app::Result<std::int64_t> unbox_int64(rivet::windows::CallResult call) {
     rivet_app::Result<std::int64_t> result;
     if (!call.succeeded()) {

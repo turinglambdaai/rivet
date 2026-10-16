@@ -140,6 +140,8 @@
 
 (define (cpp-async-handler result-type backend-namespace)
   (define result (cpp-type result-type))
+  ;; Result<void> has no value member, so the Void decode must not assign
+  ;; into it — it only validates that a value arrived.
   (define decode
     (if (eq? result-type 'Void)
         (format "detail::decode_~a(*rivet_result.value);" (type-key result-type))
@@ -147,6 +149,60 @@
   (format
    "[completion = std::move(completion)](~a::CallResult rivet_result) mutable { Result<~a> result; if (rivet_result.error) { result.error = rivet_result.error; } else { try { if (!rivet_result.value) throw std::runtime_error(\"Rivet async call completed without a value\"); ~a } catch (...) { result.error = std::current_exception(); } } completion(std::move(result)); }"
    backend-namespace result decode))
+
+;; Bounded-wait companion (issue #252): the completion side of request_async
+;; resolves a promise, so a poller waits up to the timeout and cancels the
+;; request if it is still pending. Void RPCs return bool (false = timed
+;; out); other results return std::nullopt on timeout. Backend errors still
+;; throw from the final get, keeping the blocking call's error contract.
+(define (cpp-promise-handler result-type backend-namespace)
+  (define settle
+    (if (eq? result-type 'Void)
+        (format "detail::decode_~a(*rivet_result.value);" (type-key result-type))
+        (format "rivet_done->set_value(detail::decode_~a(*rivet_result.value));"
+                (type-key result-type))))
+  (format
+   "[rivet_done](~a::CallResult rivet_result) mutable { if (rivet_result.error) { rivet_done->set_exception(rivet_result.error); } else { try { if (!rivet_result.value) throw std::runtime_error(\"Rivet async call completed without a value\"); ~a } catch (...) { rivet_done->set_exception(std::current_exception()); } } }"
+   backend-namespace settle))
+
+(define (cpp-within-method info backend-namespace)
+  (define names (map cpp-id (schema-rpc-arg-names info)))
+  (define types (schema-rpc-arg-types info))
+  (define result-type (schema-rpc-result-type info))
+  (define void? (eq? result-type 'Void))
+  (define params
+    (string-join
+     (for/list ([name (in-list names)] [type (in-list types)])
+       (format "~a ~a" (cpp-type type) name))
+     ", "))
+  (define encoded
+    (string-join
+     (for/list ([name (in-list names)] [type (in-list types)])
+       (format "detail::encode_~a(~a)" (type-key type) name))
+     ", "))
+  (define rpc-name (cpp-string-literal (symbol->string (schema-rpc-name info))))
+  (define return-type
+    (if void? "bool" (format "std::optional<~a>" (cpp-type result-type))))
+  (define timed-out-return (if void? "false" "std::nullopt"))
+  (define final-get
+    (if void?
+        "rivet_done->get_future().get(); return true;"
+        "return rivet_done->get_future().get();"))
+  ;; A zero-argument RPC has no parameter list; the timeout must not follow
+  ;; a stray comma.
+  (define within-params
+    (if (string=? params "")
+        "std::chrono::milliseconds rivet_timeout"
+        (format "~a, std::chrono::milliseconds rivet_timeout" params)))
+  (format
+   "  ~a ~a_within(~a) { auto rivet_done = std::make_shared<std::promise<~a>>(); auto rivet_id = backend_.request_async(~a, rivet::Value::List{~a}, ~a); if (rivet_done->get_future().wait_for(rivet_timeout) != std::future_status::ready) { backend_.cancel(rivet_id); return ~a; } ~a }\n"
+   return-type
+   (cpp-id (schema-rpc-name info))
+   within-params
+   (cpp-type result-type)
+   rpc-name encoded
+   (cpp-promise-handler result-type backend-namespace)
+   timed-out-return final-get))
 
 (define (cpp-completion-type type)
   (format "std::function<void(Result<~a>)>" (cpp-type type)))
@@ -173,7 +229,7 @@
     (cpp-append-param params
                       (format "~a completion" (cpp-completion-type result-type))))
   (format
-   "  std::future<~a> ~a(~a) { ~a }\n  [[nodiscard]] std::uint64_t ~a_async(~a) { if (!completion) throw std::invalid_argument(\"Rivet async completion handler is empty\"); return backend_.request_async(~a, rivet::Value::List{~a}, ~a); }\n"
+   "  std::future<~a> ~a(~a) { ~a }\n  [[nodiscard]] std::uint64_t ~a_async(~a) { if (!completion) throw std::invalid_argument(\"Rivet async completion handler is empty\"); return backend_.request_async(~a, rivet::Value::List{~a}, ~a); }\n~a"
    (cpp-type result-type)
    (cpp-id (schema-rpc-name info))
    params
@@ -182,7 +238,8 @@
                        rpc-name encoded))
    (cpp-id (schema-rpc-name info))
    async-params
-   rpc-name encoded (cpp-async-handler result-type backend-namespace)))
+   rpc-name encoded (cpp-async-handler result-type backend-namespace)
+   (cpp-within-method info backend-namespace)))
 
 (define (cpp-state-methods state backend-namespace)
   (define name (cpp-id (schema-state-name state)))
@@ -228,7 +285,7 @@
                       identifier release-channel backend-namespace)
   (define types (all-types rpcs events states records enums))
   (string-append
-   "// Generated by Rivet. Do not edit by hand.\n#pragma once\n\n#include <cstdint>\n#include <exception>\n#include <functional>\n#include <future>\n#include <optional>\n#include <stdexcept>\n#include <string>\n#include <utility>\n#include <variant>\n#include <vector>\n\n#include \"backend.hpp\"\n\nnamespace rivet_app {\n"
+   "// Generated by Rivet. Do not edit by hand.\n#pragma once\n\n#include <chrono>\n#include <cstdint>\n#include <exception>\n#include <functional>\n#include <future>\n#include <optional>\n#include <stdexcept>\n#include <string>\n#include <utility>\n#include <variant>\n#include <vector>\n\n#include \"backend.hpp\"\n\nnamespace rivet_app {\n"
    (format "inline constexpr char kModuleName[] = ~a;\ninline constexpr char kEntryName[] = ~a;\ninline constexpr char kDisplayName[] = ~a;\ninline constexpr char kVersion[] = ~a;\ninline constexpr std::int64_t kBuild = ~a;\ninline constexpr char kIdentifier[] = ~a;\ninline constexpr char kReleaseChannel[] = ~a;\n\n"
            (cpp-string-literal module-name)
            (cpp-string-literal entry-name)
