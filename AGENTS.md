@@ -15,20 +15,14 @@ typed companion foundation is not yet a generated, packaged application flow.
 
 ### Commercial entitlement boundary
 
-Rivet owns application runtime, native UI, general secure storage,
-distribution, and update integrity. It does not own product entitlements,
-trials, activations, seats, subscriptions, payments, or accounts. Commercial
-products may depend on Rivet and
-[Permit](https://github.com/turinglambdaai/permit) independently, but Rivet
-must not depend on Permit or grow a built-in licensing subsystem.
-
-A product may store Permit credentials, local-trial state, or an
-`installation_id` through Rivet's general secure-storage API. That does not
-move their semantics into Rivet. Rivet update-signing keys, platform publisher
-credentials, and Permit credential-signing keys are separate trust domains and
-must use separate keys and rotation procedures. The shared integration
-contract lives at
-[`Permit/docs/framework-integration.md`](https://github.com/turinglambdaai/permit/blob/main/docs/framework-integration.md).
+Rivet does not own product entitlements, trials, activations, seats,
+subscriptions, payments, or accounts — Permit does, as a sibling dependency
+of the product, never of Rivet (`product -> rivet`, `product -> permit`,
+`rivet -X-> permit`). Update-signing keys, platform publisher credentials,
+and Permit credential-signing keys are separate trust domains with separate
+keys and rotation procedures. The normative shared contract is
+[`permit/docs/framework-integration.md`](https://github.com/turinglambdaai/permit/blob/main/docs/framework-integration.md);
+do not restate it here.
 
 Before roadmap, desktop-closeout, or mobile-delivery work, read
 `docs/desktop-closeout-mobile-plan.md`. It records the current decision,
@@ -38,6 +32,17 @@ Treat repository state as the agent-to-agent handoff. Do not rely on prior chat
 history: read the plan's **Next implementation handoff**, implement only that
 bounded slice, update its evidence, run the required tests, and commit the
 coherent change so the next agent can reproduce the same context.
+
+## Family contracts
+
+Rivet and Glaze share the transport-neutral contract package `keel`. Family
+packages are consumed only as published catalog packages, never vendored or
+copied, and every family dependency declares a `#:version` floor equal to
+the lowest version this suite actually covers; raise the floor in the same
+CHANGELOG entry that raises the tested version. The weekly *Family
+compatibility* workflow (`family-compat.yml`) updates family packages to
+latest and runs the full Racket suite; when it goes red, adapt here or fix
+upstream, and keep `main` green before starting any other work.
 
 ## Start with evidence
 
