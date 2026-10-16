@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add `fetch-sibling-asset` to `rivet/distribution` and the
+  `raco rivet sign-manifest` subcommand. The sibling helper checks the HTTP
+  status before saving, enforces the declared Content-Length against the
+  byte limit, verifies an optional expected SHA-256, and streams under the
+  same connect and idle deadlines as the manifest fetch — replacing the
+  private per-product sidecar downloads that silently accepted 404 pages.
+  The subcommand builds a manifest from explicitly named artifacts, signs
+  it with the distribution signer, verifies the written bytes with the
+  public half before publishing (deleting the output on failure), and
+  optionally emits `.sha256` sidecars next to each artifact, so products
+  keep only their asset-naming conventions.
+
 - Extend the family boundary to Commerce: online payment orchestration and
   credential delivery remain optional product/service concerns and never
   become Rivet dependencies.

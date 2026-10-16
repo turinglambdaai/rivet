@@ -50,6 +50,12 @@
     "  raco rivet release --development   exercise release flow without platform production signing\n"
     "  raco rivet release --without-updates  release without an update manifest or update key\n"
     "  raco rivet manifest-compose <inputs...> [--output <file>]\n"
+    "  raco rivet sign-manifest --application-id <id> --version <v> --build <n>\n"
+    "                           --channel <stable|beta|dev> --base-url <url>\n"
+    "                           --key-id <id> --artifact <platform>:<arch>:<installer>:<file> ...\n"
+    "                           [--private-key <der>] [--public-key <der>] [--output <file>]\n"
+    "                           [--sidecars] [--minimum-version <v>] [--previous-version <v>]\n"
+    "                           [--published-at <ts>] [--rollout <0-100>] [--rollback-allowed]\n"
     "                                      compose a verified family update manifest\n"
     "  raco rivet compliance              generate SBOM/notices and run the license audit\n"
     "  raco rivet verify                  re-verify the current packaged artifact\n"
@@ -211,6 +217,18 @@
                            #:private-key-path private-key-path
                            #:key-id key-id))
      (say "family update manifest: ~a" compose-output)]
+    [(cons "sign-manifest" rest)
+     ;; Build the release update manifest from named artifacts, sign it
+     ;; with the distribution signer, and (with a public key available)
+     ;; verify the written bytes before publishing. Products keep only
+     ;; their asset-naming conventions.
+     (define parse-sign-manifest-arguments
+       (command "sign-manifest" 'parse-sign-manifest-arguments))
+     (define-values (artifacts options)
+       (parse-sign-manifest-arguments rest))
+     (define sign-manifest! (command "sign-manifest" 'sign-manifest!))
+     (define output (sign-manifest! artifacts options))
+     (say "signed update manifest: ~a" output)]
     [(list "verify")
      (define verify-project-package! (command "verify" 'verify-project-package!))
      (define output (verify-project-package! (current-project!)))
