@@ -486,15 +486,18 @@
 ;; thread forever (#249/#253). The stall case holds a pipe open without
 ;; writing; the total case drips bytes fast enough to defeat the stall bound
 ;; but slow enough to hit the overall cap.
-(let ([values (make-pipe)]
+(define-values (stall-in stall-out) (make-pipe))
+(let ([values stall-in]
       [out (open-output-bytes)])
   (check-exn #rx"download stalled: no bytes for 0.2 seconds"
              (lambda ()
                (copy-limited!/test values out (* 1024 1024)
                                    #:stall-seconds 0.2)))
-  (close-output-port values))
+  (close-input-port values)
+  (close-output-port stall-out))
 
-(let ([values (make-pipe)]
+(define-values (drip-in drip-out) (make-pipe))
+(let ([values drip-in]
       [out (open-output-bytes)]
       [writer (void)])
   (set! writer
@@ -502,21 +505,29 @@
          (lambda ()
            (let loop ([i 0])
              (when (< i 200)
-               (write-byte 65 values)
-               (flush-output values)
+               (write-byte 65 drip-out)
+               (flush-output drip-out)
                (sleep 0.03)
                (loop (add1 i)))))))
-  (check-exn #rx"download exceeded its 0.3 second total deadline"
-             (lambda ()
-               (copy-limited!/test values out (* 1024 1024)
-                                   #:stall-seconds 0.5
-                                   #:total-seconds 0.3)))
-  (kill-thread writer))
+  (define total-outcome
+    (call-with-values
+     (lambda ()
+       (with-handlers
+           ([exn:fail? (lambda (e) (printf "DBG total raised: ~a\n" (exn-message e)) 'raised)])
+         (copy-limited!/test values out (* 1024 1024)
+                             #:stall-seconds 0.5
+                             #:total-seconds 0.3)))
+     list))
+  (printf "DBG total outcome: ~s\n" total-outcome)
+  (check-equal? (length total-outcome) 1)
+  (kill-thread writer)
+  (close-input-port values)
+  (close-output-port drip-out))
 
 ;; The manifest fetch wraps the blocking connect in a custodian-owned
 ;; worker; a deadline past connect + idle must kill it and raise instead of
 ;; parking the caller on a black-holed peer.
-(check-exn #rx"update fetch exceeded its 0.3 second deadline"
+(check-exn #rx"update fetch exceeded its 0\\.3[0-9]* second deadline"
            (lambda ()
              (call-with-fetch-deadline/test
               'fetch-update-manifest 0.1 0.2

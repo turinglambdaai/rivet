@@ -41,14 +41,20 @@
   ;; Blocks until at least one byte is available, the peer reaches EOF, the
   ;; stall deadline passes, or the total deadline fires. Returns the byte
   ;; count, eof, 'stall, or 'total respectively.
+  ;; handle-evt normalizes the peek completion to a single value regardless
+  ;; of how many values the underlying event produces.
   (define ready
     (sync/timeout stall-seconds
-                  (peek-bytes-avail!-evt (make-bytes 1) 0 in)
+                  (handle-evt
+                   (peek-bytes-avail!-evt (make-bytes 4) 0 #f in)
+                   (lambda (_peeked) 'ready))
                   total-deadline))
   (cond
     [(not ready) 'stall]
     [(eq? ready total-deadline) 'total]
-    [else (read-bytes-avail! buffer in)]))
+    [else
+     (define count (read-bytes-avail! buffer in))
+     count]))
 
 (define (copy-limited! in out limit
                        #:who [who 'copy-limited!]
