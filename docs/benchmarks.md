@@ -45,6 +45,29 @@ Example shape:
 
 The numbers above illustrate the JSON schema only; they are not Rivet performance claims or release thresholds.
 
+## Measuring a packaged app
+
+`raco rivet measure` reports what a host app actually weighs, so release CI
+can gate budgets instead of eyeballing dist listings:
+
+- `raco rivet measure size` lists every artifact in `dist/` with its byte
+  count. With `--budget <file>`, each artifact is matched against the
+  budget file's rules — `{"rules": [{"glob": "*.dmg", "max-bytes":
+  100000000}, ...]}`, first matching glob wins — and the command exits
+  nonzero when any artifact exceeds its budget, so a bundle-size regression
+  fails the build instead of shipping. `--artifact <name>` narrows the
+  report to one file.
+- `raco rivet measure startup [--artifact <name>] [--seconds N]` runs the
+  launch-survival smoke (the same gate `raco rivet package` and `verify`
+  use) and reports the elapsed window, so the artifact's ability to boot on
+  the packaging machine is measured rather than assumed.
+
+Per-RPC latency stays with the integration benchmarks above: the
+`--benchmark` mode measures the real embedded runtime end to end, which a
+detached CLI cannot reach into a packaged GUI host. A practical release
+budget file lives in the product repository next to `rivet-schema.json` and
+is updated in the same review that changes packaging.
+
 ## CI behavior
 
 Every `Embedded Roundtrip` job first runs the existing correctness integration path, then starts a fresh integration process with `--benchmark`. The second step records one JSON report for that runner and revision. Starting a fresh process is important because the embedded Racket runtime is intentionally one-shot within a process and startup is itself one of the measured costs.

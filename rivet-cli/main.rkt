@@ -64,6 +64,8 @@
     "                           [--published-at <ts>] [--rollout <0-100>] [--rollback-allowed]\n"
     "                                      compose a verified family update manifest\n"
     "  raco rivet i18n                    verify shared/i18n parity and regenerate embedded tables\n"
+    "  raco rivet measure                 report packaged artifact sizes and launch survival\n"
+    "  raco rivet measure size --budget <file>  fail when artifacts exceed budgets\n"
     "  raco rivet compliance              generate SBOM/notices and run the license audit\n"
     "  raco rivet verify                  re-verify the current packaged artifact\n"
     "  raco rivet verify --production     verify production trust/notarization requirements\n"
@@ -295,6 +297,11 @@
      (define-values (keys files) (apply values (generate-i18n! (current-project!))))
      (say "i18n: ~a keys across zh/en; wrote ~a embedded table~a"
           keys files (if (= files 1) "" "s"))]
+    [(cons "measure" measure-args)
+     ;; Report packaged-app measurements (issue #262): dist artifact sizes
+     ;; against optional budgets, and the launch-survival window.
+     (define run-measure (command "measure" 'run-measure))
+     (run-measure measure-args)]
     [(list "compliance")
      (define generate-compliance-artifacts!
        (command "compliance" 'generate-compliance-artifacts!))
