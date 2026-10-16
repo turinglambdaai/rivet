@@ -36,9 +36,10 @@
 
 (define (make-runtime settings #:fetch [fetch #f] #:download [download #f])
   (define kws
-    (append '(#:config #:destination-dir #:settings)
-            (if fetch (list '#:fetch) '())
-            (if download (list '#:download) '())))
+    (sort (append '(#:config #:destination-dir #:settings)
+                  (if fetch (list '#:fetch) '())
+                  (if download (list '#:download) '()))
+          keyword<?))
   (define vals
     (append (list config
                   (make-temporary-file "rivet-scaffold-~a" 'directory)
