@@ -10,6 +10,7 @@ include_guard(GLOBAL)
 set(RIVET_LINUX_PLATFORM_SOURCES
   "${RIVET_ROOT}/platform/linux/chart/chart_area.cpp"
   "${RIVET_ROOT}/platform/linux/runtime/backend.cpp"
+  "${RIVET_ROOT}/platform/linux/runtime/layout.cpp"
   "${RIVET_ROOT}/platform/linux/system/autostart.cpp"
   "${RIVET_ROOT}/platform/linux/system/clipboard.cpp"
   "${RIVET_ROOT}/platform/linux/system/crash_shutdown.cpp"
