@@ -94,7 +94,9 @@
       updater-config-expected-key-id
       updater-config-maximum-download-bytes updater-config-platform
       updater-config-public-key updater-config-rollout-bucket updater-config?
-      updater-wait updater? rfc3339-now
+      updater-silent-check! updater-silent-check-due? updater-wait
+      updater? rfc3339-now
+      draw-rollout-bucket resolve-rollout-bucket! silent-check-stamp-key
       valid-channel? verify-platform-payload! verify-signed-manifest
       verify-update-artifact! version-compare version<=? version<? version=?
       version>=? version>? version? write-signed-manifest))

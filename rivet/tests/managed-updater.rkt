@@ -29,7 +29,11 @@
                            #:check-timeout [check-timeout 1.0]
                            #:stall-timeout [stall-timeout 1.0]
                            #:total-timeout [total-timeout 2.0]
-                           #:fetch [fetch fake-fetch])
+                           #:fetch [fetch fake-fetch]
+                           #:silent-throttle-seconds [silent-throttle-seconds
+                                                      (* 4 60 60)]
+                           #:settings-get [settings-get #f]
+                           #:settings-set! [settings-set! #f])
   (parameterize ([current-managed-fetch-manifest fetch]
                  [current-managed-download download])
     (make-updater
@@ -45,7 +49,19 @@
      #:rollout-bucket 17
      #:check-timeout check-timeout
      #:stall-timeout stall-timeout
-     #:total-timeout total-timeout)))
+     #:total-timeout total-timeout
+     #:silent-throttle-seconds silent-throttle-seconds
+     #:settings-get settings-get
+     #:settings-set! settings-set!)))
+
+;; A plain in-memory settings store behind the managed interface: string
+;; keys, arbitrary values, durable-enough semantics for tests.
+(define (make-settings-store)
+  (define table (make-hash))
+  (values
+   (lambda (key) (hash-ref table key #f))
+   (lambda (key value) (hash-set! table key value))
+   table))
 
 (define root (make-temporary-file "rivet-managed-updater-~a" 'directory))
 (dynamic-wind
@@ -186,5 +202,118 @@
     (break-thread checking-thread)
     (check-not-false (sync/timeout 2 (thread-dead-evt checking-thread)))
     (check-not-false (sync/timeout 2 fetch-stopped))
-    (check-equal? (hash-ref (updater-state interrupted) 'phase) "error"))
+    (check-equal? (hash-ref (updater-state interrupted) 'phase) "error")
+
+    ;; ---- Silent-check throttle (issue #251) ----
+    ;;
+    ;; "Checked" means the check settled: an answer or a definitive failure.
+    ;; The stamp lives behind the host's settings interface, so hosts stop
+    ;; hand-rolling timestamps in three languages.
+    (let* ([settings-mismatch-updater
+            (lambda ()
+              (make-test-updater root successful-download
+                                 #:settings-get (lambda (key) #f)))]
+           [fetch-count (box 0)]
+           [counting-fetch
+            (lambda _
+              (set-box! fetch-count (add1 (unbox fetch-count)))
+              manifest)]
+           [failing-fetch (lambda _ (error 'fetch "connection refused"))]
+           [broken-set! (lambda (key value) (error 'settings "disk full"))]
+           [interfaceless (make-test-updater root successful-download)])
+      (let-values ([(store-get store-set! store-table)
+                    (make-settings-store)]
+                   [(broken-get _broken-set! _broken-table)
+                    (make-settings-store)]
+                   [(bucket-get bucket-set! bucket-table)
+                    (make-settings-store)])
+        (let ([throttled-updater
+               (make-test-updater root successful-download
+                                  #:settings-get store-get
+                                  #:settings-set! store-set!)]
+              [counting-updater
+               (make-test-updater root successful-download
+                                  #:fetch counting-fetch
+                                  #:silent-throttle-seconds 3600
+                                  #:settings-get store-get
+                                  #:settings-set! store-set!)]
+              [failing-updater
+               (make-test-updater root successful-download
+                                  #:fetch failing-fetch
+                                  #:settings-get store-get
+                                  #:settings-set! store-set!)]
+              [broken-updater
+               (make-test-updater root successful-download
+                                  #:settings-get broken-get
+                                  #:settings-set! broken-set!)])
+          (check-exn #rx"settings-get and settings-set! must be provided together"
+                     (lambda () (settings-mismatch-updater)))
+          ;; A fresh installation is due; a settled check stamps exactly once.
+          (check-true (updater-silent-check-due? throttled-updater))
+          (check-equal?
+           (hash-ref (updater-silent-check! throttled-updater) 'status)
+           "available")
+          (check-true
+           (exact-integer? (read-silent-check-stamp throttled-updater)))
+          (check-equal? (hash-ref store-table silent-check-stamp-key)
+                        (read-silent-check-stamp throttled-updater))
+          (check-false (updater-silent-check-due? throttled-updater))
+
+          ;; A throttled check never touches the network.
+          (check-equal?
+           (hash-ref (updater-silent-check! counting-updater) 'status)
+           "throttled")
+          (check-equal? (unbox fetch-count) 0)
+
+          ;; A definitive transport failure settles the check: the error
+          ;; result is returned and the stamp is still written, so an outage
+          ;; cannot be retried in a tight loop.
+          (hash-clear! store-table)
+          (check-equal?
+           (hash-ref (updater-silent-check! failing-updater) 'status) "error")
+          (check-true
+           (exact-integer? (read-silent-check-stamp failing-updater)))
+          (check-false (updater-silent-check-due? failing-updater))
+
+          ;; An expired stamp is due again.
+          (hash-set! store-table silent-check-stamp-key
+                     (- (current-seconds) (* 4 60 60)))
+          (check-true (updater-silent-check-due? failing-updater))
+
+          ;; A broken settings store cannot defeat the throttle: the memory
+          ;; fallback keeps silent checks bounded for the process lifetime.
+          (check-true (updater-silent-check-due? broken-updater))
+          (check-equal?
+           (hash-ref (updater-silent-check! broken-updater) 'status)
+           "available")
+          (check-true
+           (exact-integer? (read-silent-check-stamp broken-updater)))
+          (check-false (updater-silent-check-due? broken-updater))
+
+          ;; Silent checks without a settings interface are a hard error.
+          (check-exn #rx"silent checks require a settings interface"
+                     (lambda () (updater-silent-check-due? interfaceless)))
+          (check-exn #rx"silent checks require a settings interface"
+                     (lambda () (updater-silent-check! interfaceless)))
+
+          ;; ---- Sticky rollout bucket (issue #240 glue) ----
+          (for ([_i (in-range 20)])
+            (check-true (<= 0 (draw-rollout-bucket) 99)))
+          (define first-bucket (resolve-rollout-bucket! bucket-get bucket-set!))
+          (check-true (and (exact-integer? first-bucket)
+                           (<= 0 first-bucket 99) #t))
+          (check-equal? (hash-ref bucket-table "update-rollout-bucket")
+                        first-bucket)
+          ;; Sticky: the stored bucket wins on the next run.
+          (check-equal? (resolve-rollout-bucket! bucket-get bucket-set!)
+                        first-bucket)
+          ;; Corrupt or out-of-range values redraw instead of propagating.
+          (hash-set! bucket-table "update-rollout-bucket" 200)
+          (check-true (<= 0 (resolve-rollout-bucket! bucket-get bucket-set!) 99))
+          (check-false
+           (equal? (hash-ref bucket-table "update-rollout-bucket") 200))
+          ;; A store that cannot persist degrades to an unpersisted draw.
+          (check-true
+           (let ([bucket (resolve-rollout-bucket! #f #f)])
+             (and (exact-integer? bucket) (<= 0 bucket 99))))))))
   (lambda () (delete-directory/files root)))

@@ -109,7 +109,20 @@ installation APIs below.
 
 Persist one rollout bucket from 0 through 99 per installation and pass it to
 `make-updater`; generating a fresh value for every check would make staged
-rollouts unstable. The managed API accepts only Rivet's supported Windows,
+rollouts unstable. `resolve-rollout-bucket!` recovers that sticky value from
+the host's settings store (drawing and persisting a fresh one on first run)
+and `draw-rollout-bucket` draws from OS entropy, since `racket/base`'s PRNG
+has a fixed seed.
+
+Hosts that poll for updates silently should stop hand-rolling timestamps:
+provide `#:settings-get`/`#:settings-set!` to `make-updater` and call
+`updater-silent-check!` instead of `updater-check!` on the background path.
+The throttle stamp lives behind that settings interface under
+`silent-check-stamp-key`, and "checked" means the check *settled* — an
+answer or a definitive failure. A throttled check never touches the network;
+a settled check always stamps before returning, so an outage cannot be
+retried in a tight loop; and an offline launch that never settles (external
+interruption) does not buy four silent hours without an actual answer. The managed API accepts only Rivet's supported Windows,
 macOS, and Linux x64/ARM64 targets and fails closed on an unknown architecture.
 Its polling phase vocabulary is stable: `idle`, `checking`, `available`,
 `up-to-date`, `downloading`, `downloaded`, `cancelled`, and `error`. A failed

@@ -874,6 +874,41 @@ hash. The stable phase vocabulary is @racket["idle"], @racket["checking"],
 or cancelled download retains its authenticated candidate so an application
 may explicitly retry; starting a new check resets it.}
 
+@defproc[(updater-silent-check! [instance updater?]) hash?]{
+Runs the gated silent check: a check within the last
+@racket[#:silent-throttle-seconds] window (default four hours) returns
+@racketcode[(hasheq 'status "throttled")] without touching the network. A due
+check settles first — an answer or a definitive error result — and only then
+persists the throttle stamp behind the updater's settings interface, so an
+outage cannot be retried in a tight loop and an offline launch does not buy
+four silent hours without an actual answer. Requires
+@racket[#:settings-get] and @racket[#:settings-set!] on the updater.}
+
+@defproc[(updater-silent-check-due? [instance updater?]) boolean?]{
+Reports whether the silent-check throttle window has elapsed since the last
+settled check, or no stamp exists. Also requires the settings interface.}
+
+@defthing[silent-check-stamp-key string?]{
+The settings key under which the managed updater persists its silent-check
+throttle stamp (a unix-seconds integer). Hosts whose settings store uses
+symbol keys or string serialization translate on their side of the
+@racket[#:settings-get]/@racket[#:settings-set!] boundary; the value stored
+for this key is always an integer.}
+
+@defproc[(draw-rollout-bucket) (integer-in 0 99)]{
+Draws one rollout bucket from the operating-system entropy pool;
+@racket[racket/base]'s PRNG has a fixed seed and must not be used for
+rollout placement.}
+
+@defproc[(resolve-rollout-bucket! [settings-get (-> any/c any/c)]
+                                   [settings-set! (-> any/c any/c any/c)]
+                                   [key any/c "update-rollout-bucket"])
+         (integer-in 0 99)]{
+Recovers this installation's sticky rollout bucket from the settings store,
+drawing and persisting a fresh value on first run. A corrupt or out-of-range
+stored value redraws; a store that cannot persist degrades to an unpersisted
+draw. Pass the result to @racket[make-updater] as @racket[#:rollout-bucket].}
+
 @defproc[(updater-wait [instance updater?]
                        [timeout (or/c #f (and/c real? (not/c negative?))) #f])
          (or/c #f hash?)]{

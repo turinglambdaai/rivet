@@ -6,6 +6,7 @@
 
 (require racket/async-channel
          racket/file
+         racket/random
          racket/match
          racket/path
          racket/string
@@ -20,6 +21,11 @@
          make-updater
          updater-state
          updater-check!
+         updater-silent-check-due?
+         updater-silent-check!
+         silent-check-stamp-key
+         draw-rollout-bucket
+         resolve-rollout-bucket!
          updater-download!
          updater-cancel!
          updater-wait
@@ -31,11 +37,23 @@
                   rollout-bucket maximum-manifest-bytes maximum-download-bytes
                   check-timeout stall-timeout total-timeout
                   fetch-manifest download
-                  lock snapshot candidate operation worker cancel-reason)
+                  lock snapshot candidate operation worker cancel-reason
+                  silent-throttle-seconds settings-get settings-set!
+                  silent-stamp-memory)
   #:mutable)
 
 (define current-managed-fetch-manifest (make-parameter fetch-update-manifest))
 (define current-managed-download (make-parameter download-update))
+
+;; The family contract: one silent check per ~4 hours. The stamp is owned by
+;; this module and persisted behind the host's settings interface — hosts
+;; stop hand-rolling timestamps in three languages. "Checked" means the
+;; check *settled*: an answer (up-to-date, available) or a definitive
+;; failure. A check interrupted from outside (break) has not settled and
+;; leaves the stamp untouched, so an offline launch does not buy four
+;; silent hours without an actual answer.
+(define default-silent-throttle-seconds (* 4 60 60))
+(define silent-check-stamp-key "update-last-check")
 
 (define (update-architecture-for machine)
   (with-handlers ([exn:fail:contract?
@@ -103,7 +121,11 @@
                       [maximum-download-bytes (* 512 1024 1024)]
                       #:check-timeout [check-timeout 30.0]
                       #:stall-timeout [stall-timeout 120.0]
-                      #:total-timeout [total-timeout (* 30.0 60.0)])
+                      #:total-timeout [total-timeout (* 30.0 60.0)]
+                      #:silent-throttle-seconds
+                      [silent-throttle-seconds default-silent-throttle-seconds]
+                      #:settings-get [settings-get #f]
+                      #:settings-set! [settings-set! #f])
   (unless (and (string? application-id) (not (string=? application-id "")))
     (raise-argument-error 'make-updater "non-empty string?" application-id))
   (unless (version? current-version)
@@ -142,6 +164,20 @@
       (raise-argument-error 'make-updater
                             (format "positive real? for ~a" name)
                             value)))
+  (unless (positive-real? silent-throttle-seconds)
+    (raise-argument-error 'make-updater "positive real?" silent-throttle-seconds))
+  (unless (if settings-get settings-set! (not settings-set!))
+    (raise-arguments-error
+     'make-updater
+     "settings-get and settings-set! must be provided together"
+     "settings-get" (if settings-get "a procedure" "#f")
+     "settings-set!" (if settings-set! "a procedure" "#f")))
+  (when settings-get
+    (unless (and (procedure-arity-includes? settings-get 1)
+                 (procedure-arity-includes? settings-set! 2))
+      (raise-argument-error 'make-updater
+                            "settings-get of arity 1 and settings-set! of arity 2"
+                            settings-get)))
   (updater (string->immutable-string application-id)
            (string->immutable-string current-version)
            channel platform architecture
@@ -156,7 +192,9 @@
            maximum-manifest-bytes maximum-download-bytes check-timeout
            stall-timeout total-timeout
            (current-managed-fetch-manifest) (current-managed-download)
-           (make-semaphore 1) (initial-state current-version) #f #f #f #f))
+           (make-semaphore 1) (initial-state current-version) #f #f #f #f
+           silent-throttle-seconds settings-get settings-set!
+           (box #f)))
 
 (define (with-updater-lock instance thunk)
   (call-with-semaphore (updater-lock instance) thunk))
@@ -460,8 +498,94 @@
      (updater-state instance)]
     [else #f]))
 
+;; ---- Silent-check throttle (issue #251) ----
+;;
+;; The stamp lives behind the host's settings interface so each product keeps
+;; its own persistence (config file, SQLite, Keychain-backed store). The
+;; contract with the settings functions: settings-get receives a key (string
+;; or symbol) and returns the stored value or #f; settings-set! writes a
+;; value and persists it durably before returning. This module stores plain
+;; unix-seconds integers for the stamp and an integer 0-99 for the rollout
+;; bucket; hosts whose store is string-only serialize on their side of the
+;; interface. A stamp written but unreadable, or a failed stamp write, falls
+;; back to a process-lifetime memory stamp so a broken store cannot turn
+;; into a tight silent-check loop.
+
+(define (read-silent-check-stamp instance)
+  (or (and (updater-settings-get instance)
+           (let ([value ((updater-settings-get instance)
+                         silent-check-stamp-key)])
+             (and (exact-integer? value) value)))
+      (and (updater-silent-stamp-memory instance)
+           (unbox (updater-silent-stamp-memory instance)))))
+
+(define (write-silent-check-stamp! instance stamp)
+  (when (updater-settings-set! instance)
+    (with-handlers ([exn:fail? void])
+      ((updater-settings-set! instance) silent-check-stamp-key stamp)))
+  (when (updater-silent-stamp-memory instance)
+    (set-box! (updater-silent-stamp-memory instance) stamp)))
+
+(define (updater-silent-check-due? instance)
+  (unless (updater? instance)
+    (raise-argument-error 'updater-silent-check-due? "updater?" instance))
+  (unless (updater-settings-get instance)
+    (raise-arguments-error
+     'updater-silent-check-due?
+     "silent checks require a settings interface; provide #:settings-get and #:settings-set!"))
+  (define stamp (read-silent-check-stamp instance))
+  (or (not stamp)
+      (>= (current-seconds)
+          (+ stamp (floor (updater-silent-throttle-seconds instance))))))
+
+(define (updater-silent-check! instance)
+  ;; One gate, one stamp write, in the right order: a throttled check never
+  ;; touches the network, and a settled check (answer or definitive error
+  ;; result) always records the stamp before returning. updater-check!
+  ;; returns an error result instead of raising for transport failures, so
+  ;; an outage settles the check exactly once instead of retrying in a
+  ;; tight loop. An outside break propagates without stamping.
+  (unless (updater? instance)
+    (raise-argument-error 'updater-silent-check! "updater?" instance))
+  (unless (updater-settings-get instance)
+    (raise-arguments-error
+     'updater-silent-check!
+     "silent checks require a settings interface; provide #:settings-get and #:settings-set!"))
+  (if (not (updater-silent-check-due? instance))
+      (immutable-json-value
+       (hasheq 'status "throttled"
+               'currentVersion (updater-current-version instance)))
+      (let ([result (updater-check! instance)])
+        (write-silent-check-stamp! instance (current-seconds))
+        result)))
+
+;; ---- Sticky rollout bucket (issue #240 glue) ----
+
+(define (draw-rollout-bucket)
+  ;; racket/base's PRNG has a fixed seed; draw from the OS entropy pool.
+  (modulo (integer-bytes->integer (crypto-random-bytes 4) #t #t) 100))
+
+(define (resolve-rollout-bucket! settings-get settings-set! [key #f])
+  ;; Recover this installation's sticky 0-99 bucket, drawing and persisting
+  ;; a fresh one on first run. A broken store degrades to an unpersisted
+  ;; draw rather than an error; rollouts remain stable for the process
+  ;; lifetime in that case.
+  (define bucket-key (or key "update-rollout-bucket"))
+  (define stored
+    (and settings-get
+         (let ([value (with-handlers ([exn:fail? (lambda (_) #f)])
+                        (settings-get bucket-key))])
+           (and (exact-integer? value) (<= 0 value 99) value))))
+  (or stored
+      (let ([bucket (draw-rollout-bucket)])
+        (when settings-set!
+          (with-handlers ([exn:fail? void])
+            (settings-set! bucket-key bucket)))
+        bucket)))
+
 (module+ test-support
   (provide current-managed-fetch-manifest
            current-managed-download
            default-destination
-           update-architecture-for))
+           update-architecture-for
+           read-silent-check-stamp))
