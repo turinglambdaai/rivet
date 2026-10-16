@@ -66,6 +66,7 @@
       execute-install-plan!
       execute-platform-installation! fetch-sibling-asset
       fetch-update-manifest install-plan
+      make-updater-runtime mark-silent-checked!
       install-plan-backup-path install-plan-candidate
       install-plan-downloaded-path install-plan-install install-plan-restart
       install-plan-rollback install-plan? installer-extension make-install-plan
@@ -74,7 +75,9 @@
       platform-symbol prepare-platform-installation read-ed25519-private-key
       read-ed25519-public-key read-signed-manifest recover-install-plan!
       recover-platform-installation! select-update sha256-bytes sha256-file
-      sha256-file/hex struct:install-plan
+      sha256-file/hex silent-check-due? silent-check-interval-seconds
+      struct:install-plan struct:updater-runtime
+      struct:updater-settings-adapter
       struct:update-artifact struct:update-candidate struct:update-manifest
       struct:updater-config update-artifact update-artifact-architecture
       update-artifact-arguments update-artifact-installer
@@ -87,7 +90,14 @@
       update-manifest-minimum-version update-manifest-previous-version
       update-manifest-published-at update-manifest-rollback-allowed?
       update-manifest-rollout update-manifest-version update-manifest?
-      updater-cancel! updater-check! updater-download! updater-state
+      updater-cancel! updater-check! updater-download!
+      updater-runtime-check! updater-runtime-config
+      updater-runtime-destination-dir updater-runtime-download
+      updater-runtime-download! updater-runtime-fetch
+      updater-runtime-silent-interval updater-runtime-state
+      updater-settings-adapter updater-settings-adapter-get
+      updater-settings-adapter-set! updater-runtime
+      updater-state
       updater-config updater-config-application-id
       updater-config-architecture updater-config-channel
       updater-config-component updater-config-current-version

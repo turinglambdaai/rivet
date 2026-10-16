@@ -13,6 +13,21 @@
 - Add `macos-localizations` packaging support. A `(macos-localizations "zh-Hans" "en")` declaration (BCP 47 identifiers, validated at project load) emits `CFBundleLocalizations` in Info.plist and stages marker `Contents/Resources/<lang>.lproj/InfoPlist.strings` files before `sign-macos!` runs, so AppKit renders the system-provided chrome (About/Quit menus, standard alerts) in the user's language instead of the development region's — replacing per-app plutil injection plus manual re-signing. Projects without the declaration build byte-identical bundles to before.
 
 - Add `raco rivet measure` for host apps. `measure size` lists every `dist/` artifact with its byte count and, with `--budget <file>` (glob rules, first match wins), exits nonzero when any artifact exceeds its budget so a bundle-size regression fails the build instead of shipping. `measure startup` runs the launch-survival smoke over the packaged artifact and reports the elapsed window. Per-RPC latency deliberately stays with the integration `--benchmark` mode, which measures the real embedded runtime end to end; `docs/benchmarks.md` documents the budget format and that boundary.
+- Add the updater scaffolding to `rivet/distribution`. A runtime binds the
+  updater config, destination directory, settings bridge, and injectable
+  transport hooks; `updater-runtime-check!` fetches, selects, and drives the
+  download while a phase box (`idle/checking/available/downloading/
+  downloaded/error` with percent, message, and downloaded path) feeds the
+  product's `update-state` event. The family silent-check throttle stamp is
+  now owned here: a stamp is written only when a check settles — an answer
+  or a definitive failure — and `silent-check-due?` reads it through the
+  product's settings adapter, ending the three hand-rolled timestamp
+  semantics where one offline launch could silence four hours.
+ The sticky 0-99 rollout bucket resolves through the same adapter
+ (`resolve-rollout-bucket!`): drawn once from OS entropy, recovered on later
+ runs, redrawn on corrupt stored values, degrading to an unpersisted draw when
+ the store cannot write.
+
 
 - Let one update feed carry multiple installables per platform. Artifacts
   gain an optional `component` discriminator (`app`, `cli`, or `tool`) that

@@ -600,6 +600,64 @@ Pairs an accepted manifest with its current-platform artifact.}
              [rollback procedure?])]{
 Contains the verified artifact and platform-owned lifecycle callbacks.}
 
+@defstruct*[updater-settings-adapter
+            ([get procedure?]
+             [set! procedure?])]{
+Bridges the updater scaffolding to the product's settings store: @racket[get]
+answers a string key with a string or @racket[#f], @racket[set!] persists one.}
+
+@defstruct*[updater-runtime
+            ([config updater-config?]
+             [destination-dir path-string?]
+             [settings updater-settings-adapter?]
+             [fetch procedure?]
+             [download procedure?]
+             [box box?]
+             [silent-interval real?])]{
+The product's update surface: config, destination, settings bridge,
+injectable transport hooks, the phase box, and the silent-check interval.
+Run @racket[updater-runtime-check!] and @racket[updater-runtime-download!]
+on a product-owned worker thread; the RVT1 layer observes
+@racket[updater-runtime-state].}
+
+@defproc[(make-updater-runtime [#:config config updater-config?]
+                               [#:destination-dir destination-dir path-string?]
+                               [#:settings settings updater-settings-adapter?]
+                               [#:fetch fetch procedure? fetch-update-manifest]
+                               [#:download download procedure? download-update]
+                               [#:silent-interval-seconds silent-interval real? silent-check-interval-seconds])
+         updater-runtime?]{
+Builds the scaffolding. The default transport hooks are the real
+deadline-bounded updaters; tests and products with injected clients
+override them.}
+
+@defproc[(updater-runtime-state [runtime updater-runtime?]) hash?]{
+The current phase snapshot: @racket['status] drawn from
+@racket["idle" "checking" "available" "downloading" "downloaded" "error"],
+@racket['percent], @racket['message], and @racket['downloaded_path].}
+
+@defproc[(updater-runtime-check! [runtime updater-runtime?])
+         (or/c #f update-candidate?)]{
+Fetches and selects against the config, drives the download when one is
+available, and writes the silent-check stamp because the check settled —
+whether it answered or raised. The error propagates with the phase
+recorded.}
+
+@defproc[(updater-runtime-download! [runtime updater-runtime?]
+                                    [candidate update-candidate?])
+         path?]{
+Downloads the candidate into the destination directory with progress
+reflected in the phase box, verifies, and records the path.}
+
+@defproc[(silent-check-due? [runtime updater-runtime?]
+                            [now-seconds exact-positive-integer?]) boolean?]{
+@racket[#t] when no stamp exists or the interval has elapsed since the
+last settled check.}
+
+@defproc[(mark-silent-checked! [runtime updater-runtime?]
+                               [now-seconds exact-positive-integer?]) void?]{
+Persists the settled-check stamp behind the settings adapter.}
+
 @defproc[(platform-installation? [value any/c]) boolean?]{
 Recognizes an opaque first-party portable replacement transaction. Its plan,
 health and commit callbacks, and target-scoped lock identity remain private so
