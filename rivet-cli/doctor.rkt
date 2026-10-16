@@ -8,6 +8,7 @@
          racket/string
          racket/system
          "codegen.rkt"
+         "i18n.rkt"
          "project.rkt"
          "runtime.rkt"
          "windows-tools.rkt")
@@ -554,7 +555,26 @@
       "installed rivet release is discoverable"
       (lambda ()
         (and (not installed-version)
-             "could not read the installed rivet package's release version; install rivet as a package (raco pkg install) before releasing")))))
+             "could not read the installed rivet package's release version; install rivet as a package (raco pkg install) before releasing")))
+     ;; Projects that keep a shared/i18n single source gate its parity and
+     ;; the freshness of the embedded host tables (issue #242). Projects
+     ;; without one skip this check.
+     (release-check
+      "i18n tables are consistent and fresh"
+      (lambda ()
+        (or (check-i18n-parity! project)
+            (let ([result (check-generated-i18n project)])
+              (and result
+                   (or (pair? (hash-ref result 'stale))
+                       (pair? (hash-ref result 'missing)))
+                   (format "~a generated i18n table~a differ from the shared source or are missing; run `raco rivet i18n`"
+                           (+ (length (hash-ref result 'stale))
+                              (length (hash-ref result 'missing)))
+                           (if (<= (+ (length (hash-ref result 'stale))
+                                      (length (hash-ref result 'missing)))
+                                   1)
+                               ""
+                               "s")))))))))
   (hash 'checks checks
         'failed (length (filter (lambda (check) (string=? (hash-ref check 'status) "fail")) checks))))
 

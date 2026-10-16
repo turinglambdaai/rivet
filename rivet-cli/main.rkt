@@ -63,6 +63,7 @@
     "                           [--sidecars] [--minimum-version <v>] [--previous-version <v>]\n"
     "                           [--published-at <ts>] [--rollout <0-100>] [--rollback-allowed]\n"
     "                                      compose a verified family update manifest\n"
+    "  raco rivet i18n                    verify shared/i18n parity and regenerate embedded tables\n"
     "  raco rivet compliance              generate SBOM/notices and run the license audit\n"
     "  raco rivet verify                  re-verify the current packaged artifact\n"
     "  raco rivet verify --production     verify production trust/notarization requirements\n"
@@ -287,6 +288,13 @@
      (say "production trust verified ~a~a"
           output
           (if launch-smoke? "" " (launch smoke skipped)"))]
+    [(list "i18n")
+     ;; Single-source user-visible strings (issue #242): verify parity of
+     ;; shared/i18n/{zh,en}.json and regenerate the embedded host tables.
+     (define generate-i18n! (command "i18n" 'generate-i18n!))
+     (define-values (keys files) (apply values (generate-i18n! (current-project!))))
+     (say "i18n: ~a keys across zh/en; wrote ~a embedded table~a"
+          keys files (if (= files 1) "" "s"))]
     [(list "compliance")
      (define generate-compliance-artifacts!
        (command "compliance" 'generate-compliance-artifacts!))

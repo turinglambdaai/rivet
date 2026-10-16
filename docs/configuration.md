@@ -148,6 +148,25 @@ package, and `raco rivet verify` behavior identical on all three platforms.
 
 Projects created before this feature remain valid because all three settings are optional. To embed a Windows icon in an older generated host, add Rivet's conditional `RIVET_WINDOWS_ICON_RC` `ResourceCompile` item from the current host template or regenerate the host project while preserving application UI sources.
 
+## User-visible strings: shared/i18n
+
+Projects that show user-facing strings keep one flat single source:
+`shared/i18n/zh.json` and `shared/i18n/en.json`, each a flat
+`string -> string` JSON object with identical key sets. Run
+`raco rivet i18n` to verify that parity contract and regenerate the
+embedded host tables (`windows/GeneratedI18n.hpp`,
+`linux/GeneratedI18n.hpp`, and
+`macos-host/Sources/RivetHost/GeneratedI18n.swift`). Hosts look a key up
+through their shipped loaders (`rivet_app::i18n::tr` on Windows and
+Linux, `GeneratedI18n.tr` on macOS): the active language, then the other
+language, then the key itself — so a missing or untranslated key can
+never silently render as another host's hardcoded copy. Stage the
+`shared/i18n` directory through `resources` when other tooling reads the
+raw JSON at runtime; the embedded tables are the authoritative runtime
+source. `raco rivet doctor --release` fails when the parity contract
+breaks or the embedded tables drift from the shared source, and the
+command exits nonzero on any parity violation.
+
 ## Deployment targets
 
 - `macos-min-version` — two- or three-component macOS deployment version, for example `14.0` or `14.1`. The backwards-compatible default is `14.0`.
