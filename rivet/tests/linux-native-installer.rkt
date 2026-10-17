@@ -103,8 +103,11 @@
       (check-true
        (regexp-match? #rx"update-desktop-database" (file->string script))
        "maintainer scripts must refresh the desktop database")
-      (check-equal? (file-or-directory-permissions script 'bits) 493
-                    "maintainer scripts must be executable (0o755)"))
+      ;; Unix permission bits do not exist on NTFS: everything reports
+      ;; 0o777 there, so the 0o755 assertion is only meaningful on POSIX.
+      (when (memq (system-type 'os) '(unix macosx))
+        (check-equal? (file-or-directory-permissions script 'bits) 493
+                      "maintainer scripts must be executable (0o755)")))
 
     ;; ------------------------------------------------------------- rpm
     (define spec-path (build-path temp-root "demo.spec"))
