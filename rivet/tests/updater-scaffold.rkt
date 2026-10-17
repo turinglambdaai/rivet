@@ -155,9 +155,17 @@
 (let* ([settings (make-fake-settings)]
        [first-bucket (resolve-rollout-bucket! settings)]
        [stored ((updater-settings-adapter-get settings)
-                "update.rollout-bucket")])
-  (eprintf "diagnostic: first-bucket=~a stored=~a\n"
-           first-bucket stored)
+                "update.rollout-bucket")]
+       [direct-set
+        (begin
+          ((updater-settings-adapter-set! settings)
+           "diagnostic.direct" "yes")
+          ((updater-settings-adapter-get settings) "diagnostic.direct"))]
+       [writer-binding
+        (updater-settings-adapter-set! settings)])
+  (eprintf "diagnostic: first-bucket=~a stored=~a direct-set=~a writer-is-set-proc=~a\n"
+           first-bucket stored direct-set
+           (if (writer-binding "diagnostic.direct" "ignored") #t #f))
   (check-true (and (exact-integer? first-bucket) (<= 0 first-bucket 99)))
   (check-equal? stored (number->string first-bucket))
   (check-equal? (resolve-rollout-bucket! settings) first-bucket))
