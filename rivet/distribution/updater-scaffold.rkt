@@ -127,15 +127,13 @@
   ;; calling the adapter.
   (define write-value! (updater-settings-adapter-set! settings))
   (define stored
-    (let ([value (with-handlers ([exn:fail? (lambda (_) #f)]) (get key))])
-      (define number
-        (and (string? value) (string->number (string-trim value))))
-      (and number (exact-integer? number) (<= 0 number 99) number)))
+    (let ([value (get key)])
+      (and (string? value)
+           (let ([number (string->number (string-trim value))])
+             (and number (exact-integer? number) (<= 0 number 99) number)))))
   (or stored
       (let ([bucket (draw-rollout-bucket)])
-        (when write-value!
-          (with-handlers ([exn:fail? void])
-            (write-value! key (number->string bucket))))
+        (write-value! key (number->string bucket))
         bucket)))
 
 (define (artifact-file-name artifact)
