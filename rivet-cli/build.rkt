@@ -202,10 +202,13 @@
       (when source
         ;; Resource Compiler treats backslashes as escapes inside quoted
         ;; paths. Forward slashes are accepted by Windows tools and keep
-        ;; arbitrary project directory names unambiguous.
+        ;; arbitrary project directory names unambiguous. The numeric ID 1
+        ;; is the app-icon slot hosts address with LoadIconW(MAKEINTRESOURCEW(1));
+        ;; a bare identifier would compile to a string-named resource no
+        ;; numeric lookup can reach.
         (define portable
           (string-replace (path->string source) "\\" "/"))
-        (fprintf out "IDI_RIVET_APP_ICON ICON \"~a\"\n" portable))
+        (fprintf out "1 ICON \"~a\"\n" portable))
       (write-windows-version-info! out project)))
   resource-script)
 
