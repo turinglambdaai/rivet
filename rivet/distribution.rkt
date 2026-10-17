@@ -5,6 +5,7 @@
          "distribution/managed-updater.rkt"
          "distribution/manifest.rkt"
          "distribution/platform-adapter.rkt"
+         "distribution/updater-scaffold.rkt"
          "distribution/updater.rkt"
          "distribution/version.rkt")
 
@@ -13,5 +14,6 @@
                        "distribution/managed-updater.rkt"
                        "distribution/manifest.rkt"
                        "distribution/platform-adapter.rkt"
+                       "distribution/updater-scaffold.rkt"
                        "distribution/updater.rkt"
                        "distribution/version.rkt"))
