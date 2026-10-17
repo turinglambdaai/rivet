@@ -21,6 +21,7 @@
 
 (require racket/file
          racket/match
+         racket/random
          racket/string
          "manifest.rkt"
          "updater.rkt")
@@ -33,7 +34,9 @@
          updater-runtime-download!
          silent-check-due?
          mark-silent-checked!
-         silent-check-interval-seconds)
+         silent-check-interval-seconds
+         draw-rollout-bucket
+         resolve-rollout-bucket!)
 
 ;; Four hours, the family-wide silent-check interval.
 (define silent-check-interval-seconds (* 4 60 60))
@@ -104,6 +107,36 @@
   (define adapter (updater-runtime-settings runtime))
   ((updater-settings-adapter-set! adapter)
    silent-check-stamp-key (number->string now-seconds)))
+
+;; ---- Sticky rollout bucket ----
+;;
+;; The #240 proposal pairs the throttle stamp with a persistent rollout
+;; bucket: one 0-99 value per installation, drawn from OS entropy on first
+;; run (racket/base's PRNG has a fixed seed) and recovered from the same
+;; settings adapter afterwards. A corrupt stored value redraws; a store
+;; that cannot persist degrades to an unpersisted draw so a broken store
+;; cannot turn into an error at startup.
+
+(define (draw-rollout-bucket)
+  (modulo (integer-bytes->integer (crypto-random-bytes 4) #t #t) 100))
+
+(define (resolve-rollout-bucket! settings [key "update.rollout-bucket"])
+  (define get (updater-settings-adapter-get settings))
+  ;; The writer cannot be named set!: (set! key value) would parse as the
+  ;; assignment form and silently rebind the key parameter instead of
+  ;; calling the adapter.
+  (define write-value! (updater-settings-adapter-set! settings))
+  (define stored
+    (let ([value (with-handlers ([exn:fail? (lambda (_) #f)]) (get key))])
+      (define number
+        (and (string? value) (string->number (string-trim value))))
+      (and number (exact-integer? number) (<= 0 number 99) number)))
+  (or stored
+      (let ([bucket (draw-rollout-bucket)])
+        (when write-value!
+          (with-handlers ([exn:fail? void])
+            (write-value! key (number->string bucket))))
+        bucket)))
 
 (define (artifact-file-name artifact)
   (define url (update-artifact-url artifact))

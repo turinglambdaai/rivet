@@ -35,18 +35,23 @@
 ;; --- throttle stamp semantics ---------------------------------------------
 
 (define (make-runtime settings #:fetch [fetch #f] #:download [download #f])
-  (define kws
-    (sort (append '(#:config #:destination-dir #:settings)
-                  (if fetch (list '#:fetch) '())
-                  (if download (list '#:download) '()))
-          keyword<?))
-  (define vals
-    (append (list config
-                  (make-temporary-file "rivet-scaffold-~a" 'directory)
-                  settings)
-            (if fetch (list fetch) '())
-            (if download (list download) '())))
-  (keyword-apply make-updater-runtime kws vals '()))
+  ;; keyword-apply requires the keyword list to be sorted and pairs each
+  ;; keyword with its position in the value list — so sort the (keyword
+  ;; value) pairs together instead of sorting keywords against unsorted
+  ;; values, which silently swapped #:fetch into #:settings' slot.
+  (define pairs
+    (sort
+     (append (list (list '#:config config)
+                   (list '#:destination-dir
+                         (make-temporary-file "rivet-scaffold-~a" 'directory))
+                   (list '#:settings settings))
+             (if fetch (list (list '#:fetch fetch)) '())
+             (if download (list (list '#:download download)) '()))
+     keyword<? #:key car))
+  (keyword-apply make-updater-runtime
+                 (map car pairs)
+                 (map cadr pairs)
+                 '()))
 
 (check-true
  (let ([runtime (make-runtime (make-fake-settings))])
@@ -69,7 +74,7 @@
 ;; counts — but the runtime stamps failures too, so an offline launch is
 ;; silent for the interval instead of retry-storming.
 (let ([settings (make-fake-settings)]
-      [now 2000000])
+      [now (current-seconds)])
   (define runtime
     (make-runtime settings
                   #:fetch (lambda (public-key)
@@ -100,8 +105,7 @@
   (check-equal? (hash-ref (updater-runtime-state runtime) 'status) "downloaded")
   (check-equal? (hash-ref (updater-runtime-state runtime) 'percent) 100)
   (check-true (file-exists?
-               (path->string
-                (hash-ref (updater-runtime-state runtime) 'downloaded_path))))
+               (hash-ref (updater-runtime-state runtime) 'downloaded_path)))
   ;; The download progress went through the phase box.
   (check-true
    (>= (hash-ref (updater-runtime-state runtime) 'percent) 100))
@@ -114,12 +118,11 @@
        [config-old
         (struct-copy updater-config config [current-version "9.9.9"])]
        [runtime
-        (apply make-updater-runtime
-               `(#:config ,config-old
-                 #:destination-dir
-                 ,(make-temporary-file "rivet-scaffold-~a" 'directory)
-                 #:settings ,settings
-                 #:fetch ,(lambda (public-key) (sample-manifest))))])
+        (make-updater-runtime
+         #:config config-old
+         #:destination-dir (make-temporary-file "rivet-scaffold-~a" 'directory)
+         #:settings settings
+         #:fetch (lambda (public-key) (sample-manifest)))])
   (check-false (updater-runtime-check! runtime))
   (check-equal? (hash-ref (updater-runtime-state runtime) 'status) "idle")
   (check-equal? (hash-ref (updater-runtime-state runtime) 'message)
@@ -143,3 +146,32 @@
                (hash-ref (updater-runtime-state runtime) 'message)
                "connection reset"))
   (delete-directory/files (updater-runtime-destination-dir runtime)))
+
+;; --- sticky rollout bucket (issue #240) ------------------------------------
+
+;; A fresh installation draws once from OS entropy and persists the value;
+;; later runs recover it instead of redrawing, and out-of-range or corrupt
+;; stored values redraw rather than propagate.
+(let* ([settings (make-fake-settings)]
+       [first-bucket (resolve-rollout-bucket! settings)])
+  (check-true (and (exact-integer? first-bucket) (<= 0 first-bucket 99)))
+  (check-equal? ((updater-settings-adapter-get settings)
+                 "update.rollout-bucket")
+                (number->string first-bucket))
+  (check-equal? (resolve-rollout-bucket! settings) first-bucket))
+
+(let ([settings
+       (updater-settings-adapter
+        (lambda (key) "200")
+        (lambda (key value)
+          (error 'settings "persist failed")))])
+  (define bucket (resolve-rollout-bucket! settings))
+  (check-true (and (exact-integer? bucket) (<= 0 bucket 99))))
+
+(let ([settings
+       (updater-settings-adapter (lambda (key) #f) (lambda (key value) void))])
+  (check-true (and (exact-integer? (resolve-rollout-bucket! settings))
+                   (<= 0 (resolve-rollout-bucket! settings) 99))))
+
+(for ([_i (in-range 20)])
+  (check-true (<= 0 (draw-rollout-bucket) 99)))

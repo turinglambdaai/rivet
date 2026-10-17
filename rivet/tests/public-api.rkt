@@ -75,6 +75,7 @@
       platform-symbol prepare-platform-installation read-ed25519-private-key
       read-ed25519-public-key read-signed-manifest recover-install-plan!
       recover-platform-installation! select-update sha256-bytes sha256-file
+      draw-rollout-bucket resolve-rollout-bucket!
       sha256-file/hex silent-check-due? silent-check-interval-seconds
       struct:install-plan struct:updater-runtime
       struct:updater-settings-adapter
@@ -91,12 +92,14 @@
       update-manifest-published-at update-manifest-rollback-allowed?
       update-manifest-rollout update-manifest-version update-manifest?
       updater-cancel! updater-check! updater-download!
-      updater-runtime-check! updater-runtime-config
+      updater-runtime-box updater-runtime-check! updater-runtime-config
       updater-runtime-destination-dir updater-runtime-download
       updater-runtime-download! updater-runtime-fetch
-      updater-runtime-silent-interval updater-runtime-state
+      updater-runtime-settings updater-runtime-silent-interval
+      updater-runtime-state updater-runtime?
       updater-settings-adapter updater-settings-adapter-get
-      updater-settings-adapter-set! updater-runtime
+      updater-settings-adapter-set! updater-settings-adapter?
+      updater-runtime
       updater-state
       updater-config updater-config-application-id
       updater-config-architecture updater-config-channel

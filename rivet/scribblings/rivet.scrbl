@@ -658,6 +658,21 @@ last settled check.}
                                [now-seconds exact-positive-integer?]) void?]{
 Persists the settled-check stamp behind the settings adapter.}
 
+@defproc[(draw-rollout-bucket) (integer-in 0 99)]{
+Draws one rollout bucket from the operating-system entropy pool;
+@racket[racket/base]'s PRNG has a fixed seed and must not be used for
+rollout placement.}
+
+@defproc[(resolve-rollout-bucket!
+          [settings updater-settings-adapter?]
+          [key (or/c string? symbol?) "update.rollout-bucket"])
+         (integer-in 0 99)]{
+Recovers this installation's sticky rollout bucket from the settings
+adapter, drawing and persisting a fresh value on first run. A corrupt or
+out-of-range stored value redraws; a store that cannot persist degrades
+to an unpersisted draw. Pass the result to @racket[updater-config] as its
+@racket[rollout-bucket].}
+
 @defproc[(platform-installation? [value any/c]) boolean?]{
 Recognizes an opaque first-party portable replacement transaction. Its plan,
 health and commit callbacks, and target-scoped lock identity remain private so
