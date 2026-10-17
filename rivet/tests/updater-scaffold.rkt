@@ -14,7 +14,11 @@
 ;; --- settings adapter over a hash ------------------------------------------
 
 (define (make-fake-settings)
-  (define store (make-hasheq))
+  ;; equal?-based keys on purpose: the adapter contract passes string keys,
+  ;; and interned literals from two modules are eq?-distinct, so a hasheq
+  ;; store silently loses every cross-module write (the resolved bucket
+  ;; never came back).
+  (define store (make-hash))
   (updater-settings-adapter
    (lambda (key) (hash-ref store key #f))
    (lambda (key value) (hash-set! store key value))))
@@ -155,26 +159,16 @@
 (let* ([settings (make-fake-settings)]
        [first-bucket (resolve-rollout-bucket! settings)]
        [stored ((updater-settings-adapter-get settings)
-                "update.rollout-bucket")]
-       [direct-set
-        (begin
-          ((updater-settings-adapter-set! settings)
-           "diagnostic.direct" "yes")
-          ((updater-settings-adapter-get settings) "diagnostic.direct"))]
-       [writer-binding
-        (updater-settings-adapter-set! settings)]
-       [pre-set
-        (begin
-          (writer-binding "update.rollout-bucket" "42")
-          ((updater-settings-adapter-get settings) "update.rollout-bucket"))]
-       [resolved-after-pre (resolve-rollout-bucket! settings)])
-  (eprintf "diagnostic: first-bucket=~a stored=~a direct-set=~a writer-is-set-proc=~a pre-set=~a resolved-after-pre=~a\n"
-           first-bucket stored direct-set
-           (if (writer-binding "diagnostic.direct" "ignored") #t #f)
-           pre-set resolved-after-pre)
+                "update.rollout-bucket")])
   (check-true (and (exact-integer? first-bucket) (<= 0 first-bucket 99)))
+  ;; The draw persisted under the key the next run reads back.
   (check-equal? stored (number->string first-bucket))
-  (check-equal? (resolve-rollout-bucket! settings) first-bucket))
+  ;; Sticky: a stored draw is recovered, not redrawn.
+  (check-equal? (resolve-rollout-bucket! settings) first-bucket)
+  ;; A valid value written directly through the adapter is what the next
+  ;; run recovers, too.
+  ((updater-settings-adapter-set! settings) "update.rollout-bucket" "42")
+  (check-equal? (resolve-rollout-bucket! settings) 42))
 
 (let ([settings
        (updater-settings-adapter
