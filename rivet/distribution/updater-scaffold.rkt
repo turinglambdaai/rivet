@@ -133,7 +133,11 @@
              (and number (exact-integer? number) (<= 0 number 99) number)))))
   (or stored
       (let ([bucket (draw-rollout-bucket)])
-        (write-value! key (number->string bucket))
+        (with-handlers ([exn:fail?
+                         (lambda (e)
+                           (eprintf "rollout-bucket persist diagnostic: ~a\n"
+                                    (exn-message e)))])
+          (write-value! key (number->string bucket)))
         bucket)))
 
 (define (artifact-file-name artifact)
