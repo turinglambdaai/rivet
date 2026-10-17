@@ -162,10 +162,16 @@
            "diagnostic.direct" "yes")
           ((updater-settings-adapter-get settings) "diagnostic.direct"))]
        [writer-binding
-        (updater-settings-adapter-set! settings)])
-  (eprintf "diagnostic: first-bucket=~a stored=~a direct-set=~a writer-is-set-proc=~a\n"
+        (updater-settings-adapter-set! settings)]
+       [pre-set
+        (begin
+          (writer-binding "update.rollout-bucket" "42")
+          ((updater-settings-adapter-get settings) "update.rollout-bucket"))]
+       [resolved-after-pre (resolve-rollout-bucket! settings)])
+  (eprintf "diagnostic: first-bucket=~a stored=~a direct-set=~a writer-is-set-proc=~a pre-set=~a resolved-after-pre=~a\n"
            first-bucket stored direct-set
-           (if (writer-binding "diagnostic.direct" "ignored") #t #f))
+           (if (writer-binding "diagnostic.direct" "ignored") #t #f)
+           pre-set resolved-after-pre)
   (check-true (and (exact-integer? first-bucket) (<= 0 first-bucket 99)))
   (check-equal? stored (number->string first-bucket))
   (check-equal? (resolve-rollout-bucket! settings) first-bucket))
