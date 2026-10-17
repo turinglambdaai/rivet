@@ -76,8 +76,10 @@
     (define rc (prepare-windows-icon-resource! project))
     (check-true (file-exists? rc))
     (check-true
-     (regexp-match? #rx"IDI_RIVET_APP_ICON ICON"
-                    (file->string rc)))
+     ;; Numeric ID 1: the app-icon slot, addressable with
+     ;; LoadIconW(MAKEINTRESOURCEW(1)). A bare identifier would compile to a
+     ;; string-named resource no numeric lookup can reach.
+     (regexp-match? #rx"^1 ICON " (file->string rc)))
     (check-false (regexp-match? #rx"\\\\" (file->string rc)))
     ;; The version block always ships, icon or not: identity in Explorer,
     ;; Task Manager, and installer UX is not optional for packaged apps.
@@ -97,7 +99,7 @@
       (parameterize ([current-error-port iconless-stderr])
         (prepare-windows-icon-resource! (rivet-project temp-root #hasheq((name . "Demo_App"))))))
     (check-false
-     (regexp-match? #rx"IDI_RIVET_APP_ICON" (file->string iconless-rc)))
+     (regexp-match? #rx"1 ICON" (file->string iconless-rc)))
     (check-true
      (regexp-match? #rx"no `windows-icon`" (get-output-string iconless-stderr)))
 
