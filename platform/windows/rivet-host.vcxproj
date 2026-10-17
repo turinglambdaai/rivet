@@ -73,6 +73,11 @@
     <ClCompile>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <ConformanceMode>true</ConformanceMode>
+      <!-- Sources and headers are UTF-8; without this MSVC reads them in
+           the system code page and CJK-locale machines drown in C4819
+           (and misread any non-ASCII literal). Downstream hosts already
+           build with /utf-8 — the linked static library must match. -->
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level4</WarningLevel>
       <SDLCheck>true</SDLCheck>

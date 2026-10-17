@@ -118,8 +118,12 @@
      (lambda (out) (display "// custom app entry\n" out)))
    (define custom-report (project-report project))
    (define custom-macos (hash-ref (hash-ref custom-report 'edit-points) 'macos-ui))
+   ;; Reported paths are path->string output, so separators follow the host
+   ;; — build the expectation instead of hardcoding forward slashes.
    (check-equal? (map (lambda (entry) (hash-ref entry 'path)) custom-macos)
-                 '("macos-host/Sources/RivetHost/AgentDemoApp.swift"))
+                 (list (path->string
+                        (build-path "macos-host" "Sources" "RivetHost"
+                                    "AgentDemoApp.swift"))))
    (check-true (andmap (lambda (entry) (hash-ref entry 'exists)) custom-macos))
 
    (delete-file (build-path root "rivet-schema.json"))

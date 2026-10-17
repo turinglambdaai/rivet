@@ -143,7 +143,11 @@
   (lambda ()
     (define project-root (create-project! "gate" temp-gate-root))
     (define project (load-project project-root))
-    (write-schema-snapshot! project "rivet-schema.json")
+    ;; The baseline lives at the project root (what every downstream
+    ;; commits); a cwd-relative path would drop it next to this test file
+    ;; and stay behind after the run.
+    (write-schema-snapshot! project
+                            (build-path project-root "rivet-schema.json"))
     (generate-clients! project)
     ;; A stray good-shaped updater call and a workflow pin keep the green
     ;; path realistic: the scanner and pin check run on every report.

@@ -178,9 +178,9 @@ void DeviceSessionHost::run() {
           // The pairing window elapsed with no desktop decision; the state
           // machine answers with its own expiry semantics.
           auto expire_actions = server_->expire(now_());
-          bool saw_acceptance = false;
-          bool saw_close = false;
-          execute(expire_actions, saw_acceptance, saw_close);
+          bool expired_acceptance = false;
+          bool expired_close = false;
+          execute(expire_actions, expired_acceptance, expired_close);
           timed_out = true;
           break;
         }
