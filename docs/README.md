@@ -11,6 +11,7 @@ a product overview rather than a second documentation index.
 - [Diagnostics and cleanup](diagnostics.md)
 - [Continuous integration](ci.md) · [中文](ci.zh-CN.md)
 - [Agent-native development](agent-native.md)
+- [Product acceptance evidence](product-acceptance.md)
 
 ## Understand contracts / 理解契约
 

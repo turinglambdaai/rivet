@@ -37,7 +37,10 @@ scenario vocabulary. Keep those identifiers in native source:
 
 Copy the matching driver under `rivet/tests/native-ui/`, replace the reference
 identifiers and actions with one product-critical scenario, and add the driver
-to a packaging job. A useful minimum scenario has one RPC-driven mutation, one
+to a packaging job. Declare that driver as a `native-ui` suite in the
+product's `rivet-acceptance.rktd` so missing platform coverage fails before the
+job starts; see [product acceptance evidence](product-acceptance.md). A useful
+minimum scenario has one RPC-driven mutation, one
 Event, a stable accessibility-tree assertion, and orderly close. Test-only
 protocol messages and a cross-platform selector language are deliberately not
 extension points.

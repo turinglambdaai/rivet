@@ -20,6 +20,14 @@ certificates and notarization credentials do not belong in pull-request CI;
 use development packaging there and reserve `--production` for a protected
 release environment.
 
+Every maintained product should also commit `rivet-acceptance.rktd` and run
+`raco rivet acceptance --json` in each native platform job. That manifest is
+the executable definition of done: RackUnit, generated-client bridge tests,
+native accessibility drivers, and packaged-product checks remain implemented
+by their owning layer, while Rivet rejects missing declared coverage, timeouts,
+nonzero exits, and missing evidence. Archive the JSON report on failure. See
+[product acceptance evidence](product-acceptance.md).
+
 ## Copy-paste GitHub Actions workflow
 
 The following workflow pins Rivet 0.11.0. Update every Rivet package source and
@@ -52,6 +60,7 @@ jobs:
       - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.11.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
+      - run: raco rivet acceptance --json
       - run: raco rivet build
 
   macos-host:
@@ -71,6 +80,7 @@ jobs:
       - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.11.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
+      - run: raco rivet acceptance --json
       - run: raco rivet build
 
   linux-host:
@@ -87,6 +97,7 @@ jobs:
         run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.11.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
+      - run: raco rivet acceptance --json
       - run: raco rivet build
 ```
 

@@ -23,7 +23,11 @@ raco rivet dev
 
 这就是普通用户的主路径。`doctor` 会检查原生工具链，并在缺少必要组件时直接给出下一步修复建议；`dev` 会构建并启动当前平台的一等原生宿主。
 
-每个新项目都会生成 `AGENTS.md` 和初始 `rivet-schema.json` 兼容性基线；`inspect --json` 则提供带版本号的机器可读项目地图，包括项目身份、Racket 后端与各端原生 UI 编辑入口、schema 检查、目标成熟度、生成目录和安全生命周期命令。详见 [Agent-native 开发](docs/agent-native.md)。
+每个新项目都会生成 `AGENTS.md`、初始 `rivet-schema.json` 兼容性基线和
+`rivet-acceptance.rktd` 可执行完成定义；`inspect --json` 则提供带版本号的机器
+可读项目地图，包括项目身份、Racket 后端与各端原生 UI 编辑入口、schema 与验收
+检查、目标成熟度、生成目录和安全生命周期命令。详见 [Agent-native
+开发](docs/agent-native.md)和[产品验收证据](docs/product-acceptance.md)。
 
 需要完整引导时直接看 **[Rivet 快速上手教程](docs/getting-started.zh-CN.md)**；产品发布前请采用[原生宿主 CI 契约](docs/ci.zh-CN.md)。安装后的包也提供可搜索的 Scribble 文档。只有开发 Rivet 框架本身时，才需要使用教程里的源码 link 安装方式。
 

@@ -35,6 +35,12 @@ history: read the plan's **Next implementation handoff**, implement only that
 bounded slice, update its evidence, run the required tests, and commit the
 coherent change so the next agent can reproduce the same context.
 
+Before editing, inspect the worktree and update the tracked branch from its
+remote with fast-forward-only semantics. If the worktree is dirty, the branch
+has diverged, or the remote cannot be reached, preserve the local state and
+report the condition instead of stashing, resetting, or editing an unverified
+base. Record the starting commit in the handoff evidence.
+
 ## Family contracts
 
 The five-repository dependency graph, repository ownership, change routing,
@@ -60,7 +66,14 @@ For an application project, run:
 ```bash
 raco rivet inspect --json
 raco rivet doctor --json
+raco rivet acceptance --json
 ```
+
+`rivet-acceptance.rktd` is the product-owned, executable definition of done.
+Do not remove a requirement, weaken a suite, replace packaged behavior with a
+development substitute, or refresh expected evidence merely to make a change
+green. A skipped, unrun, timed-out, or wrong-platform required suite means the
+work is not complete.
 
 For this repository, inspect the nearest implementation and its tests before
 editing. The shared wire contract is documented in `docs/protocol.md` and

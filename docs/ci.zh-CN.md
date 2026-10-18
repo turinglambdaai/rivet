@@ -17,6 +17,12 @@ CI 应使用与发布任务相同类别的 runner 和工具链：
 `package` 与 `verify`。发布者证书和公证凭据不应进入拉取请求 CI；这里使用
 开发打包，把 `--production` 留给受保护的发布环境。
 
+每个持续维护的产品还应提交 `rivet-acceptance.rktd`，并在每个原生平台 job
+中运行 `raco rivet acceptance --json`。这份清单是可执行的完成定义：RackUnit、
+生成客户端桥接测试、原生无障碍驱动和打包产品检查仍由各自层实现；Rivet 负责
+拒绝缺少的声明覆盖、超时、非零退出码和缺失证据，并应在失败时归档 JSON 报告。
+格式与使用方法见 [Product acceptance evidence](product-acceptance.md)。
+
 ## 可直接使用的 GitHub Actions 工作流
 
 下面的工作流固定到 Rivet 0.11.0。升级时，应在同一次评审中把每处 Rivet
@@ -49,6 +55,7 @@ jobs:
       - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.11.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
+      - run: raco rivet acceptance --json
       - run: raco rivet build
 
   macos-host:
@@ -68,6 +75,7 @@ jobs:
       - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.11.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
+      - run: raco rivet acceptance --json
       - run: raco rivet build
 
   linux-host:
@@ -84,6 +92,7 @@ jobs:
         run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.11.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
+      - run: raco rivet acceptance --json
       - run: raco rivet build
 ```
 

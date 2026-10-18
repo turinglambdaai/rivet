@@ -115,6 +115,33 @@ installer path.
 Exit evidence: credential-backed artifacts pass `raco rivet verify
 --production` in their trusted release environments.
 
+### Gate D5 — product behavior has executable evidence
+
+1. Every maintained product commits `rivet-acceptance.rktd` and runs `raco
+   rivet acceptance --json` in required Windows, macOS, and Linux jobs.
+2. Requirements cover shared contract behavior, generated-client/embedded-
+   backend round trips, native host builds, and at least one critical packaged
+   native UI flow on every supported desktop platform.
+3. UI suites use disposable profile/config/database roots and observable
+   accessibility or state conditions. Fixed sleeps, process-survival-only
+   smoke tests, CLI substitutes for GUI actions, and undeclared workarounds do
+   not satisfy the corresponding requirement.
+4. Acceptance-policy changes, native drivers, golden data, and CI gates receive
+   the same protected review as public API changes.
+
+Exit evidence: Taskly is the first product to pass the complete contract on all
+three platforms; the remaining maintained products then adopt the same gate.
+Rivet provides the bounded, shell-free orchestration and rejects missing
+coverage, stale evidence, timeouts, or failed commands, while each product owns
+its native driver and assertions.
+
+Progress (2026-10-18): Rivet's acceptance manifest and CLI orchestration are
+implemented in the current change, together with scaffold, diagnostics, tests,
+and the permanent product guide. Framework CI must validate this batch before
+the gate can be considered available. Taskly adoption remains pending because
+its local checkout could not be fast-forwarded from the remote during this
+work; no product files were edited on that unverified base.
+
 ## Non-blocking desktop improvements
 
 These remain worthwhile but do not block mobile contract/gateway work:

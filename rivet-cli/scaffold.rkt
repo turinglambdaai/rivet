@@ -40,6 +40,29 @@
 RKT
   )
 
+(define acceptance-template
+  #<<ACCEPTANCE
+#hasheq(
+ (version . 1)
+ (requirements
+  . (#hasheq((kind . contract) (platforms . (windows macos linux)))
+     #hasheq((kind . native-build) (platforms . (windows macos linux)))))
+ (suites
+  . (#hasheq((id . schema-contract)
+             (kind . contract)
+             (platforms . (windows macos linux))
+             (command . ("raco" "rivet" "schema" "check" "rivet-schema.json" "--json"))
+             (timeout-seconds . 120)
+             (evidence . ()))
+     #hasheq((id . native-build)
+             (kind . native-build)
+             (platforms . (windows macos linux))
+             (command . ("raco" "rivet" "build"))
+             (timeout-seconds . 1800)
+             (evidence . ())))))
+ACCEPTANCE
+  )
+
 (define (starter-readme name)
   (format
    (string-append
@@ -50,6 +73,7 @@ RKT
     "raco rivet inspect --json\n"
     "raco rivet schema --json\n"
     "raco rivet doctor\n"
+    "raco rivet acceptance --json\n"
     "raco rivet dev\n"
     "```\n\n"
     "`doctor` checks the local Racket/native toolchain and prints actionable fixes when something required is missing. `dev` rebuilds the Racket backend, regenerates the typed native client, builds the current platform host, and launches the app.\n\n"
@@ -60,11 +84,13 @@ RKT
     "- Linux UI: `linux/src/main.cpp` (GTK4)\n"
     "- Packaged application resources and icons: configure `resources`, `windows-icon`, and `macos-icon` in `rivet.rktd`\n"
     "- App identity/deployment targets: `rivet.rktd`\n"
-    "- Versioned public API baseline: `rivet-schema.json`\n\n"
+    "- Versioned public API baseline: `rivet-schema.json`\n"
+    "- Executable completion evidence: `rivet-acceptance.rktd`\n\n"
     "## When Racket does not already have the capability\n\n"
     "Run `raco rivet inspect --json` and read `capability-sourcing`. Prefer a built-in or maintained Racket package; keep platform-owned features in the native host; use a small safe FFI wrapper for a stable C ABI; use an argv-based subprocess for coarse-grained tools; reserve a sidecar for persistent or crash-isolated runtimes. The generated `AGENTS.md` contains the safety and packaging checks.\n\n"
     "## Ship a build\n\n"
     "```bash\n"
+    "raco rivet acceptance --json\n"
     "raco rivet build\n"
     "raco rivet package\n"
     "raco rivet verify\n"
@@ -92,6 +118,11 @@ raco rivet doctor --json
 backend, each native UI edit point, platform maturity, generated directories,
 and safe lifecycle commands. `doctor` reports the exact local toolchain and
 returns a failing exit status when the current host is not usable.
+
+Before editing an existing repository, inspect `git status`, fetch its tracked
+remote, and update with fast-forward-only semantics. If the worktree is dirty,
+the branch has diverged, or the remote is unavailable, stop and report that
+state; never hide it with stash, reset, or generated-file cleanup.
 
 ## Architecture boundary
 
@@ -142,6 +173,7 @@ Source you may edit:
 - `linux/`
 - `rivet.rktd`
 - `rivet-schema.json` when an API compatibility break is intentional
+- `rivet-acceptance.rktd` when product acceptance requirements change
 - declared application resources
 
 Generated output you should not hand-edit:
@@ -178,6 +210,19 @@ cases/order is breaking:
 ```bash
 raco rivet schema check rivet-schema.json --json
 ```
+
+`rivet-acceptance.rktd` is the source-controlled completion contract. Add a
+suite for every behavior a change claims, keep native UI drivers native to the
+platform, and never weaken requirements or expected evidence merely to make a
+change green. Run the current platform's required suites with:
+
+```bash
+raco rivet acceptance --json
+```
+
+Do not call work complete when a required suite was skipped, was not run on its
+declared platform, timed out, or exercised only a development substitute for
+the packaged artifact named by the product contract.
 
 ```bash
 raco rivet build
@@ -224,6 +269,7 @@ AGENTS
     (default-project-identifier name)
     default-macos-min-version
     default-windows-min-version))
+  (write-text (build-path root "rivet-acceptance.rktd") acceptance-template)
   (write-text (build-path root "app" "backend.rkt") backend-template)
   (write-text
    (build-path root ".gitignore")

@@ -196,11 +196,19 @@ removes only those generated roots and refuses to follow directory symlinks.
 The normal autonomous loop is:
 
 ```bash
+raco rivet acceptance --json
 raco rivet build
 raco rivet dev
 raco rivet package
 raco rivet verify
 ```
+
+`rivet-acceptance.rktd` is the product-owned, executable definition of done.
+It declares required evidence categories and the native platforms that must
+run them. `acceptance` launches each suite without a shell, enforces time and
+output bounds, checks exit status and declared artifacts, and returns a
+machine-readable report suitable for a required CI check. See
+[product acceptance evidence](product-acceptance.md).
 
 `build` validates the Racket schema and regenerates typed native clients.
 `package` creates and immediately verifies a development distributable.
@@ -210,8 +218,9 @@ under application control.
 
 ## Current boundary
 
-This contract makes project discovery, diagnostics, mutation boundaries, and
-artifact verification agent-native. It does not yet provide automated visual
-inspection of every first-party native UI. Windows/macOS/Linux UI automation,
-accessibility-tree inspection, screenshots, and interaction traces remain a
-separate product layer and should not be claimed until those adapters exist.
+This contract makes project discovery, diagnostics, mutation boundaries,
+acceptance orchestration, and artifact verification agent-native. Rivet does
+not itself visually inspect every first-party product UI. Windows/macOS/Linux
+UI automation, accessibility-tree inspection, screenshots, and interaction
+traces remain product-owned suites and should not be claimed until those
+native adapters are declared and green in the acceptance manifest.
