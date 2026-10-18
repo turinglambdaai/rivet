@@ -150,14 +150,24 @@
   (define root (rivet-project-root project))
   (define backend (project-ref project 'backend))
   (define schema-baseline (source-report project "rivet-schema.json" 'file))
+  (define acceptance-manifest
+    (source-report project "rivet-acceptance.rktd" 'file))
   (define warnings
-    (if (hash-ref schema-baseline 'exists)
-        '()
-        (list
-         (project-warning
-          "missing-schema-baseline"
-          "The project has no committed rivet-schema.json compatibility baseline."
-          "Run `raco rivet schema --output rivet-schema.json`, review the snapshot, commit it, and add `raco rivet schema check rivet-schema.json --json` to CI."))))
+    (append
+     (if (hash-ref schema-baseline 'exists)
+         '()
+         (list
+          (project-warning
+           "missing-schema-baseline"
+           "The project has no committed rivet-schema.json compatibility baseline."
+           "Run `raco rivet schema --output rivet-schema.json`, review the snapshot, commit it, and add `raco rivet schema check rivet-schema.json --json` to CI.")))
+     (if (hash-ref acceptance-manifest 'exists)
+         '()
+         (list
+          (project-warning
+           "missing-acceptance-manifest"
+           "The project has no committed rivet-acceptance.rktd evidence contract."
+           "Declare required product suites and add `raco rivet acceptance --json` to every native CI platform.")))))
   (hash 'contract-version
         contract-version
         'product
@@ -196,6 +206,10 @@
         (hash 'baseline schema-baseline
               'format "rivet-schema"
               'format-version 1)
+        'acceptance
+        (hash 'manifest acceptance-manifest
+              'format "rivet-acceptance"
+              'format-version 1)
         'transport-contract
         transport-contract
         'device-surface
@@ -222,6 +236,8 @@
               '("product-ui"))
         'readiness
         (hash 'schema-baseline-configured (hash-ref schema-baseline 'exists)
+              'acceptance-manifest-configured
+              (hash-ref acceptance-manifest 'exists)
               'warnings warnings)
         'generated-clients
         (hash 'swift
@@ -261,7 +277,8 @@
                '("linux/src/main.cpp"))
               'configuration
               (list (source-report project "rivet.rktd" 'file)
-                    (source-report project "rivet-schema.json" 'file)))
+                    (source-report project "rivet-schema.json" 'file)
+                    acceptance-manifest))
         'targets
         (list (target "windows" "production-target" "WinUI 3 / C++/WinRT" "windows")
               (target "macos" "production-target" "SwiftUI / AppKit" "macos-host")
@@ -276,6 +293,7 @@
         'commands
         (list (action "inspect" "raco rivet inspect --json" #f)
               (action "diagnose" "raco rivet doctor --json" #f)
+              (action "acceptance" "raco rivet acceptance --json" #f)
               (action "inspect-schema" "raco rivet schema --json" #f)
               (action "save-schema-baseline"
                       "raco rivet schema --output rivet-schema.json"
@@ -311,6 +329,7 @@
               (hash-ref warning 'message))))
   (displayln "  next:")
   (displayln "    raco rivet doctor --json")
+  (displayln "    raco rivet acceptance --json")
   (displayln "    raco rivet dev")
   (displayln "  missing a capability:")
   (for ([option (in-list (hash-ref (hash-ref report 'capability-sourcing) 'decision-order))])

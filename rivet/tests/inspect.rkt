@@ -27,6 +27,8 @@
     (hash-ref (hash-ref (hash-ref report 'schema) 'baseline) 'exists))
    (check-true
     (hash-ref (hash-ref report 'readiness) 'schema-baseline-configured))
+   (check-true
+    (hash-ref (hash-ref report 'readiness) 'acceptance-manifest-configured))
    (check-equal? (hash-ref (hash-ref report 'readiness) 'warnings) '())
 
    (define transport (hash-ref report 'transport-contract))
@@ -85,6 +87,11 @@
    (define commands (hash-ref report 'commands))
    (check-not-false
     (findf (lambda (entry)
+             (and (equal? (hash-ref entry 'name) "acceptance")
+                  (not (hash-ref entry 'mutates))))
+           commands))
+   (check-not-false
+    (findf (lambda (entry)
              (and (equal? (hash-ref entry 'name) "check-schema-compatibility")
                   (not (hash-ref entry 'mutates))))
            commands))
@@ -135,12 +142,25 @@
     "missing-schema-baseline")
 
    (check-true (file-exists? (build-path root "AGENTS.md")))
+   (check-true (file-exists? (build-path root "rivet-acceptance.rktd")))
    (define instructions (file->string (build-path root "AGENTS.md")))
    (check-regexp-match #rx"raco rivet inspect --json" instructions)
    (check-regexp-match #rx"cross-platform UI DSL" instructions)
    (check-regexp-match #rx"Capability sourcing" instructions)
    (check-regexp-match #rx"never construct a shell command" instructions)
    (check-regexp-match #rx"raco rivet schema check rivet-schema.json --json" instructions)
+   (check-regexp-match #rx"raco rivet acceptance --json" instructions)
+
+   (delete-file (build-path root "rivet-acceptance.rktd"))
+   (define missing-acceptance-report (project-report project))
+   (check-false
+    (hash-ref (hash-ref missing-acceptance-report 'readiness)
+              'acceptance-manifest-configured))
+   (check-not-false
+    (for/or ([warning (in-list
+                       (hash-ref (hash-ref missing-acceptance-report 'readiness)
+                                 'warnings))])
+      (string=? (hash-ref warning 'code) "missing-acceptance-manifest")))
 
    (define encoded
      (let ([out (open-output-string)])

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add executable product acceptance contracts. `raco rivet acceptance
+  --json` validates `rivet-acceptance.rktd`, rejects missing kind/platform
+  coverage, launches each current-platform suite as an executable plus argv
+  without a shell, enforces bounded time and output, and fails on nonzero exits
+  or missing evidence. `inspect --json`, generated projects, agent guidance,
+  and the native UI extension contract now expose the same definition of done,
+  so a build-only or unrun platform can no longer be described as accepted.
+
 - Set the Windows title-bar icon from the embedded exe resource. WinUI shows a generic placeholder in the title bar unless the window is handed an icon explicitly, so every shipped host ran with a foreign default glyph while taskbar and shortcuts showed the real brand icon — the icon was compiled into the exe (resource ID 1 since #283) but nothing ever loaded it. The host template now loads it with `LoadIconW` and hands it to `AppWindow.SetIcon` at construction; projects without a `windows-icon` declaration keep the placeholder. Existing products carry the same lines in their own `MainWindow` constructor (podlens landed it first).
 
 - Add the release gate. `raco rivet generate --check` regenerates every client file in memory and fails when the tree differs — the writer and the gate share one regeneration, so a hand-edited version stamp or a forgotten regeneration (four shipped-repo incidents in one week) cannot merge. `raco rivet doctor --release` validates in one command and one exit code: generated freshness, the committed schema baseline, hand-written host sources calling `fetch-update-manifest`/`select-update`/`download-update`/`fetch-sibling-asset` only with keywords the installed rivet accepts (read via `procedure-keywords` from the live functions, closing the payback `#:redirections` class), and every `rivet.git#...` pin being non-empty and consistent with the installed release (the autarx empty-ref incident). The update API keyword contract is a documented, test-guarded stable surface, and `docs/ci.md` warns about the empty `URL#` footgun.

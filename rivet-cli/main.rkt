@@ -38,6 +38,8 @@
     "                                     schema baseline, update-API keyword contracts, pins\n"
     "  raco rivet inspect                 show the current project's edit and verification map\n"
     "  raco rivet inspect --json          emit the agent-readable project contract\n"
+    "  raco rivet acceptance              run the current platform's declared acceptance suites\n"
+    "  raco rivet acceptance --json       emit bounded machine-readable acceptance evidence\n"
     "  raco rivet schema --json           emit the current versioned API schema\n"
     "  raco rivet schema --output <file>  write a schema compatibility baseline\n"
     "  raco rivet schema check <file>     reject breaking changes from a baseline\n"
@@ -105,6 +107,10 @@
     [(list "inspect" "--json")
      (define run-inspect (command "inspect" 'run-inspect))
      (exit (run-inspect (current-project!) #:json? #t))]
+    [(cons "acceptance" acceptance-args)
+     (define run-acceptance-command
+       (command "acceptance" 'run-acceptance-command))
+     (exit (run-acceptance-command (current-project!) acceptance-args))]
     [(list "schema" "--json")
      (define schema-snapshot (command "codegen" 'schema-snapshot))
      (write-json (schema-snapshot (current-project!)))

@@ -23,7 +23,13 @@ raco rivet dev
 
 That is the normal first-run path. `doctor` checks the native toolchain and prints actionable fixes when a required component is missing; `dev` builds and launches the current platform's first-party native host.
 
-Every generated app includes an `AGENTS.md` and an initial `rivet-schema.json` compatibility baseline. `inspect --json` exposes a versioned machine-readable map of project identity, backend/native UI edit points, schema checks, target maturity, generated paths, and safe lifecycle commands. See [agent-native development](docs/agent-native.md).
+Every generated app includes an `AGENTS.md`, an initial `rivet-schema.json`
+compatibility baseline, and a `rivet-acceptance.rktd` executable definition of
+done. `inspect --json` exposes a versioned machine-readable map of project
+identity, backend/native UI edit points, schema and acceptance checks, target
+maturity, generated paths, and safe lifecycle commands. See [agent-native
+development](docs/agent-native.md) and [product acceptance
+evidence](docs/product-acceptance.md).
 
 For a guided walkthrough, read **[Getting Started with Rivet](docs/getting-started.md)**. Before shipping a product, adopt the [native-host CI contract](docs/ci.md). The installed package also includes searchable Scribble documentation. If you are developing Rivet itself, use the linked-checkout workflow in that guide instead of installing from the catalog.
 
