@@ -337,7 +337,6 @@
   ;; gh during tests.
   (parameterize ([current-run-gh run-gh])
     (define sha (resolve-commit-sha repo ref))
-    (make-directory* output-directory)
     (define baseline
       (map (lambda (run) (hash-ref run 'databaseId))
            (listed-dispatch-runs repo workflow)))
@@ -349,6 +348,9 @@
     (define run-ids
       (wait-for-dispatched-runs repo workflow sha baseline (length platforms)
                                 timeout-seconds wake-after now))
+    ;; Nothing is written until the runs exist: a failed dispatch or a
+    ;; timeout leaves no empty output directory behind.
+    (make-directory* output-directory)
     (define outcomes
       (for/list ([run-id (in-list (sort run-ids <))])
         (with-handlers
