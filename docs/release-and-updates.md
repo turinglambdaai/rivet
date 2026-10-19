@@ -197,12 +197,33 @@ Only the final OS handoff remains native, and Rivet ships that too:
   and relaunches the application. The release callback runs after the helper
   exists so single-instance ownership is dropped before the new process starts.
   `ConsumeFailure` and `CleanupStaleAttempts` complete the startup lifecycle.
-- Linux keeps `prepare-platform-installation` /
-  `execute-platform-installation!` as the blessed AppImage swap path; GTK hosts
-  must not duplicate it. The linked `rivet::platform` target exposes
-  `DetectLinuxInstallKind` for pre-download UI policy and
-  `RelaunchInstalledAppImage` for the post-commit exec handoff, including lease
-  release. deb/rpm installations remain owned by the system package manager.
+- Linux hosts that apply an AppImage update must not run the swap
+  themselves: a crash between moving the old AppImage aside and moving the
+  new one into place would leave no executable at the launch path, and the
+  dead process could never run recovery. The linked `rivet::platform` target
+  therefore exposes `AppImageHandoff::LaunchReplacement`, the process-external
+  counterpart of `MsiHandoff::LaunchVerifiedInstaller`. After the managed
+  updater has produced a verified AppImage, the handoff writes a generated
+  first-party shell script into a process-specific attempt directory under
+  `$XDG_STATE_HOME/Rivet/updates/<application-id>/`, waits a bounded time for
+  the launching process to exit, and only then performs the atomic replace —
+  staging copy beside the target, SHA-256 re-check, renamed swap, schema-1
+  journal phases, idempotent rollback — before relaunching the replacement
+  and committing once it survives the settle window. A replacement that dies
+  inside the window restores the previous AppImage (unless the signed
+  manifest forbids rollback) and records `failure.txt` for
+  `ConsumeFailure`/`CleanupStaleAttempts` on the next launch. A helper that
+  itself died between the two renames is healed by the next attempt's
+  preflight, so the launch path is never left without an executable. Release
+  the single-instance lease through the `release_lease` callback once the
+  helper is confirmed running, then exit promptly. The journal uses the same
+  field names and phases as `execute-platform-installation!`, so an
+  interrupted handoff stays recoverable with
+  `recover-platform-installation!` once the caller rebuilds the plan; do not
+  call recovery from the relaunched process while a helper may still be
+  running. `DetectLinuxInstallKind` remains the pre-download UI policy check,
+  `RelaunchInstalledAppImage` the post-commit exec handoff, and deb/rpm
+  installations remain owned by the system package manager.
 
 The product supplies application id, current version, feed URL, public key,
 key id, a persistent rollout bucket, and localized UI. It does not own manifest
