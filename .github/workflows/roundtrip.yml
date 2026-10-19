@@ -53,6 +53,7 @@ jobs:
           cmake --build "$native_build" --config Release
           "$native_build/RivetThemeTest"
           dbus-run-session -- "$native_build/RivetGlobalShortcutsTest"
+          "$native_build/RivetUpdateHandoffTest"
           cp "$native_build/RivetIntegration" "$stage/RivetIntegration"
           chmod +x "$stage/RivetIntegration"
 

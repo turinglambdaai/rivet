@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Add the crash-safe process-external Linux AppImage handoff (issue #290).
+  `AppImageHandoff::LaunchReplacement` in the linked `rivet::platform` target
+  writes a generated first-party shell script — the counterpart of the
+  Windows `MsiHandoff` — that waits a bounded time for the launching process
+  to exit, performs the atomic replace with staging, SHA-256 re-check,
+  schema-1 journal phases, and idempotent rollback, relaunches the
+  replacement, and commits only after it survives the settle window;
+  otherwise it restores the previous AppImage (unless the signed manifest
+  forbids rollback) and records a failure marker for `ConsumeFailure` on the
+  next launch. A preflight heals attempts that died between the two renames,
+  so the launch path is never left without an executable, and deb/rpm
+  installations stay owned by the system package manager.
+
 ## 0.12.0
 
 - Make cross-platform verification first-class. `raco rivet matrix
