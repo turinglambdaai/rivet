@@ -27,6 +27,7 @@ __pycache__/
 packages/
 AppPackages/
 BundleArtifacts/
+platform/windows/obj/
 
 # OS
 .DS_Store
