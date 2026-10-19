@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.12.0
 
 - Make cross-platform verification first-class. `raco rivet matrix
   <report.json>... [--json]` folds the per-platform `acceptance --json`
