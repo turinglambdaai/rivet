@@ -17,6 +17,7 @@
 
 (provide default-acceptance-manifest-name
          acceptance-kinds
+         supported-platforms
          (struct-out acceptance-suite)
          load-acceptance-manifest
          acceptance-report

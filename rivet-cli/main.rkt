@@ -40,6 +40,9 @@
     "  raco rivet inspect --json          emit the agent-readable project contract\n"
     "  raco rivet acceptance              run the current platform's declared acceptance suites\n"
     "  raco rivet acceptance --json       emit bounded machine-readable acceptance evidence\n"
+    "  raco rivet matrix <report.json>... aggregate per-platform acceptance reports into the\n"
+    "                                     cross-platform verification matrix\n"
+    "  raco rivet matrix <report.json>... --json  emit the machine-readable matrix\n"
     "  raco rivet schema --json           emit the current versioned API schema\n"
     "  raco rivet schema --output <file>  write a schema compatibility baseline\n"
     "  raco rivet schema check <file>     reject breaking changes from a baseline\n"
@@ -111,6 +114,12 @@
      (define run-acceptance-command
        (command "acceptance" 'run-acceptance-command))
      (exit (run-acceptance-command (current-project!) acceptance-args))]
+    [(cons "matrix" matrix-args)
+     ;; Matrix aggregation consumes report artifacts, not a project checkout,
+     ;; so it runs anywhere: on an editing host far from the platform legs it
+     ;; is judging (issue #287).
+     (define run-matrix-command (command "matrix" 'run-matrix-command))
+     (exit (run-matrix-command matrix-args))]
     [(list "schema" "--json")
      (define schema-snapshot (command "codegen" 'schema-snapshot))
      (write-json (schema-snapshot (current-project!)))

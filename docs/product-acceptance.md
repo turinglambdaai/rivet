@@ -89,6 +89,65 @@ commit with the acceptance report. A dirty, diverged, or unreachable checkout
 is a reason to stop and report the state, not a reason to stash, reset, or
 claim evidence against an unknown base.
 
+## Classify desktop capabilities
+
+Not every desktop capability carries the same parity obligation. Declare each
+one as one of three categories and let the category drive the requirements
+list:
+
+- **Guaranteed** — the same semantics are required on every declared desktop
+  platform; a missing platform is a release failure. These become
+  `requirements` entries with all desktop platforms and suites of the matching
+  kinds.
+- **Conditional capability** — the same API and semantics everywhere, but
+  runtime availability may differ: tray, global shortcuts, secure storage,
+  notifications. The adapter must report supported/unavailable/permission
+  state explicitly instead of failing silently, and suites assert the
+  reported state, not unconditional success.
+- **Platform-specific** — intentionally native-only behavior with no forced
+  cross-platform abstraction. It is excluded from the requirements list;
+  platform-specific does not mean unverified, it means verified by that
+  platform's own suites.
+
+The goal is semantic parity, not identical visual behavior. Native SwiftUI,
+WinUI, and GTK presentations are expected to differ; the acceptance evidence
+(accessibility state, RPC effects, declared artifacts) must not.
+
+A Guaranteed feature is not complete until every declared platform has run
+its suites — which is what the matrix below proves.
+
+## Aggregate the cross-platform matrix
+
+The local operating system is an editing environment, not the boundary of
+verification. Each platform leg archives its acceptance report as a CI
+artifact; the matrix folds the reports for one commit into a single verdict:
+
+```bash
+raco rivet matrix windows-report.json macos-report.json linux-report.json
+raco rivet matrix windows-report.json --json
+```
+
+```text
+Rivet verification matrix: Taskly - 3 reports
+
+  requirement    windows     macos     linux
+  contract          PASS      PASS      PASS
+  native-ui         PASS      PASS      FAIL
+
+Cross-platform status: FAIL
+```
+
+The rules are deterministic: a cell is proven only by a passing suite of that
+kind in a report from that platform; ran-but-failed evidence fails the cell;
+no evidence for a platform means missing, never silently green. All reports
+must describe the same project, so one product's green leg cannot vouch for
+another. A diagnostic `--suite` run is accepted and flagged as partial in the
+matrix, but merge gates should feed complete reports. The exit code is green
+only when every required kind/platform cell is proven.
+
+Feed the reports for the commit under verification; the matrix aggregates
+what it is given and does not heuristically prefer fresher runs.
+
 ## What counts as complete
 
 RackUnit is the normal owner of shared Racket behavior. A product that claims
