@@ -1,7 +1,8 @@
 #include "update_handoff.hpp"
 
 #include <fcntl.h>
-#include <signal.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <cerrno>
@@ -155,8 +156,10 @@ std::string handoff_script(std::string const& application_id,
        {"prepared", "installing", "installed", "restarting", "restarted",
         "checking", "healthy", "committing", "committed", "rollback-started",
         "rolled-back", "rollback-failed"}) {
-    writers += journal_writer(phase, application_id, version, artifact_sha256,
-                              downloaded, backup);
+    writers += journal_writer(phase,
+                              journal_line(phase, application_id, version,
+                                           artifact_sha256, downloaded,
+                                           backup));
   }
 
   std::string arguments;
@@ -379,7 +382,8 @@ void launch_detached(std::filesystem::path const& attempt,
       if (log != STDOUT_FILENO && log != STDERR_FILENO) ::close(log);
     }
     ::setsid();
-    ::chdir(attempt.c_str());
+    // Every path the script sees is absolute, so the working directory of
+    // the detached helper does not matter.
     ::execv("/bin/sh", argv.data());
     int const error = errno;
     ssize_t const ignored = ::write(error_pipe[1], &error, sizeof(error));
