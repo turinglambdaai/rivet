@@ -194,6 +194,18 @@ RKT
     (check-true (string-contains? cpp "bool log_line_within(std::string message, std::chrono::milliseconds rivet_timeout)"))
     (check-true (string-contains? cpp "backend_.cancel(rivet_id); return false;"))
     (check-true (string-contains? cpp "rivet_done->set_value(detail::decode_Int64(*rivet_result.value));"))
+    (check-true
+     (string-contains? cpp
+                       "auto rivet_future = rivet_done->get_future();"))
+    (check-true
+     (string-contains? cpp
+                       "rivet_future.wait_for(rivet_timeout)"))
+    (check-true (string-contains? cpp "return rivet_future.get();"))
+    (check-false
+     (string-contains? cpp "rivet_done->get_future().wait_for"))
+    (check-true
+     (string-contains? cpp
+                       "detail::decode_Void(*rivet_result.value); rivet_done->set_value();"))
     ;; A Void async handler must not assign into Result<void>, which has no
     ;; value member — the decode only validates arrival.
     (check-false (string-contains? cpp "result.value = detail::decode_void"))

@@ -75,6 +75,7 @@ class API {
   std::optional<std::string> greet_within(
       std::string name, std::chrono::milliseconds rivet_timeout) {
     auto rivet_done = std::make_shared<std::promise<std::string>>();
+    auto rivet_future = rivet_done->get_future();
     auto rivet_id = backend_.request_async(
         "greet", rivet::linux_runtime::Value::List{rivet::Value(std::move(name))},
         [rivet_done](rivet::linux_runtime::CallResult call) mutable {
@@ -85,17 +86,18 @@ class API {
             rivet_done->set_value(*result.value);
           }
         });
-    if (rivet_done->get_future().wait_for(rivet_timeout) !=
+    if (rivet_future.wait_for(rivet_timeout) !=
         std::future_status::ready) {
       backend_.cancel(rivet_id);
       return std::nullopt;
     }
-    return rivet_done->get_future().get();
+    return rivet_future.get();
   }
 
   std::optional<std::int64_t> increment_within(
       std::int64_t value, std::chrono::milliseconds rivet_timeout) {
     auto rivet_done = std::make_shared<std::promise<std::int64_t>>();
+    auto rivet_future = rivet_done->get_future();
     auto rivet_id = backend_.request_async(
         "increment", rivet::linux_runtime::Value::List{rivet::Value(value)},
         [rivet_done](rivet::linux_runtime::CallResult call) mutable {
@@ -106,12 +108,12 @@ class API {
             rivet_done->set_value(*result.value);
           }
         });
-    if (rivet_done->get_future().wait_for(rivet_timeout) !=
+    if (rivet_future.wait_for(rivet_timeout) !=
         std::future_status::ready) {
       backend_.cancel(rivet_id);
       return std::nullopt;
     }
-    return rivet_done->get_future().get();
+    return rivet_future.get();
   }
 
   // State accessors: completion callbacks run on the backend reader thread
