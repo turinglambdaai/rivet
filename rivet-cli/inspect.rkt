@@ -294,6 +294,9 @@
         (list (action "inspect" "raco rivet inspect --json" #f)
               (action "diagnose" "raco rivet doctor --json" #f)
               (action "acceptance" "raco rivet acceptance --json" #f)
+              (action "verify-remote"
+                      "raco rivet verify-remote --repo OWNER/REPO --ref HEAD"
+                      #f)
               (action "inspect-schema" "raco rivet schema --json" #f)
               (action "save-schema-baseline"
                       "raco rivet schema --output rivet-schema.json"

@@ -43,6 +43,9 @@
     "  raco rivet matrix <report.json>... aggregate per-platform acceptance reports into the\n"
     "                                     cross-platform verification matrix\n"
     "  raco rivet matrix <report.json>... --json  emit the machine-readable matrix\n"
+    "  raco rivet verify-remote --repo OWNER/REPO --ref REF [--workflow verify.yml]\n"
+    "                                     trigger the per-platform acceptance legs and\n"
+    "                                     fold their archived reports into the matrix\n"
     "  raco rivet schema --json           emit the current versioned API schema\n"
     "  raco rivet schema --output <file>  write a schema compatibility baseline\n"
     "  raco rivet schema check <file>     reject breaking changes from a baseline\n"
@@ -120,6 +123,12 @@
      ;; is judging (issue #287).
      (define run-matrix-command (command "matrix" 'run-matrix-command))
      (exit (run-matrix-command matrix-args))]
+    [(cons "verify-remote" verify-remote-args)
+     ;; Remote orchestration triggers the platform legs and pulls their
+     ;; archived reports into the matrix from one editing host (issue #287).
+     (define run-verify-remote-command
+       (command "verify-remote" 'run-verify-remote-command))
+     (exit (run-verify-remote-command verify-remote-args))]
     [(list "schema" "--json")
      (define schema-snapshot (command "codegen" 'schema-snapshot))
      (write-json (schema-snapshot (current-project!)))

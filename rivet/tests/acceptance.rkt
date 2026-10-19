@@ -178,7 +178,116 @@ RKT
    (check-equal?
     (hash-ref (first (hash-ref stale-report 'suites)) 'missing-evidence)
     '(".rivet/acceptance/stale.txt"))
-   (check-false (file-exists? stale-evidence)))
+   (check-false (file-exists? stale-evidence))
+
+   ;; Evidence is classified (issue #287): accessibility snapshots are the
+   ;; primary cross-platform record, screenshots are supplemental, and plain
+   ;; string paths stay legal as the generic kind.
+   (write-manifest
+    root
+    #<<RKT
+#hasheq(
+ (version . 1)
+ (requirements . (#hasheq((kind . native-ui) (platforms . (windows)))))
+ (suites
+  . (#hasheq((id . windows-ui)
+             (kind . native-ui)
+             (platforms . (windows))
+             (command . ("pwsh" "-File" "scripts/ui.ps1"))
+             (evidence
+              . (#hasheq((path . ".rivet/acceptance/windows/ax.json")
+                         (kind . accessibility-snapshot))
+                 #hasheq((path . ".rivet/acceptance/windows/screen.png")
+                         (kind . screenshot))
+                 ".rivet/acceptance/windows/trace.json"))))))
+RKT
+    )
+   (define-values (_classified-path classified-suites _classified-reqs)
+     (load-acceptance-manifest project))
+   (check-equal?
+    (acceptance-suite-evidence (first classified-suites))
+    '((".rivet/acceptance/windows/ax.json" . accessibility-snapshot)
+      (".rivet/acceptance/windows/screen.png" . screenshot)
+      (".rivet/acceptance/windows/trace.json" . generic)))
+
+   ;; Unknown kinds and malformed entries are rejected before any suite runs.
+   (for ([manifest-text (in-list
+                         (list
+                          #<<RKT
+#hasheq(
+ (version . 1)
+ (requirements . (#hasheq((kind . native-ui) (platforms . (windows)))))
+ (suites
+  . (#hasheq((id . windows-ui)
+             (kind . native-ui)
+             (platforms . (windows))
+             (command . ("pwsh" "-File" "scripts/ui.ps1"))
+             (evidence
+              . (#hasheq((path . ".rivet/acceptance/windows/ax.json")
+                         (kind . video))))))))
+RKT
+                          #<<RKT
+#hasheq(
+ (version . 1)
+ (requirements . (#hasheq((kind . native-ui) (platforms . (windows)))))
+ (suites
+  . (#hasheq((id . windows-ui)
+             (kind . native-ui)
+             (platforms . (windows))
+             (command . ("pwsh" "-File" "scripts/ui.ps1"))
+             (evidence
+              . (#hasheq((kind . screenshot))))))))
+RKT
+                          #<<RKT
+#hasheq(
+ (version . 1)
+ (requirements . (#hasheq((kind . native-ui) (platforms . (windows)))))
+ (suites
+  . (#hasheq((id . windows-ui)
+             (kind . native-ui)
+             (platforms . (windows))
+             (command . ("pwsh" "-File" "scripts/ui.ps1"))
+             (evidence
+              . (#hasheq((path . ".rivet/acceptance/windows/ax.json")
+                         (kind . screenshot)
+                         (note . "extra"))))))))
+RKT
+                         ))])
+     (write-manifest root manifest-text)
+     (check-exn #rx"invalid suite evidence"
+                (lambda () (load-acceptance-manifest project))))
+
+   ;; The report pins each declared artifact's kind, presence, size, and
+   ;; digest, so remote consumers audit what a green suite produced.
+   (define classified-evidence-directory
+     (build-path root ".rivet" "acceptance" "windows"))
+   (make-directory* classified-evidence-directory)
+   (call-with-output-file
+    (build-path classified-evidence-directory "ax.json")
+    #:exists 'truncate/replace
+    (lambda (output) (display "{\"role\":\"window\"}" output)))
+   (define recorded-suite
+     (acceptance-suite 'windows-ui 'native-ui '(windows)
+                       (list "pwsh" "-File" "scripts/ui.ps1") 900
+                       '((".rivet/acceptance/windows/ax.json"
+                          . accessibility-snapshot)
+                         (".rivet/acceptance/windows/screen.png"
+                          . screenshot))))
+   (define entries (evidence-entries project recorded-suite))
+   (check-equal? (length entries) 2)
+   (define snapshot-entry (first entries))
+   (check-equal? (hash-ref snapshot-entry 'kind) "accessibility-snapshot")
+   (check-equal? (hash-ref snapshot-entry 'present) #t)
+   (check-equal? (hash-ref snapshot-entry 'bytes)
+                 (file-size (build-path classified-evidence-directory
+                                        "ax.json")))
+   (check-true (regexp-match? #px"^[0-9a-f]{64}$"
+                              (hash-ref snapshot-entry 'sha256)))
+   (define screenshot-entry (second entries))
+   (check-equal? (hash-ref screenshot-entry 'kind) "screenshot")
+   (check-equal? (hash-ref screenshot-entry 'present) #f)
+   (check-equal? (hash-ref screenshot-entry 'sha256) 'null)
+   (check-equal? (hash-ref screenshot-entry 'bytes) 'null))
  (lambda ()
    (when (directory-exists? temp-root)
      (delete-directory/files temp-root))))
