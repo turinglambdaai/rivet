@@ -116,9 +116,11 @@
 
 ;; Three green legs fold into a passing matrix and exit 0.
 (let-values ([(wake count) (sleep-counter)])
+  (define work (make-temporary-file "rivet-verify-~a" 'directory))
   (define exit-code
     (run-verify-remote-command
-     (list "--repo" "acme/demo" "--ref" "main")
+     (list "--repo" "acme/demo" "--ref" "main"
+           "--output-directory" (path->string work))
      #:run-gh (make-fake-gh!
                #:runs-after (green-runs-json)
                #:artifacts-by-run (all-green-artifacts))
@@ -129,11 +131,13 @@
 
 ;; The same command in --json mode reports the runs and the matrix verdict.
 (let ()
+  (define work (make-temporary-file "rivet-verify-~a" 'directory))
   (define-values (exit-code output)
     (capture-output
      (lambda ()
        (run-verify-remote-command
-        (list "--repo" "acme/demo" "--ref" "main" "--json")
+        (list "--repo" "acme/demo" "--ref" "main" "--json"
+              "--output-directory" (path->string work))
         #:run-gh (make-fake-gh!
                   #:runs-after (green-runs-json)
                   #:artifacts-by-run (all-green-artifacts))
@@ -151,6 +155,7 @@
 ;; A red run still hands over its archived evidence; the failing platform's
 ;; report fails its matrix cell and the command exits 1.
 (let ()
+  (define work (make-temporary-file "rivet-verify-~a" 'directory))
   (define artifacts
     (hash 101 (list (cons "linux" (report-text "linux" "fail")))
           102 (list (cons "macos" (report-text "macos" "pass")))
@@ -159,7 +164,8 @@
     (capture-output
      (lambda ()
        (run-verify-remote-command
-        (list "--repo" "acme/demo" "--ref" "main")
+        (list "--repo" "acme/demo" "--ref" "main"
+              "--output-directory" (path->string work))
         #:run-gh (make-fake-gh!
                   #:runs-after (green-runs-json)
                   #:watch-codes (hash 101 1)
