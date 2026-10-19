@@ -60,7 +60,13 @@ jobs:
       - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.12.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
-      - run: raco rivet acceptance --json
+      - run: raco rivet acceptance --json > acceptance-report.json
+        shell: bash
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: acceptance-report-windows
+          path: acceptance-report.json
       - run: raco rivet build
 
   macos-host:
@@ -80,7 +86,13 @@ jobs:
       - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.12.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
-      - run: raco rivet acceptance --json
+      - run: raco rivet acceptance --json > acceptance-report.json
+        shell: bash
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: acceptance-report-macos
+          path: acceptance-report.json
       - run: raco rivet build
 
   linux-host:
@@ -97,9 +109,22 @@ jobs:
         run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.12.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
-      - run: raco rivet acceptance --json
+      - run: raco rivet acceptance --json > acceptance-report.json
+        shell: bash
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: acceptance-report-linux
+          path: acceptance-report.json
       - run: raco rivet build
 ```
+
+Each job writes its `acceptance --json` report to a file and archives it as
+`acceptance-report-<platform>` with `if: always()`, so a red leg still hands
+over its evidence. Those names are exactly what
+[`raco rivet verify-remote`](product-acceptance.md#orchestrate-remote-verification-from-one-host)
+expects: from any editing host it dispatches the legs, waits for the runs,
+downloads the archived reports, and folds them into the verification matrix.
 
 The Linux order is load-bearing: install the Rivet package **after**
 `setup-embed-racket`. The action's minimal Racket build intentionally ships

@@ -80,7 +80,9 @@ required acceptance suites pass on Windows, macOS, and Linux. The local
 operating system determines only which checks can run locally; it does not
 reduce the required verification scope. Archive every platform leg's
 `acceptance --json` report and prove the union with
-`raco rivet matrix <reports...> --json` (issue #287). Classify desktop
+`raco rivet matrix <reports...> --json`; `raco rivet verify-remote`
+dispatches those legs and pulls their archived reports into the matrix from
+this host when the platforms are not local (issue #287). Classify desktop
 capabilities as guaranteed, conditional, or platform-specific as documented
 in `docs/product-acceptance.md`.
 

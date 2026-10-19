@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Make verification evidence and orchestration first-class for distributed
+  agents (issue #287). `raco rivet verify-remote` dispatches the
+  per-platform acceptance legs of one commit on GitHub Actions, waits for the
+  runs, downloads the archived `acceptance --json` reports, and folds them
+  into the verification matrix, so an agent edits on one OS and is judged by
+  the others. Acceptance evidence entries are now classified —
+  `accessibility-snapshot`, `screenshot`, `interaction-trace`, `log`, or
+  `generic` — and the report pins each declared artifact's kind, presence,
+  byte size, and SHA-256, while plain string evidence paths stay legal as
+  `generic`. The product CI guide archives every leg's report as
+  `acceptance-report-<platform>` with `if: always()`, which is exactly the
+  convention the new command consumes.
+
 - Add the crash-safe process-external Linux AppImage handoff (issue #290).
   `AppImageHandoff::LaunchReplacement` in the linked `rivet::platform` target
   writes a generated first-party shell script — the counterpart of the

@@ -55,7 +55,13 @@ jobs:
       - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.12.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
-      - run: raco rivet acceptance --json
+      - run: raco rivet acceptance --json > acceptance-report.json
+        shell: bash
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: acceptance-report-windows
+          path: acceptance-report.json
       - run: raco rivet build
 
   macos-host:
@@ -75,7 +81,13 @@ jobs:
       - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.12.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
-      - run: raco rivet acceptance --json
+      - run: raco rivet acceptance --json > acceptance-report.json
+        shell: bash
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: acceptance-report-macos
+          path: acceptance-report.json
       - run: raco rivet build
 
   linux-host:
@@ -92,9 +104,22 @@ jobs:
         run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.12.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
-      - run: raco rivet acceptance --json
+      - run: raco rivet acceptance --json > acceptance-report.json
+        shell: bash
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: acceptance-report-linux
+          path: acceptance-report.json
       - run: raco rivet build
 ```
+
+每个 job 都把 `acceptance --json` 报告写入文件，并以
+`acceptance-report-<platform>` 为名、`if: always()` 归档——失败的腿也要交出
+证据。这些名字正是
+[`raco rivet verify-remote`](product-acceptance.md#orchestrate-remote-verification-from-one-host)
+的默认约定：在任一编辑主机上触发各平台腿、等待运行、下载归档报告并折叠成
+验证矩阵。
 
 Linux 中的顺序是必要条件：必须在 `setup-embed-racket` **之后**安装 Rivet。
 该 action 准备的是刻意不附带任何包的 minimal Racket；此时再安装 Rivet，

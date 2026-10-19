@@ -13,19 +13,29 @@
          racket/port
          racket/string
          racket/system
+         "../rivet/distribution/crypto.rkt"
          "project.rkt")
 
 (provide default-acceptance-manifest-name
          acceptance-kinds
+         evidence-kinds
          supported-platforms
          (struct-out acceptance-suite)
          load-acceptance-manifest
          acceptance-report
+         evidence-entries
          run-acceptance-command)
 
 (define default-acceptance-manifest-name "rivet-acceptance.rktd")
 (define acceptance-kinds
   '(unit contract bridge native-build native-ui package release))
+;; Normalized evidence classes (issue #287): accessibility snapshots are the
+;; primary cross-platform acceptance evidence, screenshots are supplemental
+;; because native UIs are expected to look different, and traces plus logs
+;; carry the interaction and failure narrative. Plain string paths in a
+;; manifest stay legal and mean 'generic.
+(define evidence-kinds
+  '(accessibility-snapshot screenshot interaction-trace log generic))
 (define supported-platforms '(windows macos linux))
 (define maximum-captured-output-bytes (* 64 1024))
 
@@ -95,10 +105,64 @@
               (string-ci=? (path->string (first parts)) ".rivet")
               (string-ci=? (path->string (second parts)) "acceptance")))))
 
-(define (valid-evidence? value)
-  (and (list? value)
-       (andmap acceptance-evidence-path-string? value)
-       (= (length value) (length (remove-duplicates value string=?)))))
+;; Manifest evidence entries are either a bare path string (legacy shape,
+;; normalized to the 'generic kind) or a hash with exactly `path` and `kind`.
+;; Internally each entry is a (path . kind) pair.
+(define (parse-evidence-entry path suite-id raw)
+  (cond
+    [(string? raw)
+     (unless (acceptance-evidence-path-string? raw)
+       (manifest-error path
+                       "invalid suite evidence path"
+                       "suite" suite-id
+                       "expected"
+                       "a unique file path below .rivet/acceptance/"
+                       "value" raw))
+     (cons raw 'generic)]
+    [(hash? raw)
+     (define path-value
+       (hash-ref raw 'path
+                 (lambda ()
+                   (manifest-error path
+                                   "invalid suite evidence entry"
+                                   "suite" suite-id
+                                   "expected" "a hash with path and kind"
+                                   "value" raw))))
+     (unless (acceptance-evidence-path-string? path-value)
+       (manifest-error path
+                       "invalid suite evidence path"
+                       "suite" suite-id
+                       "expected"
+                       "a unique file path below .rivet/acceptance/"
+                       "value" path-value))
+     (define kind-value
+       (hash-ref raw 'kind
+                 (lambda ()
+                   (manifest-error path
+                                   "invalid suite evidence entry"
+                                   "suite" suite-id
+                                   "expected" "a hash with path and kind"
+                                   "value" raw))))
+     (unless (memq kind-value evidence-kinds)
+       (manifest-error path
+                       "invalid suite evidence kind"
+                       "suite" suite-id
+                       "expected" evidence-kinds
+                       "value" kind-value))
+     (unless (= (length (hash-keys raw)) 2)
+       (manifest-error path
+                       "invalid suite evidence entry"
+                       "suite" suite-id
+                       "expected" "a hash with exactly path and kind"
+                       "value" raw))
+     (cons path-value kind-value)]
+    [else
+     (manifest-error path
+                     "invalid suite evidence entry"
+                     "suite" suite-id
+                     "expected"
+                     "a path string or a hash with path and kind"
+                     "value" raw)]))
 
 (define (parse-suite path raw)
   (unless (hash? raw)
@@ -134,14 +198,17 @@
                     "suite" id
                     "expected" "integer from 1 through 7200"
                     "value" timeout-seconds))
-  (define evidence (hash-ref raw 'evidence '()))
-  (unless (valid-evidence? evidence)
+  (define evidence-raw (hash-ref raw 'evidence '()))
+  (define evidence
+    (map (lambda (entry) (parse-evidence-entry path id entry)) evidence-raw))
+  (unless (= (length evidence)
+             (length (remove-duplicates evidence equal?)))
     (manifest-error path
                     "invalid suite evidence"
                     "suite" id
                     "expected"
                     "unique file paths below .rivet/acceptance/"
-                    "value" evidence))
+                    "value" evidence-raw))
   (when (and (memq kind '(native-ui package release))
              (null? evidence))
     (manifest-error path
@@ -280,7 +347,8 @@
 (define (prepare-evidence! project suite)
   ;; Evidence belongs under Rivet's generated root, so removing stale files is
   ;; both safe and necessary: an earlier green run must not satisfy this run.
-  (for ([relative (in-list (acceptance-suite-evidence suite))])
+  (for ([entry (in-list (acceptance-suite-evidence suite))])
+    (define relative (car entry))
     (define path (project-path project relative))
     (for/fold ([parent (rivet-project-root project)])
               ([part (in-list
@@ -302,9 +370,23 @@
       (delete-file path))))
 
 (define (evidence-missing project suite)
-  (for/list ([relative (in-list (acceptance-suite-evidence suite))]
-             #:unless (file-exists? (project-path project relative)))
-    relative))
+  (for/list ([entry (in-list (acceptance-suite-evidence suite))]
+             #:unless (file-exists? (project-path project (car entry))))
+    (car entry)))
+
+;; First-class evidence records (issue #287): the report pins each declared
+;; artifact's kind, presence, size, and digest so remote consumers can audit
+;; what a green suite actually produced without trusting prose.
+(define (evidence-entries project suite)
+  (for/list ([entry (in-list (acceptance-suite-evidence suite))])
+    (define relative (car entry))
+    (define path (project-path project relative))
+    (define present (file-exists? path))
+    (hash 'path relative
+          'kind (symbol->string (cdr entry))
+          'present present
+          'bytes (if present (file-size path) 'null)
+          'sha256 (if present (string-downcase (sha256-file/hex path)) 'null))))
 
 (define (execute-suite project suite)
   (define command (acceptance-suite-command suite))
@@ -334,7 +416,7 @@
           (hash 'id (symbol->string (acceptance-suite-id suite))
                 'kind (symbol->string (acceptance-suite-kind suite))
                 'command (acceptance-suite-command suite)
-                'evidence (acceptance-suite-evidence suite)
+                'evidence (evidence-entries project suite)
                 'status "fail"
                 'duration-ms
                 (inexact->exact
@@ -371,7 +453,7 @@
     (hash 'id (symbol->string (acceptance-suite-id suite))
           'kind (symbol->string (acceptance-suite-kind suite))
           'command (acceptance-suite-command suite)
-          'evidence (acceptance-suite-evidence suite)
+          'evidence (evidence-entries project suite)
           'status (if passed? "pass" "fail")
           'duration-ms
           (inexact->exact

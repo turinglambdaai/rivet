@@ -33,8 +33,12 @@ Commit the manifest at the project root:
              (platforms . (windows))
              (command . ("pwsh" "-File" "scripts/e2e/windows.ps1"))
              (timeout-seconds . 900)
-             (evidence . (".rivet/acceptance/windows/trace.json"
-                          ".rivet/acceptance/windows/accessibility.json"))))))
+             (evidence
+              . (#hasheq((path . ".rivet/acceptance/windows/accessibility.json")
+                         (kind . accessibility-snapshot))
+                 #hasheq((path . ".rivet/acceptance/windows/screen.png")
+                         (kind . screenshot))
+                 ".rivet/acceptance/windows/trace.json"))))))
 ```
 
 The supported suite kinds are:
@@ -55,6 +59,16 @@ paths below `.rivet/acceptance/`. Rivet removes each declared file before the
 suite starts and then requires the suite to recreate it, so a stale artifact
 from an earlier green run cannot satisfy the current run. `native-ui`,
 `package`, and `release` suites must declare at least one evidence file.
+
+Evidence entries are classified so remote consumers know what a green suite
+actually produced. A bare path string means the `generic` kind; a hash declares
+`path` and one `kind` of `accessibility-snapshot`, `screenshot`,
+`interaction-trace`, `log`, or `generic`. Accessibility snapshots are the
+primary cross-platform record — semantic UI state that is comparable across
+platforms — while screenshots are supplemental because native presentations
+are expected to differ. The `--json` report pins every declared entry's kind,
+presence, byte size, and SHA-256, so an archived report audits the artifacts
+it vouches for.
 
 `requirements` is the reviewable policy. For every kind/platform pair there
 must be at least one matching suite or the manifest is rejected before a child
@@ -147,6 +161,35 @@ only when every required kind/platform cell is proven.
 
 Feed the reports for the commit under verification; the matrix aggregates
 what it is given and does not heuristically prefer fresher runs.
+
+## Orchestrate remote verification from one host
+
+`raco rivet verify-remote` closes the loop for an agent editing away from the
+platform legs: it dispatches each platform's acceptance leg on GitHub Actions,
+waits for the runs, downloads the archived `acceptance --json` reports, and
+folds them into the matrix:
+
+```bash
+raco rivet verify-remote --repo OWNER/REPO --ref <branch-or-sha>
+raco rivet verify-remote --repo OWNER/REPO --ref <sha> --platform linux
+raco rivet verify-remote --repo OWNER/REPO --ref <sha> --json
+```
+
+The command drives the `gh` CLI and nothing else. The defaults encode one
+convention — workflow `verify.yml`, artifacts named
+`acceptance-report-<platform>` — and `--workflow`/`--artifact-prefix` adapt it
+to a product's own naming. The workflow contract is: a `workflow_dispatch`
+trigger with a `platform` input (`linux`, `windows`, or `macos`), one
+`raco rivet acceptance --json` per leg, and the report uploaded with
+`if: always()` so a red leg still hands over its evidence. Re-running only the
+affected platform is just `--platform <name>`; the final verdict still needs
+every required platform's report, because missing platforms are never silently
+green.
+
+The command exits green only when the matrix passes and every requested
+platform delivered a report. Run collections land under
+`.rivet/verify-remote/` (adjust with `--output-directory`), and `--json` adds
+the per-run conclusions and report paths to the matrix document.
 
 ## What counts as complete
 
