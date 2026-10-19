@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Make cross-platform verification first-class. `raco rivet matrix
+  <report.json>... [--json]` folds the per-platform `acceptance --json`
+  reports for one commit into a single machine-readable verdict: a required
+  kind/platform cell is proven only by a passing suite on that platform,
+  missing platforms are never silently green, and the exit code is green only
+  when every required cell is proven — so an agent editing on one OS can
+  still be judged by the other platforms' evidence. `docs/product-acceptance.md`
+  now defines the guaranteed / conditional / platform-specific capability
+  classification, and the maintainer contract states that the local
+  operating system does not reduce the required verification scope.
+
 - Ship the Windows runtime source list as a machine-consumable property
   sheet. `platform/windows/rivet-runtime-sources.props` is now the single
   author of the host library's `<ClCompile>` set — `rivet-host.vcxproj`

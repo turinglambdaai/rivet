@@ -75,6 +75,15 @@ development substitute, or refresh expected evidence merely to make a change
 green. A skipped, unrun, timed-out, or wrong-platform required suite means the
 work is not complete.
 
+A change touching a guaranteed desktop capability is incomplete until the
+required acceptance suites pass on Windows, macOS, and Linux. The local
+operating system determines only which checks can run locally; it does not
+reduce the required verification scope. Archive every platform leg's
+`acceptance --json` report and prove the union with
+`raco rivet matrix <reports...> --json` (issue #287). Classify desktop
+capabilities as guaranteed, conditional, or platform-specific as documented
+in `docs/product-acceptance.md`.
+
 For this repository, inspect the nearest implementation and its tests before
 editing. The shared wire contract is documented in `docs/protocol.md` and
 exercised by `rivet/tests/protocol-golden.txt` across Racket, C++, Swift, and Kotlin.

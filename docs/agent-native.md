@@ -210,6 +210,14 @@ output bounds, checks exit status and declared artifacts, and returns a
 machine-readable report suitable for a required CI check. See
 [product acceptance evidence](product-acceptance.md).
 
+The local operating system bounds only which suites can run locally, not the
+required verification scope. Archive every platform leg's
+`acceptance --json` report as a CI artifact and judge the union with
+`raco rivet matrix <reports...> --json`: a change touching a guaranteed
+desktop capability is incomplete until the required suites are proven on
+every declared platform. Fix, then re-run only the affected platform's leg
+and re-aggregate.
+
 `build` validates the Racket schema and regenerates typed native clients.
 `package` creates and immediately verifies a development distributable.
 `verify` can audit the artifact again without rebuilding it. Production mode
