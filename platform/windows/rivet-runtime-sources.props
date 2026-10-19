@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Authoritative Windows runtime source list (issue #280).
+
+       This property sheet is the machine-consumable replacement for
+       hand-copied <ClCompile> lists. rivet-host.vcxproj imports it, so
+       Rivet's own build and every downstream consumer share one list and a
+       new translation unit can no longer silently miss a vendored host the
+       way the podlens valid_utf8 LNK2001 did. The guard test in
+       rivet/tests/host-package-linkage.rkt keeps this list in step with
+       runtime/CMakeLists.txt.
+
+       Transitional hosts that compile Rivet sources directly import this
+       file instead of re-listing sources:
+
+         <Import
+           Project="$(RivetRoot)\platform\windows\rivet-runtime-sources.props" />
+
+       Override RivetSourceRoot when importing from a checkout rooted
+       elsewhere. Products on the packaged-consumption path (#238) do not
+       need this file: they reference rivet-host.vcxproj directly. -->
+  <PropertyGroup>
+    <RivetSourceRoot Condition="'$(RivetSourceRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)..\..'))</RivetSourceRoot>
+  </PropertyGroup>
+  <ItemGroup Label="RivetRuntimeSources">
+    <ClCompile Include="$(RivetSourceRoot)platform\windows\device\device_identity.cpp" />
+    <ClCompile Include="$(RivetSourceRoot)platform\windows\device\device_listener.cpp" />
+    <ClCompile Include="$(RivetSourceRoot)platform\windows\device\device_session_service.cpp" />
+    <ClCompile Include="$(RivetSourceRoot)platform\windows\device\schannel_transport.cpp" />
+    <ClCompile Include="$(RivetSourceRoot)platform\windows\runtime\backend.cpp" />
+    <ClCompile Include="$(RivetSourceRoot)platform\windows\runtime\win32_pipe_transport.cpp" />
+    <ClCompile Include="$(RivetSourceRoot)platform\windows\system\system_services.cpp" />
+    <ClCompile Include="$(RivetSourceRoot)platform\windows\update\update_handoff.cpp" />
+    <ClCompile Include="$(RivetSourceRoot)runtime\src\device_session.cpp" />
+    <ClCompile Include="$(RivetSourceRoot)runtime\src\device_session_host.cpp" />
+    <ClCompile Include="$(RivetSourceRoot)runtime\src\discovery_advertisement.cpp" />
+    <ClCompile Include="$(RivetSourceRoot)runtime\src\protocol.cpp" />
+    <ClCompile Include="$(RivetSourceRoot)runtime\src\sha256.cpp" />
+    <ClCompile Include="$(RivetSourceRoot)runtime\src\utf8.cpp" />
+    <ClCompile Include="$(RivetSourceRoot)runtime\src\x509_spki.cpp" />
+  </ItemGroup>
+</Project>

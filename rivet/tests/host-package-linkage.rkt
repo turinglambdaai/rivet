@@ -7,6 +7,7 @@
 
 (require rackunit
          racket/file
+         racket/list
          racket/runtime-path
          racket/string)
 
@@ -23,6 +24,13 @@
   (file->string
    (build-path repository-root "platform" "windows"
                "rivet-host.vcxproj")))
+(define windows-source-props
+  (file->string
+   (build-path repository-root "platform" "windows"
+               "rivet-runtime-sources.props")))
+(define runtime-cmake
+  (file->string
+   (build-path repository-root "runtime" "CMakeLists.txt")))
 (define windows-host-template
   (file->string
    (build-path repository-root "platform" "windows" "host"
@@ -58,6 +66,33 @@
     project-text
     (format "obj\\~a\\</MSBuildProjectExtensionsPath>" project-name))
    (format "~a must have an isolated NuGet assets directory" project-name)))
+
+;; The Windows runtime source list has exactly one author (issue #280): the
+;; props file that vendored hosts import. Re-listing sources in the vcxproj
+;; would reintroduce the roting hand copies behind the podlens LNK2001.
+(check-true (string-contains? windows-host "rivet-runtime-sources.props")
+            "rivet-host.vcxproj must import the shared runtime source props")
+(check-false (string-contains? windows-host "<ClCompile Include=")
+             "rivet-host.vcxproj must not re-list sources beside the props")
+
+;; Every shared runtime unit CMake compiles into rivet_protocol — minus the
+;; chart unit that rivet-chart.lib owns on Windows — must appear in the props,
+;; so adding a translation unit without reaching vendored Windows hosts fails
+;; here instead of at a downstream link (the utf8.cpp LNK2001 class).
+(define cmake-runtime-units
+  (filter-map
+   (lambda (line)
+     (define unit-match
+       (regexp-match #px"^\\s*src/([A-Za-z0-9_]+\\.cpp)\\s*$" line))
+     (and unit-match (second unit-match)))
+   (string-split runtime-cmake "\n")))
+(check-true (pair? cmake-runtime-units)
+            "runtime/CMakeLists.txt must still declare rivet_protocol sources")
+(for ([unit (in-list cmake-runtime-units)]
+      #:unless (string=? unit "chart_batch.cpp"))
+  (check-true
+   (string-contains? windows-source-props (format "runtime\\src\\~a" unit))
+   (format "rivet-runtime-sources.props must compile the shared unit ~a" unit)))
 
 (check-true
  (string-contains? windows-host-template

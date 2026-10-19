@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Ship the Windows runtime source list as a machine-consumable property
+  sheet. `platform/windows/rivet-runtime-sources.props` is now the single
+  author of the host library's `<ClCompile>` set — `rivet-host.vcxproj`
+  imports it, and hosts that still compile Rivet sources directly (the
+  transitional path until #238 ships prebuilt static libraries) import the
+  same file instead of hand-copying entries that rot: adding a runtime
+  translation unit previously broke every downstream Windows host at link
+  time (the podlens `valid_utf8` LNK2001). A guard test keeps the props in
+  step with `runtime/CMakeLists.txt`, and `platform/windows/README.md`
+  documents both consumption contracts.
+
 - Fix generated C++ bounded-wait RPCs so each promise yields exactly one
   future, reused for both the timeout wait and the result read. Void RPCs now
   also fulfill their promise after decoding a successful response; previously
