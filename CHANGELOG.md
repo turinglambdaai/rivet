@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fix generated C++ bounded-wait RPCs so each promise yields exactly one
+  future, reused for both the timeout wait and the result read. Void RPCs now
+  also fulfill their promise after decoding a successful response; previously
+  non-Void calls threw `future_already_retrieved` and Void calls always timed
+  out even when the backend had completed.
+
 - Add executable product acceptance contracts. `raco rivet acceptance
   --json` validates `rivet-acceptance.rktd`, rejects missing kind/platform
   coverage, launches each current-platform suite as an executable plus argv

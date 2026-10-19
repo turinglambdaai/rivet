@@ -158,7 +158,8 @@
 (define (cpp-promise-handler result-type backend-namespace)
   (define settle
     (if (eq? result-type 'Void)
-        (format "detail::decode_~a(*rivet_result.value);" (type-key result-type))
+        (format "detail::decode_~a(*rivet_result.value); rivet_done->set_value();"
+                (type-key result-type))
         (format "rivet_done->set_value(detail::decode_~a(*rivet_result.value));"
                 (type-key result-type))))
   (format
@@ -186,8 +187,8 @@
   (define timed-out-return (if void? "false" "std::nullopt"))
   (define final-get
     (if void?
-        "rivet_done->get_future().get(); return true;"
-        "return rivet_done->get_future().get();"))
+        "rivet_future.get(); return true;"
+        "return rivet_future.get();"))
   ;; A zero-argument RPC has no parameter list; the timeout must not follow
   ;; a stray comma.
   (define within-params
@@ -195,7 +196,7 @@
         "std::chrono::milliseconds rivet_timeout"
         (format "~a, std::chrono::milliseconds rivet_timeout" params)))
   (format
-   "  ~a ~a_within(~a) { auto rivet_done = std::make_shared<std::promise<~a>>(); auto rivet_id = backend_.request_async(~a, rivet::Value::List{~a}, ~a); if (rivet_done->get_future().wait_for(rivet_timeout) != std::future_status::ready) { backend_.cancel(rivet_id); return ~a; } ~a }\n"
+   "  ~a ~a_within(~a) { auto rivet_done = std::make_shared<std::promise<~a>>(); auto rivet_future = rivet_done->get_future(); auto rivet_id = backend_.request_async(~a, rivet::Value::List{~a}, ~a); if (rivet_future.wait_for(rivet_timeout) != std::future_status::ready) { backend_.cancel(rivet_id); return ~a; } ~a }\n"
    return-type
    (cpp-id (schema-rpc-name info))
    within-params
