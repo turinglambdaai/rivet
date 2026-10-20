@@ -83,13 +83,17 @@ These settings describe native registration only. They do not add messages to RV
 ## Companion-device API
 
 - `device-rpcs` — an explicit list of backend RPC symbols exposed through the
-  generated Apple companion API. It defaults to the empty list, so upgrading
+  generated companion API. It defaults to the empty list, so upgrading
   an existing project does not expose backend methods to another device.
 
 Every name must identify a declared RPC and fit the bounded RivetDevice route
-syntax. Selected argument/result types must be Codable-compatible; `Any` is
+syntax. Selected argument/result types must be companion-compatible; `Any` is
 rejected. Generation produces Swift request types, typed
-`RivetDeviceClient` methods, and `RivetDeviceRouter.registerGeneratedBackend`.
+`RivetDeviceClient` methods, and `RivetDeviceRouter.registerGeneratedBackend`,
+plus a Kotlin `RivetDeviceAPI` wrapper over the authenticated Android
+`RivetClient`. The Kotlin wrapper contains only the allowlisted methods; the
+desktop gateway remains the authoritative scope check even if application
+code bypasses generated clients.
 The exported names are included in `rivet-schema.json`: removing one is a
 breaking change, while adding one is compatible. See
 [typed device communication](device-communication.md).

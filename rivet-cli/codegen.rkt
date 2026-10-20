@@ -68,7 +68,7 @@
          ;; the file drop-in for Gradle source sets.
          (cons (project-path project ".rivet" "generated" "kotlin" "dev" "rivet"
                              "generated" "GeneratedBackend.kt")
-               (generate-kotlin rpcs events states records enums
+               (generate-kotlin rpcs events states records enums device-rpcs
                                 module-name entry-name display-name version build
                                 identifier release-channel))))
       (define linux-host (project-path project "linux"))

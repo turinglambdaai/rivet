@@ -256,8 +256,12 @@ M3's Android companion binding is also implemented: the Kotlin
 `dev.rivet.session` package carries the RVD1 records, the client state
 machine with its credential-persistence gate, a blocking runner over any
 byte stream, and the canonical discovery advertisement behind a driver
-interface, all pinned by the shared golden fixture. The remaining M3 work
-is product binding and real-device acceptance on both platforms.
+interface, all pinned by the shared golden fixture. Kotlin generation now
+also derives `RivetDeviceAPI` from the product's default-deny `device-rpcs`
+allowlist, so an accepted Android session gets the same typed device surface
+as Apple rather than the complete backend API. The remaining M3 work is the
+Android NSD/TLS stream adapter, product binding, and real-device acceptance
+on both platforms.
 
 M3's Windows transport slice is also implemented: a CNG-persisted P-256
 self-signed identity with deletion-based rotation, an SChannel TLS server
@@ -270,9 +274,9 @@ byte-identical across platforms. This code compiles only under the
 Windows SDK, so it has not run on real hardware yet: acceptance requires a
 Windows machine to verify identity creation, listener start, DNS-SD
 visibility (`dns-sd -B _rivet-device._tcp` from another host), and an iOS
-provisional-pairing handshake. After that, bind Android discovery/TLS
-streams to the existing Kotlin runtime and the generated device API using
-the same golden fixture. Read `docs/network-device-channel.md` for the
+provisional-pairing handshake. After that, bind Android NSD/TLS streams to
+the existing Kotlin runtime and exercise the generated `RivetDeviceAPI`
+using the same golden fixture. Read `docs/network-device-channel.md` for the
 wire and timing contract and reuse the language-neutral fixtures; do not
 reinterpret the preface per platform.
 
