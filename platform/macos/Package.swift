@@ -103,6 +103,11 @@ let package = Package(
             path: "Sources/RivetUI"
         ),
         .testTarget(
+            name: "RivetWatchConnectivityTests",
+            dependencies: ["RivetWatchConnectivity", "RivetDevice"],
+            path: "Tests/RivetWatchConnectivityTests"
+        ),
+        .testTarget(
             name: "RivetRuntimeTests",
             dependencies: ["RivetRuntime"],
             path: "Tests/RivetRuntimeTests"
