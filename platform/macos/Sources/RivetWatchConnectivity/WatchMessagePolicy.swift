@@ -1,13 +1,21 @@
 import Foundation
 import RivetDevice
 
+/// A conservative foreground WatchConnectivity message budget. Large
+/// background transfers belong to WCSession file transfer, not sendMessageData.
+public let rivetWatchConnectivityDefaultMaximumMessageSize = 64 * 1024
+
 /// An untrusted, bounded WatchConnectivity envelope. The paired iPhone must
 /// authorize each registered route and the authenticated desktop session.
 public struct RivetWatchMessagePolicy: Sendable {
     public let maximumBytes: Int
 
-    public init(maximumBytes: Int = rivetDeviceDefaultMaximumMessageSize) {
-        precondition(maximumBytes > 0 && maximumBytes <= rivetDeviceDefaultMaximumMessageSize)
+    public init(maximumBytes: Int = rivetWatchConnectivityDefaultMaximumMessageSize) {
+        precondition(
+            maximumBytes > 0 &&
+                maximumBytes <= rivetWatchConnectivityDefaultMaximumMessageSize &&
+                maximumBytes <= rivetDeviceDefaultMaximumMessageSize
+        )
         self.maximumBytes = maximumBytes
     }
 
