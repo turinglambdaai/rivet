@@ -141,18 +141,22 @@ class DeviceDiscoveryBrowser(
 ) {
     private val discoveries = LinkedHashMap<String, DeviceDiscovery>()
     private var running = false
+    // A previous discovery driver can deliver a queued callback after restart.
+    // Only the generation that registered the callback may update candidates.
+    private var discoveryGeneration = 0L
 
     val snapshot: List<DeviceDiscovery>
         get() = synchronized(this) { discoveries.values.toList() }
 
     fun start() {
-        synchronized(this) {
+        val generation = synchronized(this) {
             if (running) return
             running = true
+            ++discoveryGeneration
         }
         driver.start { serviceName, txtRecord, removed ->
             synchronized(this) {
-                if (!running) return@synchronized
+                if (!running || generation != discoveryGeneration) return@synchronized
                 if (removed) {
                     discoveries.remove(serviceName)?.let { onEvent(DeviceDiscoveryEventKind.REMOVED, it) }
                     return@synchronized
@@ -192,6 +196,7 @@ class DeviceDiscoveryBrowser(
         synchronized(this) {
             if (!running) return
             running = false
+            discoveryGeneration++
             removals = discoveries.values.toList()
             discoveries.clear()
         }
@@ -201,6 +206,7 @@ class DeviceDiscoveryBrowser(
 
     private fun fail() {
         running = false
+        discoveryGeneration++
         driver.stop()
         val removals = discoveries.values.toList()
         discoveries.clear()
