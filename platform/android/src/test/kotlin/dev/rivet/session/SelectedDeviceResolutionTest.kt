@@ -53,10 +53,8 @@ class SelectedDeviceResolutionTest {
         val callback = h.nativeCallback!!
         callback(h.result(selected))
         callback(h.result(selected, port = 54321))
-        assertEquals(
-            listOf(DeviceResolvedEndpoint("192.0.2.1", 12345, advertisementID, false)),
-            answers,
-        )
+        assertEquals(1, answers.size)
+        assertEquals(DeviceResolvedEndpoint("192.0.2.1", 12345, advertisementID, false), answers.single())
         h.browser.stop()
     }
 
@@ -130,7 +128,8 @@ class SelectedDeviceResolutionTest {
         val selection = DeviceDiscovery("Rivet-gone", advertisementID, true)
         val results = mutableListOf<DeviceResolvedEndpoint?>()
         h.resolver.resolveSelected(selection) { results += it }
-        assertEquals(listOf(null), results)
+        assertEquals(1, results.size)
+        assertNull(results.single())
         assertEquals(0, h.resolutionCalls)
     }
 }
