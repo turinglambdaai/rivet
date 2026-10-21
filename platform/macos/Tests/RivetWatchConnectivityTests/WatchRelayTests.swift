@@ -32,6 +32,15 @@ private struct PhoneRelayLoopback: RivetDeviceTransport {
 }
 
 @Test func watchEnvelopeRejectsEmptyAndOversizedMessages() throws {
+    let defaultPolicy = RivetWatchMessagePolicy()
+    #expect(defaultPolicy.maximumBytes == 64 * 1024)
+    try defaultPolicy.validate(Data(repeating: 1, count: 64 * 1024))
+    #expect(throws: RivetWatchMessagePolicyError.messageTooLarge(
+        actual: 64 * 1024 + 1, maximum: 64 * 1024
+    )) {
+        try defaultPolicy.validate(Data(repeating: 1, count: 64 * 1024 + 1))
+    }
+
     let policy = RivetWatchMessagePolicy(maximumBytes: 16)
     #expect(throws: RivetWatchMessagePolicyError.emptyMessage) {
         try policy.validate(Data())

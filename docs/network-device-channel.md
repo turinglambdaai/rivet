@@ -22,8 +22,8 @@ authority; stored SPKI pinning, dual-peer pairing approval, credential
 persistence and accepted RVD1 remain mandatory before RVT1 traffic.
 
 Apple Watch has a separate `RivetWatchConnectivity` foreground
-**watch-to-iPhone relay**. It carries only bounded, non-empty
-`RivetDevice` request/response envelopes through an activated, reachable
+**watch-to-iPhone relay**. It carries only bounded, non-empty (maximum 64 KiB per immediate
+message) `RivetDevice` request/response envelopes through an activated, reachable
 WCSession. The iPhone must register and scope the permitted routes on
 its own `RivetDeviceRouter` and own the authorized desktop connection:
 the watch transport itself neither exposes backend RPCs nor pairs
