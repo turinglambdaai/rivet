@@ -180,7 +180,16 @@
                   (type-key (schema-event-type event)))))
        "            else -> throw RivetGeneratedException(\"unknown Rivet event: \" + name)\n        }\n    }\n}\n\n")))
 
-(define (generate-kotlin rpcs events states records enums
+(define (generate-kotlin-device-api device-rpcs)
+  (if (null? device-rpcs)
+      ""
+      (string-append
+       "\n/** RPCs admitted by this product's companion-device API. */\n"
+       "class RivetDeviceAPI(val client: RivetClient) {\n"
+       (apply string-append (map kotlin-rpc-method device-rpcs))
+       "}\n")))
+
+(define (generate-kotlin rpcs events states records enums device-rpcs
                          module-name entry-name display-name version build
                          identifier release-channel)
   (define types (all-types rpcs events states records enums))
@@ -213,4 +222,5 @@
    (apply string-append (map kotlin-rpc-method rpcs))
    (if (null? states) "" "\n    // Shared state\n")
    (apply string-append (map kotlin-state-methods states))
-   "}\n"))
+   "}\n"
+   (generate-kotlin-device-api device-rpcs)))

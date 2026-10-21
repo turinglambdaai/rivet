@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Generate an Android `RivetDeviceAPI` from the same default-deny
+  `device-rpcs` allowlist used by Apple companions. The wrapper is emitted
+  beside the ordinary Kotlin `RivetAPI`, reuses its typed codecs, and contains
+  only explicitly exported RPC methods, so an authenticated Android session
+  can bind to the product's generated device surface without hand-written
+  route strings. Server-side gateway scopes remain authoritative.
+
 - Make verification evidence and orchestration first-class for distributed
   agents (issue #287). `raco rivet verify-remote` dispatches the
   per-platform acceptance legs of one commit on GitHub Actions, waits for the

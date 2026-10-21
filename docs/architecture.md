@@ -243,8 +243,11 @@ cancellation ordering, and deterministic stream shutdown.
 
 `raco rivet build` and `generate` emit the typed Kotlin client under
 `.rivet/generated/kotlin/`. CI compiles it with the pinned Gradle wrapper and
-Java 17. This is a tested protocol and code-generation foundation, not yet an
-Android application host. Developer-preview status still requires a JNI bridge
+Java 17. Projects declaring `device-rpcs` also receive a `RivetDeviceAPI`
+wrapper containing only that allowlist for authenticated companion sessions;
+the desktop gateway still enforces scopes. This is a tested protocol and
+code-generation foundation, not yet an Android application host.
+Developer-preview status still requires a JNI bridge
 to portable Racket CS for supported ABIs, a generated Compose/Gradle project,
 lifecycle and process-death tests, emulator/device round trips, signing,
 packaging, and release automation. Wear OS is outside the current committed

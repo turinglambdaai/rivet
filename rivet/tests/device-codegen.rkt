@@ -80,11 +80,35 @@ RKT
       (check-true (string-contains? swift fragment) fragment))
     (check-false (string-contains? swift "public struct RawValue:"))
 
+    ;; Android companions use the same default-deny allowlist. The ordinary
+    ;; RivetAPI remains available to an in-process Android host, while the
+    ;; device-facing wrapper contains only explicitly exported RPCs.
+    (define kotlin
+      (file->string
+       (build-path project-root ".rivet" "generated" "kotlin" "dev" "rivet"
+                   "generated" "GeneratedBackend.kt")))
+    (define kotlin-parts (regexp-split #rx"class RivetDeviceAPI" kotlin))
+    (check-equal? (length kotlin-parts) 2)
+    (define device-kotlin (cadr kotlin-parts))
+    (for ([fragment (in-list
+                     '("class RivetAPI(val client: RivetClient)"
+                       "class RivetDeviceAPI(val client: RivetClient)"
+                       "suspend fun fetch_profile(id: Long): Profile?"
+                       "suspend fun refresh(): Unit"))])
+      (check-true (string-contains? kotlin fragment) fragment))
+    (check-false (string-contains? device-kotlin "raw_value"))
+
     ;; Export removals are breaking because an installed companion may still
     ;; call the route; additions are compatible with existing companions.
     (define exported-baseline (build-path project-root ".rivet" "device-exported.json"))
     (write-schema-snapshot! project exported-baseline)
     (set-device-rpcs! '())
+    (generate-clients! (load-project project-root))
+    (define no-device-kotlin
+      (file->string
+       (build-path project-root ".rivet" "generated" "kotlin" "dev" "rivet"
+                   "generated" "GeneratedBackend.kt")))
+    (check-false (string-contains? no-device-kotlin "class RivetDeviceAPI"))
     (define removal-report
       (check-schema-compatibility! (load-project project-root) exported-baseline))
     (check-false (hash-ref removal-report 'compatible))

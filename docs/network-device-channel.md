@@ -201,7 +201,9 @@ with its TTL after shutdown). The Android companion runs the client side
 through the Kotlin `dev.rivet.session` package: the same records,
 transcripts, state machine, and canonical advertisement codec, pinned by
 the shared fixture, with NSD supplied by the application behind a driver
-interface.
+interface. Generated Kotlin clients add a `RivetDeviceAPI` containing only
+the product's `device-rpcs` allowlist; the gateway remains authoritative if
+application code bypasses that convenience surface.
 
 ## Session protocol
 
@@ -449,7 +451,9 @@ The first vertical slice targets macOS and Windows desktop hosts with an iOS com
    limits, disconnect cleanup, and deterministic tests without opening a port.
 3. **Apple vertical slice** — add the macOS host and iOS client transport, pairing, pinning, secure persistence, reconnect, and a minimal native sample.
 4. **Windows host** — implement the same listener/discovery/security contract and run the iOS sample against it.
-5. **Android client** — bind discovery/TLS streams to the existing coroutine client and compile the same generated device API.
+5. **Android client** — bind discovery/TLS streams to the existing coroutine
+   client. The default-deny generated device API is implemented; the native
+   NSD/TLS adapter and real-device evidence remain.
 6. **Linux host** — add the native adapter and only then update the platform maturity table.
 
 Every transport stage must verify: disabled means no listener; unauthenticated and revoked clients cannot call; forbidden RPC/State/Event names do not leak; the 512 KiB limit is enforced before allocation; cancellations cannot cross session or request-ID ownership; slow readers remain bounded; reconnect never replays a side-effecting RPC; and desktop in-process behavior remains unchanged.
