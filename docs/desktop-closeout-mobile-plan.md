@@ -259,9 +259,15 @@ byte stream, and the canonical discovery advertisement behind a driver
 interface, all pinned by the shared golden fixture. Kotlin generation now
 also derives `RivetDeviceAPI` from the product's default-deny `device-rpcs`
 allowlist, so an accepted Android session gets the same typed device surface
-as Apple rather than the complete backend API. The remaining M3 work is the
-Android NSD/TLS stream adapter, product binding, and real-device acceptance
-on both platforms.
+as Apple rather than the complete backend API. The Kotlin TLS stream connector
+now configures TLS 1.2+ forward-secret AEAD, requires `rivet-device/1`
+ALPN, pins the SHA-256 of the leaf DER SubjectPublicKeyInfo on reconnect,
+and permits provisional trust only for an explicitly selected pairing
+attempt. A single 30-second connect/handshake budget closes failures without
+exposing application streams. It is pinned by JVM policy/unit tests, not
+Android-device evidence. The remaining M3 work includes the Android NSD
+platform adapter, binding resolved endpoints and the accepted RVD1 stream to
+the generated API, product UI/storage, and real-device acceptance.
 
 M3's Windows transport slice is also implemented: a CNG-persisted P-256
 self-signed identity with deletion-based rotation, an SChannel TLS server
@@ -274,9 +280,9 @@ byte-identical across platforms. This code compiles only under the
 Windows SDK, so it has not run on real hardware yet: acceptance requires a
 Windows machine to verify identity creation, listener start, DNS-SD
 visibility (`dns-sd -B _rivet-device._tcp` from another host), and an iOS
-provisional-pairing handshake. After that, bind Android NSD/TLS streams to
-the existing Kotlin runtime and exercise the generated `RivetDeviceAPI`
-using the same golden fixture. Read `docs/network-device-channel.md` for the
+provisional-pairing handshake. After that, supply Android NSD resolution,
+connect the Kotlin TLS stream and `SessionClientRunner`, and exercise the
+generated `RivetDeviceAPI` using the same golden fixture. Read `docs/network-device-channel.md` for the
 wire and timing contract and reuse the language-neutral fixtures; do not
 reinterpret the preface per platform.
 

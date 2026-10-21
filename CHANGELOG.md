@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Introduce the Android companion TLS connector for M3: a single-use
+  JSSE socket with server SPKI SHA-256 pinning for reconnect, explicitly
+  provisional pairing, `rivet-device/1` ALPN, TLS 1.2+ forward-secret AEAD
+  policy, and a cumulative 30-second connection deadline. Deterministic
+  JVM tests cover the pin and negotiation policy. Android NSD discovery,
+  RVD1/application binding, and real-device acceptance are not yet delivered.
+
 - Generate an Android `RivetDeviceAPI` from the same default-deny
   `device-rpcs` allowlist used by Apple companions. The wrapper is emitted
   beside the ordinary Kotlin `RivetAPI`, reuses its typed codecs, and contains
