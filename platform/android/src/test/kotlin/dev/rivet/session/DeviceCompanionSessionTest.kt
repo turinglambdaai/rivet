@@ -160,6 +160,76 @@ class DeviceCompanionSessionTest {
     }
 
     @Test
+    fun pairedSessionPersistsBeforeApplicationHandoff() {
+        val attemptID = SessionUuid(ByteArray(16) { 0x44 })
+        val windowID = SessionUuid(ByteArray(16) { 0x22 })
+        val responses = encodeSessionRecord(SessionMessage.PairChallenge(attemptID, serverNonce)) +
+            encodeSessionRecord(
+                SessionMessage.Paired(deviceID, credential, sessionID, listOf("reader"), 524288L, 64L),
+            )
+        val transport = FakeTransport(responses, fingerprint)
+        val events = mutableListOf<String>()
+        val store = SessionCredentialStore { savedID, savedCredential, savedFingerprint ->
+            assertEquals(deviceID, savedID)
+            assertContentEquals(credential, savedCredential)
+            assertContentEquals(fingerprint, savedFingerprint)
+            events += "persisted"
+        }
+        lateinit var session: DeviceCompanionSession
+        session = DeviceCompanionSession(
+            endpoint,
+            DeviceCompanionIntent.Pair("com.example.app", windowID, "My Android"),
+            credentialStore = store,
+            onPairingCode = { code ->
+                events += "code"
+                assertEquals(attemptID, code.attemptID)
+                assertEquals(
+                    sessionPairingCode("com.example.app", fingerprint, clientNonce, serverNonce),
+                    code.verificationCode,
+                )
+                session.confirmPairingOnDevice(true)
+            },
+            onAccepted = { acceptance, input, output ->
+                events += "accepted"
+                assertEquals(sessionID, acceptance.sessionID)
+                assertSame(transport.incoming, input)
+                assertSame(transport.outgoing, output)
+            },
+            dialer = DeviceCompanionDialer { _, auth ->
+                assertSame(DeviceServerAuthentication.ProvisionalPairing, auth)
+                transport
+            },
+            nonceGenerator = { clientNonce.copyOf() },
+        )
+        try {
+            val accepted = session.run()
+            assertEquals(deviceID, accepted.deviceID)
+            assertEquals(listOf("code", "persisted", "accepted"), events)
+            val encoded = transport.outgoing.toByteArray()
+            val messages = mutableListOf<SessionMessage>()
+            var offset = 0
+            while (offset < encoded.size) {
+                val payloadSize = (encoded[offset + 6].toInt() and 0xff) or
+                    ((encoded[offset + 7].toInt() and 0xff) shl 8)
+                val count = 8 + payloadSize
+                messages += decodeSessionRecord(encoded.copyOfRange(offset, offset + count))
+                offset += count
+            }
+            assertEquals(
+                listOf(
+                    SessionMessage.PairStart("com.example.app", windowID, "My Android", clientNonce),
+                    SessionMessage.PairDecision(attemptID, true),
+                ),
+                messages,
+            )
+            assertFalse(transport.closed)
+        } finally {
+            session.close()
+        }
+        assertTrue(transport.closed)
+    }
+
+    @Test
     fun earlyClosePreventsAnyConnection() {
         var dialed = false
         val session = DeviceCompanionSession(
