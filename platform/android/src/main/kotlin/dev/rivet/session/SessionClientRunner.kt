@@ -53,10 +53,22 @@ class SessionClientRunner(
     private var decisionMade = false
 
     fun cancel() {
-        cancelled.set(true)
+        if (!cancelled.compareAndSet(false, true)) return
         synchronized(lock) {
             decisionMade = true
             lock.notifyAll()
+        }
+        // Closing socket streams releases a blocked RVD1 read. Do not hold
+        // the decision lock across potentially blocking stream operations.
+        try {
+            input.close()
+        } catch (_: IOException) {
+            // Already cancelling.
+        }
+        try {
+            output.close()
+        } catch (_: IOException) {
+            // Already cancelling.
         }
     }
 
@@ -115,14 +127,14 @@ class SessionClientRunner(
                         else -> executeActions(listOf(action))
                     }
                 }
-                client.acceptance()?.let { return it }
+                client.acceptance()?.let { return handoff(it) }
 
                 if (sawCode && message is SessionMessage.PairChallenge) {
                     waitForDesktopDecision(pairingResponseTimeoutSeconds)
                     if (cancelled.get()) {
                         throw SessionClientFailure.CANCELLED.toException()
                     }
-                    client.acceptance()?.let { return it }
+                    client.acceptance()?.let { return handoff(it) }
                     // The decision is still pending (or was a rejection
                     // without a response); keep reading on the same rolling
                     // deadline semantics.
@@ -136,13 +148,21 @@ class SessionClientRunner(
         } catch (failure: SessionStateException) {
             throw mapStateFailure(failure)
         } catch (_: EOFException) {
-            throw SessionClientFailure.CONNECTION_CLOSED.toException()
+            throw (if (cancelled.get()) SessionClientFailure.CANCELLED else SessionClientFailure.CONNECTION_CLOSED).toException()
         } catch (failure: IOException) {
             if (cancelled.get()) {
                 throw SessionClientFailure.CANCELLED.toException()
             }
             throw SessionClientFailure.CONNECTION_CLOSED.toException()
         }
+    }
+
+    private fun handoff(acceptance: SessionAcceptance): SessionAcceptance {
+        if (cancelled.get()) throw SessionClientFailure.CANCELLED.toException()
+        // Application RVT1 traffic starts only after server acceptance,
+        // including the persistence gate for newly paired credentials.
+        applicationHandler(acceptance, input, output)
+        return acceptance
     }
 
     private fun decisionAwaitedAndUnresolved(): Boolean =
