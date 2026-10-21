@@ -23,8 +23,10 @@ sealed interface DeviceCompanionIntent {
         credential: ByteArray,
         serverFingerprint: ByteArray,
     ) : DeviceCompanionIntent {
-        val credential: ByteArray = credential.copyOf()
-        val serverFingerprint: ByteArray = serverFingerprint.copyOf()
+        private val storedCredential = credential.copyOf()
+        private val storedFingerprint = serverFingerprint.copyOf()
+        val credential: ByteArray get() = storedCredential.copyOf()
+        val serverFingerprint: ByteArray get() = storedFingerprint.copyOf()
     }
 
     data class Pair(

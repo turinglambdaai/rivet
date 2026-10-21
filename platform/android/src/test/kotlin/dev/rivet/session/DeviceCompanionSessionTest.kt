@@ -4,12 +4,16 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.SSLHandshakeException
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -172,6 +176,66 @@ class DeviceCompanionSessionTest {
         }
         assertEquals(SessionClientRunner.SessionClientFailure.CANCELLED, failure.failure)
         assertFalse(dialed)
+    }
+
+    @Test
+    fun cancellationDuringTLSConnectCannotEnterRVD1() {
+        val dialStarted = CountDownLatch(1)
+        val finishDial = CountDownLatch(1)
+        val transport = FakeTransport(ByteArray(0), fingerprint)
+        val failure = AtomicReference<Throwable?>()
+        var accepted = false
+        val session = DeviceCompanionSession(
+            endpoint, reconnect(),
+            onAccepted = { _, _, _ -> accepted = true },
+            dialer = DeviceCompanionDialer { _, _ ->
+                dialStarted.countDown()
+                check(finishDial.await(3, TimeUnit.SECONDS)) { "test dialer not released" }
+                transport
+            },
+        )
+        val thread = Thread {
+            try {
+                session.run()
+            } catch (error: Throwable) {
+                failure.set(error)
+            }
+        }
+        thread.isDaemon = true
+        thread.start()
+        try {
+            assertTrue(dialStarted.await(3, TimeUnit.SECONDS))
+            session.close()
+            finishDial.countDown()
+            thread.join(3_000)
+            assertFalse(thread.isAlive, "cancellation must finish the connector")
+            val thrown = assertIs<SessionClientRunner.SessionClientFailureException>(failure.get())
+            assertEquals(SessionClientRunner.SessionClientFailure.CANCELLED, thrown.failure)
+            assertEquals(0, transport.outgoing.size())
+            assertFalse(accepted)
+            assertTrue(transport.closed)
+        } finally {
+            session.close()
+            finishDial.countDown()
+            thread.join(3_000)
+        }
+    }
+
+    @Test
+    fun reconnectIntentDefensivelyCopiesCredentialAndPin() {
+        val originalCredential = credential.copyOf()
+        val originalFingerprint = fingerprint.copyOf()
+        val intent = DeviceCompanionIntent.Reconnect(
+            "com.example.app", deviceID, originalCredential, originalFingerprint,
+        )
+        originalCredential.fill(0)
+        originalFingerprint.fill(0)
+        assertContentEquals(credential, intent.credential)
+        assertContentEquals(fingerprint, intent.serverFingerprint)
+        intent.credential.fill(0)
+        intent.serverFingerprint.fill(0)
+        assertContentEquals(credential, intent.credential)
+        assertContentEquals(fingerprint, intent.serverFingerprint)
     }
 
     @Test
