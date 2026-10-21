@@ -9,6 +9,12 @@ private struct WatchEcho: RivetDeviceRequest {
     typealias Response = WatchEchoReply
 }
 
+private struct WatchDenied: RivetDeviceRequest {
+    static let route = "watch.unregistered"
+    let text: String
+    typealias Response = WatchEchoReply
+}
+
 private struct WatchEchoReply: Codable, Sendable, Equatable {
     let text: String
 }
@@ -60,5 +66,21 @@ private struct PhoneRelayLoopback: RivetDeviceTransport {
     ))
     await #expect(throws: RivetWatchMessagePolicyError.self) {
         try await client.send(WatchEcho(text: "small"))
+    }
+}
+
+@Test func watchRelayCannotInvokeUnregisteredPhoneRoutes() async throws {
+    let router = RivetDeviceRouter()
+    try await router.register(WatchEcho.self) { message in
+        WatchEchoReply(text: message.text)
+    }
+    let client = RivetDeviceClient(transport: PhoneRelayLoopback(
+        router: router, policy: RivetWatchMessagePolicy()
+    ))
+    await #expect(throws: RivetDeviceError.remote(
+        code: "unknown_route",
+        message: "watch.unregistered"
+    )) {
+        try await client.send(WatchDenied(text: "cannot escalate"))
     }
 }

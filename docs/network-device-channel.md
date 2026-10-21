@@ -21,11 +21,11 @@ An iPhone or iPad can run explicit Bonjour discovery and the pinned TLS
 authority; stored SPKI pinning, dual-peer pairing approval, credential
 persistence and accepted RVD1 remain mandatory before RVT1 traffic.
 
-Apple Watch has a separate \`RivetWatchConnectivity\` foreground
+Apple Watch has a separate `RivetWatchConnectivity` foreground
 **watch-to-iPhone relay**. It carries only bounded, non-empty
-\`RivetDevice\` request/response envelopes through an activated, reachable
+`RivetDevice` request/response envelopes through an activated, reachable
 WCSession. The iPhone must register and scope the permitted routes on
-its own \`RivetDeviceRouter\` and own the authorized desktop connection:
+its own `RivetDeviceRouter` and own the authorized desktop connection:
 the watch transport itself neither exposes backend RPCs nor pairs
 directly with a desktop. Invalid or oversized WatchConnectivity
 requests/replies fail closed.
