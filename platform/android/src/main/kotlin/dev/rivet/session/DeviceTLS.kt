@@ -4,6 +4,7 @@ import java.io.Closeable
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
+import java.net.SocketTimeoutException
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.cert.CertificateException
@@ -112,6 +113,20 @@ internal fun deviceTLSAllowedProtocols(available: Array<String>): Array<String> 
 internal fun deviceTLSAllowedCipherSuites(available: Array<String>): Array<String> =
     available.filter { it in deviceTLSCipherSuites }.toTypedArray()
 
+/** One cumulative budget for connect and TLS handshake, not one per phase. */
+internal fun deviceTLSRemainingMillis(
+    timeoutMillis: Int,
+    startedAtNanos: Long,
+    nowNanos: Long,
+): Int {
+    val elapsedMillis = (nowNanos - startedAtNanos) / 1_000_000L
+    val remaining = timeoutMillis.toLong() - elapsedMillis
+    if (remaining <= 0L) {
+        throw SocketTimeoutException("Rivet device TLS connection timed out")
+    }
+    return remaining.toInt()
+}
+
 /**
  * One authenticated TLS byte stream, ready for the RVD1 preface. Ownership
  * transfers to the caller, which must close the socket on cancellation,
@@ -159,6 +174,7 @@ object DeviceTLSClient {
             "invalid Rivet device connection timeout"
         }
 
+        val startedAtNanos = System.nanoTime()
         val verifier = DevicePeerTrustManager(authentication)
         val context = SSLContext.getInstance("TLS")
         context.init(null, arrayOf(verifier), SecureRandom())
@@ -175,11 +191,16 @@ object DeviceTLSClient {
             parameters.applicationProtocols = arrayOf(DEVICE_TLS_APPLICATION_PROTOCOL)
             socket.sslParameters = parameters
 
-            // Connection and TLS receive phases are individually bounded;
-            // endpoint resolution remains an OS/network responsibility.
-            socket.connect(InetSocketAddress(host, port), timeoutMillis)
-            socket.soTimeout = timeoutMillis
+            // Socket connect and TLS handshake share a single budget; DNS
+            // resolution itself remains owned by the platform network stack.
+            socket.connect(
+                InetSocketAddress(host, port),
+                deviceTLSRemainingMillis(timeoutMillis, startedAtNanos, System.nanoTime()),
+            )
+            socket.soTimeout =
+                deviceTLSRemainingMillis(timeoutMillis, startedAtNanos, System.nanoTime())
             socket.startHandshake()
+            deviceTLSRemainingMillis(timeoutMillis, startedAtNanos, System.nanoTime())
             if (socket.applicationProtocol != DEVICE_TLS_APPLICATION_PROTOCOL ||
                 socket.session.protocol !in deviceTLSProtocols ||
                 socket.session.cipherSuite !in deviceTLSCipherSuites

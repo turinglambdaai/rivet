@@ -1,5 +1,6 @@
 package dev.rivet.session
 
+import java.net.SocketTimeoutException
 import java.security.KeyPairGenerator
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -52,6 +53,18 @@ class DeviceTLSTest {
         )
         assertTrue(deviceTLSAllowedProtocols(arrayOf("TLSv1.0")).isEmpty())
         assertTrue(deviceTLSAllowedCipherSuites(arrayOf("TLS_RSA_WITH_AES_128_GCM_SHA256")).isEmpty())
+    }
+
+    @Test
+    fun connectionTimeoutIsOneBudgetAcrossConnectAndHandshake() {
+        assertEquals(30_000, deviceTLSRemainingMillis(30_000, 0, 0))
+        assertEquals(15_000, deviceTLSRemainingMillis(30_000, 0, 15_000_000_000L))
+        assertFailsWith<SocketTimeoutException> {
+            deviceTLSRemainingMillis(30_000, 0, 30_000_000_000L)
+        }
+        assertFailsWith<SocketTimeoutException> {
+            deviceTLSRemainingMillis(30_000, 0, 31_000_000_000L)
+        }
     }
 
     @Test
