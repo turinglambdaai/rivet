@@ -201,7 +201,14 @@ with its TTL after shutdown). The Android companion runs the client side
 through the Kotlin `dev.rivet.session` package: the same records,
 transcripts, state machine, and canonical advertisement codec, pinned by
 the shared fixture, with NSD supplied by the application behind a driver
-interface. Generated Kotlin clients add a `RivetDeviceAPI` containing only
+interface. The JVM-compatible `DeviceTLSClient` verifies the SHA-256 of
+the server's DER SubjectPublicKeyInfo, restricts negotiated TLS to 1.2+
+forward-secret AEAD suites with `rivet-device/1` ALPN, and returns streams
+only after a pinned reconnect or an explicitly provisional pairing handshake.
+Provisional TLS is not device authorization: the RVD1 dual-confirmation and
+credential-persistence gate still precede application traffic. Android NSD
+resolution and real-device interoperability remain product/platform work.
+Generated Kotlin clients add a `RivetDeviceAPI` containing only
 the product's `device-rpcs` allowlist; the gateway remains authoritative if
 application code bypasses that convenience surface.
 
