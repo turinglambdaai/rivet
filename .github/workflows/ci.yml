@@ -300,32 +300,37 @@ jobs:
           # The smoke reads one line from stdin to stop. A bounded subprocess
           # proves identity creation, listener/advertisement startup, and
           # clean teardown on a real Windows runner without hanging CI.
-          result = subprocess.run(
-              [str(candidates[0])],
-              input="\n",
-              text=True,
-              capture_output=True,
-              timeout=30,
-              check=False,
-          )
-          print(result.stdout)
-          if result.returncode != 0:
-              raise SystemExit(
-                  f"device gateway smoke exited {result.returncode}: "
-                  f"{result.stderr}"
+          for arguments in ([], ["--pair"]):
+              # The --pair case exercises de-registration/re-publication of
+              # the canonical pairing-window TXT bit while the listener runs.
+              result = subprocess.run(
+                  [str(candidates[0]), *arguments],
+                  input="\n",
+                  text=True,
+                  capture_output=True,
+                  timeout=30,
+                  check=False,
               )
-          if not re.search(
-              r"identity certificate ready; spki-sha256 [0-9a-f]{64}",
-              result.stdout,
-          ):
-              raise SystemExit("Windows smoke did not create the TLS identity")
-          if not re.search(
-              r"listener ready on port [1-9][0-9]*; advertisement id [0-9a-f]{32}",
-              result.stdout,
-          ):
-              raise SystemExit("Windows smoke did not start its listener")
-          if "stopped cleanly" not in result.stdout:
-              raise SystemExit("Windows smoke did not stop cleanly")
+              print(result.stdout)
+              if result.returncode != 0:
+                  raise SystemExit(
+                      f"device gateway smoke {arguments} exited "
+                      f"{result.returncode}: {result.stderr}"
+                  )
+              if not re.search(
+                  r"identity certificate ready; spki-sha256 [0-9a-f]{64}",
+                  result.stdout,
+              ):
+                  raise SystemExit("Windows smoke did not create the TLS identity")
+              if not re.search(
+                  r"listener ready on port [1-9][0-9]*; advertisement id [0-9a-f]{32}",
+                  result.stdout,
+              ):
+                  raise SystemExit("Windows smoke did not start its listener")
+              if bool(arguments) != ("pairing window open" in result.stdout):
+                  raise SystemExit("Windows smoke reported incorrect pairing state")
+              if "stopped cleanly" not in result.stdout:
+                  raise SystemExit("Windows smoke did not stop cleanly")
           '@ | python -
       - name: Install Rivet
         shell: pwsh
