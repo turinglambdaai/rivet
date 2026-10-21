@@ -291,6 +291,16 @@ reinterpret the preface per platform.
 Add the Windows gateway against the same iOS client, then bind Android
 discovery/TLS streams to the existing Kotlin runtime and generated device API.
 
+Apple companion coverage extends to iOS and iPadOS through the shared
+iOS transport, and watchOS through a separate WatchConnectivity request
+relay to its paired iPhone. The relay requires activated/reachable
+WCSession state, non-empty bounded messages and replies, and an
+iPhone-owned route allowlist and authenticated desktop session. CI now
+includes iOS/watchOS device and simulator framework compilations and
+deterministic Swift relay tests. Neither standalone iPad/watch
+applications nor real-device pairing, background connectivity,
+signing and package acceptance are implied by these framework gates.
+
 ### M4 — standalone mobile hosts
 
 Only after the shared contract is stable, pursue Android JNI/portable Racket +
