@@ -400,7 +400,18 @@
   (define app-name (path->string (file-name-from-path app)))
   (delete-directory/files staging #:must-exist? #f)
   (make-directory* staging)
-  (copy-directory/files app staging-app)
+  ;; The macOS .app is already signed and contains a versioned
+  ;; Racket.framework. Racket copy-directory/files dereferences symlinks,
+  ;; turning Versions/Current and the framework's top-level Racket link into
+  ;; duplicate real files. This changes the nested bundle layout after
+  ;; codesign and makes the resulting branded DMG fail strict verification
+  ;; ("bundle format is ambiguous"). Use ditto, as package.rkt already does
+  ;; when staging the original framework; it preserves signed bundle links.
+  (define ditto (find-executable-path "ditto"))
+  (unless ditto
+    (error 'create-installer!
+           "ditto is required to preserve signed macOS app bundles"))
+  (run! 'create-installer! ditto (path->string app) (path->string staging-app))
   (make-file-or-directory-link "/Applications"
                                (build-path staging "Applications"))
   (make-directory* (build-path staging ".background"))
