@@ -274,6 +274,59 @@ jobs:
         run: |
           $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
           & $msbuild "platform\windows\rivet-device-smoke.vcxproj" /p:RIVET_ROOT="$env:GITHUB_WORKSPACE" /p:Configuration=Release /p:Platform=x64 /m /nologo /v:m
+      - name: Run Windows device gateway identity and listener lifecycle smoke
+        shell: pwsh
+        run: |
+          # The preceding MSBuild job already compiles the real CNG,
+          # SChannel, listener, and DNS-SD integration. Exercise it instead
+          # of accepting compile-only evidence for the Windows M3 adapter.
+          @'
+          import os
+          import pathlib
+          import re
+          import subprocess
+
+          workspace = pathlib.Path(os.environ["GITHUB_WORKSPACE"])
+          candidates = sorted(
+              path for path in workspace.rglob("*.exe")
+              if path.stem.lower() in ("rivet-device-smoke", "rivetdevicesmoke")
+          )
+          if len(candidates) != 1:
+              raise SystemExit(
+                  "expected exactly one built Windows device gateway smoke exe, "
+                  f"found {len(candidates)}: {candidates}"
+              )
+
+          # The smoke reads one line from stdin to stop. A bounded subprocess
+          # proves identity creation, listener/advertisement startup, and
+          # clean teardown on a real Windows runner without hanging CI.
+          result = subprocess.run(
+              [str(candidates[0])],
+              input="\n",
+              text=True,
+              capture_output=True,
+              timeout=30,
+              check=False,
+          )
+          print(result.stdout)
+          if result.returncode != 0:
+              raise SystemExit(
+                  f"device gateway smoke exited {result.returncode}: "
+                  f"{result.stderr}"
+              )
+          if not re.search(
+              r"identity certificate ready; spki-sha256 [0-9a-f]{64}",
+              result.stdout,
+          ):
+              raise SystemExit("Windows smoke did not create the TLS identity")
+          if not re.search(
+              r"listener ready on port [1-9][0-9]*; advertisement id [0-9a-f]{32}",
+              result.stdout,
+          ):
+              raise SystemExit("Windows smoke did not start its listener")
+          if "stopped cleanly" not in result.stdout:
+              raise SystemExit("Windows smoke did not stop cleanly")
+          '@ | python -
       - name: Install Rivet
         shell: pwsh
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
