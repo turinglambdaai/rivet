@@ -16,6 +16,22 @@ import kotlin.test.assertTrue
 import kotlin.test.assertFailsWith
 
 class SessionClientRunnerTest {
+    private class TrackedInput(bytes: ByteArray) : ByteArrayInputStream(bytes) {
+        var closed = false
+        override fun close() {
+            closed = true
+            super.close()
+        }
+    }
+
+    private class TrackedOutput : ByteArrayOutputStream() {
+        var closed = false
+        override fun close() {
+            closed = true
+            super.close()
+        }
+    }
+
     private val applicationID = "com.example.app"
     private val deviceID = SessionUuid(ByteArray(16) { it.toByte() })
     private val sessionID = SessionUuid(ByteArray(16) { (it + 32).toByte() })
@@ -32,8 +48,8 @@ class SessionClientRunnerTest {
     fun acceptanceHandsTheOriginalStreamsToApplicationOnce() {
         val responses = encodeSessionRecord(SessionMessage.AuthChallenge(serverNonce)) +
             encodeSessionRecord(SessionMessage.Accept(sessionID, listOf("reader"), 524288L, 64L))
-        val input = ByteArrayInputStream(responses)
-        val output = ByteArrayOutputStream()
+        val input = TrackedInput(responses)
+        val output = TrackedOutput()
         var handoffs = 0
         var delivered: SessionAcceptance? = null
         val runner = SessionClientRunner(
@@ -51,16 +67,19 @@ class SessionClientRunnerTest {
         assertEquals(sessionID, accepted.sessionID)
         assertEquals(deviceID, accepted.deviceID)
         assertTrue(output.size() > 0)
+        assertFalse(input.closed)
+        assertFalse(output.closed)
     }
 
     @Test
     fun rejectionCannotReachApplication() {
-        val input = ByteArrayInputStream(
+        val input = TrackedInput(
             encodeSessionRecord(SessionMessage.Reject(SessionRejectCode.AUTHENTICATION_FAILED)),
         )
+        val output = TrackedOutput()
         var handoffs = 0
         val runner = SessionClientRunner(
-            input, ByteArrayOutputStream(), ::reconnect, null,
+            input, output, ::reconnect, null,
             applicationHandler = { _, _, _ -> handoffs++ },
         )
         val thrown = assertFailsWith<SessionClientRunner.SessionClientFailureException> {
@@ -68,6 +87,8 @@ class SessionClientRunnerTest {
         }
         assertEquals(SessionClientRunner.SessionClientFailure.REJECTED, thrown.failure)
         assertEquals(0, handoffs)
+        assertTrue(input.closed)
+        assertTrue(output.closed)
     }
 
     @Test

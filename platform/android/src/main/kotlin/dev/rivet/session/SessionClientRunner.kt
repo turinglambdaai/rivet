@@ -94,9 +94,10 @@ class SessionClientRunner(
      */
     fun run(): SessionAcceptance {
         val startedAt = Date(nowMillis())
-        val client = clientFactory(startedAt).also { this.client = it }
-        var nextDeadline = startedAt.time + secondsToMillis(postTLSTimeoutSeconds)
+        var handoffCompleted = false
         try {
+            val client = clientFactory(startedAt).also { this.client = it }
+            var nextDeadline = startedAt.time + secondsToMillis(postTLSTimeoutSeconds)
             executeActions(client.start(Date(nowMillis())))
             while (true) {
                 val message = receiveMessage()
@@ -127,14 +128,22 @@ class SessionClientRunner(
                         else -> executeActions(listOf(action))
                     }
                 }
-                client.acceptance()?.let { return handoff(it) }
+                client.acceptance()?.let {
+                    val accepted = handoff(it)
+                    handoffCompleted = true
+                    return accepted
+                }
 
                 if (sawCode && message is SessionMessage.PairChallenge) {
                     waitForDesktopDecision(pairingResponseTimeoutSeconds)
                     if (cancelled.get()) {
                         throw SessionClientFailure.CANCELLED.toException()
                     }
-                    client.acceptance()?.let { return handoff(it) }
+                    client.acceptance()?.let {
+                    val accepted = handoff(it)
+                    handoffCompleted = true
+                    return accepted
+                }
                     // The decision is still pending (or was a rejection
                     // without a response); keep reading on the same rolling
                     // deadline semantics.
@@ -154,6 +163,13 @@ class SessionClientRunner(
                 throw SessionClientFailure.CANCELLED.toException()
             }
             throw SessionClientFailure.CONNECTION_CLOSED.toException()
+        } finally {
+            // Failed or rejected prefaces must not leave an unauthenticated
+            // socket open. A successful application handoff owns the streams.
+            if (!handoffCompleted) {
+                runCatching { input.close() }
+                runCatching { output.close() }
+            }
         }
     }
 
