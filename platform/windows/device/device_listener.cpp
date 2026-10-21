@@ -2,6 +2,8 @@
 
 #include <windns.h>
 
+#include <condition_variable>
+#include <mutex>
 #include <stdexcept>
 #include <utility>
 
@@ -19,6 +21,59 @@ std::wstring instance_name(std::string const& id) {
   return std::wstring(name.begin(), name.end());
 }
 
+// Windows DNS-SD requires a valid .local target host, not an empty pointer.
+std::wstring local_host_name() {
+  wchar_t computer[MAX_COMPUTERNAME_LENGTH + 1]{};
+  DWORD size = MAX_COMPUTERNAME_LENGTH + 1;
+  if (!GetComputerNameW(computer, &size) || size == 0) {
+    throw std::runtime_error("reading the device hostname failed");
+  }
+  return std::wstring(computer, size) + L".local";
+}
+
+struct DnsCompletion {
+  std::mutex mutex;
+  std::condition_variable ready;
+  DWORD status = ERROR_GEN_FAILURE;
+  PDNS_SERVICE_INSTANCE instance = nullptr;
+  bool finished = false;
+};
+
+void WINAPI dns_registration_complete(DWORD status, PVOID context,
+                                      PDNS_SERVICE_INSTANCE instance) {
+  auto* completion = static_cast<DnsCompletion*>(context);
+  {
+    std::lock_guard<std::mutex> lock(completion->mutex);
+    completion->status = status;
+    completion->instance = instance;
+    completion->finished = true;
+  }
+  completion->ready.notify_one();
+}
+
+struct DnsResult {
+  DWORD status;
+  PDNS_SERVICE_INSTANCE instance;
+};
+
+// DnsServiceRegister/DeRegister are asynchronous: a null callback is not a
+// synchronous request. Do not discard the completion status and advertise
+// readiness until the Windows DNS-SD service confirms registration.
+DnsResult complete_dns_request(DNS_SERVICE_REGISTER_REQUEST& request,
+                               bool deregister) {
+  DnsCompletion completion;
+  request.pQueryContext = &completion;
+  request.pRegisterCompletionCallback = dns_registration_complete;
+  DWORD status = deregister ? DnsServiceDeRegister(&request, nullptr)
+                            : DnsServiceRegister(&request, nullptr);
+  if (status != DNS_REQUEST_PENDING) {
+    return {status, nullptr};
+  }
+  std::unique_lock<std::mutex> lock(completion.mutex);
+  completion.ready.wait(lock, [&completion] { return completion.finished; });
+  return {completion.status, completion.instance};
+}
+
 }  // namespace
 
 // The DNS-SD registration handle for DnsServiceDeRegister. The classic
@@ -32,10 +87,9 @@ struct DeviceListener::Registration {
   std::vector<std::wstring> values;
   std::vector<PWSTR> key_pointers;
   std::vector<PWSTR> value_pointers;
-  IP4_ADDRESS ipv4{};
   DNS_SERVICE_INSTANCE instance{};
   DNS_SERVICE_REGISTER_REQUEST request{};
-  bool registered = false;
+  PDNS_SERVICE_INSTANCE registered_instance = nullptr;
 };
 
 DeviceListener::DeviceListener(DeviceIdentity& identity,
@@ -113,6 +167,7 @@ void DeviceListener::start() {
 void DeviceListener::publish() {
   auto registration = std::make_unique<Registration>();
   registration->name = instance_name(advertisement_id_);
+  registration->host_name = local_host_name();
   DeviceAdvertisement advertisement(advertisement_id_,
                                     pairing_window_open_.load());
   Bytes record = encode_discovery_txt(advertisement);
@@ -142,7 +197,9 @@ void DeviceListener::publish() {
 
   registration->instance.pszInstanceName = registration->name.data();
   registration->instance.pszHostName = registration->host_name.data();
-  registration->instance.ip4Address = &registration->ipv4;
+  // No fabricated zero IPv4 address: Windows derives the host's interfaces.
+  registration->instance.ip4Address = nullptr;
+  registration->instance.ip6Address = nullptr;
   registration->instance.wPort = port_;
   registration->instance.dwPropertyCount =
       static_cast<DWORD>(registration->keys.size());
@@ -152,31 +209,28 @@ void DeviceListener::publish() {
   registration->request.Version = DNS_QUERY_REQUEST_VERSION1;
   registration->request.InterfaceIndex = 0;  // all interfaces
   registration->request.pServiceInstance = &registration->instance;
-  // A null completion callback makes the registration synchronous.
-  registration->request.pRegisterCompletionCallback = nullptr;
-
-  DWORD status = DnsServiceRegister(&registration->request, nullptr);
-  if (status != ERROR_SUCCESS) {
+  DnsResult result = complete_dns_request(registration->request, false);
+  if (result.status != ERROR_SUCCESS || result.instance == nullptr) {
     throw std::runtime_error("registering the device advertisement failed ("
-                             + std::to_string(status) + ")");
+                             + std::to_string(result.status) + ")");
   }
-  registration->registered = true;
+  registration->registered_instance = result.instance;
   registration_ = std::move(registration);
 }
 
 void DeviceListener::unpublish() {
-  if (!registration_ || !registration_->registered) {
+  if (!registration_ || !registration_->registered_instance) {
     registration_.reset();
     return;
   }
-  // DnsServiceDeRegister only needs the service identity; a null callback
-  // keeps it synchronous.
   DNS_SERVICE_REGISTER_REQUEST request{};
   request.Version = DNS_QUERY_REQUEST_VERSION1;
   request.InterfaceIndex = 0;
-  request.pServiceInstance = &registration_->instance;
-  request.pRegisterCompletionCallback = nullptr;
-  (void)DnsServiceDeRegister(&request, nullptr);
+  request.pServiceInstance = registration_->registered_instance;
+  DnsResult result = complete_dns_request(request, true);
+  if (result.status == ERROR_SUCCESS && result.instance != nullptr) {
+    DnsServiceFreeInstance(result.instance);
+  }
   registration_.reset();
 }
 
