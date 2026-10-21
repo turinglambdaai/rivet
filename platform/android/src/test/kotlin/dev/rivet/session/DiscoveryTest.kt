@@ -85,4 +85,45 @@ class DiscoveryTest {
         // Repeated stops are idempotent.
         browser.stop()
     }
+
+    @Test
+    fun staleCallbacksCannotMutateRestartedDiscovery() {
+        val callbacks = mutableListOf<(String, ByteArray?, Boolean) -> Unit>()
+        val driver = object : DeviceDiscoveryDriver {
+            override fun start(onResult: (String, ByteArray?, Boolean) -> Unit) {
+                callbacks += onResult
+            }
+
+            override fun stop() {}
+        }
+        val events = mutableListOf<Pair<DeviceDiscoveryEventKind, String>>()
+        val browser = DeviceDiscoveryBrowser(driver) { kind, discovery ->
+            events += kind to discovery.advertisementID
+        }
+        val prior = encodeDiscoveryTXT(DeviceAdvertisement(advertisementID, true))
+        val currentID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        val current = encodeDiscoveryTXT(DeviceAdvertisement(currentID, false))
+
+        browser.start()
+        val oldCallback = callbacks.single()
+        oldCallback("prior-host", prior, false)
+        browser.stop()
+        browser.start()
+        val currentCallback = callbacks.last()
+        currentCallback("current-host", current, false)
+        val eventsBeforeStaleCallbacks = events.toList()
+
+        // Both callbacks were queued by the stopped session. Even when their
+        // service names collide with current candidates, they must do nothing.
+        oldCallback("current-host", null, true)
+        oldCallback("stale-host", prior, false)
+        assertEquals(listOf(DeviceDiscovery("current-host", currentID, false)), browser.snapshot)
+        assertEquals(eventsBeforeStaleCallbacks, events)
+
+        // The newly registered callback still has authority to update state.
+        currentCallback("current-host", null, true)
+        assertTrue(browser.snapshot.isEmpty())
+        assertEquals(DeviceDiscoveryEventKind.REMOVED to currentID, events.last())
+        browser.stop()
+    }
 }
