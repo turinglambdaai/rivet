@@ -316,9 +316,11 @@ codes through an async event stream, persists the new credential before RVT1
 handoff, and updates granted-scope metadata before the product callback.
 A reusable `RivetDeviceAppleCompanionUI` SwiftUI view/model now provides
 nearby discovery, pair/reconnect actions, explicit pairing-code approval,
-saved-pairing removal and session status. The host pairing-window ID and the
-post-RVD1 application handler remain product inputs; no generated app,
-signing, or physical-device acceptance is implied.
+saved-pairing removal and session status. The watchOS relay also exposes
+reachability changes and a `RivetWatchCompanionView` shell for one
+product-supplied typed action. The host pairing-window ID, post-RVD1
+application handler, and watch action remain product inputs; no generated
+app, signing, or physical-device acceptance is implied.
 
 ### M4 — standalone mobile hosts
 

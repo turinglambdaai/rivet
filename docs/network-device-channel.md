@@ -34,7 +34,10 @@ WCSession. The iPhone must register and scope the permitted routes on
 its own `RivetDeviceRouter` and own the authorized desktop connection:
 the watch transport itself neither exposes backend RPCs nor pairs
 directly with a desktop. Invalid or oversized WatchConnectivity
-requests/replies fail closed.
+requests/replies fail closed. `RivetWatchCompanionView` provides a small
+watchOS shell that displays paired-iPhone reachability and invokes one
+product-supplied typed action only while reachable; it never invents RPC
+routes or implies direct watch-to-desktop access.
 
 The framework CI runs Swift watch relay policy tests and compiles the
 Rivet runtime and watch relay against iOS and watchOS device and
@@ -42,9 +45,9 @@ simulator SDKs, plus the Apple device security/session/TLS layers for
 iOS devices and simulator. This is **SDK compilation coverage**, not
 an iPad app layout check, a paired-Watch reachability run, mobile app
 signing or packaging, foreground/background permission acceptance, or
-real iOS/iPadOS TLS/Bonjour pairing evidence. Products must integrate the reusable SwiftUI companion surface, supply
-local-network permission declarations and app-specific route/RVT1 handling,
-implement watch-specific UI, and provide lifecycle tests and real-device evidence.
+real iOS/iPadOS TLS/Bonjour pairing evidence. Products must integrate the reusable iOS/iPadOS and watchOS SwiftUI surfaces,
+supply local-network permission declarations and app-specific RVT1 handling or
+typed watch actions, and provide lifecycle tests and real-device evidence.
 
 ## Problem
 

@@ -42,6 +42,11 @@ let client = RivetDeviceClient(transport: transport)
 let score = try await client.current_score(game_id: "final")
 ```
 
+`RivetWatchCompanionView` provides a small watchOS shell for relay
+reachability and a product-supplied typed action. The action should use the
+same generated client and explicit route allowlist shown above; the view is a
+reusable component, not a complete signed watch application.
+
 The allowlist is empty by default. Missing RPC names fail generation. Selected
 arguments and results must be representable by `Codable`: the primitive,
 `List`, `Optional`, Record, and Enum schema types are supported, while `Any` is
