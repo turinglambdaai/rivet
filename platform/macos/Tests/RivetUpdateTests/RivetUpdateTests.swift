@@ -347,8 +347,8 @@ private func stopProbeProcesses(from launchLog: URL) {
         stopProbeProcesses(from: launchLog)
         try? FileManager.default.removeItem(at: root)
     }
-    try makeProbeApp(at: app, version: "1.0.0", behavior: "sleep 30 & wait $!")
-    try makeProbeApp(at: candidate, version: "1.1.0", behavior: "sleep 30 & wait $!")
+    try makeProbeApp(at: app, version: "1.0.0", behavior: "trap 'kill $child 2>/dev/null || true; exit 0' TERM; sleep 30 & child=$!; wait $child")
+    try makeProbeApp(at: candidate, version: "1.1.0", behavior: "trap 'kill $child 2>/dev/null || true; exit 0' TERM; sleep 30 & child=$!; wait $child")
     try makeFakeOpenCommand(at: open)
 
     let script = RivetUpdateService.swapScript(
@@ -381,7 +381,7 @@ private func stopProbeProcesses(from launchLog: URL) {
         stopProbeProcesses(from: launchLog)
         try? FileManager.default.removeItem(at: root)
     }
-    try makeProbeApp(at: app, version: "1.0.0", behavior: "sleep 30 & wait $!")
+    try makeProbeApp(at: app, version: "1.0.0", behavior: "trap 'kill $child 2>/dev/null || true; exit 0' TERM; sleep 30 & child=$!; wait $child")
     try makeProbeApp(at: candidate, version: "1.1.0", behavior: "exit 3")
     try makeFakeOpenCommand(at: open)
 
