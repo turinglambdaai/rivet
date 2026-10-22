@@ -205,7 +205,9 @@ jobs:
           for scheme in \
             RivetDeviceAppleSecurity \
             RivetDeviceSession \
-            RivetDeviceAppleTransport; do
+            RivetDeviceAppleTransport \
+            RivetDeviceAppleCompanion \
+            RivetDeviceAppleCompanionUI; do
             for platform in iOS 'iOS Simulator' macOS; do
               xcodebuild \
                 -workspace . \
