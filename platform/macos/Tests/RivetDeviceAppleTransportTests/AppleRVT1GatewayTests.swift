@@ -454,7 +454,7 @@ private func helloFrame() throws -> Data {
         pairedDeviceID: UUID(),
         scopes: [RivetDeviceScope(
             name: "companion",
-            events: ["progress", "$state"],
+            events: ["progress"],
             readableStates: ["volume"]
         )]
     )
