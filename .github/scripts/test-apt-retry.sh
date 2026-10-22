@@ -23,6 +23,9 @@ case "$FAKE_APT_MODE" in
   timeout)
     sleep 5
     ;;
+  success)
+    exit 0
+    ;;
   *)
     exit 64
     ;;
@@ -51,3 +54,35 @@ if bash "$script_dir/apt-retry.sh" update; then
   echo "apt-retry test expected the bounded command to fail" >&2
   exit 1
 fi
+
+# Distinguish large install budgets from update without ever disabling
+# timeout enforcement. An explicit caller override still takes precedence.
+fake_timeout="$work/fake-timeout"
+cat >"$fake_timeout" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"$FAKE_TIMEOUT_ARGS"
+while (( $# > 0 )); do
+  case "$1" in
+    --foreground|--signal=*|--kill-after=*) shift ;;
+    *s) shift; break ;;
+    *) exit 64 ;;
+  esac
+done
+"$@"
+SH
+chmod +x "$fake_timeout"
+export RIVET_TIMEOUT_COMMAND="$fake_timeout"
+export FAKE_TIMEOUT_ARGS="$work/timeout-arguments"
+export FAKE_APT_MODE=success
+export RIVET_APT_RETRY_ATTEMPTS=1
+unset RIVET_APT_TIMEOUT_SECONDS
+bash "$script_dir/apt-retry.sh" install --yes example-package
+grep -Fq -- '480s' "$FAKE_TIMEOUT_ARGS"
+: >"$FAKE_TIMEOUT_ARGS"
+bash "$script_dir/apt-retry.sh" update
+grep -Fq -- '180s' "$FAKE_TIMEOUT_ARGS"
+: >"$FAKE_TIMEOUT_ARGS"
+export RIVET_APT_TIMEOUT_SECONDS=9
+bash "$script_dir/apt-retry.sh" install --yes example-package
+grep -Fq -- '9s' "$FAKE_TIMEOUT_ARGS"

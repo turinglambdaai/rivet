@@ -14,7 +14,15 @@ fi
 (( $# > 0 )) || usage
 
 attempts="${RIVET_APT_RETRY_ATTEMPTS:-2}"
-timeout_seconds="${RIVET_APT_TIMEOUT_SECONDS:-180}"
+# A complete GTK4/libsecret install can fetch 100+ packages on cold hosted
+# runners. A 180-second attempt interrupts healthy downloads mid-flight.
+# Update remains short; install gets a larger but still bounded window.
+operation="$1"
+case "$operation" in
+  install) default_timeout_seconds=480 ;;
+  *) default_timeout_seconds=180 ;;
+esac
+timeout_seconds="${RIVET_APT_TIMEOUT_SECONDS:-$default_timeout_seconds}"
 delay_seconds="${RIVET_APT_RETRY_DELAY_SECONDS:-10}"
 apt_get="${RIVET_APT_GET:-apt-get}"
 timeout_command="${RIVET_TIMEOUT_COMMAND:-timeout}"
@@ -41,7 +49,6 @@ if [[ "$use_sudo" == true ]]; then
   apt_command=(sudo -n "${apt_command[@]}")
 fi
 
-operation="$1"
 for (( attempt = 1; attempt <= attempts; attempt++ )); do
   echo "apt-retry: $operation attempt $attempt/$attempts (timeout ${timeout_seconds}s)"
   if "$timeout_command" --foreground --signal=TERM --kill-after=30s \
