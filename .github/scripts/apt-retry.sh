@@ -13,15 +13,16 @@ if [[ "${1:-}" == "--sudo" ]]; then
 fi
 (( $# > 0 )) || usage
 
-attempts="${RIVET_APT_RETRY_ATTEMPTS:-2}"
 # A complete GTK4/libsecret install can fetch 100+ packages on cold hosted
-# runners. A 180-second attempt interrupts healthy downloads mid-flight.
-# Update remains short; install gets a larger but still bounded window.
+# runners. A 180-second attempt interrupts healthy downloads mid-flight, and
+# two attempts cannot outlast a slow mirror. Update remains short; install
+# gets a larger window and one more bounded, cache-resuming attempt.
 operation="$1"
 case "$operation" in
-  install) default_timeout_seconds=480 ;;
-  *) default_timeout_seconds=180 ;;
+  install) default_timeout_seconds=480 ; default_attempts=3 ;;
+  *) default_timeout_seconds=180 ; default_attempts=2 ;;
 esac
+attempts="${RIVET_APT_RETRY_ATTEMPTS:-$default_attempts}"
 timeout_seconds="${RIVET_APT_TIMEOUT_SECONDS:-$default_timeout_seconds}"
 delay_seconds="${RIVET_APT_RETRY_DELAY_SECONDS:-10}"
 apt_get="${RIVET_APT_GET:-apt-get}"

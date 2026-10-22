@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           bash .github/scripts/apt-retry.sh --sudo update
-          bash .github/scripts/apt-retry.sh --sudo install --yes \
+          bash .github/scripts/apt-retry.sh --sudo install --yes --no-install-recommends \
             desktop-file-utils libgtk-4-dev libsecret-1-dev rpm
           raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Build release artifacts

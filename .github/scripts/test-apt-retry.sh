@@ -55,6 +55,26 @@ if bash "$script_dir/apt-retry.sh" update; then
   exit 1
 fi
 
+# Install attempts default higher than update; explicit override still wins.
+: >"$FAKE_APT_STATE"
+export FAKE_APT_MODE=fail
+export RIVET_APT_RETRY_ATTEMPTS=1
+bash "$script_dir/apt-retry.sh" install --yes example-package || true
+[[ "$(cat "$FAKE_APT_STATE")" == 1 ]]
+unset RIVET_APT_RETRY_ATTEMPTS
+: >"$FAKE_APT_STATE"
+if bash "$script_dir/apt-retry.sh" install --yes example-package; then
+  echo "apt-retry test expected the bounded command to fail" >&2
+  exit 1
+fi
+[[ "$(cat "$FAKE_APT_STATE")" == 3 ]]
+: >"$FAKE_APT_STATE"
+if bash "$script_dir/apt-retry.sh" update; then
+  echo "apt-retry test expected the bounded command to fail" >&2
+  exit 1
+fi
+[[ "$(cat "$FAKE_APT_STATE")" == 2 ]]
+
 # Distinguish large install budgets from update without ever disabling
 # timeout enforcement. An explicit caller override still takes precedence.
 fake_timeout="$work/fake-timeout"
