@@ -176,6 +176,9 @@ public actor RivetDeviceAppleCompanion {
     private var activeTask: Task<Void, Never>?
     private var activeToken: UUID?
     private var activeDeviceID: UUID?
+    private var startingDeviceID: UUID?
+    private var sessionStarting = false
+    private var cancelRequestedDuringStart = false
 
     public init(
         configuration: RivetDeviceAppleCompanionConfiguration,
@@ -219,6 +222,8 @@ public actor RivetDeviceAppleCompanion {
     public func removePairing(deviceID: UUID) async throws {
         if activeDeviceID == deviceID {
             await cancelSession()
+        } else if startingDeviceID == deviceID {
+            cancelRequestedDuringStart = true
         }
         try await pairingStore.remove(deviceID: deviceID)
     }
@@ -230,10 +235,26 @@ public actor RivetDeviceAppleCompanion {
         intent: RivetDeviceAppleCompanionConnectIntent,
         applicationHandler: @escaping ApplicationHandler
     ) async throws {
-        guard activeSession == nil else {
+        guard activeSession == nil, !sessionStarting else {
             throw RivetDeviceAppleCompanionError.sessionAlreadyActive
         }
+        sessionStarting = true
+        cancelRequestedDuringStart = false
+        if case .reconnect(let deviceID) = intent {
+            startingDeviceID = deviceID
+        } else {
+            startingDeviceID = nil
+        }
+        defer {
+            sessionStarting = false
+            cancelRequestedDuringStart = false
+            startingDeviceID = nil
+        }
+
         let snapshot = await browser.snapshot()
+        guard !cancelRequestedDuringStart else {
+            throw RivetDeviceAppleCompanionError.sessionNoLongerActive
+        }
         guard snapshot.discoveries.contains(selected) else {
             throw RivetDeviceAppleCompanionError.staleSelection
         }
@@ -254,6 +275,9 @@ public actor RivetDeviceAppleCompanion {
             guard let pairing = try await pairingStore.load(deviceID: deviceID) else {
                 throw RivetDeviceAppleCompanionError.pairingNotFound
             }
+            guard !cancelRequestedDuringStart else {
+                throw RivetDeviceAppleCompanionError.sessionNoLongerActive
+            }
             guard pairing.device.applicationID == configuration.applicationID else {
                 throw RivetDeviceAppleCompanionError.applicationMismatch
             }
@@ -261,6 +285,9 @@ public actor RivetDeviceAppleCompanion {
             sessionIntent = .reconnect(pairing: pairing)
         }
 
+        guard !cancelRequestedDuringStart else {
+            throw RivetDeviceAppleCompanionError.sessionNoLongerActive
+        }
         let token = UUID()
         let continuation = eventContinuation
         let credentialStore = self.credentialStore
@@ -336,6 +363,9 @@ public actor RivetDeviceAppleCompanion {
 
     public func cancelSession() async {
         guard let activeSession else {
+            if sessionStarting {
+                cancelRequestedDuringStart = true
+            }
             return
         }
         activeTask?.cancel()
