@@ -238,19 +238,169 @@ private var testConfiguration: RivetUpdateConfiguration {
     #expect(!development.canUpdate)
 }
 
+private func makeProbeApp(at appURL: URL,
+                          version: String,
+                          behavior: String) throws {
+    let executableURL = appURL.appendingPathComponent("Contents/MacOS/Probe")
+    try FileManager.default.createDirectory(
+        at: executableURL.deletingLastPathComponent(),
+        withIntermediateDirectories: true)
+    let info: [String: Any] = [
+        "CFBundleExecutable": "Probe",
+        "CFBundleIdentifier": "org.rivet.update.test.\(UUID().uuidString)",
+        "CFBundleName": "Probe",
+        "CFBundlePackageType": "APPL",
+        "CFBundleVersion": version,
+        "CFBundleShortVersionString": version
+    ]
+    let plist = try PropertyListSerialization.data(
+        fromPropertyList: info, format: .xml, options: 0)
+    try plist.write(to: appURL.appendingPathComponent("Contents/Info.plist"))
+    try Data("#!/bin/sh\n\(behavior)\n".utf8).write(to: executableURL)
+    try FileManager.default.setAttributes(
+        [.posixPermissions: 0o755], ofItemAtPath: executableURL.path)
+}
+
+private func makeFakeOpenCommand(at url: URL) throws {
+    let source = """
+        #!/bin/bash
+        set -eu
+        app="$2"
+        executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+        "$app/Contents/MacOS/$executable" >/dev/null 2>&1 &
+        echo "$!" >> "$RIVET_TEST_LAUNCH_LOG"
+        exit 0
+        """
+    try Data(source.utf8).write(to: url)
+    try FileManager.default.setAttributes(
+        [.posixPermissions: 0o755], ofItemAtPath: url.path)
+}
+
+private func runSwapScript(_ source: String,
+                           at root: URL,
+                           launchLog: URL) throws -> Int32 {
+    let scriptURL = root.appendingPathComponent("swap.sh")
+    try Data(source.utf8).write(to: scriptURL)
+    try FileManager.default.setAttributes(
+        [.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/bin/bash")
+    process.arguments = [scriptURL.path]
+    var environment = ProcessInfo.processInfo.environment
+    environment["RIVET_TEST_LAUNCH_LOG"] = launchLog.path
+    process.environment = environment
+    try process.run()
+    process.waitUntilExit()
+    return process.terminationStatus
+}
+
+private func stopProbeProcesses(from launchLog: URL) {
+    guard let contents = try? String(contentsOf: launchLog, encoding: .utf8) else {
+        return
+    }
+    for value in contents.split(whereSeparator: \.isNewline) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/kill")
+        process.arguments = ["-TERM", String(value)]
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            // A short-lived failing probe may already have exited.
+        }
+    }
+}
+
 // MARK: - Swap script and hashing
 
 @Test func swapScriptQuotesPathsAndRestoresBackup() {
     let script = RivetUpdateService.swapScript(
         bundlePath: "/Applications/Ta skly.app",
-        newBundlePath: "/tmp/rivet-update/unpacked/Ta skly.app")
+        newBundlePath: "/tmp/rivet-update/unpacked/Ta skly.app",
+        oldPID: 1234)
     #expect(script.contains("sleep 1"))
-    #expect(script.contains("rm -rf '/Applications/Ta skly.app.old'"))
-    #expect(script.contains("mv '/Applications/Ta skly.app' '/Applications/Ta skly.app.old'"))
-    // The failed-move branch restores the previous bundle before exiting.
-    #expect(script.contains("mv '/Applications/Ta skly.app.old' '/Applications/Ta skly.app'"))
-    #expect(script.contains("open '/Applications/Ta skly.app'"))
+    #expect(script.contains("APP='/Applications/Ta skly.app'"))
+    #expect(script.contains("NEW='/tmp/rivet-update/unpacked/Ta skly.app'"))
+    #expect(script.contains("OLD='/Applications/Ta skly.app.old'"))
+    #expect(script.contains("OLD_PID=1234"))
+    #expect(script.contains("while /bin/kill -0 \"$OLD_PID\""))
+    #expect(script.contains("/bin/mv \"$APP\" \"$OLD\""))
+    // Failed move and failed launch both restore the previous bundle.
+    #expect(script.contains("/bin/mv \"$OLD\" \"$APP\""))
+    #expect(script.contains("OPEN_COMMAND='/usr/bin/open'"))
+    #expect(script.contains("\"$OPEN_COMMAND\" -n \"$APP\""))
+    #expect(script.contains("EXECUTABLE_PATH=\"$APP/Contents/MacOS/$APP_EXECUTABLE\""))
+    #expect(script.contains("[ \"$waited\" -lt 30 ]"))
+    #expect(script.contains("/bin/rm -rf \"$OLD\""))
     #expect(script.hasSuffix("exit 1"))
+}
+
+@Test func swapScriptCommitsOnlyAfterReplacementSurvivesLaunch() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("rivet-update-swap-success-\(UUID().uuidString)")
+    let app = root.appendingPathComponent("Applications/Fulcrum.app")
+    let candidate = root.appendingPathComponent("update/Fulcrum.app")
+    let open = root.appendingPathComponent("fake-open")
+    let launchLog = root.appendingPathComponent("launched-pids")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer {
+        stopProbeProcesses(from: launchLog)
+        try? FileManager.default.removeItem(at: root)
+    }
+    try makeProbeApp(at: app, version: "1.0.0", behavior: "trap 'kill $child 2>/dev/null || true; exit 0' TERM; sleep 30 & child=$!; wait $child")
+    try makeProbeApp(at: candidate, version: "1.1.0", behavior: "trap 'kill $child 2>/dev/null || true; exit 0' TERM; sleep 30 & child=$!; wait $child")
+    try makeFakeOpenCommand(at: open)
+
+    let script = RivetUpdateService.swapScript(
+        bundlePath: app.path,
+        newBundlePath: candidate.path,
+        oldPID: 0,
+        healthTimeoutSeconds: 5,
+        healthSettleSeconds: 1,
+        openCommand: open.path)
+    let status = try runSwapScript(script, at: root, launchLog: launchLog)
+    #expect(status == 0)
+    #expect(FileManager.default.fileExists(atPath: app.path))
+    #expect(!FileManager.default.fileExists(atPath: app.path + ".old"))
+    #expect(!FileManager.default.fileExists(atPath: candidate.path))
+    let plist = try Data(contentsOf: app.appendingPathComponent("Contents/Info.plist"))
+    let info = try #require(PropertyListSerialization.propertyList(
+        from: plist, format: nil) as? [String: Any])
+    #expect(info["CFBundleVersion"] as? String == "1.1.0")
+}
+
+@Test func swapScriptRestoresOldBundleWhenReplacementExitsImmediately() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("rivet-update-swap-rollback-\(UUID().uuidString)")
+    let app = root.appendingPathComponent("Applications/Fulcrum.app")
+    let candidate = root.appendingPathComponent("update/Fulcrum.app")
+    let open = root.appendingPathComponent("fake-open")
+    let launchLog = root.appendingPathComponent("launched-pids")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer {
+        stopProbeProcesses(from: launchLog)
+        try? FileManager.default.removeItem(at: root)
+    }
+    try makeProbeApp(at: app, version: "1.0.0", behavior: "trap 'kill $child 2>/dev/null || true; exit 0' TERM; sleep 30 & child=$!; wait $child")
+    try makeProbeApp(at: candidate, version: "1.1.0", behavior: "exit 3")
+    try makeFakeOpenCommand(at: open)
+
+    let script = RivetUpdateService.swapScript(
+        bundlePath: app.path,
+        newBundlePath: candidate.path,
+        oldPID: 0,
+        healthTimeoutSeconds: 3,
+        healthSettleSeconds: 1,
+        openCommand: open.path)
+    let status = try runSwapScript(script, at: root, launchLog: launchLog)
+    #expect(status == 1)
+    #expect(FileManager.default.fileExists(atPath: app.path))
+    #expect(!FileManager.default.fileExists(atPath: app.path + ".old"))
+    #expect(!FileManager.default.fileExists(atPath: candidate.path))
+    let plist = try Data(contentsOf: app.appendingPathComponent("Contents/Info.plist"))
+    let info = try #require(PropertyListSerialization.propertyList(
+        from: plist, format: nil) as? [String: Any])
+    #expect(info["CFBundleVersion"] as? String == "1.0.0")
 }
 
 @Test func swapScriptEscapesSingleQuotesInPaths() {
