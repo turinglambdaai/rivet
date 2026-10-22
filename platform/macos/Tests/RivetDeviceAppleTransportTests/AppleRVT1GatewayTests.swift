@@ -175,6 +175,23 @@ private func helloFrame() throws -> Data {
     await client.stop()
 }
 
+@Test func appleRVT1ClientStartCancellationClosesPendingHandshake() async throws {
+    let stream = MemoryByteStream()
+    let client = RivetDeviceAppleRVT1Client(stream: stream)
+    let starting = Task { try await client.start() }
+
+    for _ in 0..<2_000 {
+        if await stream.waitingReaderCount() > 0 { break }
+        await Task.yield()
+    }
+    #expect(await stream.waitingReaderCount() > 0)
+    starting.cancel()
+    await #expect(throws: CancellationError.self) {
+        try await starting.value
+    }
+    #expect(await stream.isClosed())
+}
+
 @Test func appleRVT1ClientRunOwnsConnectionLifetimeUntilStopped() async throws {
     let stream = MemoryByteStream(incoming: try helloFrame())
     let client = RivetDeviceAppleRVT1Client(stream: stream)

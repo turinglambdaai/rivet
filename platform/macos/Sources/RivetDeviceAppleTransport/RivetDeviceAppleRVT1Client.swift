@@ -54,8 +54,18 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
             throw RivetDeviceAppleRVT1ClientError.alreadyStarted
         }
         let hello: RivetFrame
-        do { hello = try await channel.receive() }
-        catch { stopped = true; await channel.close(); throw error }
+        do {
+            hello = try await withTaskCancellationHandler {
+                try await channel.receive()
+            } onCancel: {
+                Task { await self.stop() }
+            }
+        } catch {
+            stopped = true
+            await channel.close()
+            if Task.isCancelled { throw CancellationError() }
+            throw error
+        }
         guard hello.type == .hello, hello.id == 0 else {
             stopped = true
             await channel.close()
@@ -81,18 +91,23 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
     /// Unlike start(), this keeps an application-handler task alive for the
     /// full connection lifetime, which is useful for companion coordinators.
     public func run(onEvent: EventHandler? = nil) async throws {
-        try await start(onEvent: onEvent)
-        await withTaskCancellationHandler {
-            await withCheckedContinuation {
-                (continuation: CheckedContinuation<Void, Never>) in
-                if terminated {
-                    continuation.resume()
-                } else {
-                    terminationWaiters.append(continuation)
+        do {
+            try await withTaskCancellationHandler {
+                try await start(onEvent: onEvent)
+                await withCheckedContinuation {
+                    (continuation: CheckedContinuation<Void, Never>) in
+                    if terminated {
+                        continuation.resume()
+                    } else {
+                        terminationWaiters.append(continuation)
+                    }
                 }
+            } onCancel: {
+                Task { await self.stop() }
             }
-        } onCancel: {
-            Task { await self.stop() }
+        } catch {
+            if Task.isCancelled { throw CancellationError() }
+            throw error
         }
         if let terminalError { throw terminalError }
         try Task.checkCancellation()
