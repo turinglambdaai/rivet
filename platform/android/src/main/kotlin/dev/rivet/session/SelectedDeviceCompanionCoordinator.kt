@@ -55,7 +55,7 @@ class SelectedDeviceCompanionCoordinator(
             started = true
             callback = onFinished
         }
-        if (browser.snapshot.none { it == selection }) {
+        if (browser.snapshot.none { it.namesSelectedDevice(selection) }) {
             complete(Result.failure(DeviceSelectionException(DeviceSelectionFailure.STALE_SELECTION)))
             return
         }
@@ -74,18 +74,34 @@ class SelectedDeviceCompanionCoordinator(
                     if (!isPending()) return@execute
                     // Discovery may change between the native resolution
                     // callback and this worker actually starting the dial.
-                    if (browser.snapshot.none { it == selection }) {
+                    // The pairing-window bit flips independently of device
+                    // presence, so staleness matches stable identity and the
+                    // window is judged from the fresh advertisement.
+                    val fresh = browser.snapshot.firstOrNull { it.namesSelectedDevice(selection) }
+                    if (fresh == null) {
                         complete(Result.failure(DeviceSelectionException(DeviceSelectionFailure.STALE_SELECTION)))
                         return@execute
                     }
-                    val session = DeviceCompanionSession(
-                        endpoint = DeviceCompanionEndpoint(endpoint.host, endpoint.port),
-                        intent = intent,
-                        credentialStore = credentialStore,
-                        onPairingCode = onPairingCode,
-                        onAccepted = onAccepted,
-                        dialer = dialer,
-                    )
+                    if (intent is DeviceCompanionIntent.Pair && !fresh.pairingWindowOpen) {
+                        complete(Result.failure(DeviceSelectionException(DeviceSelectionFailure.PAIRING_WINDOW_CLOSED)))
+                        return@execute
+                    }
+                    val session = try {
+                        DeviceCompanionSession(
+                            endpoint = DeviceCompanionEndpoint(endpoint.host, endpoint.port),
+                            intent = intent,
+                            credentialStore = credentialStore,
+                            onPairingCode = onPairingCode,
+                            onAccepted = onAccepted,
+                            dialer = dialer,
+                        )
+                    } catch (failure: Throwable) {
+                        // A rejected endpoint or session configuration must
+                        // still resolve the caller's callback instead of
+                        // killing the shared worker thread.
+                        complete(Result.failure(failure))
+                        return@execute
+                    }
                     val abandoned = synchronized(lock) {
                         if (closed || finished) true else {
                             current = session

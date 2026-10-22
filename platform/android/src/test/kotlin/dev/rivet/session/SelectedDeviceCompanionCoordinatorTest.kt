@@ -198,4 +198,95 @@ class SelectedDeviceCompanionCoordinatorTest {
         )
         coordinator.close()
     }
+
+    @Test
+    fun rejectedResolvedEndpointFailsCallbackWithoutKillingTheWorker() {
+        val h = Harness()
+        val selected = h.select(advertisementID, true)
+        val pending = mutableListOf<Runnable>()
+        var dialed = false
+        val results = mutableListOf<Result<SessionAcceptance>>()
+        val coordinator = SelectedDeviceCompanionCoordinator(
+            h.browser, h.driver, Executor { pending += it },
+            onAccepted = { _, _, _ -> },
+            dialer = DeviceCompanionDialer { _, _ ->
+                dialed = true
+                error("must not connect")
+            },
+        )
+        coordinator.connectSelected(selected, intent()) { results += it }
+        h.resolved!!(
+            DeviceResolvedService(
+                selected.serviceName, "192.0.2.1", 0,
+                encodeDiscoveryTXT(DeviceAdvertisement(selected.advertisementID, selected.pairingWindowOpen)),
+            ),
+        )
+        assertEquals(1, pending.size)
+        pending.single().run()
+        assertEquals(1, results.size)
+        assertTrue(results.single().exceptionOrNull() is IllegalArgumentException)
+        assertFalse(dialed)
+        coordinator.close()
+    }
+
+    @Test
+    fun windowFlipBeforeWorkerStartJudgedFromFreshAdvertisement() {
+        val h = Harness()
+        val selected = h.select(advertisementID, true)
+        val pending = mutableListOf<Runnable>()
+        var dialed = false
+        val results = mutableListOf<Result<SessionAcceptance>>()
+        val coordinator = SelectedDeviceCompanionCoordinator(
+            h.browser, h.driver, Executor { pending += it },
+            onAccepted = { _, _, _ -> },
+            dialer = DeviceCompanionDialer { _, _ ->
+                dialed = true
+                error("stop at dial")
+            },
+        )
+        coordinator.connectSelected(selected, intent()) { results += it }
+        h.reply(selected)
+        // Only the pairing-window bit flips; the device is still present, so a
+        // reconnect dial proceeds while a pair dial fails with the window code.
+        h.discovery(
+            selected.serviceName,
+            encodeDiscoveryTXT(DeviceAdvertisement(selected.advertisementID, false)),
+            false,
+        )
+        pending.single().run()
+        assertTrue(dialed)
+        coordinator.close()
+
+        val h2 = Harness()
+        val selected2 = h2.select(advertisementID, true)
+        val pending2 = mutableListOf<Runnable>()
+        var dialed2 = false
+        val results2 = mutableListOf<Result<SessionAcceptance>>()
+        val coordinator2 = SelectedDeviceCompanionCoordinator(
+            h2.browser, h2.driver, Executor { pending2 += it },
+            onAccepted = { _, _, _ -> },
+            dialer = DeviceCompanionDialer { _, _ ->
+                dialed2 = true
+                error("must not connect")
+            },
+        )
+        coordinator2.connectSelected(
+            selected2,
+            DeviceCompanionIntent.Pair("com.example.app", id, "Android"),
+        ) { results2 += it }
+        h2.reply(selected2)
+        h2.discovery(
+            selected2.serviceName,
+            encodeDiscoveryTXT(DeviceAdvertisement(selected2.advertisementID, false)),
+            false,
+        )
+        pending2.single().run()
+        assertEquals(1, results2.size)
+        assertEquals(
+            DeviceSelectionFailure.PAIRING_WINDOW_CLOSED,
+            (results2.single().exceptionOrNull() as DeviceSelectionException).failure,
+        )
+        assertFalse(dialed2)
+        coordinator2.close()
+    }
 }

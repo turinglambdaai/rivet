@@ -117,6 +117,14 @@ data class DeviceDiscovery(
     val pairingWindowOpen: Boolean,
 )
 
+/**
+ * Stable selection identity across snapshots: the pairing-window bit flips
+ * independently of device presence, so presence checks compare service name
+ * and listener identity only and judge the window from the fresh result.
+ */
+fun DeviceDiscovery.namesSelectedDevice(selected: DeviceDiscovery): Boolean =
+    serviceName == selected.serviceName && advertisementID == selected.advertisementID
+
 enum class DeviceDiscoveryEventKind { ADDED, REMOVED }
 
 /**
