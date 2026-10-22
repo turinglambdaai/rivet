@@ -69,26 +69,30 @@ private actor MemoryByteStream: RivetDeviceAppleApplicationByteStream {
 }
 
 private actor SlowGatewayHost: RivetDeviceGatewayHost {
-    private var started = false
+    private var starts = 0
     private var cancellations = 0
-    private var responseTask: Task<Data, any Error>?
+    private var nextID: UInt64 = 1
+    private var responseTasks: [UInt64: Task<Data, any Error>] = [:]
 
     func startRPC(name: String, payload: Data) async throws -> RivetDeviceGatewayHostCall {
-        started = true
+        starts += 1
+        let id = nextID
+        nextID += 1
         let task = Task<Data, any Error> {
             try await Task.sleep(nanoseconds: 30_000_000_000)
             return Data([0x01])
         }
-        responseTask = task
-        return RivetDeviceGatewayHostCall(id: 1, response: task)
+        responseTasks[id] = task
+        return RivetDeviceGatewayHostCall(id: id, response: task)
     }
 
     func cancelRPC(id: UInt64) async {
         cancellations += 1
-        responseTask?.cancel()
+        responseTasks[id]?.cancel()
     }
 
-    func didStart() -> Bool { started }
+    func didStart() -> Bool { starts > 0 }
+    func startCount() -> Int { starts }
     func cancellationCount() -> Int { cancellations }
 }
 
@@ -239,6 +243,42 @@ private func helloFrame() throws -> Data {
     let denied = try #require(byID[9])
     #expect(try decodeRivetValue(denied.payload) == .string("operation not permitted"))
     #expect(Set(await host.names()) == Set(["player.play", "$state/get"]))
+    #expect(await gateway.sessionCount() == 0)
+}
+
+@Test func appleRVT1GatewayBoundsConcurrentRequests() async throws {
+    let host = SlowGatewayHost()
+    let gateway = RivetDeviceGateway(host: host)
+    let session = try await gateway.openSession(
+        pairedDeviceID: UUID(),
+        scopes: [RivetDeviceScope(name: "companion", rpcs: ["player.play"])]
+    )
+    var incoming = Data()
+    for id in 1...65 {
+        incoming.append(try encodedFrame(RivetFrame(
+            type: .request,
+            id: UInt64(id),
+            payload: try encodeRivetValue(.list([.string("player.play")]))
+        )))
+    }
+    let stream = MemoryByteStream(incoming: incoming)
+    let server = RivetDeviceAppleRVT1GatewayServer(
+        stream: stream, gateway: gateway, session: session
+    )
+    let running = Task { try await server.run() }
+
+    for _ in 0..<2_000 {
+        if await stream.sentCount() >= 2 { break }
+        await Task.yield()
+    }
+    let sent = try await stream.sentFrames()
+    let rejected = try #require(sent.first(where: { $0.id == 65 }))
+    #expect(rejected.type == .error)
+    #expect(try decodeRivetValue(rejected.payload) == .string("too many pending requests"))
+    #expect(await host.startCount() <= rivetDeviceDefaultMaximumPendingRequests)
+
+    await stream.enqueue(try encodedFrame(RivetFrame(type: .shutdown, id: 0)))
+    try await running.value
     #expect(await gateway.sessionCount() == 0)
 }
 

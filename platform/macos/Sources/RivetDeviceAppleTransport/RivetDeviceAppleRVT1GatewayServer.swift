@@ -157,9 +157,14 @@ public actor RivetDeviceAppleRVT1GatewayServer {
         guard frame.id != 0 else {
             throw RivetDeviceAppleRVT1GatewayServerError.invalidRequestID
         }
-        guard activeIDs.insert(frame.id).inserted else {
+        guard !activeIDs.contains(frame.id) else {
             throw RivetDeviceAppleRVT1GatewayServerError.duplicateRequestID(frame.id)
         }
+        guard activeIDs.count < rivetDeviceDefaultMaximumPendingRequests else {
+            try await sendError(id: frame.id, message: "too many pending requests")
+            return
+        }
+        activeIDs.insert(frame.id)
         do {
             guard case .list(let fields) = try decodeRivetValue(frame.payload),
                   let first = fields.first,
