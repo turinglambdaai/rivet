@@ -309,7 +309,8 @@
    (apply string-append (map swift-decoder types))
    "\n"
    (generate-swift-events events)
-   "public struct RivetAPI: Sendable {\n    public let client: any RivetRPCClient\n    public init(client: any RivetRPCClient) { self.client = client }\n\n"
+   "public protocol RivetGeneratedRPCClient: Sendable {\n    func call(_ name: String, arguments: [RivetValue]) async throws -> RivetValue\n}\n\n// Keep generated clients compatible with the last released SwiftPM runtime.\n// Authenticated network clients can use RivetAPI(call: deviceClient.call).\npublic extension RivetGeneratedRPCClient {\n    func getState(_ name: String) async throws -> RivetValue {\n        try await call(\"$state/get\", arguments: [.string(name)])\n    }\n\n    @discardableResult\n    func setState(_ name: String, value: RivetValue) async throws -> RivetValue {\n        try await call(\"$state/set\", arguments: [.string(name), value])\n    }\n}\n\nextension RivetClient: RivetGeneratedRPCClient {}\n\nprivate struct RivetGeneratedClosureClient: RivetGeneratedRPCClient {\n    let invoke: @Sendable (String, [RivetValue]) async throws -> RivetValue\n\n    func call(_ name: String, arguments: [RivetValue]) async throws -> RivetValue {\n        try await invoke(name, arguments)\n    }\n}\n\n"
+   "public struct RivetAPI: Sendable {\n    public let client: any RivetGeneratedRPCClient\n    public init(client: any RivetGeneratedRPCClient) { self.client = client }\n    public init(call: @escaping @Sendable (String, [RivetValue]) async throws -> RivetValue) {\n        self.client = RivetGeneratedClosureClient(invoke: call)\n    }\n\n"
    (apply string-append (map swift-rpc-method rpcs))
    (if (null? states) "" "\n    // Shared state\n")
    (apply string-append (map swift-state-methods states))

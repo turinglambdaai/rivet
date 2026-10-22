@@ -219,8 +219,11 @@ RKT
                    ".rivet" "generated" "kotlin" "dev" "rivet" "generated"
                    "GeneratedBackend.kt")))
 
-    (check-true (regexp-match? #rx"public let client: any RivetRPCClient" swift))
-    (check-true (regexp-match? #rx"public init\\(client: any RivetRPCClient\\)" swift))
+    (check-true (string-contains? swift "public protocol RivetGeneratedRPCClient: Sendable"))
+    (check-true (string-contains? swift "extension RivetClient: RivetGeneratedRPCClient {}"))
+    (check-true (string-contains? swift "public let client: any RivetGeneratedRPCClient"))
+    (check-true (string-contains? swift "public init(call: @escaping @Sendable"))
+    (check-false (string-contains? swift "public let client: any RivetRPCClient"))
     (check-true (regexp-match? #rx"public enum RivetTypes" swift))
     (check-true (regexp-match? #rx"    public struct User: Sendable" swift))
     (check-true (regexp-match? #rx"displayName = \"demo\"" swift))

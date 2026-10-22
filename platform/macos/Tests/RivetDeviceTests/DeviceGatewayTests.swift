@@ -132,9 +132,10 @@ private let pairedScope = RivetDeviceScope(
         stateName: "sync.status",
         payload: payload
     )
-    #expect(response == Data([0x42]))
+    #expect(response == payload)
     let starts = await host.starts
     #expect(starts.map(\.name) == ["$state/get"])
+    #expect(starts.map(\.payload) == [payload])
 }
 
 @Test func remoteRequestIDsMapToHostIDsAndCancellationStaysInSession() async throws {
