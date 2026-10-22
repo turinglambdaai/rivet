@@ -238,17 +238,21 @@ class ClientTest {
 
     @Test
     fun oversizedIncomingFrameFailsClosedAndReleasesPendingCalls() = runBlocking {
-        ClientHarness(maxFramePayloadSize = 64).use { harness ->
-            harness.start()
-            val pending = async { harness.client.call("waiting") }
-            val request = withContext(Dispatchers.IO) { harness.backendInput.readFrame() }
-            harness.backendOutput.writeFrame(
-                RivetFrame(RivetMessageType.RESPONSE, request.id, ByteArray(65)),
-            )
-            val failure = assertFailsWith<RivetProtocolException> {
-                withTimeout(2_000) { pending.await() }
+        // An expected failure in an async child must not cancel the parent
+        // test scope before assertFailsWith can inspect the terminal error.
+        supervisorScope {
+            ClientHarness(maxFramePayloadSize = 64).use { harness ->
+                harness.start()
+                val pending = async { harness.client.call("waiting") }
+                val request = withContext(Dispatchers.IO) { harness.backendInput.readFrame() }
+                harness.backendOutput.writeFrame(
+                    RivetFrame(RivetMessageType.RESPONSE, request.id, ByteArray(65)),
+                )
+                val failure = assertFailsWith<RivetProtocolException> {
+                    withTimeout(2_000) { pending.await() }
+                }
+                assertEquals(RivetProtocolFailure.LENGTH_OVERFLOW, failure.failure)
             }
-            assertEquals(RivetProtocolFailure.LENGTH_OVERFLOW, failure.failure)
         }
     }
 
