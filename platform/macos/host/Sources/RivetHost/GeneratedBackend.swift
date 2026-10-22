@@ -18,9 +18,9 @@ public enum RivetGeneratedConfig {
 }
 
 public struct RivetAPI: Sendable {
-    public let client: RivetClient
+    public let client: any RivetRPCClient
 
-    public init(client: RivetClient) {
+    public init(client: any RivetRPCClient) {
         self.client = client
     }
 

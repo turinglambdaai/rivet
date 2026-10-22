@@ -309,7 +309,7 @@
    (apply string-append (map swift-decoder types))
    "\n"
    (generate-swift-events events)
-   "public struct RivetAPI: Sendable {\n    public let client: RivetClient\n    public init(client: RivetClient) { self.client = client }\n\n"
+   "public struct RivetAPI: Sendable {\n    public let client: any RivetRPCClient\n    public init(client: any RivetRPCClient) { self.client = client }\n\n"
    (apply string-append (map swift-rpc-method rpcs))
    (if (null? states) "" "\n    // Shared state\n")
    (apply string-append (map swift-state-methods states))

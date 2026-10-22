@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add the Apple post-RVD1 RVT1 device path: generated Swift APIs can target a
+  shared RivetRPCClient protocol; a bounded network client correlates RPCs,
+  forwards cancellation and delivers events; a scoped gateway server applies
+  RPC/state/event grants and a backend adapter calls the existing local
+  client. Framework tests cover request correlation, state grant isolation,
+  event filtering and host argument/result encoding. Product listener wiring,
+  scope selection, event fan-out, signed apps and physical-device validation
+  remain outstanding.
+
 - Bridge Android companion TLS streams to the RVD1 client through a
   one-shot selected-endpoint session driver. Enforce the stored SPKI pin on
   reconnect without implicit pairing fallback, preserve explicit pairing

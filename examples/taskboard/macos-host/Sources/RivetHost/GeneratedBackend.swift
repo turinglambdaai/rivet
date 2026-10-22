@@ -167,8 +167,8 @@ public enum RivetEvent: Sendable {
 }
 
 public struct RivetAPI: Sendable {
-    public let client: RivetClient
-    public init(client: RivetClient) { self.client = client }
+    public let client: any RivetRPCClient
+    public init(client: any RivetRPCClient) { self.client = client }
 
     public func create_task(title: String, notes: String) async throws -> RivetTypes.BoardTask {
         let rivetResult = try await client.call("create-task", arguments: [encode_String(title), encode_String(notes)])

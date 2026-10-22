@@ -3,14 +3,16 @@
 Status: active design for [issue #85](https://github.com/turinglambdaai/rivet/issues/85).
 The transport-independent `RivetDeviceGateway` policy/session core, pairing/
 authentication lifecycle, and byte-exact session preface are implemented and
-tested in memory. The Apple pairing-credential Keychain adapter, bounded
-Network.framework TLS stream adapter, per-install identity provider, and
-disabled-by-default macOS listener with bounded Bonjour advertising, and the
-single-connection macOS preface host are also implemented. The explicit iOS
-Bonjour browser accepts only the privacy-bounded canonical advertisement and
-does not connect or authorize a peer. No iOS client-session coordinator,
-product gateway binding, pairing UI, product enablement, or generated mobile
-application is shipped yet.
+tested in memory. The Apple Keychain credential store, bounded
+Network.framework TLS stream, per-install identity, disabled-by-default macOS
+listener and single-connection RVD1 preface host are implemented. The explicit
+iOS Bonjour browser accepts only the canonical privacy-bounded advertisement.
+The Apple transport now also has a bounded RVT1 client, per-device gateway
+server, and backend adapter: generated APIs can run over the authenticated
+network stream, while RPCs, state reads/writes, events, and state-change events
+are filtered through the paired device's grants. Product code must still wire
+the RVD1 host, scope policy, backend client, event fan-out, app UI, and signed
+mobile application; framework code alone does not constitute a shipped app.
 
 ### iPhone, iPad and Apple Watch companion boundaries
 

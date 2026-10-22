@@ -57,7 +57,7 @@ let package = Package(
         ),
         .target(
             name: "RivetDeviceAppleTransport",
-            dependencies: ["RivetDevice", "RivetDeviceSession"],
+            dependencies: ["RivetDevice", "RivetDeviceSession", "RivetRuntime"],
             path: "Sources/RivetDeviceAppleTransport",
             linkerSettings: [
                 .linkedFramework("CryptoKit"),
@@ -129,7 +129,12 @@ let package = Package(
         ),
         .testTarget(
             name: "RivetDeviceAppleTransportTests",
-            dependencies: ["RivetDeviceAppleTransport", "RivetDeviceSession"],
+            dependencies: [
+                "RivetDeviceAppleTransport",
+                "RivetDeviceSession",
+                "RivetDevice",
+                "RivetRuntime"
+            ],
             path: "Tests/RivetDeviceAppleTransportTests"
         ),
         .testTarget(

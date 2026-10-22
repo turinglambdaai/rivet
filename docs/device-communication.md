@@ -107,11 +107,13 @@ pre-session admission and fail-closed lifecycle handling. That listener now
 publishes the privacy-bounded Bonjour service while ready. The framework-only
 Bonjour browser discovers that service on iOS, rejects non-canonical TXT
 records, and reports endpoint and advertisement changes without connecting or
-granting authority. An iOS client-session coordinator and explicit native
-confirmation UI remain. The macOS session host
-drives `RVD1`, exposes the stream only after authenticated acceptance, and
-leaves product gateway dispatch to an explicit application handler; Windows
-also needs its Credential Manager and transport adapters.
+granting authority. The Apple transport now includes a bounded RVT1 client,
+a scoped gateway server, and a backend adapter that forwards typed RPC calls
+to the existing local client while filtering state access, events, and state
+changes per paired device. Product code still must connect these components to
+the RVD1 session host, companion coordinator/confirmation UI, per-device scope
+policy, and event fan-out; Windows also needs its Credential Manager and
+transport adapters.
 
 This design follows the core idea in [DSLs for Safe iOS/watchOS Communication](https://defn.io/2025/02/16/type-safe-watchos-communication/): encode the request/response relationship in types and centralize dispatch instead of spreading dictionaries, route strings, and casts throughout both apps. Rivet generates that relationship from the shared Racket schema while keeping the exported device surface explicit.
 

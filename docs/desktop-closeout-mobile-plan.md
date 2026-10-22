@@ -309,6 +309,14 @@ unverified.
 Add the Windows gateway against the same iOS client, then bind Android
 discovery/TLS streams to the existing Kotlin runtime and generated device API.
 
+The Apple post-RVD1 RVT1 path now has a bounded client and scoped gateway
+server, a backend adapter for the existing local RPC client, cancellation
+forwarding, and per-device event/state-change filtering. The generated Swift
+API accepts the shared RivetRPCClient protocol so in-process and network
+clients can share typed methods. Product host wiring, per-device scope
+selection, event fan-out, mobile UI integration, and real-device acceptance
+remain open gates.
+
 Apple companion coverage extends to iOS and iPadOS through the shared
 iOS transport, and watchOS through a separate WatchConnectivity request
 relay to its paired iPhone. The relay requires activated/reachable
