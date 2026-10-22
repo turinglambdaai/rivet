@@ -177,7 +177,7 @@ jobs:
       - name: Install GTK4 development files and rpm tooling
         run: |
           bash .github/scripts/apt-retry.sh --sudo update
-          bash .github/scripts/apt-retry.sh --sudo install --yes \
+          bash .github/scripts/apt-retry.sh --sudo install --yes --no-install-recommends \
             libgtk-4-dev rpm desktop-file-utils
       - name: Compile full schema matrix, package, and verify a GTK4 app
         shell: bash
