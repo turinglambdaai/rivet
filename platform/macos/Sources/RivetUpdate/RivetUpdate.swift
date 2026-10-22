@@ -399,7 +399,8 @@ public final class RivetUpdateService: Sendable {
         // Swap: the shell script survives our exit; it also restores the
         // old bundle if the new one fails to move in.
         let script = Self.swapScript(bundlePath: bundleURL.path,
-                                     newBundlePath: newBundle.path)
+                                     newBundlePath: newBundle.path,
+                                     oldPID: ProcessInfo.processInfo.processIdentifier)
         let swapPath = workDir.appendingPathComponent("swap.sh")
         try script.write(to: swapPath, atomically: true, encoding: .utf8)
         try await Self.runProcess("/bin/chmod", arguments: ["+x", swapPath.path])
@@ -438,23 +439,88 @@ public final class RivetUpdateService: Sendable {
         #endif
     }
 
-    /// The swap helper: after a grace period it moves the running bundle
-    /// aside, moves the verified payload in, reopens the application, and
-    /// restores the previous bundle when the new one cannot be moved in.
+    /// The swap helper: wait for the old process to exit, activate the verified
+    /// bundle, and keep the previous bundle until the replacement process has
+    /// survived a short health window. If launch fails or the process exits
+    /// during that window, restore and reopen the previous bundle.
     /// Static and pure so the exact script is unit-testable.
-    static func swapScript(bundlePath: String, newBundlePath: String) -> String {
+    static func swapScript(bundlePath: String,
+                           newBundlePath: String,
+                           oldPID: Int32 = 0,
+                           healthTimeoutSeconds: Int = 15,
+                           healthSettleSeconds: Int = 3) -> String {
         let old = bundlePath + ".old"
         return """
         #!/bin/bash
+        set -u
+        APP=\(shellQuoted(bundlePath))
+        NEW=\(shellQuoted(newBundlePath))
+        OLD=\(shellQuoted(old))
+        OLD_PID=\(oldPID)
         sleep 1
-        rm -rf \(shellQuoted(old))
-        if mv \(shellQuoted(bundlePath)) \(shellQuoted(old)); then
-          if mv \(shellQuoted(newBundlePath)) \(shellQuoted(bundlePath)); then
-            open \(shellQuoted(bundlePath))
-            rm -rf \(shellQuoted(old))
-            exit 0
+
+        # Never move a running app bundle. NSApplication gets the normal
+        # terminate path first; this bounded wait covers deferred shutdown.
+        if [ "$OLD_PID" -gt 1 ]; then
+          waited=0
+          while /bin/kill -0 "$OLD_PID" 2>/dev/null && [ "$waited" -lt 40 ]; do
+            /bin/sleep 0.25
+            waited=$((waited + 1))
+          done
+          if /bin/kill -0 "$OLD_PID" 2>/dev/null; then
+            exit 1
           fi
-          mv \(shellQuoted(old)) \(shellQuoted(bundlePath))
+        fi
+
+        # A stale .old can only be discarded after the current app was alive
+        # enough to request an update. Keep the current bundle as the rollback
+        # copy for this transaction.
+        /bin/rm -rf "$OLD"
+        if ! /bin/mv "$APP" "$OLD"; then
+          exit 1
+        fi
+        if ! /bin/mv "$NEW" "$APP"; then
+          /bin/mv "$OLD" "$APP"
+          exit 1
+        fi
+
+        APP_EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist") || APP_EXECUTABLE=""
+        if [ -z "$APP_EXECUTABLE" ]; then
+          /bin/rm -rf "$APP"
+          /bin/mv "$OLD" "$APP"
+          exit 1
+        fi
+        EXECUTABLE_PATH="$APP/Contents/MacOS/$APP_EXECUTABLE"
+
+        # open only acknowledges LaunchServices; it does not prove the new
+        # process survived. Find the executable under the new bundle and keep
+        # the backup until that same process remains alive for the settle time.
+        if /usr/bin/open -n "$APP"; then
+          waited=0
+          while [ "$waited" -lt \(healthTimeoutSeconds * 2) ]; do
+            new_pid=$(/bin/ps -axo pid=,command= | /usr/bin/awk -v path="$EXECUTABLE_PATH" -v old_pid="$OLD_PID" '$1 != old_pid && index($0, path) > 0 { print $1; exit }')
+            if [ -n "$new_pid" ] && /bin/kill -0 "$new_pid" 2>/dev/null; then
+              /bin/sleep \(healthSettleSeconds)
+              if /bin/kill -0 "$new_pid" 2>/dev/null &&
+                 /bin/ps -p "$new_pid" -o command= | /usr/bin/grep -Fq "$EXECUTABLE_PATH"; then
+                /bin/rm -rf "$OLD"
+                exit 0
+              fi
+              waited=$((waited + \(healthSettleSeconds * 2)))
+            else
+              /bin/sleep 0.5
+              waited=$((waited + 1))
+            fi
+          done
+        fi
+
+        # Launch failed or crashed during the health window. Restore the
+        # previous bundle before attempting to reopen it.
+        if [ -d "$OLD" ]; then
+          /bin/rm -rf "$APP"
+          if /bin/mv "$OLD" "$APP"; then
+            /usr/bin/open -n "$APP" >/dev/null 2>&1 || true
+          fi
         fi
         exit 1
         """
