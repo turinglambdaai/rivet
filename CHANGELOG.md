@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add an Android Keystore-backed, app-scoped pairing credential store for
+  the RVD1 persistence gate. Credentials and server SPKI pins are encrypted
+  together with AES-256-GCM and bound to the application and device ID;
+  corrupted, restored-without-key, or cross-device records fail closed.
+  Synchronous SharedPreferences commits and no-replacement policy prevent
+  a failed credential write from authorizing application traffic. JVM
+  envelope tests cover tampering, identity binding, and malformed records;
+  Android SDK compilation covers the KeyStore adapter. This does not provide
+  a product UI or hardware pairing acceptance.
+
 - Bridge Android companion TLS streams to the RVD1 client through a
   one-shot selected-endpoint session driver. Enforce the stored SPKI pin on
   reconnect without implicit pairing fallback, preserve explicit pairing
