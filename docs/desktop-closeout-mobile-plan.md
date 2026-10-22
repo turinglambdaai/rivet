@@ -303,6 +303,10 @@ Kotlin CI job; canonical TXT mapping has JVM tests. The product still owns
 local-network permission prompts, foreground/multicast lifecycle, secure
 credential storage and mobile UI; physical-device network pairing remains
 unverified.
+The portable `SelectedDeviceCompanionCoordinator` now bridges that live NSD
+selection to exactly one authenticated RVD1 attempt on an injected worker,
+with fail-closed cancellation and explicit pairing-window policy. It still
+requires product-owned credential storage, UI approval and real-device proof.
 
 ### M3 — second desktop host and Android client
 

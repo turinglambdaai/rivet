@@ -50,7 +50,7 @@ fun interface DeviceCompanionDialer {
     ): DeviceCompanionTransport
 }
 
-private val systemDeviceCompanionDialer = DeviceCompanionDialer { endpoint, authentication ->
+internal val systemDeviceCompanionDialer = DeviceCompanionDialer { endpoint, authentication ->
     val connection = DeviceTLSClient.connect(
         endpoint.host, endpoint.port, authentication,
     )

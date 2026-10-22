@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add an Android selected-device connection coordinator joining live
+  canonical NSD resolution to one explicit pinned-TLS/RVD1 attempt on a
+  product-supplied executor. Reject closed pairing windows, stale candidates
+  and duplicate starts; cancel outstanding resolution and active transports
+  without a delayed dial or automatic pairing fallback. Deterministic
+  JVM tests cover selection, successful authenticated handoff, cancellation
+  before queued work, and stale native callbacks. Product secure storage,
+  native UI and physical-device evidence remain separate.
+
 - Bridge Android companion TLS streams to the RVD1 client through a
   one-shot selected-endpoint session driver. Enforce the stored SPKI pin on
   reconnect without implicit pairing fallback, preserve explicit pairing
