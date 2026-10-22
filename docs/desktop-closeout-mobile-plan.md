@@ -273,7 +273,12 @@ session client, surfaces explicit pairing approval, hands the accepted
 stream to the product's RVT1 client only after the persistence gate, and
 closes failed or cancelled transport attempts. Kotlin/JVM tests cover
 wrong pins, no reconnect-to-pairing fallback, accepted stream ownership,
-and cancellation during an in-flight TLS dial. The Android `NsdManager`
+and cancellation during an in-flight TLS dial. The accepted RVT1 client now
+applies the payload and pending-request budgets negotiated by its RVD1
+session: oversized outgoing RPCs are rejected before any frame is emitted,
+oversized incoming frames fail closed, and malformed acceptance budgets are
+rejected during session establishment, all pinned by deterministic JVM
+tests. The Android `NsdManager`
 driver, product credential integration, and device-to-device evidence
 remain separate unfinished M3 tasks.
 

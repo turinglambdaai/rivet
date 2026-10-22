@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Bind Android's RVT1 stream client to the payload and pending-request budgets
+  negotiated by an accepted RVD1 session. Reject oversized outgoing RPCs
+  without emitting a frame or poisoning later requests; oversized incoming
+  frames fail closed. Deterministic JVM tests cover both directions and
+  malformed acceptance budgets. This is companion transport policy, not a
+  claim of a complete Android app or physical-device acceptance.
+
 - Add reusable iOS/iPadOS companion orchestration and SwiftUI UI for explicit
   Bonjour selection, pinned reconnect, provisional RVD1 pairing, pairing-code
   confirmation, Keychain-backed credential persistence, saved-pairing removal,
