@@ -40,6 +40,8 @@ public final class RivetWatchConnectivityTransport: NSObject, RivetDeviceTranspo
     private let session: WCSession
     private let router: RivetDeviceRouter?
     private let messagePolicy: RivetWatchMessagePolicy
+    private let stateContinuation: AsyncStream<RivetWatchConnectivityState>.Continuation
+    public let stateChanges: AsyncStream<RivetWatchConnectivityState>
 
     public init(
         session: WCSession = .default,
@@ -49,15 +51,42 @@ public final class RivetWatchConnectivityTransport: NSObject, RivetDeviceTranspo
         self.session = session
         self.router = router
         self.messagePolicy = messagePolicy
+        let (stateChanges, stateContinuation) = AsyncStream.makeStream(
+            of: RivetWatchConnectivityState.self,
+            bufferingPolicy: .bufferingNewest(16)
+        )
+        self.stateChanges = stateChanges
+        self.stateContinuation = stateContinuation
         super.init()
         session.delegate = self
+    }
+
+    deinit {
+        stateContinuation.finish()
+    }
+
+    public var currentState: RivetWatchConnectivityState {
+        guard WCSession.isSupported() else { return .unsupported }
+        switch session.activationState {
+        case .activated:
+            return session.isReachable ? .reachable : .notReachable
+        case .notActivated, .inactive:
+            return .inactive
+        @unknown default:
+            return .failed
+        }
     }
 
     public func activate() throws {
         guard WCSession.isSupported() else {
             throw RivetWatchConnectivityError.notSupported
         }
-        session.activate()
+        // Do not enqueue a stale .inactive snapshot if the session was
+        // already active/reachable before the SwiftUI consumer subscribed.
+        stateContinuation.yield(currentState)
+        if session.activationState != .activated {
+            session.activate()
+        }
     }
 
     public func send(_ request: Data) async throws -> Data {
@@ -100,7 +129,13 @@ extension RivetWatchConnectivityTransport: WCSessionDelegate {
         _ session: WCSession,
         activationDidCompleteWith activationState: WCSessionActivationState,
         error: Error?
-    ) {}
+    ) {
+        stateContinuation.yield(error == nil ? currentState : .failed)
+    }
+
+    public func sessionReachabilityDidChange(_ session: WCSession) {
+        stateContinuation.yield(currentState)
+    }
 
     public func session(
         _ session: WCSession,
@@ -131,10 +166,13 @@ extension RivetWatchConnectivityTransport: WCSessionDelegate {
     }
 
     #if os(iOS)
-    public func sessionDidBecomeInactive(_ session: WCSession) {}
+    public func sessionDidBecomeInactive(_ session: WCSession) {
+        stateContinuation.yield(currentState)
+    }
 
     public func sessionDidDeactivate(_ session: WCSession) {
         session.activate()
+        stateContinuation.yield(currentState)
     }
     #endif
 }
