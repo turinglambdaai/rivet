@@ -330,7 +330,7 @@ private func stopProbeProcesses(from launchLog: URL) {
     #expect(script.contains("OPEN_COMMAND='/usr/bin/open'"))
     #expect(script.contains("\"$OPEN_COMMAND\" -n \"$APP\""))
     #expect(script.contains("EXECUTABLE_PATH=\"$APP/Contents/MacOS/$APP_EXECUTABLE\""))
-    #expect(script.contains("waited -lt 30"))
+    #expect(script.contains("[ \"$waited\" -lt 30 ]"))
     #expect(script.contains("/bin/rm -rf \"$OLD\""))
     #expect(script.hasSuffix("exit 1"))
 }
