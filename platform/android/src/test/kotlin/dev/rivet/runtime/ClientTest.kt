@@ -19,13 +19,16 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-private class ClientHarness(maxPendingRequests: Int = 1024) : AutoCloseable {
+private class ClientHarness(
+    maxPendingRequests: Int = 1024,
+    maxFramePayloadSize: Int = RIVET_MAX_FRAME_PAYLOAD_SIZE,
+) : AutoCloseable {
     private val backendToClient = PipedOutputStream()
     private val clientInput = PipedInputStream(backendToClient, 1024 * 1024)
     private val clientToBackend = PipedOutputStream()
     val backendInput = PipedInputStream(clientToBackend, 1024 * 1024)
     val backendOutput: OutputStream = backendToClient
-    val client = RivetClient(clientInput, clientToBackend, maxPendingRequests)
+    val client = RivetClient(clientInput, clientToBackend, maxPendingRequests, maxFramePayloadSize = maxFramePayloadSize)
 
     suspend fun start(onEvent: RivetClient.EventHandler? = null) {
         backendOutput.writeFrame(
@@ -211,6 +214,58 @@ class ClientTest {
                 ),
             )
             assertEquals(RivetValue.Int64(2), withTimeout(2_000) { next.await() })
+        }
+    }
+
+    @Test
+    fun oversizedOutgoingRequestFailsWithoutPoisoningTheSession() = runBlocking {
+        ClientHarness(maxFramePayloadSize = 64).use { harness ->
+            harness.start()
+            val failed = assertFailsWith<RivetClientException> {
+                harness.client.call("large", listOf(RivetValue.StringValue("x".repeat(128))))
+            }
+            assertEquals(RivetClientFailure.MESSAGE_TOO_LARGE, failed.failure)
+
+            val next = async { harness.client.call("small") }
+            val request = withContext(Dispatchers.IO) { harness.backendInput.readFrame() }
+            assertEquals("small", request.requestName())
+            harness.backendOutput.writeFrame(
+                RivetFrame(RivetMessageType.RESPONSE, request.id, encodeRivetValue(RivetValue.Int64(1))),
+            )
+            assertEquals(RivetValue.Int64(1), withTimeout(2_000) { next.await() })
+        }
+    }
+
+    @Test
+    fun oversizedIncomingFrameFailsClosedAndReleasesPendingCalls() = runBlocking {
+        // An expected failure in an async child must not cancel the parent
+        // test scope before assertFailsWith can inspect the terminal error.
+        supervisorScope {
+            ClientHarness(maxFramePayloadSize = 64).use { harness ->
+                harness.start()
+                val pending = async { harness.client.call("waiting") }
+                val request = withContext(Dispatchers.IO) { harness.backendInput.readFrame() }
+                harness.backendOutput.writeFrame(
+                    RivetFrame(RivetMessageType.RESPONSE, request.id, ByteArray(65)),
+                )
+                val failure = assertFailsWith<RivetProtocolException> {
+                    withTimeout(2_000) { pending.await() }
+                }
+                assertEquals(RivetProtocolFailure.LENGTH_OVERFLOW, failure.failure)
+            }
+        }
+    }
+
+    @Test
+    fun invalidRVT1PayloadBudgetsAreRejected() {
+        assertFailsWith<IllegalArgumentException> {
+            RivetClient(InputStream.nullInputStream(), OutputStream.nullOutputStream(), maxFramePayloadSize = 0)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            RivetClient(
+                InputStream.nullInputStream(), OutputStream.nullOutputStream(),
+                maxFramePayloadSize = RIVET_MAX_FRAME_PAYLOAD_SIZE + 1,
+            )
         }
     }
 
