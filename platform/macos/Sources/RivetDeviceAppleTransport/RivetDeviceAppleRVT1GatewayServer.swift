@@ -67,6 +67,10 @@ public actor RivetDeviceAppleRVT1GatewayServer {
         } catch {
             await close()
             if Task.isCancelled { throw CancellationError() }
+            if let channelError = error as? RivetDeviceAppleRVT1ChannelError,
+               channelError == .closed {
+                return
+            }
             throw error
         }
     }

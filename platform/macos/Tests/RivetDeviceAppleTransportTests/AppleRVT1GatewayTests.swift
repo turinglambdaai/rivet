@@ -398,6 +398,29 @@ private func helloFrame() throws -> Data {
     #expect(await gateway.sessionCount() == 0)
 }
 
+@Test func appleRVT1GatewayPeerDisconnectRevokesSessionNormally() async throws {
+    let host = TestGatewayHost()
+    let gateway = RivetDeviceGateway(host: host)
+    let session = try await gateway.openSession(
+        pairedDeviceID: UUID(),
+        scopes: [RivetDeviceScope(name: "companion", rpcs: ["player.play"])]
+    )
+    let stream = MemoryByteStream()
+    let server = RivetDeviceAppleRVT1GatewayServer(
+        stream: stream, gateway: gateway, session: session
+    )
+    let running = Task { try await server.run() }
+
+    for _ in 0..<2_000 {
+        if await stream.waitingReaderCount() > 0 { break }
+        await Task.yield()
+    }
+    #expect(await stream.waitingReaderCount() > 0)
+    await stream.close()
+    try await running.value
+    #expect(await gateway.sessionCount() == 0)
+}
+
 @Test func appleRVT1GatewayRunCancellationClosesConnectionAndRevokesSession() async throws {
     let host = TestGatewayHost()
     let gateway = RivetDeviceGateway(host: host)
