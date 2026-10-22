@@ -213,14 +213,20 @@ private func helloFrame() throws -> Data {
                    payload: try encodeRivetValue(.list([.string("$state/get"), .string("volume")]))),
         RivetFrame(type: .request, id: 9,
                    payload: try encodeRivetValue(.list([.string("$state/get"), .string("private.state")]))),
-        RivetFrame(type: .shutdown, id: 0)
     ]
     for frame in frames { incoming.append(try encodedFrame(frame)) }
     let stream = MemoryByteStream(incoming: incoming)
     let server = RivetDeviceAppleRVT1GatewayServer(
         stream: stream, gateway: gateway, session: session
     )
-    try await server.run()
+    let running = Task { try await server.run() }
+    for _ in 0..<2_000 {
+        if await stream.sentCount() >= 4 { break }
+        await Task.yield()
+    }
+    #expect(await stream.sentCount() >= 4)
+    await stream.enqueue(try encodedFrame(RivetFrame(type: .shutdown, id: 0)))
+    try await running.value
 
     let sent = try await stream.sentFrames()
     #expect(sent.first?.type == .hello)
