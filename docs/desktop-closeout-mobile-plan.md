@@ -311,11 +311,11 @@ discovery/TLS streams to the existing Kotlin runtime and generated device API.
 
 The Apple post-RVD1 RVT1 path now has a bounded client and scoped gateway
 server, a backend adapter for the existing local RPC client, cancellation
-forwarding, and per-device event/state-change filtering. The generated Swift
-API accepts the shared RivetRPCClient protocol so in-process and network
-clients can share typed methods. Product host wiring, per-device scope
-selection, event fan-out, mobile UI integration, and real-device acceptance
-remain open gates.
+forwarding, and per-device event/state-change filtering. Generated Swift APIs
+support a shared RPC interface with compatibility for the released in-process
+SwiftPM runtime, so network and in-process clients share typed methods.
+Product host wiring, scope selection, event fan-out, and real-device
+acceptance remain open gates.
 
 Apple companion coverage extends to iOS and iPadOS through the shared
 iOS transport, and watchOS through a separate WatchConnectivity request
@@ -326,6 +326,19 @@ includes iOS/watchOS device and simulator framework compilations and
 deterministic Swift relay tests. Neither standalone iPad/watch
 applications nor real-device pairing, background connectivity,
 signing and package acceptance are implied by these framework gates.
+
+The shared Apple companion framework now has a reusable iOS/iPadOS
+orchestrator that checks a selected Bonjour candidate is still current,
+requires explicit pairing intent or a stored pinned pairing, routes pairing
+codes through an async event stream, persists the new credential before RVT1
+handoff, and updates granted-scope metadata before the product callback.
+A reusable `RivetDeviceAppleCompanionUI` SwiftUI view/model now provides
+nearby discovery, pair/reconnect actions, explicit pairing-code approval,
+saved-pairing removal and session status. The watchOS relay also exposes
+reachability changes and a `RivetWatchCompanionView` shell for one
+product-supplied typed action. The host pairing-window ID, post-RVD1
+application handler, and watch action remain product inputs; no generated
+app, signing, or physical-device acceptance is implied.
 
 ### M4 — standalone mobile hosts
 

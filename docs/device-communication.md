@@ -42,6 +42,11 @@ let client = RivetDeviceClient(transport: transport)
 let score = try await client.current_score(game_id: "final")
 ```
 
+`RivetWatchCompanionView` provides a small watchOS shell for relay
+reachability and a product-supplied typed action. The action should use the
+same generated client and explicit route allowlist shown above; the view is a
+reusable component, not a complete signed watch application.
+
 The allowlist is empty by default. Missing RPC names fail generation. Selected
 arguments and results must be representable by `Codable`: the primitive,
 `List`, `Optional`, Record, and Enum schema types are supported, while `Any` is
@@ -107,13 +112,16 @@ pre-session admission and fail-closed lifecycle handling. That listener now
 publishes the privacy-bounded Bonjour service while ready. The framework-only
 Bonjour browser discovers that service on iOS, rejects non-canonical TXT
 records, and reports endpoint and advertisement changes without connecting or
-granting authority. The Apple transport now includes a bounded RVT1 client,
-a scoped gateway server, and a backend adapter that forwards typed RPC calls
-to the existing local client while filtering state access, events, and state
-changes per paired device. Product code still must connect these components to
-the RVD1 session host, companion coordinator/confirmation UI, per-device scope
-policy, and event fan-out; Windows also needs its Credential Manager and
-transport adapters.
+granting authority. The `RivetDeviceAppleCompanion` coordinator composes
+live explicit selection, pinned reconnect or provisional pairing, credential
+persistence, and an iOS/iPadOS SwiftUI confirmation surface. The post-RVD1
+transport adds a bounded typed RVT1 client, scoped gateway server, and backend
+RPC adapter; they apply per-device RPC, State, and Event grants and cancellation
+without treating discovery as authority. Products must wire the accepted
+session to application-specific RPC/state policy, event fan-out, local-network
+permissions, signing, and real-device acceptance. The macOS host only exposes
+application streams after authenticated acceptance; Windows
+also needs its Credential Manager and transport adapters.
 
 This design follows the core idea in [DSLs for Safe iOS/watchOS Communication](https://defn.io/2025/02/16/type-safe-watchos-communication/): encode the request/response relationship in types and centralize dispatch instead of spreading dictionaries, route strings, and casts throughout both apps. Rivet generates that relationship from the shared Racket schema while keeping the exported device surface explicit.
 

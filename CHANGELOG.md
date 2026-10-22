@@ -12,6 +12,14 @@
   Product listener wiring, scope selection, event fan-out, signed apps and
   physical-device validation remain outstanding.
 
+- Add reusable iOS/iPadOS companion orchestration and SwiftUI UI for explicit
+  Bonjour selection, pinned reconnect, provisional RVD1 pairing, pairing-code
+  confirmation, Keychain-backed credential persistence, saved-pairing removal,
+  and session status. Add a watchOS SwiftUI control shell and WatchConnectivity
+  reachability stream with bounded 64 KiB immediate messages. CI covers Apple
+  device/simulator SDK builds; signed app packaging and physical-device
+  acceptance remain outstanding.
+
 - Bridge Android companion TLS streams to the RVD1 client through a
   one-shot selected-endpoint session driver. Enforce the stored SPKI pin on
   reconnect without implicit pairing fallback, preserve explicit pairing

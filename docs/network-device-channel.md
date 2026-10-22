@@ -1,19 +1,19 @@
 # Network device channel design
 
 Status: active design for [issue #85](https://github.com/turinglambdaai/rivet/issues/85).
-The transport-independent `RivetDeviceGateway` policy/session core, pairing/
-authentication lifecycle, and byte-exact session preface are implemented and
-tested in memory. The Apple Keychain credential store, bounded
-Network.framework TLS stream, per-install identity, disabled-by-default macOS
-listener and single-connection RVD1 preface host are implemented. The explicit
-iOS Bonjour browser accepts only the canonical privacy-bounded advertisement.
-The Apple transport now also has a bounded RVT1 client, per-device gateway
-server, and backend adapter: generated APIs can run over the authenticated
-network stream. The client offers a lifecycle-aware `run()` entry point for
-companion handlers, and RPCs, state reads/writes, events, and state-change
-events are filtered through the paired device's grants. Product code must still wire
-the RVD1 host, scope policy, backend client, event fan-out, app UI, and signed
-mobile application; framework code alone does not constitute a shipped app.
+The transport-independent `RivetDeviceGateway` policy/session core,
+pairing/authentication lifecycle, and byte-exact RVD1 preface have in-memory
+coverage. The Apple Keychain pairing store, Network.framework TLS transport,
+per-install identity, disabled-by-default macOS listener, bounded Bonjour
+advertising, and single-connection RVD1 session host are implemented. The
+iOS/iPadOS companion orchestrator provides explicit Bonjour selection, pinned
+reconnect or provisional pairing, Keychain persistence, and a reusable SwiftUI
+pair/reconnect confirmation surface. After authenticated RVD1 acceptance, a
+bounded RVT1 client, scoped per-device gateway, and backend adapter support
+typed RPC, State, cancellation and filtered Event delivery. Products still own
+per-device grants, gateway wiring, local-network permissions, event fan-out,
+signed application packaging, and real-device verification. These reusable
+targets are not a generated standalone mobile application.
 
 ### iPhone, iPad and Apple Watch companion boundaries
 
@@ -31,7 +31,10 @@ WCSession. The iPhone must register and scope the permitted routes on
 its own `RivetDeviceRouter` and own the authorized desktop connection:
 the watch transport itself neither exposes backend RPCs nor pairs
 directly with a desktop. Invalid or oversized WatchConnectivity
-requests/replies fail closed.
+requests/replies fail closed. `RivetWatchCompanionView` provides a small
+watchOS shell that displays paired-iPhone reachability and invokes one
+product-supplied typed action only while reachable; it never invents RPC
+routes or implies direct watch-to-desktop access.
 
 The framework CI runs Swift watch relay policy tests and compiles the
 Rivet runtime and watch relay against iOS and watchOS device and
@@ -39,9 +42,9 @@ simulator SDKs, plus the Apple device security/session/TLS layers for
 iOS devices and simulator. This is **SDK compilation coverage**, not
 an iPad app layout check, a paired-Watch reachability run, mobile app
 signing or packaging, foreground/background permission acceptance, or
-real iOS/iPadOS TLS/Bonjour pairing evidence. Products must supply
-local network permission declarations, pairing UIs, watch/iPhone UI,
-route allowlists, lifecycle tests, and real-device evidence.
+real iOS/iPadOS TLS/Bonjour pairing evidence. Products must integrate the reusable iOS/iPadOS and watchOS SwiftUI surfaces,
+supply local-network permission declarations and app-specific RVT1 handling or
+typed watch actions, and provide lifecycle tests and real-device evidence.
 
 ## Problem
 
