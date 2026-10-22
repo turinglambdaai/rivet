@@ -128,7 +128,8 @@ jobs:
       - name: Install headless Wayland compositor
         run: |
           bash .github/scripts/apt-retry.sh --sudo update
-          bash .github/scripts/apt-retry.sh --sudo install --yes weston
+          bash .github/scripts/apt-retry.sh --sudo install --yes --no-install-recommends \
+            weston xwayland
       - name: Launch AppImage outside the build tree
         shell: bash
         env:
