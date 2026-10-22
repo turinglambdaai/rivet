@@ -84,7 +84,9 @@ public final class RivetWatchConnectivityTransport: NSObject, RivetDeviceTranspo
         // Do not enqueue a stale .inactive snapshot if the session was
         // already active/reachable before the SwiftUI consumer subscribed.
         stateContinuation.yield(currentState)
-        session.activate()
+        if session.activationState != .activated {
+            session.activate()
+        }
     }
 
     public func send(_ request: Data) async throws -> Data {
