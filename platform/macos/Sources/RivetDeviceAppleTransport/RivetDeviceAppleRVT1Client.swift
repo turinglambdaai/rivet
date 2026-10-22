@@ -32,6 +32,7 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
     private var readerTask: Task<Void, Never>?
     private var eventHandler: EventHandler?
     private var terminated = false
+    private var terminalError: (any Error)?
     private var terminationWaiters: [CheckedContinuation<Void, Never>] = []
 
     public init(connection: RivetDeviceAppleConnection,
@@ -93,6 +94,7 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
         } onCancel: {
             Task { await self.stop() }
         }
+        if let terminalError { throw terminalError }
         try Task.checkCancellation()
     }
 
@@ -163,6 +165,7 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
                 }
             } else { pending[id] = current }
         } catch {
+            if !stopped && !isNormalTermination(error) { terminalError = error }
             stopped = true
             failAll(error)
             await channel.close()
@@ -226,6 +229,7 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
                 }
             }
         } catch {
+            if !stopped && !isNormalTermination(error) { terminalError = error }
             stopped = true
             failAll(error)
             await channel.close()
@@ -241,9 +245,22 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
     }
 
     private func failConnection(_ error: any Error) async {
+        if !stopped && !isNormalTermination(error) { terminalError = error }
         stopped = true
         failAll(error)
         await channel.close()
+    }
+
+    private func isNormalTermination(_ error: any Error) -> Bool {
+        if let clientError = error as? RivetDeviceAppleRVT1ClientError,
+           clientError == .stopped {
+            return true
+        }
+        if let channelError = error as? RivetDeviceAppleRVT1ChannelError,
+           channelError == .closed {
+            return true
+        }
+        return false
     }
 
     private func failAll(_ error: any Error) {
