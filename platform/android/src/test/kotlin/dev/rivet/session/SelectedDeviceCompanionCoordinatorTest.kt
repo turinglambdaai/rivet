@@ -200,7 +200,7 @@ class SelectedDeviceCompanionCoordinatorTest {
     }
 
     @Test
-    fun rejectedResolvedEndpointFailsCallbackWithoutKillingTheWorker() {
+    fun rejectedResolutionFailsCallbackOnceWithoutDialingOrQueueingWork() {
         val h = Harness()
         val selected = h.select(advertisementID, true)
         val pending = mutableListOf<Runnable>()
@@ -215,16 +215,21 @@ class SelectedDeviceCompanionCoordinatorTest {
             },
         )
         coordinator.connectSelected(selected, intent()) { results += it }
+        // An out-of-range port fails the resolver's validation, so the
+        // selection resolves to null and must complete the caller's callback
+        // exactly once without queueing worker work or opening a dial.
         h.resolved!!(
             DeviceResolvedService(
                 selected.serviceName, "192.0.2.1", 0,
                 encodeDiscoveryTXT(DeviceAdvertisement(selected.advertisementID, selected.pairingWindowOpen)),
             ),
         )
-        assertEquals(1, pending.size)
-        pending.single().run()
+        assertEquals(0, pending.size)
         assertEquals(1, results.size)
-        assertTrue(results.single().exceptionOrNull() is IllegalArgumentException)
+        assertEquals(
+            DeviceSelectionFailure.STALE_SELECTION,
+            (results.single().exceptionOrNull() as DeviceSelectionException).failure,
+        )
         assertFalse(dialed)
         coordinator.close()
     }
