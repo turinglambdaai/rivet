@@ -304,8 +304,15 @@ public actor RivetDeviceAppleCompanion {
             sessionIntent = .reconnect(pairing: pairing)
         }
 
+        // Loading a stored pairing can suspend. Revalidate after all awaits
+        // so a candidate that vanished or changed while the user action was
+        // in flight cannot become a connection attempt.
+        let latestSnapshot = await browser.snapshot()
         guard !cancelRequestedDuringStart else {
             throw RivetDeviceAppleCompanionError.sessionNoLongerActive
+        }
+        guard latestSnapshot.discoveries.contains(selected) else {
+            throw RivetDeviceAppleCompanionError.staleSelection
         }
         let token = UUID()
         let continuation = eventContinuation
