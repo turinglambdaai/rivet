@@ -392,7 +392,7 @@ public actor RivetDeviceAppleCompanion {
             cancelRequestedDuringStart = true
             return
         }
-        guard let activeSession else { return }
+        guard let session = activeSession else { return }
         let task = activeTask
         activeSession = nil
         activeTask = nil
@@ -400,7 +400,7 @@ public actor RivetDeviceAppleCompanion {
         activeDeviceID = nil
         _ = eventContinuation.yield(.sessionEnded)
         task?.cancel()
-        await activeSession.cancel()
+        await session.cancel()
     }
 
     private func sessionAccepted(
