@@ -309,6 +309,14 @@ deterministic Swift relay tests. Neither standalone iPad/watch
 applications nor real-device pairing, background connectivity,
 signing and package acceptance are implied by these framework gates.
 
+The shared Apple companion framework now has a reusable iOS/iPadOS
+orchestrator that checks a selected Bonjour candidate is still current,
+requires explicit pairing intent or a stored pinned pairing, routes pairing
+codes through an async event stream, persists the new credential before RVT1
+handoff, and updates granted-scope metadata before the product callback.
+Products provide the post-RVD1 application handler; this does not imply an
+app-specific SwiftUI experience, generated app, or physical-device acceptance.
+
 ### M4 — standalone mobile hosts
 
 Only after the shared contract is stable, pursue Android JNI/portable Racket +

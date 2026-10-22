@@ -5,12 +5,15 @@ The transport-independent `RivetDeviceGateway` policy/session core, pairing/
 authentication lifecycle, and byte-exact session preface are implemented and
 tested in memory. The Apple pairing-credential Keychain adapter, bounded
 Network.framework TLS stream adapter, per-install identity provider, and
-disabled-by-default macOS listener with bounded Bonjour advertising, and the
-single-connection macOS preface host are also implemented. The explicit iOS
-Bonjour browser accepts only the privacy-bounded canonical advertisement and
-does not connect or authorize a peer. No iOS client-session coordinator,
-product gateway binding, pairing UI, product enablement, or generated mobile
-application is shipped yet.
+disabled-by-defaulThe explicit iOS Bonjour browser accepts only the privacy-bounded
+canonical advertisement and does not connect or authorize a peer. The
+`RivetDeviceAppleCompanion` library now composes explicit candidate selection,
+pinned reconnect or provisional RVD1 pairing, the Keychain pairing store,
+credential-persistence gating, and a product-supplied RVT1 application handler.
+This is a reusable framework coordinator, not a generated or signed mobile app:
+products still own SwiftUI screens, local-network permission declarations,
+the application-specific RVT1 client/gateway binding, packaging, and real-device
+acceptance.
 
 ### iPhone, iPad and Apple Watch companion boundaries
 
