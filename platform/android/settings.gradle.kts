@@ -13,3 +13,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "rivet-android-runtime"
+
+include(":android-nsd")
