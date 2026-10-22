@@ -28,6 +28,10 @@ let package = Package(
             name: "RivetDeviceAppleCompanion",
             targets: ["RivetDeviceAppleCompanion"]
         ),
+        .library(
+            name: "RivetDeviceAppleCompanionUI",
+            targets: ["RivetDeviceAppleCompanionUI"]
+        ),
         .library(name: "RivetWatchConnectivity", targets: ["RivetWatchConnectivity"]),
         .library(name: "RivetEmbedding", targets: ["RivetEmbedding"]),
         .library(name: "RivetSystem", targets: ["RivetSystem"]),
@@ -81,6 +85,15 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("Network")
             ]
+        ),
+        .target(
+            name: "RivetDeviceAppleCompanionUI",
+            dependencies: [
+                "RivetDevice",
+                "RivetDeviceAppleTransport",
+                "RivetDeviceAppleCompanion"
+            ],
+            path: "Sources/RivetDeviceAppleCompanionUI"
         ),
         .target(
             name: "RivetWatchConnectivity",

@@ -10,10 +10,13 @@ canonical advertisement and does not connect or authorize a peer. The
 `RivetDeviceAppleCompanion` library now composes explicit candidate selection,
 pinned reconnect or provisional RVD1 pairing, the Keychain pairing store,
 credential-persistence gating, and a product-supplied RVT1 application handler.
-This is a reusable framework coordinator, not a generated or signed mobile app:
-products still own SwiftUI screens, local-network permission declarations,
-the application-specific RVT1 client/gateway binding, packaging, and real-device
-acceptance.
+A reusable `RivetDeviceAppleCompanionUI` SwiftUI view/model is also available
+for nearby discovery, explicit pairing or stored-device reconnect, pairing-code
+confirmation, saved-pairing removal, and session status. Products supply the
+host pairing-window ID from their QR/manual flow and the post-RVD1 application
+handler. These are reusable components, not a generated or signed mobile app:
+products still own local-network permission declarations, the application-
+specific RVT1 client/gateway binding, packaging, and real-device acceptance.
 
 ### iPhone, iPad and Apple Watch companion boundaries
 

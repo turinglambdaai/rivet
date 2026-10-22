@@ -314,8 +314,11 @@ orchestrator that checks a selected Bonjour candidate is still current,
 requires explicit pairing intent or a stored pinned pairing, routes pairing
 codes through an async event stream, persists the new credential before RVT1
 handoff, and updates granted-scope metadata before the product callback.
-Products provide the post-RVD1 application handler; this does not imply an
-app-specific SwiftUI experience, generated app, or physical-device acceptance.
+A reusable `RivetDeviceAppleCompanionUI` SwiftUI view/model now provides
+nearby discovery, pair/reconnect actions, explicit pairing-code approval,
+saved-pairing removal and session status. The host pairing-window ID and the
+post-RVD1 application handler remain product inputs; no generated app,
+signing, or physical-device acceptance is implied.
 
 ### M4 — standalone mobile hosts
 

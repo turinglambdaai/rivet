@@ -206,7 +206,8 @@ jobs:
             RivetDeviceAppleSecurity \
             RivetDeviceSession \
             RivetDeviceAppleTransport \
-            RivetDeviceAppleCompanion; do
+            RivetDeviceAppleCompanion \
+            RivetDeviceAppleCompanionUI; do
             for platform in iOS 'iOS Simulator' macOS; do
               xcodebuild \
                 -workspace . \
