@@ -31,6 +31,8 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
     private var stopped = false
     private var readerTask: Task<Void, Never>?
     private var eventHandler: EventHandler?
+    private var terminated = false
+    private var terminationWaiters: [CheckedContinuation<Void, Never>] = []
 
     public init(connection: RivetDeviceAppleConnection,
                 maximumPendingRequests: Int = rivetDeviceDefaultMaximumPendingRequests) {
@@ -74,6 +76,26 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
         readerTask = Task { [weak self] in await self?.readLoop() }
     }
 
+    /// Runs the RVT1 session until the peer disconnects or this client stops.
+    /// Unlike start(), this keeps an application-handler task alive for the
+    /// full connection lifetime, which is useful for companion coordinators.
+    public func run(onEvent: EventHandler? = nil) async throws {
+        try await start(onEvent: onEvent)
+        await withTaskCancellationHandler {
+            await withCheckedContinuation {
+                (continuation: CheckedContinuation<Void, Never>) in
+                if terminated {
+                    continuation.resume()
+                } else {
+                    terminationWaiters.append(continuation)
+                }
+            }
+        } onCancel: {
+            Task { await self.stop() }
+        }
+        try Task.checkCancellation()
+    }
+
     public func call(_ name: String, arguments: [RivetValue] = []) async throws -> RivetValue {
         guard started, !stopped else { throw RivetDeviceAppleRVT1ClientError.invalidState }
         guard pending.count < maximumPendingRequests else {
@@ -98,13 +120,22 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
     }
 
     public func stop() async {
-        guard !stopped else { return }
+        guard !stopped else {
+            if let readerTask { await readerTask.value }
+            return
+        }
         stopped = true
-        readerTask?.cancel()
+        let task = readerTask
         readerTask = nil
+        task?.cancel()
         failAll(RivetDeviceAppleRVT1ClientError.stopped)
         if started { try? await channel.send(RivetFrame(type: .shutdown, id: 0)) }
         await channel.close()
+        if let task {
+            await task.value
+        } else {
+            markTerminated()
+        }
     }
 
     private func allocateRequestID() -> UInt64 {
@@ -154,6 +185,7 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
     }
 
     private func readLoop() async {
+        defer { markTerminated() }
         do {
             while !Task.isCancelled && !stopped {
                 let frame = try await channel.receive()
@@ -198,6 +230,14 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
             failAll(error)
             await channel.close()
         }
+    }
+
+    private func markTerminated() {
+        guard !terminated else { return }
+        terminated = true
+        let waiters = terminationWaiters
+        terminationWaiters.removeAll(keepingCapacity: false)
+        for waiter in waiters { waiter.resume() }
     }
 
     private func failConnection(_ error: any Error) async {

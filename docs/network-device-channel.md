@@ -9,8 +9,9 @@ listener and single-connection RVD1 preface host are implemented. The explicit
 iOS Bonjour browser accepts only the canonical privacy-bounded advertisement.
 The Apple transport now also has a bounded RVT1 client, per-device gateway
 server, and backend adapter: generated APIs can run over the authenticated
-network stream, while RPCs, state reads/writes, events, and state-change events
-are filtered through the paired device's grants. Product code must still wire
+network stream. The client offers a lifecycle-aware `run()` entry point for
+companion handlers, and RPCs, state reads/writes, events, and state-change
+events are filtered through the paired device's grants. Product code must still wire
 the RVD1 host, scope policy, backend client, event fan-out, app UI, and signed
 mobile application; framework code alone does not constitute a shipped app.
 

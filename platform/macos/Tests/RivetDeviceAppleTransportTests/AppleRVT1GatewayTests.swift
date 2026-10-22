@@ -44,6 +44,7 @@ private actor MemoryByteStream: RivetDeviceAppleApplicationByteStream {
 
     func sentCount() -> Int { sent.count }
     func isClosed() -> Bool { closed }
+    func waitingReaderCount() -> Int { waiters.count }
 
     func sentFrames() throws -> [RivetFrame] {
         try sent.map { try decodeRivetFrame($0) }
@@ -94,6 +95,12 @@ private actor SlowGatewayHost: RivetDeviceGatewayHost {
     func didStart() -> Bool { starts > 0 }
     func startCount() -> Int { starts }
     func cancellationCount() -> Int { cancellations }
+}
+
+private actor RunCompletion {
+    private var returned = false
+    func markReturned() { returned = true }
+    func didReturn() -> Bool { returned }
 }
 
 private actor EchoRPCClient: RivetRPCClient {
@@ -166,6 +173,27 @@ private func helloFrame() throws -> Data {
     )))
     #expect(try await call.value == .string("seeked"))
     await client.stop()
+}
+
+@Test func appleRVT1ClientRunOwnsConnectionLifetimeUntilStopped() async throws {
+    let stream = MemoryByteStream(incoming: try helloFrame())
+    let client = RivetDeviceAppleRVT1Client(stream: stream)
+    let completion = RunCompletion()
+    let running = Task {
+        try await client.run()
+        await completion.markReturned()
+    }
+
+    for _ in 0..<2_000 {
+        if await stream.waitingReaderCount() > 0 { break }
+        await Task.yield()
+    }
+    #expect(await stream.waitingReaderCount() > 0)
+    #expect(!(await completion.didReturn()))
+
+    await client.stop()
+    try await running.value
+    #expect(await completion.didReturn())
 }
 
 @Test func appleRVT1ClientCancellationSendsMatchingCancelFrame() async throws {
