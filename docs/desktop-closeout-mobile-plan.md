@@ -266,8 +266,16 @@ and permits provisional trust only for an explicitly selected pairing
 attempt. A single 30-second connect/handshake budget closes failures without
 exposing application streams. It is pinned by JVM policy/unit tests, not
 Android-device evidence. The remaining M3 work includes the Android NSD
-platform adapter, binding resolved endpoints and the accepted RVD1 stream to
-the generated API, product UI/storage, and real-device acceptance.
+platform adapter, product UI/storage, and real-device acceptance.
+The independently reviewed `DeviceCompanionSession` bridge binds one
+explicitly selected TLS endpoint and observed fingerprint to the RVD1
+session client, surfaces explicit pairing approval, hands the accepted
+stream to the product's RVT1 client only after the persistence gate, and
+closes failed or cancelled transport attempts. Kotlin/JVM tests cover
+wrong pins, no reconnect-to-pairing fallback, accepted stream ownership,
+and cancellation during an in-flight TLS dial. The Android `NsdManager`
+driver, product credential integration, and device-to-device evidence
+remain separate unfinished M3 tasks.
 
 M3's Windows transport slice is also implemented: a CNG-persisted P-256
 self-signed identity with deletion-based rotation, an SChannel TLS server

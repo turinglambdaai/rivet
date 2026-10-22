@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Bridge Android companion TLS streams to the RVD1 client through a
+  one-shot selected-endpoint session driver. Enforce the stored SPKI pin on
+  reconnect without implicit pairing fallback, preserve explicit pairing
+  approval and credential-persistence gating, and lend accepted RVT1 streams
+  to the product. JVM regressions cover pin mismatch, rejection, success,
+  cancellation during TLS dialing, and socket cleanup. Product NSD,
+  secure storage/UI, and physical-device validation remain pending.
+
 - Introduce the Android companion TLS connector for M3: a single-use
   JSSE socket with server SPKI SHA-256 pinning for reconnect, explicitly
   provisional pairing, `rivet-device/1` ALPN, TLS 1.2+ forward-secret AEAD
