@@ -388,7 +388,7 @@ private func helloFrame() throws -> Data {
         pairedDeviceID: UUID(),
         scopes: [RivetDeviceScope(
             name: "companion",
-            events: ["progress"],
+            events: ["progress", "$state"],
             readableStates: ["volume"]
         )]
     )
@@ -403,6 +403,10 @@ private func helloFrame() throws -> Data {
     }
     #expect(try await server.sendEvent(name: "progress", value: .int64(3)))
     #expect(!(try await server.sendEvent(name: "private.event", value: .int64(3))))
+    #expect(!(try await server.sendEvent(
+        name: "$state",
+        value: .list([.string("private.state"), .int64(9)])
+    )))
     #expect(try await server.sendStateChange(name: "volume", value: .int64(8)))
     #expect(!(try await server.sendStateChange(name: "private.state", value: .int64(8))))
     await stream.enqueue(try encodedFrame(RivetFrame(type: .shutdown, id: 0)))

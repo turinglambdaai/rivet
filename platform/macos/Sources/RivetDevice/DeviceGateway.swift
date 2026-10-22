@@ -309,7 +309,9 @@ public actor RivetDeviceGatewaySession {
         guard !closed else {
             throw RivetDeviceGatewayError.sessionClosed
         }
-        guard grants.events.contains(name) else {
+        // State changes have a separate state-name authorization path;
+        // never let an ordinary event grant bypass readable-state filtering.
+        guard name != "$state", grants.events.contains(name) else {
             return nil
         }
         try checkMessageSize(payload)
