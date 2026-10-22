@@ -434,6 +434,10 @@ public final class RivetUpdateService: Sendable {
         // quietly kill the relaunched update.
         try? await Task.sleep(nanoseconds: 1_500_000_000)
         await MainActor.run { NSApplication.shared.stop(nil) }
+        // Stopping NSApplication's run loop is not itself a process-exit
+        // guarantee when SwiftUI tasks retain the application. The detached
+        // handoff must not race a live old PID while moving its bundle.
+        exit(0)
         #else
         exit(0)
         #endif
