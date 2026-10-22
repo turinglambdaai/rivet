@@ -25,9 +25,9 @@ jobs:
         run: |
           set -euo pipefail
           bash .github/scripts/apt-retry.sh --sudo update
-          bash .github/scripts/apt-retry.sh --sudo install --yes \
+          bash .github/scripts/apt-retry.sh --sudo install --yes --no-install-recommends \
             at-spi2-core dbus-x11 libgtk-4-dev libsecret-1-dev \
-            python3-pyatspi weston
+            python3-pyatspi weston xwayland
           raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Package and exercise the GTK4 Taskboard on native Wayland
         shell: bash
