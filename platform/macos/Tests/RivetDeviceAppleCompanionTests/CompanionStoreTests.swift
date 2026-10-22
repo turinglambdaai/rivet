@@ -95,6 +95,33 @@ private actor MemoryPairingStore: RivetDevicePairingStore {
     #expect(persisted?.credential == original)
 }
 
+@Test func appleCompanionRollsBackNewCredentialWhenAcceptedScopesAreInvalid() async throws {
+    let store = MemoryPairingStore()
+    let adapter = try RivetDeviceApplePairingCredentialStoreAdapter(
+        store: store,
+        applicationID: "com.example.player",
+        deviceName: "Test iPhone"
+    )
+    let deviceID = UUID()
+    try await adapter.savePairingCredential(
+        deviceID: deviceID,
+        credential: Data(repeating: 0x41, count: rivetDeviceCredentialSize),
+        serverFingerprint: Data(repeating: 0x42, count: rivetDeviceFingerprintSize)
+    )
+    let acceptance = RivetDeviceSessionClientAcceptance(
+        sessionID: UUID(),
+        deviceID: deviceID,
+        scopeNames: ["invalid scope"],
+        maximumPayload: 1024,
+        maximumPending: 4
+    )
+    await #expect(throws: RivetDeviceAppleCompanionError.invalidScopes) {
+        try await adapter.recordAcceptance(acceptance)
+    }
+    let remaining = try await store.load(deviceID: deviceID)
+    #expect(remaining == nil)
+}
+
 @Test func appleCompanionRejectsAcceptanceWithoutAStoredCredential() async throws {
     let store = MemoryPairingStore()
     let adapter = try RivetDeviceApplePairingCredentialStoreAdapter(

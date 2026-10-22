@@ -121,13 +121,16 @@ public actor RivetDeviceApplePairingCredentialStoreAdapter:
         guard acceptance.scopeNames.count <= 64,
               Set(acceptance.scopeNames).count == acceptance.scopeNames.count,
               acceptance.scopeNames.allSatisfy(isValidDeviceAPIName) else {
+            await discardNewPairingIfNeeded(acceptance.deviceID)
             throw RivetDeviceAppleCompanionError.invalidScopes
         }
         guard let stored = try await store.load(deviceID: acceptance.deviceID) else {
+            await discardNewPairingIfNeeded(acceptance.deviceID)
             throw RivetDeviceAppleCompanionError.pairingNotFound
         }
         guard stored.device.applicationID == applicationID,
               stored.device.serverFingerprint.count == rivetDeviceFingerprintSize else {
+            await discardNewPairingIfNeeded(acceptance.deviceID)
             throw RivetDeviceAppleCompanionError.applicationMismatch
         }
         let lastUsedAt = max(now(), stored.device.createdAt)
@@ -146,12 +149,15 @@ public actor RivetDeviceApplePairingCredentialStoreAdapter:
                 credential: stored.credential
             ))
         } catch {
-            if newlyPairedDevices.remove(acceptance.deviceID) != nil {
-                try? await store.remove(deviceID: acceptance.deviceID)
-            }
+            await discardNewPairingIfNeeded(acceptance.deviceID)
             throw error
         }
         newlyPairedDevices.remove(acceptance.deviceID)
+    }
+
+    private func discardNewPairingIfNeeded(_ deviceID: UUID) async {
+        guard newlyPairedDevices.remove(deviceID) != nil else { return }
+        try? await store.remove(deviceID: deviceID)
     }
 }
 
@@ -362,13 +368,18 @@ public actor RivetDeviceAppleCompanion {
     }
 
     public func cancelSession() async {
-        guard let activeSession else {
-            if sessionStarting {
-                cancelRequestedDuringStart = true
-            }
+        guard !sessionStarting || activeSession != nil else {
+            cancelRequestedDuringStart = true
             return
         }
-        activeTask?.cancel()
+        guard let activeSession else { return }
+        let task = activeTask
+        activeSession = nil
+        activeTask = nil
+        activeToken = nil
+        activeDeviceID = nil
+        _ = eventContinuation.yield(.sessionEnded)
+        task?.cancel()
         await activeSession.cancel()
     }
 
