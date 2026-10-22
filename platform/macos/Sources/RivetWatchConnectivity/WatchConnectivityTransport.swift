@@ -81,7 +81,9 @@ public final class RivetWatchConnectivityTransport: NSObject, RivetDeviceTranspo
         guard WCSession.isSupported() else {
             throw RivetWatchConnectivityError.notSupported
         }
-        stateContinuation.yield(.inactive)
+        // Do not enqueue a stale .inactive snapshot if the session was
+        // already active/reachable before the SwiftUI consumer subscribed.
+        stateContinuation.yield(currentState)
         session.activate()
     }
 
