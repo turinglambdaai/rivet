@@ -40,13 +40,20 @@ public struct RivetWatchCompanionView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if connectivityState != .reachable {
-                        Button("Retry connection") {
-                            do {
-                                try transport.activate()
-                                connectivityState = transport.currentState
-                            } catch {
-                                connectivityState = .failed
+                        Button(
+                            connectivityState == .inactive || connectivityState == .failed
+                                ? "Activate connection"
+                                : "Refresh status"
+                        ) {
+                            if connectivityState == .inactive || connectivityState == .failed {
+                                do {
+                                    try transport.activate()
+                                } catch {
+                                    connectivityState = .failed
+                                    return
+                                }
                             }
+                            connectivityState = transport.currentState
                         }
                     }
                     Button(isBusy ? "Working…" : actionTitle) {
