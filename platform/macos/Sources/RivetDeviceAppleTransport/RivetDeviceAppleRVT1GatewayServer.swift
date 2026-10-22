@@ -80,8 +80,13 @@ public actor RivetDeviceAppleRVT1GatewayServer {
             .string("rivet"),
             .int64(Int64(rivetProtocolVersion))
         ]))
-        try await channel.send(RivetFrame(type: .hello, id: 0, payload: hello))
+        // The hello write suspends while its bytes join the channel's
+        // serialized queue, and a product observing those bytes may call
+        // sendEvent immediately. Ready must be set before the write so that
+        // call does not race this actor's resumption and fail with
+        // notRunning; the channel queue keeps hello ahead of any event.
         ready = true
+        try await channel.send(RivetFrame(type: .hello, id: 0, payload: hello))
         while !stopping {
             let frame = try await channel.receive()
             switch frame.type {
