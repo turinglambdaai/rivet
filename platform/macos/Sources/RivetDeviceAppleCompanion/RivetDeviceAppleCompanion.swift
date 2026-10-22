@@ -60,7 +60,7 @@ public enum RivetDeviceAppleCompanionEvent: Equatable, Sendable {
     case sessionFailed
 }
 
-actor RivetDeviceApplePairingCredentialStoreAdapter:
+public actor RivetDeviceApplePairingCredentialStoreAdapter:
     RivetDeviceAppleSessionCredentialStore {
     private let store: any RivetDevicePairingStore
     private let applicationID: String
@@ -72,7 +72,7 @@ actor RivetDeviceApplePairingCredentialStoreAdapter:
         store: any RivetDevicePairingStore,
         applicationID: String,
         deviceName: String,
-        now: @escaping @Sendable () -> Date = Date.init
+        now: @escaping @Sendable () -> Date = { Date() }
     ) throws {
         guard isValidDeviceAPIName(applicationID),
               isValidDeviceDisplayName(deviceName) else {
