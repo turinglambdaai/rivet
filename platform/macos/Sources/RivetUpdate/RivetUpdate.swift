@@ -448,7 +448,8 @@ public final class RivetUpdateService: Sendable {
                            newBundlePath: String,
                            oldPID: Int32 = 0,
                            healthTimeoutSeconds: Int = 15,
-                           healthSettleSeconds: Int = 3) -> String {
+                           healthSettleSeconds: Int = 3,
+                           openCommand: String = "/usr/bin/open") -> String {
         let old = bundlePath + ".old"
         return """
         #!/bin/bash
@@ -457,6 +458,7 @@ public final class RivetUpdateService: Sendable {
         NEW=\(shellQuoted(newBundlePath))
         OLD=\(shellQuoted(old))
         OLD_PID=\(oldPID)
+        OPEN_COMMAND=\(shellQuoted(openCommand))
         sleep 1
 
         # Never move a running app bundle. NSApplication gets the normal
@@ -495,7 +497,7 @@ public final class RivetUpdateService: Sendable {
         # open only acknowledges LaunchServices; it does not prove the new
         # process survived. Find the executable under the new bundle and keep
         # the backup until that same process remains alive for the settle time.
-        if /usr/bin/open -n "$APP"; then
+        if "$OPEN_COMMAND" -n "$APP"; then
           waited=0
           while [ "$waited" -lt \(healthTimeoutSeconds * 2) ]; do
             new_pid=$(/bin/ps -axo pid=,command= | /usr/bin/awk -v path="$EXECUTABLE_PATH" -v old_pid="$OLD_PID" '$1 != old_pid && index($0, path) > 0 { print $1; exit }')
@@ -519,7 +521,7 @@ public final class RivetUpdateService: Sendable {
         if [ -d "$OLD" ]; then
           /bin/rm -rf "$APP"
           if /bin/mv "$OLD" "$APP"; then
-            /usr/bin/open -n "$APP" >/dev/null 2>&1 || true
+            "$OPEN_COMMAND" -n "$APP" >/dev/null 2>&1 || true
           fi
         fi
         exit 1
