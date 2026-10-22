@@ -398,6 +398,32 @@ private func helloFrame() throws -> Data {
     #expect(await gateway.sessionCount() == 0)
 }
 
+@Test func appleRVT1GatewayRunCancellationClosesConnectionAndRevokesSession() async throws {
+    let host = TestGatewayHost()
+    let gateway = RivetDeviceGateway(host: host)
+    let session = try await gateway.openSession(
+        pairedDeviceID: UUID(),
+        scopes: [RivetDeviceScope(name: "companion", rpcs: ["player.play"])]
+    )
+    let stream = MemoryByteStream()
+    let server = RivetDeviceAppleRVT1GatewayServer(
+        stream: stream, gateway: gateway, session: session
+    )
+    let running = Task { try await server.run() }
+
+    for _ in 0..<2_000 {
+        if await stream.waitingReaderCount() > 0 { break }
+        await Task.yield()
+    }
+    #expect(await stream.waitingReaderCount() > 0)
+    running.cancel()
+    await #expect(throws: CancellationError.self) {
+        try await running.value
+    }
+    #expect(await stream.isClosed())
+    #expect(await gateway.sessionCount() == 0)
+}
+
 @Test func appleRVT1GatewayFiltersEventsAndStateChangesPerDevice() async throws {
     let host = TestGatewayHost()
     let gateway = RivetDeviceGateway(host: host)

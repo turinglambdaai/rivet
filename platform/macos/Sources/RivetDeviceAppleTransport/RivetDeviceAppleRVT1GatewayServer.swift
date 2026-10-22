@@ -59,39 +59,48 @@ public actor RivetDeviceAppleRVT1GatewayServer {
         }
         started = true
         do {
-            let hello = try encodeRivetValue(.list([
-                .string("rivet"),
-                .int64(Int64(rivetProtocolVersion))
-            ]))
-            try await channel.send(RivetFrame(type: .hello, id: 0, payload: hello))
-            ready = true
-            while !stopping {
-                let frame = try await channel.receive()
-                switch frame.type {
-                case .request:
-                    try await acceptRequest(frame)
-                case .cancel:
-                    guard frame.id != 0, frame.payload.isEmpty else {
-                        throw RivetDeviceAppleRVT1GatewayServerError.invalidFrame
-                    }
-                    await cancelRequest(id: frame.id)
-                case .shutdown:
-                    guard frame.id == 0, frame.payload.isEmpty else {
-                        throw RivetDeviceAppleRVT1GatewayServerError.invalidFrame
-                    }
-                    stopping = true
-                default:
-                    throw RivetDeviceAppleRVT1GatewayServerError.invalidFrame
-                }
+            try await withTaskCancellationHandler {
+                try await self.runLoop()
+            } onCancel: {
+                Task { await self.close() }
             }
-            // A peer can shut down while an RPC is waiting on an unresponsive
-            // backend. Revoke the session and cancel outstanding work instead
-            // of waiting for every response before the connection can close.
-            await close()
         } catch {
             await close()
+            if Task.isCancelled { throw CancellationError() }
             throw error
         }
+    }
+
+    private func runLoop() async throws {
+        let hello = try encodeRivetValue(.list([
+            .string("rivet"),
+            .int64(Int64(rivetProtocolVersion))
+        ]))
+        try await channel.send(RivetFrame(type: .hello, id: 0, payload: hello))
+        ready = true
+        while !stopping {
+            let frame = try await channel.receive()
+            switch frame.type {
+            case .request:
+                try await acceptRequest(frame)
+            case .cancel:
+                guard frame.id != 0, frame.payload.isEmpty else {
+                    throw RivetDeviceAppleRVT1GatewayServerError.invalidFrame
+                }
+                await cancelRequest(id: frame.id)
+            case .shutdown:
+                guard frame.id == 0, frame.payload.isEmpty else {
+                    throw RivetDeviceAppleRVT1GatewayServerError.invalidFrame
+                }
+                stopping = true
+            default:
+                throw RivetDeviceAppleRVT1GatewayServerError.invalidFrame
+            }
+        }
+        // A peer can shut down while an RPC is waiting on an unresponsive
+        // backend. Revoke the session and cancel outstanding work instead
+        // of waiting for every response before the connection can close.
+        await close()
     }
 
     /// Sends an event only if this paired device has the named event grant.
