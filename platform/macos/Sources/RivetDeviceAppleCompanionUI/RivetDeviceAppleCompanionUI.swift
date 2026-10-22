@@ -105,6 +105,10 @@ public final class RivetDeviceAppleCompanionModel: ObservableObject {
                     intent: .pair(windowID: windowID),
                     applicationHandler: applicationHandler
                 )
+            } catch let error as RivetDeviceAppleCompanionError {
+                status = error == .sessionNoLongerActive
+                    ? (isBrowsing ? .browsing : .idle)
+                    : .failed
             } catch {
                 status = .failed
             }
@@ -123,6 +127,10 @@ public final class RivetDeviceAppleCompanionModel: ObservableObject {
                     intent: .reconnect(deviceID: deviceID),
                     applicationHandler: applicationHandler
                 )
+            } catch let error as RivetDeviceAppleCompanionError {
+                status = error == .sessionNoLongerActive
+                    ? (isBrowsing ? .browsing : .idle)
+                    : .failed
             } catch {
                 status = .failed
             }
@@ -145,6 +153,8 @@ public final class RivetDeviceAppleCompanionModel: ObservableObject {
 
     public func cancelSession() {
         pairingCode = nil
+        connectedDeviceID = nil
+        status = isBrowsing ? .browsing : .idle
         Task { await companion.cancelSession() }
     }
 
@@ -306,8 +316,10 @@ public struct RivetDeviceAppleCompanionView: View {
 
                 Section("Session") {
                     Text(model.status.title)
-                    if model.connectedDeviceID != nil {
-                        Button("Disconnect", role: .destructive) {
+                    if model.connectedDeviceID != nil ||
+                        model.status == .connecting ||
+                        model.status == .waitingForConfirmation {
+                        Button("Cancel session", role: .destructive) {
                             model.cancelSession()
                         }
                     }

@@ -209,6 +209,19 @@ public actor RivetDeviceAppleCompanion {
         }
     }
 
+    /// Construct the companion with the platform Keychain store used by
+    /// Rivet's Apple security adapter.
+    public static func usingKeychain(
+        configuration: RivetDeviceAppleCompanionConfiguration,
+        service: String
+    ) throws -> RivetDeviceAppleCompanion {
+        let store = try RivetDeviceApplePairingStore(service: service)
+        return try RivetDeviceAppleCompanion(
+            configuration: configuration,
+            pairingStore: store
+        )
+    }
+
     public func startBrowsing() async throws {
         try await browser.start()
     }
