@@ -243,13 +243,22 @@ private var testConfiguration: RivetUpdateConfiguration {
 @Test func swapScriptQuotesPathsAndRestoresBackup() {
     let script = RivetUpdateService.swapScript(
         bundlePath: "/Applications/Ta skly.app",
-        newBundlePath: "/tmp/rivet-update/unpacked/Ta skly.app")
+        newBundlePath: "/tmp/rivet-update/unpacked/Ta skly.app",
+        oldPID: 1234)
     #expect(script.contains("sleep 1"))
-    #expect(script.contains("rm -rf '/Applications/Ta skly.app.old'"))
-    #expect(script.contains("mv '/Applications/Ta skly.app' '/Applications/Ta skly.app.old'"))
-    // The failed-move branch restores the previous bundle before exiting.
-    #expect(script.contains("mv '/Applications/Ta skly.app.old' '/Applications/Ta skly.app'"))
-    #expect(script.contains("open '/Applications/Ta skly.app'"))
+    #expect(script.contains("APP='/Applications/Ta skly.app'"))
+    #expect(script.contains("NEW='/tmp/rivet-update/unpacked/Ta skly.app'"))
+    #expect(script.contains("OLD='/Applications/Ta skly.app.old'"))
+    #expect(script.contains("OLD_PID=1234"))
+    #expect(script.contains("while /bin/kill -0 \"$OLD_PID\""))
+    #expect(script.contains("/bin/mv \"$APP\" \"$OLD\""))
+    // Failed move and failed launch both restore the previous bundle.
+    #expect(script.contains("/bin/mv \"$OLD\" \"$APP\""))
+    #expect(script.contains("/usr/bin/open -n \"$APP\""))
+    #expect(script.contains("EXECUTABLE_PATH=\"$APP/Contents/MacOS/$APP_EXECUTABLE\""))
+    #expect(script.contains("healthTimeoutSeconds") == false)
+    #expect(script.contains("waited -lt 30"))
+    #expect(script.contains("/bin/rm -rf \"$OLD\""))
     #expect(script.hasSuffix("exit 1"))
 }
 
