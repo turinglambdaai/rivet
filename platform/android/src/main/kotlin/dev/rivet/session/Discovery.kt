@@ -154,40 +154,63 @@ class DeviceDiscoveryBrowser(
             running = true
             ++discoveryGeneration
         }
-        driver.start { serviceName, txtRecord, removed ->
-            synchronized(this) {
-                if (!running || generation != discoveryGeneration) return@synchronized
-                if (removed) {
-                    discoveries.remove(serviceName)?.let { onEvent(DeviceDiscoveryEventKind.REMOVED, it) }
-                    return@synchronized
-                }
-                if (txtRecord == null) return@synchronized
-                val advertisement = try {
-                    decodeDiscoveryTXT(txtRecord)
-                } catch (_: SessionProtocolException) {
-                    return@synchronized
-                }
-                val discovery = DeviceDiscovery(
-                    serviceName,
-                    advertisement.advertisementID,
-                    advertisement.pairingWindowOpen,
-                )
-                val previous = discoveries[serviceName]
-                if (previous != null) {
-                    if (previous != discovery) {
-                        discoveries[serviceName] = discovery
-                        onEvent(DeviceDiscoveryEventKind.REMOVED, previous)
-                        onEvent(DeviceDiscoveryEventKind.ADDED, discovery)
+        try {
+            driver.start { serviceName, txtRecord, removed ->
+                synchronized(this) {
+                    if (!running || generation != discoveryGeneration) return@synchronized
+                    if (removed) {
+                        discoveries.remove(serviceName)?.let { onEvent(DeviceDiscoveryEventKind.REMOVED, it) }
+                        return@synchronized
                     }
-                    return@synchronized
+                    if (txtRecord == null) return@synchronized
+                    val advertisement = try {
+                        decodeDiscoveryTXT(txtRecord)
+                    } catch (_: SessionProtocolException) {
+                        return@synchronized
+                    }
+                    val discovery = DeviceDiscovery(
+                        serviceName,
+                        advertisement.advertisementID,
+                        advertisement.pairingWindowOpen,
+                    )
+                    val previous = discoveries[serviceName]
+                    if (previous != null) {
+                        if (previous != discovery) {
+                            discoveries[serviceName] = discovery
+                            onEvent(DeviceDiscoveryEventKind.REMOVED, previous)
+                            onEvent(DeviceDiscoveryEventKind.ADDED, discovery)
+                        }
+                        return@synchronized
+                    }
+                    if (discoveries.size >= maximumDiscoveries) {
+                        fail()
+                        return@synchronized
+                    }
+                    discoveries[serviceName] = discovery
+                    onEvent(DeviceDiscoveryEventKind.ADDED, discovery)
                 }
-                if (discoveries.size >= maximumDiscoveries) {
-                    fail()
-                    return@synchronized
-                }
-                discoveries[serviceName] = discovery
-                onEvent(DeviceDiscoveryEventKind.ADDED, discovery)
             }
+        } catch (failure: RuntimeException) {
+            // Android's NSD APIs can fail synchronously (missing permission,
+            // exhausted resolver, or invalid platform state). Recover the
+            // browser state and any candidates emitted just before failure
+            // so a later explicit scan can start with a new generation.
+            val removed = synchronized(this) {
+                if (!running || generation != discoveryGeneration) {
+                    emptyList()
+                } else {
+                    running = false
+                    discoveryGeneration++
+                    val old = discoveries.values.toList()
+                    discoveries.clear()
+                    // Keep cleanup serialized with the generation transition
+                    // so it cannot accidentally stop the next scan.
+                    runCatching { driver.stop() }
+                    old
+                }
+            }
+            removed.forEach { onEvent(DeviceDiscoveryEventKind.REMOVED, it) }
+            throw failure
         }
     }
 
@@ -200,16 +223,21 @@ class DeviceDiscoveryBrowser(
             removals = discoveries.values.toList()
             discoveries.clear()
         }
-        driver.stop()
-        removals.forEach { onEvent(DeviceDiscoveryEventKind.REMOVED, it) }
+        try {
+            driver.stop()
+        } finally {
+            removals.forEach { onEvent(DeviceDiscoveryEventKind.REMOVED, it) }
+        }
     }
 
     private fun fail() {
         running = false
         discoveryGeneration++
-        driver.stop()
         val removals = discoveries.values.toList()
         discoveries.clear()
+        // Losing permissions or native discovery state while at the bound
+        // must not leave previously reported candidates visible.
+        runCatching { driver.stop() }
         removals.forEach { onEvent(DeviceDiscoveryEventKind.REMOVED, it) }
     }
 }

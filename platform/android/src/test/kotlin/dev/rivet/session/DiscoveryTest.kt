@@ -87,6 +87,107 @@ class DiscoveryTest {
     }
 
     @Test
+    fun synchronousDriverFailureClearsCandidatesAndPermitsRetry() {
+        val callbacks = mutableListOf<(String, ByteArray?, Boolean) -> Unit>()
+        var starts = 0
+        var stops = 0
+        val failure = SecurityException("local network permission denied")
+        val record = encodeDiscoveryTXT(DeviceAdvertisement(advertisementID, true))
+        val driver = object : DeviceDiscoveryDriver {
+            override fun start(onResult: (String, ByteArray?, Boolean) -> Unit) {
+                starts++
+                callbacks += onResult
+                if (starts == 1) {
+                    // Some discovery stacks surface a result before failing.
+                    onResult("partial", record, false)
+                    throw failure
+                }
+            }
+
+            override fun stop() {
+                stops++
+            }
+        }
+        val events = mutableListOf<DeviceDiscoveryEventKind>()
+        val browser = DeviceDiscoveryBrowser(driver) { kind, _ -> events += kind }
+
+        val thrown = assertFailsWith<SecurityException> { browser.start() }
+        assertTrue(thrown === failure)
+        assertTrue(browser.snapshot.isEmpty())
+        assertEquals(1, stops)
+        assertEquals(
+            listOf(DeviceDiscoveryEventKind.ADDED, DeviceDiscoveryEventKind.REMOVED),
+            events,
+        )
+
+        browser.start()
+        assertEquals(2, starts)
+        callbacks.first()("stale", record, false)
+        assertTrue(browser.snapshot.isEmpty())
+        callbacks.last()("current", record, false)
+        assertEquals(1, browser.snapshot.size)
+        browser.stop()
+        assertEquals(2, stops)
+        assertTrue(browser.snapshot.isEmpty())
+    }
+
+    @Test
+    fun stopPublishesRemovalsEvenIfNativeCleanupThrows() {
+        val record = encodeDiscoveryTXT(DeviceAdvertisement(advertisementID, true))
+        var callback: ((String, ByteArray?, Boolean) -> Unit)? = null
+        val driver = object : DeviceDiscoveryDriver {
+            override fun start(onResult: (String, ByteArray?, Boolean) -> Unit) {
+                callback = onResult
+            }
+
+            override fun stop() {
+                throw SecurityException("NSD permission revoked while stopping")
+            }
+        }
+        val events = mutableListOf<DeviceDiscoveryEventKind>()
+        val browser = DeviceDiscoveryBrowser(driver) { kind, _ -> events += kind }
+        browser.start()
+        callback!!("discovered", record, false)
+        assertFailsWith<SecurityException> { browser.stop() }
+        assertTrue(browser.snapshot.isEmpty())
+        assertEquals(
+            listOf(DeviceDiscoveryEventKind.ADDED, DeviceDiscoveryEventKind.REMOVED),
+            events,
+        )
+        callback!!("late", record, false)
+        assertTrue(browser.snapshot.isEmpty())
+        browser.stop()
+    }
+
+    @Test
+    fun capFailureCleansUpEvenWhenNativeStopThrows() {
+        val record = encodeDiscoveryTXT(DeviceAdvertisement(advertisementID, false))
+        var callback: ((String, ByteArray?, Boolean) -> Unit)? = null
+        val driver = object : DeviceDiscoveryDriver {
+            override fun start(onResult: (String, ByteArray?, Boolean) -> Unit) {
+                callback = onResult
+            }
+
+            override fun stop() {
+                throw SecurityException("NSD disappeared")
+            }
+        }
+        val events = mutableListOf<DeviceDiscoveryEventKind>()
+        val browser = DeviceDiscoveryBrowser(driver, maximumDiscoveries = 1) { kind, _ ->
+            events += kind
+        }
+        browser.start()
+        callback!!("first", record, false)
+        callback!!("over-cap", record, false)
+        assertTrue(browser.snapshot.isEmpty())
+        assertEquals(
+            listOf(DeviceDiscoveryEventKind.ADDED, DeviceDiscoveryEventKind.REMOVED),
+            events,
+        )
+        browser.stop()
+    }
+
+    @Test
     fun staleCallbacksCannotMutateRestartedDiscovery() {
         val callbacks = mutableListOf<(String, ByteArray?, Boolean) -> Unit>()
         val driver = object : DeviceDiscoveryDriver {

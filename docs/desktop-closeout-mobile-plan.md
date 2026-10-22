@@ -294,6 +294,16 @@ generated `RivetDeviceAPI` using the same golden fixture. Read `docs/network-dev
 wire and timing contract and reuse the language-neutral fixtures; do not
 reinterpret the preface per platform.
 
+Android native NSD discovery and resolution now have a separate
+`platform/android/android-nsd` Android SDK 35 compile target. The
+`AndroidNsdDriver` implements both portable discovery and selected-resolution
+interfaces, canonicalizes resolved TXT attributes, bounds candidates and
+suppresses stale callbacks. Android-specific compilation is checked in the
+Kotlin CI job; canonical TXT mapping has JVM tests. The product still owns
+local-network permission prompts, foreground/multicast lifecycle, secure
+credential storage and mobile UI; physical-device network pairing remains
+unverified.
+
 ### M3 — second desktop host and Android client
 
 Add the Windows gateway against the same iOS client, then bind Android
