@@ -80,6 +80,19 @@
      #:exists 'truncate/replace
      (lambda (out) (display "#!/bin/sh\nexit 0\n" out))))
 
+  ;; A versioned framework must retain symbolic links after DMG staging.
+  ;; Converting them into copied directories breaks the original bundle's
+  ;; nested code signature; previous branded DMGs did exactly that.
+  (define fw (build-path app "Contents" "Frameworks" "Racket.framework"))
+  (make-directory* (build-path fw "Versions" "9.3_CS"))
+  (call-with-output-file (build-path fw "Versions" "9.3_CS" "Racket")
+    #:exists 'truncate/replace
+    (lambda (out) (display "fake-mach-o" out)))
+  (make-file-or-directory-link "9.3_CS"
+                               (build-path fw "Versions" "Current"))
+  (make-file-or-directory-link "Versions/Current/Racket"
+                               (build-path fw "Racket"))
+
   ;; A 1x1 PNG is enough for the live run: Finder scales the background to
   ;; the window bounds.
   (define tiny-png
@@ -109,6 +122,15 @@
                 "the branded DMG must attach cleanly")
   (check-true (directory-exists? (build-path mnt "Smoke.app"))
               "the app bundle must sit at the volume root")
+  (define mounted-fw
+    (build-path mnt "Smoke.app" "Contents" "Frameworks" "Racket.framework"))
+  (check-equal? (file-or-directory-type
+                 (build-path mounted-fw "Versions" "Current") #f)
+                'link
+                "versioned framework Current must remain a symlink")
+  (check-equal? (file-or-directory-type (build-path mounted-fw "Racket") #f)
+                'link
+                "top-level framework executable must remain a symlink")
   (check-equal? (file-or-directory-type (build-path mnt "Applications") #f)
                 'link
                 "the Applications shortcut must be a symlink")
