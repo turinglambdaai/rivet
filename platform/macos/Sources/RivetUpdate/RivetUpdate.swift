@@ -500,11 +500,11 @@ public final class RivetUpdateService: Sendable {
         if "$OPEN_COMMAND" -n "$APP"; then
           waited=0
           while [ "$waited" -lt \(healthTimeoutSeconds * 2) ]; do
-            new_pid=$(/bin/ps -axo pid=,command= | /usr/bin/awk -v path="$EXECUTABLE_PATH" -v old_pid="$OLD_PID" '$1 != old_pid && index($0, path) > 0 { print $1; exit }')
+            new_pid=$(/bin/ps -ww -axo pid=,command= | /usr/bin/awk -v path="$EXECUTABLE_PATH" -v old_pid="$OLD_PID" '$1 != old_pid && index($0, path) > 0 { print $1; exit }')
             if [ -n "$new_pid" ] && /bin/kill -0 "$new_pid" 2>/dev/null; then
               /bin/sleep \(healthSettleSeconds)
               if /bin/kill -0 "$new_pid" 2>/dev/null &&
-                 /bin/ps -p "$new_pid" -o command= | /usr/bin/grep -Fq "$EXECUTABLE_PATH"; then
+                 /bin/ps -ww -p "$new_pid" -o command= | /usr/bin/grep -Fq "$EXECUTABLE_PATH"; then
                 /bin/rm -rf "$OLD"
                 exit 0
               fi
