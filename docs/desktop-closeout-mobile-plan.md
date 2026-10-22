@@ -273,7 +273,12 @@ session client, surfaces explicit pairing approval, hands the accepted
 stream to the product's RVT1 client only after the persistence gate, and
 closes failed or cancelled transport attempts. Kotlin/JVM tests cover
 wrong pins, no reconnect-to-pairing fallback, accepted stream ownership,
-and cancellation during an in-flight TLS dial. The save-before-accept gate
+and cancellation during an in-flight TLS dial. The accepted RVT1 client now
+applies the payload and pending-request budgets negotiated by its RVD1
+session: oversized outgoing RPCs are rejected before any frame is emitted,
+oversized incoming frames fail closed, and malformed acceptance budgets are
+rejected during session establishment, all pinned by deterministic JVM
+tests. The save-before-accept gate
 now has a product-shaped Android persistence adapter: one Keystore AES key
 per application ID seals each credential/fingerprint record into a versioned
 AES-GCM envelope whose additional authenticated data binds it to the product
