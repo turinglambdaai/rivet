@@ -107,8 +107,12 @@ pre-session admission and fail-closed lifecycle handling. That listener now
 publishes the privacy-bounded Bonjour service while ready. The framework-only
 Bonjour browser discovers that service on iOS, rejects non-canonical TXT
 records, and reports endpoint and advertisement changes without connecting or
-granting authority. An iOS client-session coordinator and explicit native
-confirmation UI remain. The macOS session host
+granting authority. The `RivetDeviceAppleCompanion` coordinator now composes current explicit
+selection, pinned reconnect or provisional pairing, credential persistence,
+and session events. `RivetDeviceAppleCompanionUI` supplies a reusable SwiftUI
+discovery, pair/reconnect, and manual confirmation surface for iOS/iPadOS.
+Product-specific RVT1 gateway dispatch, local-network usage strings, app
+packaging/signing, and real-device acceptance remain. The macOS session host
 drives `RVD1`, exposes the stream only after authenticated acceptance, and
 leaves product gateway dispatch to an explicit application handler; Windows
 also needs its Credential Manager and transport adapters.
