@@ -6,12 +6,14 @@ import RivetDevice
 public enum RivetWatchConnectivityError: Error, Sendable, CustomStringConvertible {
     case notSupported
     case notReachable
+    case notActivated
     case emptyReply
 
     public var description: String {
         switch self {
         case .notSupported: return "WatchConnectivity is not supported on this device"
         case .notReachable: return "the paired WatchConnectivity peer is not reachable"
+        case .notActivated: return "the paired WatchConnectivity session is not activated"
         case .emptyReply: return "the WatchConnectivity peer returned an invalid empty reply"
         }
     }
@@ -37,13 +39,16 @@ private final class RivetWatchReply: @unchecked Sendable {
 public final class RivetWatchConnectivityTransport: NSObject, RivetDeviceTransport, @unchecked Sendable {
     private let session: WCSession
     private let router: RivetDeviceRouter?
+    private let messagePolicy: RivetWatchMessagePolicy
 
     public init(
         session: WCSession = .default,
-        router: RivetDeviceRouter? = nil
+        router: RivetDeviceRouter? = nil,
+        messagePolicy: RivetWatchMessagePolicy = RivetWatchMessagePolicy()
     ) {
         self.session = session
         self.router = router
+        self.messagePolicy = messagePolicy
         super.init()
         session.delegate = self
     }
@@ -56,12 +61,17 @@ public final class RivetWatchConnectivityTransport: NSObject, RivetDeviceTranspo
     }
 
     public func send(_ request: Data) async throws -> Data {
+        try messagePolicy.validate(request)
         guard WCSession.isSupported() else {
             throw RivetWatchConnectivityError.notSupported
+        }
+        guard session.activationState == .activated else {
+            throw RivetWatchConnectivityError.notActivated
         }
         guard session.isReachable else {
             throw RivetWatchConnectivityError.notReachable
         }
+        let policy = messagePolicy
         return try await withCheckedThrowingContinuation { continuation in
             session.sendMessageData(
                 request,
@@ -69,7 +79,12 @@ public final class RivetWatchConnectivityTransport: NSObject, RivetDeviceTranspo
                     if data.isEmpty {
                         continuation.resume(throwing: RivetWatchConnectivityError.emptyReply)
                     } else {
-                        continuation.resume(returning: data)
+                        do {
+                            try policy.validate(data)
+                            continuation.resume(returning: data)
+                        } catch {
+                            continuation.resume(throwing: error)
+                        }
                     }
                 },
                 errorHandler: { error in
@@ -97,9 +112,18 @@ extension RivetWatchConnectivityTransport: WCSessionDelegate {
             reply.send(Data())
             return
         }
+        do {
+            try messagePolicy.validate(messageData)
+        } catch {
+            reply.send(Data())
+            return
+        }
+        let policy = messagePolicy
         Task {
             do {
-                reply.send(try await router.handle(messageData))
+                let data = try await router.handle(messageData)
+                try policy.validate(data)
+                reply.send(data)
             } catch {
                 reply.send(Data())
             }

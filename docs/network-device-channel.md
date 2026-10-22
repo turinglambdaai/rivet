@@ -12,6 +12,34 @@ does not connect or authorize a peer. No iOS client-session coordinator,
 product gateway binding, pairing UI, product enablement, or generated mobile
 application is shipped yet.
 
+### iPhone, iPad and Apple Watch companion boundaries
+
+The Apple companion foundation supports **iOS 16+** (including
+**iPadOS**, using the same iOS SDK) and portable **watchOS 9+** code.
+An iPhone or iPad can run explicit Bonjour discovery and the pinned TLS
++ RVD1 session client. A TXT identifier or pairing hint does not grant
+authority; stored SPKI pinning, dual-peer pairing approval, credential
+persistence and accepted RVD1 remain mandatory before RVT1 traffic.
+
+Apple Watch has a separate `RivetWatchConnectivity` foreground
+**watch-to-iPhone relay**. It carries only bounded, non-empty (maximum 64 KiB per immediate
+message) `RivetDevice` request/response envelopes through an activated, reachable
+WCSession. The iPhone must register and scope the permitted routes on
+its own `RivetDeviceRouter` and own the authorized desktop connection:
+the watch transport itself neither exposes backend RPCs nor pairs
+directly with a desktop. Invalid or oversized WatchConnectivity
+requests/replies fail closed.
+
+The framework CI runs Swift watch relay policy tests and compiles the
+Rivet runtime and watch relay against iOS and watchOS device and
+simulator SDKs, plus the Apple device security/session/TLS layers for
+iOS devices and simulator. This is **SDK compilation coverage**, not
+an iPad app layout check, a paired-Watch reachability run, mobile app
+signing or packaging, foreground/background permission acceptance, or
+real iOS/iPadOS TLS/Bonjour pairing evidence. Products must supply
+local network permission declarations, pairing UIs, watch/iPhone UI,
+route allowlists, lifecycle tests, and real-device evidence.
+
 ## Problem
 
 Rivet currently has two useful pieces that do not yet meet in the middle:

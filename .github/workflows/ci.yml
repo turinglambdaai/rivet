@@ -189,11 +189,24 @@ jobs:
               CODE_SIGNING_ALLOWED=NO \
               build
           done
+          # iPadOS shares the iOS simulator/device SDK with iPhone. Build
+          # both iOS and watchOS simulator slices, not only generic devices.
+          for scheme in RivetRuntime RivetWatchConnectivity; do
+            for destination in 'iOS Simulator' 'watchOS Simulator'; do
+              xcodebuild \
+                -workspace . \
+                -scheme "$scheme" \
+                -destination "generic/platform=$destination" \
+                -derivedDataPath "$RUNNER_TEMP/rivet-$scheme-${destination// /-}" \
+                CODE_SIGNING_ALLOWED=NO \
+                build
+            done
+          done
           for scheme in \
             RivetDeviceAppleSecurity \
             RivetDeviceSession \
             RivetDeviceAppleTransport; do
-            for platform in iOS macOS; do
+            for platform in iOS 'iOS Simulator' macOS; do
               xcodebuild \
                 -workspace . \
                 -scheme "$scheme" \
