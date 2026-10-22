@@ -5,12 +5,18 @@ The transport-independent `RivetDeviceGateway` policy/session core, pairing/
 authentication lifecycle, and byte-exact session preface are implemented and
 tested in memory. The Apple pairing-credential Keychain adapter, bounded
 Network.framework TLS stream adapter, per-install identity provider, and
-disabled-by-default macOS listener with bounded Bonjour advertising, and the
-single-connection macOS preface host are also implemented. The explicit iOS
-Bonjour browser accepts only the privacy-bounded canonical advertisement and
-does not connect or authorize a peer. No iOS client-session coordinator,
-product gateway binding, pairing UI, product enablement, or generated mobile
-application is shipped yet.
+disabled-by-defaulThe explicit iOS Bonjour browser accepts only the privacy-bounded
+canonical advertisement and does not connect or authorize a peer. The
+`RivetDeviceAppleCompanion` library now composes explicit candidate selection,
+pinned reconnect or provisional RVD1 pairing, the Keychain pairing store,
+credential-persistence gating, and a product-supplied RVT1 application handler.
+A reusable `RivetDeviceAppleCompanionUI` SwiftUI view/model is also available
+for nearby discovery, explicit pairing or stored-device reconnect, pairing-code
+confirmation, saved-pairing removal, and session status. Products supply the
+host pairing-window ID from their QR/manual flow and the post-RVD1 application
+handler. These are reusable components, not a generated or signed mobile app:
+products still own local-network permission declarations, the application-
+specific RVT1 client/gateway binding, packaging, and real-device acceptance.
 
 ### iPhone, iPad and Apple Watch companion boundaries
 
@@ -28,7 +34,10 @@ WCSession. The iPhone must register and scope the permitted routes on
 its own `RivetDeviceRouter` and own the authorized desktop connection:
 the watch transport itself neither exposes backend RPCs nor pairs
 directly with a desktop. Invalid or oversized WatchConnectivity
-requests/replies fail closed.
+requests/replies fail closed. `RivetWatchCompanionView` provides a small
+watchOS shell that displays paired-iPhone reachability and invokes one
+product-supplied typed action only while reachable; it never invents RPC
+routes or implies direct watch-to-desktop access.
 
 The framework CI runs Swift watch relay policy tests and compiles the
 Rivet runtime and watch relay against iOS and watchOS device and
@@ -36,9 +45,9 @@ simulator SDKs, plus the Apple device security/session/TLS layers for
 iOS devices and simulator. This is **SDK compilation coverage**, not
 an iPad app layout check, a paired-Watch reachability run, mobile app
 signing or packaging, foreground/background permission acceptance, or
-real iOS/iPadOS TLS/Bonjour pairing evidence. Products must supply
-local network permission declarations, pairing UIs, watch/iPhone UI,
-route allowlists, lifecycle tests, and real-device evidence.
+real iOS/iPadOS TLS/Bonjour pairing evidence. Products must integrate the reusable iOS/iPadOS and watchOS SwiftUI surfaces,
+supply local-network permission declarations and app-specific RVT1 handling or
+typed watch actions, and provide lifecycle tests and real-device evidence.
 
 ## Problem
 
