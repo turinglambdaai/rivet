@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Bind Android's RVT1 stream client to the payload and pending-request budgets
+  negotiated by an accepted RVD1 session. Reject oversized outgoing RPCs
+  without emitting a frame or poisoning later requests; oversized incoming
+  frames fail closed. Deterministic JVM tests cover both directions and
+  malformed acceptance budgets. This is companion transport policy, not a
+  claim of a complete Android app or physical-device acceptance.
+
 - Bridge Android companion TLS streams to the RVD1 client through a
   one-shot selected-endpoint session driver. Enforce the stored SPKI pin on
   reconnect without implicit pairing fallback, preserve explicit pairing
