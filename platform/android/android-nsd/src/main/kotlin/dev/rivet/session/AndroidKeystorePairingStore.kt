@@ -4,6 +4,8 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import java.io.IOException
+import java.security.GeneralSecurityException
 import java.security.KeyStore
 import java.security.MessageDigest
 import javax.crypto.KeyGenerator
@@ -11,8 +13,10 @@ import javax.crypto.SecretKey
 
 /**
  * Product-scoped Android pairing persistence for the RVD1 save-before-accept
- * gate. An AndroidKeyStore AES-256-GCM key protects each credential/pin pair;
- * only authenticated ciphertext is kept in private SharedPreferences.
+ * gate. One AndroidKeyStore AES-256-GCM key per application ID protects every
+ * record; the AES-GCM additional authenticated data binds each sealed
+ * credential/pin pair to its product and paired device, so only
+ * authenticated ciphertext is kept in private SharedPreferences.
  *
  * A missing Keystore key never causes an existing record to be regenerated
  * or trusted. Products must own backup exclusions, pairing consent UI, and
@@ -96,7 +100,12 @@ class AndroidKeystorePairingStore(
     private fun recordName(id: SessionUuid): String =
         prefix + id.bytes.joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
-    private fun key(create: Boolean): SecretKey? {
+    /**
+     * Keystore machinery failures (corrupted store, removed provider, hardware
+     * key loss) surface as the store's own IllegalStateException taxonomy so
+     * callers face one failure type per operation, never a raw KeyStore one.
+     */
+    private fun key(create: Boolean): SecretKey? = try {
         val store = KeyStore.getInstance("AndroidKeyStore").also { it.load(null) }
         (store.getKey(alias, null) as? SecretKey)?.let { return it }
         if (!create) return null
@@ -110,6 +119,10 @@ class AndroidKeystorePairingStore(
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .build(),
         )
-        return generator.generateKey()
+        generator.generateKey()
+    } catch (failure: GeneralSecurityException) {
+        throw IllegalStateException("Rivet pairing Keystore key is unavailable", failure)
+    } catch (failure: IOException) {
+        throw IllegalStateException("Rivet pairing Keystore key is unavailable", failure)
     }
 }
