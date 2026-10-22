@@ -42,9 +42,9 @@ simulator SDKs, plus the Apple device security/session/TLS layers for
 iOS devices and simulator. This is **SDK compilation coverage**, not
 an iPad app layout check, a paired-Watch reachability run, mobile app
 signing or packaging, foreground/background permission acceptance, or
-real iOS/iPadOS TLS/Bonjour pairing evidence. Products must supply
-local network permission declarations, pairing UIs, watch/iPhone UI,
-route allowlists, lifecycle tests, and real-device evidence.
+real iOS/iPadOS TLS/Bonjour pairing evidence. Products must integrate the reusable SwiftUI companion surface, supply
+local-network permission declarations and app-specific route/RVT1 handling,
+implement watch-specific UI, and provide lifecycle tests and real-device evidence.
 
 ## Problem
 
