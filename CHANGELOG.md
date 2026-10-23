@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `macos-resource-files`: a rivet.rktd key listing project-relative files
+  copied verbatim into the macOS bundle's `Contents/Resources` root before
+  signing — the standard home for `InternetAccessPolicy.plist`, which
+  firewall apps surface as the app's network policy. Collisions with
+  rivet-managed bundle names fail the package.
 ## 0.13.0
 
 - Add an Android selected-device connection coordinator joining live

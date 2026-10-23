@@ -2,6 +2,7 @@
 
 (require racket/file
          racket/format
+         racket/list
          racket/path
          racket/string
          racket/system
@@ -343,6 +344,23 @@
     (copy-file configured-icon
                (build-path resources packaged-icon-name)
                #t))
+
+  ;; Extra Resources-root files (InternetAccessPolicy.plist and friends).
+  ;; Copied before the seal like every other bundle input; a name that
+  ;; would collide with a rivet-managed file fails the package here.
+  (define managed-resource-names
+    (list* "AppIcon.icns" (map (lambda (f) (path->string (file-name-from-path f)))
+                               (project-macos-resource-files project))))
+  (unless (= (length managed-resource-names)
+             (length (remove-duplicates managed-resource-names)))
+    (error 'package-macos! "macos-resource-file name collides with a rivet-managed bundle file"))
+  (for ([resource-file (in-list (project-macos-resource-files project))])
+    (define source (project-path project resource-file))
+    (unless (file-exists? source)
+      (error 'package-macos! "macos-resource-file does not exist: ~a" resource-file))
+    (define target-name
+      (path->string (file-name-from-path source)))
+    (copy-file source (build-path resources target-name) #t))
 
   (define racket-framework (build-path frameworks "Racket.framework"))
   (copy-macos-bundle! (build-path stage "Frameworks" "Racket.framework")
