@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add an Android selected-device connection coordinator joining live
+  canonical NSD resolution to one explicit pinned-TLS/RVD1 attempt on a
+  product-supplied executor. Reject closed pairing windows, stale candidates
+  and duplicate starts; cancel outstanding resolution and active transports
+  without a delayed dial or automatic pairing fallback. Deterministic
+  JVM tests cover selection, successful authenticated handoff, cancellation
+  before queued work, and stale native callbacks. Product secure storage,
+  native UI and physical-device evidence remain separate.
+
+
 - Add the Apple post-RVD1 RVT1 device path: generated Swift APIs can target a
   shared RivetRPCClient protocol; a bounded network client correlates RPCs,
   forwards cancellation and delivers events, and its lifecycle-aware run()
