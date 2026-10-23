@@ -56,11 +56,22 @@
 RKT
         out)))
 
+    ;; Issue #311: with no declared companion-device API the project has no
+    ;; Kotlin consumer, so the fresh output set must not require the Kotlin
+    ;; client — desktop-only products keep `.rivet/` gitignored and must
+    ;; still pass the release freshness gate.
+    (check-false
+     (for/or ([pair (in-list (car (client-outputs (load-project project-root))))])
+       (string-contains? (path->string (car pair)) "GeneratedBackend.kt")))
+
     ;; Companion APIs are default-deny and only the configured RPCs appear in
     ;; the generated Codable request/client/router surface.
     (set-device-rpcs! '(fetch-profile refresh))
     (define project (load-project project-root))
     (generate-clients! project)
+    (check-true
+     (for/or ([pair (in-list (car (client-outputs project)))])
+       (string-contains? (path->string (car pair)) "GeneratedBackend.kt")))
     (define swift
       (file->string
        (build-path project-root "macos-host" "Sources" "RivetHost"
@@ -103,12 +114,15 @@ RKT
     (define exported-baseline (build-path project-root ".rivet" "device-exported.json"))
     (write-schema-snapshot! project exported-baseline)
     (set-device-rpcs! '())
-    (generate-clients! (load-project project-root))
-    (define no-device-kotlin
-      (file->string
-       (build-path project-root ".rivet" "generated" "kotlin" "dev" "rivet"
-                   "generated" "GeneratedBackend.kt")))
-    (check-false (string-contains? no-device-kotlin "class RivetDeviceAPI"))
+    ;; Issue #311: an empty companion API means no Kotlin consumer — the
+    ;; fresh output set drops the Kotlin client entirely. A previously
+    ;; generated file may linger on disk, but it is no longer part of the
+    ;; contract the release freshness gate diffs against.
+    (define empty-device-project (load-project project-root))
+    (check-false
+     (for/or ([pair (in-list (car (client-outputs empty-device-project)))])
+       (string-contains? (path->string (car pair)) "GeneratedBackend.kt")))
+    (generate-clients! empty-device-project)
     (define removal-report
       (check-schema-compatibility! (load-project project-root) exported-baseline))
     (check-false (hash-ref removal-report 'compatible))
