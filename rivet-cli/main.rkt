@@ -174,8 +174,15 @@
              (printf "  ~a\n" path))))]
     [(list "generate")
      (define generate-clients! (command "codegen" 'generate-clients!))
-     (generate-clients! (current-project!))
-     (say "generated Swift, C++, and Kotlin clients")]
+     (define client-outputs (command "codegen" 'client-outputs))
+     (define project (current-project!))
+     (define outputs (car (client-outputs project)))
+     (generate-clients! project)
+     (define kotlin? (for/or ([pair (in-list outputs)])
+                       (regexp-match? #rx"[.]kt$" (path->string (car pair)))))
+     (say (if kotlin?
+              "generated Swift, C++, and Kotlin clients"
+              "generated Swift and C++ clients (no companion API: no Kotlin client)"))]
     [(list "generate" "--check")
      ;; CI freshness gate: regenerate in memory and compare with the tree,
      ;; so hand-edited generated files or stale version stamps cannot merge.
