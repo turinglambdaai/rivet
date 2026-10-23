@@ -278,9 +278,17 @@ applies the payload and pending-request budgets negotiated by its RVD1
 session: oversized outgoing RPCs are rejected before any frame is emitted,
 oversized incoming frames fail closed, and malformed acceptance budgets are
 rejected during session establishment, all pinned by deterministic JVM
-tests. The Android `NsdManager`
-driver, product credential integration, and device-to-device evidence
-remain separate unfinished M3 tasks.
+tests. The save-before-accept gate
+now has a product-shaped Android persistence adapter: one Keystore AES key
+per application ID seals each credential/fingerprint record into a versioned
+AES-GCM envelope whose additional authenticated data binds it to the product
+and paired device, SharedPreferences holds only that ciphertext, a duplicate
+or unknown pairing ID never rotates silently, and a missing or corrupted
+Keystore key fails closed into one stable error taxonomy instead of offering
+a re-pairing path. The adapter is compile- and envelope-tested on the JVM;
+Keystore-backed behavior itself requires device evidence. The Android
+`NsdManager` driver, product credential integration, and device-to-device
+evidence remain separate unfinished M3 tasks.
 
 M3's Windows transport slice is also implemented: a CNG-persisted P-256
 self-signed identity with deletion-based rotation, an SChannel TLS server
