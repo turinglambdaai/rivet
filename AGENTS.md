@@ -61,6 +61,11 @@ upstream, and keep `main` green before starting any other work.
 
 ## Start with evidence
 
+For changes to product interaction across native hosts, read
+[`docs/agent-native.md`](docs/agent-native.md#author-the-product-interaction-contract).
+The product specifies shared behavior and each host uses native mechanisms;
+Rivet does not own a shared UI DSL or the product's layout/brand.
+
 For an application project, run:
 
 ```bash

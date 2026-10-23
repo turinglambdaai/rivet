@@ -84,6 +84,7 @@ enum class RivetClientFailure {
     UNEXPECTED_MESSAGE,
     BACKEND,
     TOO_MANY_PENDING_REQUESTS,
+    MESSAGE_TOO_LARGE,
 }
 
 class RivetClientException(
@@ -105,9 +106,13 @@ class RivetClient(
     private val output: OutputStream,
     private val maxPendingRequests: Int = 1024,
     dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val maxFramePayloadSize: Int = RIVET_MAX_FRAME_PAYLOAD_SIZE,
 ) : AutoCloseable {
     init {
         require(maxPendingRequests > 0) { "Rivet native pending request limit must be positive" }
+        require(maxFramePayloadSize in 1..RIVET_MAX_FRAME_PAYLOAD_SIZE) {
+            "Rivet frame payload budget must be within protocol limits"
+        }
     }
 
     fun interface EventHandler {
@@ -184,7 +189,11 @@ class RivetClient(
                 addAll(arguments)
             }
             val frame = try {
-                RivetFrame(RivetMessageType.REQUEST, id, encodeRivetValue(RivetValue.ListValue(values)))
+                val payload = encodeRivetValue(RivetValue.ListValue(values))
+                if (payload.size > maxFramePayloadSize) {
+                    clientFailure(RivetClientFailure.MESSAGE_TOO_LARGE, "Rivet request exceeds session payload budget")
+                }
+                RivetFrame(RivetMessageType.REQUEST, id, payload)
             } catch (error: Throwable) {
                 removePending(id, request)?.resumeWith(Result.failure(error))
                 return@suspendCancellableCoroutine
@@ -274,7 +283,7 @@ class RivetClient(
             .order(ByteOrder.LITTLE_ENDIAN)
             .int
             .toLong() and 0xffff_ffffL
-        if (length > RIVET_MAX_FRAME_PAYLOAD_SIZE) {
+        if (length > maxFramePayloadSize) {
             throw RivetProtocolException(
                 RivetProtocolFailure.LENGTH_OVERFLOW,
                 "Rivet frame exceeds protocol length limit",
