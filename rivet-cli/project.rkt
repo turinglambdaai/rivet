@@ -31,6 +31,7 @@
          project-macos-localizations
          project-linux-icon
          project-dmg-background
+         project-macos-resource-files
          project-windows-license
          project-windows-installer-bitmaps
          project-linux-formats
@@ -228,6 +229,19 @@
                      (and (memq key '(banner dialog))
                           (path-string-has-extension? item ".bmp")))))
             "hash whose optional banner and dialog values are project-relative .bmp paths")
+  (optional 'macos-resource-files
+            (lambda (v)
+              (define relative-file?
+                (lambda (item)
+                  (and (string? item)
+                       (not (string=? item ""))
+                       (not (string-prefix? item "/"))
+                       (not (regexp-match? #rx"(^|/)\\.\\." item)))))
+              (and (list? v)
+                   (not (null? v))
+                   (andmap relative-file? v)
+                   (= (length v) (length (remove-duplicates v)))))
+            "unique project-relative file paths copied to the macOS bundle's Contents/Resources root")
 
   (optional 'linux-icon
             (lambda (v) (path-string-has-extension? v ".png"))
@@ -350,6 +364,13 @@
 ;; plain single-folder image.
 (define (project-dmg-background project)
   (project-ref project 'dmg-background (lambda () #f)))
+
+;; Extra files copied verbatim into the macOS bundle's Contents/Resources
+;; root (staged before signing, like every other bundle input). The
+;; motivating consumer is InternetAccessPolicy.plist — Little Snitch-class
+;; firewalls surface it to the user as the app's network policy.
+(define (project-macos-resource-files project)
+  (project-ref project 'macos-resource-files (lambda () '())))
 
 ;; The MSI license page shows this RTF verbatim. Projects that do not
 ;; configure one get their repository LICENSE text rendered into RTF.
