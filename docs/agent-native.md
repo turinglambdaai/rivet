@@ -224,6 +224,63 @@ and re-aggregate.
 adds platform trust requirements but deliberately leaves publisher credentials
 under application control.
 
+## Author the product interaction contract
+
+An embedded backend makes domain behavior common; it does not make separately
+authored native hosts behave alike. Before implementing a multi-host feature,
+record one product-owned scenario table in the existing design/product spec:
+
+`initial state -> user action -> visible result -> persisted effect ->
+failure/recovery -> native presentation -> acceptance evidence`.
+
+Agree on navigation hierarchy, selection versus activation, draft preservation,
+focus after actions/dialogs, Escape order, undo, loading/empty/error/offline
+states and language switching. Keep product tokens and strings in one product
+source. Allow native controls, system typography, menu placement, materials,
+date pickers and accessibility mechanisms to differ. A platform exception has
+a user-visible fallback and its own evidence. Do not generalize a launcher's
+hide-on-blur rule into every application.
+
+Rivet owns platform adapters, typed contracts, discovery, diagnostics and
+evidence orchestration. The product owns information architecture, interaction
+meaning and brand. Guidance belongs in this guide and product specifications;
+it does not justify a cross-platform UI DSL, shared selector language, new
+mandatory theme engine or business logic inside hosts. Move a repeated
+mechanism upstream only after two products demonstrate the same boundary.
+
+Use [Apple's design principles](https://developer.apple.com/design/human-interface-guidelines/design-principles)
+for hierarchy, focused tasks and feedback; use the relevant platform's
+keyboard/focus and accessibility guidance when choosing the native control.
+See [Windows keyboard interactions](https://learn.microsoft.com/en-us/windows/apps/develop/input/keyboard-interactions)
+and [GNOME accessibility](https://developer.gnome.org/hig/guidelines/accessibility.html).
+For each declared desktop, exercise the same user outcome through native input,
+record accessibility state and persisted effects, and supplement it with
+screenshots at representative sizes/themes. Visual similarity alone is not
+parity; equal RPC responses alone do not prove the UI interaction.
+
+## A path for a user who does not read source
+
+The useful goal is a reproducible, reviewable delivery loop with little
+engineering knowledge required from the product owner. It is not a promise
+that arbitrary generated applications are correct without review.
+
+Start with one narrow product brief: who uses it, one primary task, data and
+privacy boundaries, declared platforms and what success looks like. The agent
+then uses the existing scaffold, inspect/doctor, schema and acceptance tools
+to deliver one packaged vertical slice. The owner reviews the running task,
+screenshots, error/recovery behavior and data export, rather than approving an
+unexplained code diff. The agent records the build and evidence so another
+agent can reproduce the result from a clean checkout.
+
+Beginner guidance and recipes should explain this loop and link to the
+canonical CLI documentation. Actual tooling gaps belong in the existing CLI:
+errors need stable codes, useful next actions and honest unavailable states.
+Do not add a second orchestration framework or conceal missing platform
+evidence behind an “AI verified” label. A tutorial is validated only when a
+fresh session can follow it without undocumented local state. Validate first
+with the taskboard reference, then one real product, and record the point at
+which human product/security judgment is required.
+
 ## Current boundary
 
 This contract makes project discovery, diagnostics, mutation boundaries,
