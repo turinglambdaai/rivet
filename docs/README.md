@@ -53,3 +53,7 @@ and operating instructions into the canonical guides above, record the release
 result in `CHANGELOG.md`, and delete the plan instead of preserving a second
 history of the same feature. Durable protocol and security rationale stays in
 its owning guide until the implementation supersedes it.
+
+## Adoption and support
+
+[English guide](USING.md) · [简体中文](USING.zh-CN.md): fit, maturity, upgrade boundaries and support. This user path links to the existing canonical technical owners above.

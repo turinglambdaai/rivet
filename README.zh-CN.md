@@ -8,6 +8,12 @@
 
 [English](README.md) · **中文**
 
+## 使用入口
+
+当第一方原生交互值得维护 SwiftUI、WinUI 3、GTK4 三份界面时，选择 Rivet。共享领域逻辑归 Racket，渲染与系统交互归原生宿主。需要共享 HTML/CSS 界面时可评估 Glaze。
+
+[使用选择、成熟度、升级与支持](docs/USING.zh-CN.md) · [English](docs/USING.md)
+
 ## 快速开始
 
 请使用你希望 Rivet 最终嵌入的那套 Racket CS 自带的 `raco`，从 Racket Package Catalog 安装：
