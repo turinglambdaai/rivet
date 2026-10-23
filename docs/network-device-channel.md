@@ -1,22 +1,19 @@
 # Network device channel design
 
 Status: active design for [issue #85](https://github.com/turinglambdaai/rivet/issues/85).
-The transport-independent `RivetDeviceGateway` policy/session core, pairing/
-authentication lifecycle, and byte-exact session preface are implemented and
-tested in memory. The Apple pairing-credential Keychain adapter, bounded
-Network.framework TLS stream adapter, per-install identity provider, and
-disabled-by-defaulThe explicit iOS Bonjour browser accepts only the privacy-bounded
-canonical advertisement and does not connect or authorize a peer. The
-`RivetDeviceAppleCompanion` library now composes explicit candidate selection,
-pinned reconnect or provisional RVD1 pairing, the Keychain pairing store,
-credential-persistence gating, and a product-supplied RVT1 application handler.
-A reusable `RivetDeviceAppleCompanionUI` SwiftUI view/model is also available
-for nearby discovery, explicit pairing or stored-device reconnect, pairing-code
-confirmation, saved-pairing removal, and session status. Products supply the
-host pairing-window ID from their QR/manual flow and the post-RVD1 application
-handler. These are reusable components, not a generated or signed mobile app:
-products still own local-network permission declarations, the application-
-specific RVT1 client/gateway binding, packaging, and real-device acceptance.
+The transport-independent `RivetDeviceGateway` policy/session core,
+pairing/authentication lifecycle, and byte-exact RVD1 preface have in-memory
+coverage. The Apple Keychain pairing store, Network.framework TLS transport,
+per-install identity, disabled-by-default macOS listener, bounded Bonjour
+advertising, and single-connection RVD1 session host are implemented. The
+iOS/iPadOS companion orchestrator provides explicit Bonjour selection, pinned
+reconnect or provisional pairing, Keychain persistence, and a reusable SwiftUI
+pair/reconnect confirmation surface. After authenticated RVD1 acceptance, a
+bounded RVT1 client, scoped per-device gateway, and backend adapter support
+typed RPC, State, cancellation and filtered Event delivery. Products still own
+per-device grants, gateway wiring, local-network permissions, event fan-out,
+signed application packaging, and real-device verification. These reusable
+targets are not a generated standalone mobile application.
 
 ### iPhone, iPad and Apple Watch companion boundaries
 

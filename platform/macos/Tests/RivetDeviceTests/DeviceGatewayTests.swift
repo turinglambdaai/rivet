@@ -101,6 +101,43 @@ private let pairedScope = RivetDeviceScope(
     #expect(starts.map(\.name) == ["tasks.list"])
 }
 
+@Test func stateRoutesRequireTheExactStateCapability() async throws {
+    let host = TestGatewayHost()
+    let session = try RivetDeviceGatewaySession(
+        pairedDeviceID: UUID(),
+        scopes: [pairedScope],
+        host: host
+    )
+    let payload = Data("encoded state args".utf8)
+
+    await #expect(throws: RivetDeviceGatewayError.forbidden) {
+        try await session.invokeRPC(
+            remoteRequestID: 20,
+            name: "$state/get",
+            payload: payload
+        )
+    }
+    await #expect(throws: RivetDeviceGatewayError.forbidden) {
+        try await session.invokeStateRPC(
+            remoteRequestID: 21,
+            name: "$state/get",
+            stateName: "private.state",
+            payload: payload
+        )
+    }
+
+    let response = try await session.invokeStateRPC(
+        remoteRequestID: 22,
+        name: "$state/get",
+        stateName: "sync.status",
+        payload: payload
+    )
+    #expect(response == payload)
+    let starts = await host.starts
+    #expect(starts.map(\.name) == ["$state/get"])
+    #expect(starts.map(\.payload) == [payload])
+}
+
 @Test func remoteRequestIDsMapToHostIDsAndCancellationStaysInSession() async throws {
     let host = TestGatewayHost(blocksResponses: true)
     let first = try RivetDeviceGatewaySession(

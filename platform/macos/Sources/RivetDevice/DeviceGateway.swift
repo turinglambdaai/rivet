@@ -40,8 +40,10 @@ public struct RivetDeviceGatewayHostCall: Sendable {
 /// authorization and remote-to-host request ID translation; the adapter owns
 /// the actual host client and its cancellation primitive.
 public protocol RivetDeviceGatewayHost: Sendable {
-    /// Returned IDs must be nonzero and unique across simultaneously pending
-    /// calls. Cancellation must affect exactly the call that owns the ID.
+    /// Payload is an encoded RivetValue list containing the RPC arguments.
+    /// The adapter decodes it for the embedded backend and encodes the result
+    /// as a RivetValue. Returned IDs must be nonzero and unique across
+    /// simultaneously pending calls; cancellation must affect exactly that ID.
     func startRPC(name: String, payload: Data) async throws -> RivetDeviceGatewayHostCall
     func cancelRPC(id: UInt64) async
 }
@@ -168,15 +170,66 @@ public actor RivetDeviceGatewaySession {
         name: String,
         payload: Data
     ) async throws -> Data {
+        // State routes must carry an explicit state name through the guarded
+        // API below; treating them as ordinary RPCs would let one granted
+        // state capability unlock every state of the same direction.
+        guard name != "$state/get", name != "$state/set" else {
+            throw RivetDeviceGatewayError.forbidden
+        }
+        return try await invokeRPCInternal(
+            remoteRequestID: remoteRequestID,
+            name: name,
+            payload: payload,
+            isStateRoute: false
+        )
+    }
+
+    package func invokeStateRPC(
+        remoteRequestID: UInt64,
+        name: String,
+        stateName: String,
+        payload: Data
+    ) async throws -> Data {
+        switch name {
+        case "$state/get":
+            try requireStateRead(stateName)
+        case "$state/set":
+            try requireStateWrite(stateName)
+        default:
+            throw RivetDeviceGatewayError.forbidden
+        }
+        return try await invokeRPCInternal(
+            remoteRequestID: remoteRequestID,
+            name: name,
+            payload: payload,
+            isStateRoute: true
+        )
+    }
+
+    private func invokeRPCInternal(
+        remoteRequestID: UInt64,
+        name: String,
+        payload: Data,
+        isStateRoute: Bool
+    ) async throws -> Data {
         guard !closed else {
             throw RivetDeviceGatewayError.sessionClosed
+        }
+        guard !Task.isCancelled else {
+            throw RivetDeviceGatewayError.cancelled
         }
         guard remoteRequestID != 0 else {
             throw RivetDeviceGatewayError.invalidRequestID
         }
-        guard grants.rpcs.contains(name) else {
+        if isStateRoute {
+            guard name == "$state/get" || name == "$state/set" else {
+                throw RivetDeviceGatewayError.forbidden
+            }
+        } else {
             // Unknown and ungranted names intentionally have the same result.
-            throw RivetDeviceGatewayError.forbidden
+            guard grants.rpcs.contains(name) else {
+                throw RivetDeviceGatewayError.forbidden
+            }
         }
         try checkMessageSize(payload)
         guard pending[remoteRequestID] == nil else {
@@ -256,7 +309,9 @@ public actor RivetDeviceGatewaySession {
         guard !closed else {
             throw RivetDeviceGatewayError.sessionClosed
         }
-        guard grants.events.contains(name) else {
+        // State changes have a separate state-name authorization path;
+        // never let an ordinary event grant bypass readable-state filtering.
+        guard name != "$state", grants.events.contains(name) else {
             return nil
         }
         try checkMessageSize(payload)

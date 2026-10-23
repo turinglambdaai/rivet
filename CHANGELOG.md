@@ -11,6 +11,17 @@
   before queued work, and stale native callbacks. Product secure storage,
   native UI and physical-device evidence remain separate.
 
+
+- Add the Apple post-RVD1 RVT1 device path: generated Swift APIs can target a
+  shared RivetRPCClient protocol; a bounded network client correlates RPCs,
+  forwards cancellation and delivers events, and its lifecycle-aware run()
+  keeps companion handlers alive until disconnect. A scoped gateway applies
+  RPC/state/event grants and a backend adapter calls the existing local client.
+  Tests cover request correlation, cancellation, shutdown, request bounds,
+  state-grant isolation, event filtering and host argument/result encoding.
+  Product listener wiring, scope selection, event fan-out, signed apps and
+  physical-device validation remain outstanding.
+
 - Add an Android Keystore-backed, app-scoped pairing credential store for
   the RVD1 persistence gate. Credentials and server SPKI pins are encrypted
   together with AES-256-GCM and bound to the application and device ID;

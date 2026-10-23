@@ -112,14 +112,15 @@ pre-session admission and fail-closed lifecycle handling. That listener now
 publishes the privacy-bounded Bonjour service while ready. The framework-only
 Bonjour browser discovers that service on iOS, rejects non-canonical TXT
 records, and reports endpoint and advertisement changes without connecting or
-granting authority. The `RivetDeviceAppleCompanion` coordinator now composes current explicit
-selection, pinned reconnect or provisional pairing, credential persistence,
-and session events. `RivetDeviceAppleCompanionUI` supplies a reusable SwiftUI
-discovery, pair/reconnect, and manual confirmation surface for iOS/iPadOS.
-Product-specific RVT1 gateway dispatch, local-network usage strings, app
-packaging/signing, and real-device acceptance remain. The macOS session host
-drives `RVD1`, exposes the stream only after authenticated acceptance, and
-leaves product gateway dispatch to an explicit application handler; Windows
+granting authority. The `RivetDeviceAppleCompanion` coordinator composes
+live explicit selection, pinned reconnect or provisional pairing, credential
+persistence, and an iOS/iPadOS SwiftUI confirmation surface. The post-RVD1
+transport adds a bounded typed RVT1 client, scoped gateway server, and backend
+RPC adapter; they apply per-device RPC, State, and Event grants and cancellation
+without treating discovery as authority. Products must wire the accepted
+session to application-specific RPC/state policy, event fan-out, local-network
+permissions, signing, and real-device acceptance. The macOS host only exposes
+application streams after authenticated acceptance; Windows
 also needs its Credential Manager and transport adapters.
 
 This design follows the core idea in [DSLs for Safe iOS/watchOS Communication](https://defn.io/2025/02/16/type-safe-watchos-communication/): encode the request/response relationship in types and centralize dispatch instead of spreading dictionaries, route strings, and casts throughout both apps. Rivet generates that relationship from the shared Racket schema while keeping the exported device surface explicit.
