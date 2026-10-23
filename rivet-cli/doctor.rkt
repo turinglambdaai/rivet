@@ -405,7 +405,34 @@
                   '(".git" ".rivet" "compiled" "dist" "node_modules" "stage")
                   #rx"[.]rkt$"))
 
-(define pin-regex #px"rivet\\.git#([A-Za-z0-9._-]*)")
+;; The ref position also matches the variable-mediated forms a workflow
+;; install step uses (`${{ env.RIVET_PIN }}`, `${RIVET_PIN}`, `$env:RIVET_PIN`);
+;; a plain character-class scan saw those as empty refs (issue #310).
+(define pin-regex
+  #px"rivet\\.git#(\\$\\{\\{ ?env\\.[A-Za-z_][A-Za-z0-9_]* ?\\}\\}|\\$\\{[A-Za-z_][A-Za-z0-9_]*\\}|\\$env:[A-Za-z_][A-Za-z0-9_]*|[A-Za-z0-9._-]*)")
+
+(define (mediated-var-name ref)
+  (define match
+    (regexp-match #px"^\\$\\{\\{ ?env\\.([A-Za-z_][A-Za-z0-9_]*) ?\\}\\}$|^\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}$|^\\$env:([A-Za-z_][A-Za-z0-9_]*)$"
+                  ref))
+  (and match (or (cadr match) (caddr match) (cadddr match))))
+
+;; NAME: value pairs from every `env:` mapping in a workflow-style file —
+;; top-level and job-level blocks both bind the names installs reference.
+(define (env-definitions text)
+  (for/fold ([env (hash)] [in-env? #f] #:result env)
+            ([line (in-list (string-split text "\n"))])
+    (define block (regexp-match #px"^env:[\t ]*$" line))
+    (define entry (regexp-match #px"^[\t ]+([A-Za-z_][A-Za-z0-9_]*):[\t ]*(.*?)[\t ]*$" line))
+    (cond
+      [block (values env #t)]
+      [(and in-env? entry)
+       (define value (string-trim (caddr entry) "\""))
+       (values (hash-set env (cadr entry) value) #t)]
+      [else (values env (and in-env? (regexp-match? #px"^[\t ]" line)))])))
+
+(define (config-file? path)
+  (regexp-match? #rx"[.](yml|yaml|rkt|rktd)$" (path->string path)))
 
 (define (text-files-under root)
   (collect-files! root
@@ -460,32 +487,56 @@
    (for/list ([path (in-list (source-files-under root))])
      (update-api-contract-violations procedures path))))
 
+(define (classify-pin ref path installed-version expected-tag)
+  (cond
+    [(string=? ref "")
+     (list 'finding
+           (format "~a: dependency pin `rivet.git#` has an empty ref and silently tracks the default branch; pin a tag or commit SHA"
+                   path))]
+    ;; Tag-shaped refs must name the installed release; commit SHAs cannot
+    ;; be compared and are accepted as-is. The comparison runs only on
+    ;; configuration files: markdown prose documents history — a changelog
+    ;; section describing a past release legitimately names its past pin
+    ;; (issue #310), so it is not judged against the installed version.
+    [(and expected-tag
+          (config-file? path)
+          (regexp-match? #rx"^v[0-9]" ref)
+          (not (string=? ref expected-tag)))
+     (list 'finding
+           (format "~a: dependency pin `rivet.git#~a` does not match the installed rivet release ~a"
+                   path ref installed-version))]
+    [else (list 'ok ref)]))
+
 (define (repository-pin-findings root installed-version)
   ;; Empty refs are the autarx v0.4.1 incident: `URL#` resolves to the
   ;; default branch, so CI ran a moving rivet while the release believed it
-  ;; was pinned. Tag-shaped refs must name the installed release; commit
-  ;; SHAs cannot be compared and are accepted as-is.
+  ;; was pinned. A variable-mediated ref is resolved against the same
+  ;; file's env block before classification, and a mediation this file
+  ;; cannot resolve stays a finding — fail safe, like the incident class
+  ;; this gate exists for (issue #310).
   (define expected-tag (and installed-version (string-append "v" installed-version)))
   (define findings '())
   (for ([path (in-list (text-files-under root))])
     (define text
       (with-handlers ([exn:fail? (lambda (_) "")])
         (file->string path)))
+    (define env (env-definitions text))
     (for ([pin-match (in-list (regexp-match* pin-regex text #:match-select cdr))])
-      (define ref (list-ref pin-match 0))
-      (cond
-        [(string=? ref "")
-         (set! findings
-               (cons (format "~a: dependency pin `rivet.git#` has an empty ref and silently tracks the default branch; pin a tag or commit SHA"
-                             path)
-                     findings))]
-        [(and expected-tag
-              (regexp-match? #rx"^v[0-9]" ref)
-              (not (string=? ref expected-tag)))
-         (set! findings
-               (cons (format "~a: dependency pin `rivet.git#~a` does not match the installed rivet release ~a"
-                             path ref installed-version)
-                     findings))])))
+      (define raw-ref (list-ref pin-match 0))
+      (define resolved
+        (if (string-prefix? raw-ref "$")
+            (let ([name (mediated-var-name raw-ref)])
+              (or (and name (hash-ref env name #f))
+                  (list 'finding
+                        (format "~a: dependency pin `rivet.git#~a` reads an env variable this file does not define; inline the pin or add it to this file's env block"
+                                path raw-ref))))
+            raw-ref))
+      (define verdict
+        (if (and (pair? resolved) (eq? (car resolved) 'finding))
+            resolved
+            (classify-pin resolved path installed-version expected-tag)))
+      (when (eq? (car verdict) 'finding)
+        (set! findings (cons (cadr verdict) findings)))))
   (reverse findings))
 
 (define (release-check name thunk)

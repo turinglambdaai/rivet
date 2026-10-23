@@ -229,6 +229,69 @@ RKT
                              "dependency pins are non-empty and match the installed release"
                              #rx"empty ref"))
 
+    ;; Issue #310: a variable-mediated pin is resolved against this file's
+    ;; env block; an undefined variable and a resolved wrong tag both fail;
+    ;; a past pin in changelog prose is history, not a live pin, while the
+    ;; shape-based empty-ref check still applies to prose.
+    (let ([workflows (build-path project-root ".github" "workflows")])
+      (when (directory-exists? workflows)
+        (define (write-ci content)
+          (call-with-output-file
+           (build-path workflows "ci.yml")
+           #:exists 'truncate
+           (lambda (out) (displayln content out))))
+        ;; mediated and resolved to the installed release -> passes
+        (write-ci
+         (format "env:\n  RIVET_PIN: v~a\npackages: \"https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}\""
+                 installed))
+        (define mediated-report (release-doctor-report project))
+        (release-check-passed?
+         mediated-report
+         "dependency pins are non-empty and match the installed release")
+        ;; mediated but undefined -> fails naming the variable
+        (write-ci
+         "packages: \"https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}\"")
+        (define unresolved-report (release-doctor-report project))
+        (release-check-failed?
+         unresolved-report
+         "dependency pins are non-empty and match the installed release"
+         #rx"reads an env variable this file does not define")
+        ;; mediated and resolved to a wrong tag -> fails the comparison
+        (write-ci
+         "env:\n  RIVET_PIN: v0.0.1\npackages: \"https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}\"")
+        (define wrong-tag-report (release-doctor-report project))
+        (release-check-failed?
+         wrong-tag-report
+         "dependency pins are non-empty and match the installed release"
+         #rx"does not match the installed rivet release")
+        ;; restore the live workflow to the installed release, then check
+        ;; that changelog prose naming a past pin is exempt from the comparison
+        (write-ci
+         (format "env:\n  RIVET_PIN: v~a\npackages: \"https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}\""
+                 installed))
+        (call-with-output-file
+         (build-path project-root "CHANGELOG.md")
+         #:exists 'truncate
+         (lambda (out)
+           (displayln "installed Rivet from `rivet.git#v0.0.1` instead of floating"
+                      out)))
+        (define history-report (release-doctor-report project))
+        (release-check-passed?
+         history-report
+         "dependency pins are non-empty and match the installed release")
+        ;; but an empty ref in prose is still the autarx shape
+        (call-with-output-file
+         (build-path project-root "CHANGELOG.md")
+         #:exists 'truncate
+         (lambda (out)
+           (displayln "installed Rivet from `rivet.git#` instead of floating"
+                      out)))
+        (define prose-empty-report (release-doctor-report project))
+        (release-check-failed?
+         prose-empty-report
+         "dependency pins are non-empty and match the installed release"
+         #rx"empty ref")))
+
     ;; The scanner itself is exported so products can run just this check.
     ;; updater-usage.rkt still holds the red-2 drifted call here, so the
     ;; direct scan must report the violation against the live contract.
