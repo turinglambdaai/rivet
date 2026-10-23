@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.13.0
 
 - Add an Android selected-device connection coordinator joining live
   canonical NSD resolution to one explicit pinned-TLS/RVD1 attempt on a
