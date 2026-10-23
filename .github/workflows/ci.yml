@@ -261,6 +261,9 @@ jobs:
           raco rivet new KtSmoke
           cd KtSmoke
           cp "$GITHUB_WORKSPACE/rivet/tests/fixtures/schema-matrix-backend.rkt" app/backend.rkt
+          # The Kotlin client exists only for projects with a declared
+          # companion API (issue #311); this smoke is the Android consumer.
+          racket -e '(require racket/file) (define p "rivet.rktd") (define c (call-with-input-file p read)) (call-with-output-file p #:exists (quote truncate/replace) (lambda (out) (write (hash-set c (quote device-rpcs) (list (quote greet) (quote increment))) out)))'
           raco rivet schema --output rivet-schema.json
           raco rivet schema check rivet-schema.json --json
           raco rivet generate
