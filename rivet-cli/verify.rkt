@@ -222,8 +222,11 @@
 ;; broken installer cannot pass a release gate.
 (define (verify-linux-native-installers! project)
   (define who 'verify-package!)
-  (for ([format (in-list (project-linux-formats project))])
-    (case format
+  ;; The loop variable must not be named `format`: the branches below call
+  ;; the format builtin, and the shadow turned "deb" into a procedure
+  ;; application (rivet #320).
+  (for ([fmt (in-list (project-linux-formats project))])
+    (case fmt
       [("deb")
        (define installer (deb-installer-path project))
        (required-file! who installer "deb installer")
