@@ -11,6 +11,7 @@
          "codegen/type-graph.rkt")
 
 (provide generate-clients!
+         client-outputs
          check-generated-clients
          schema-snapshot
          write-schema-snapshot!
@@ -52,8 +53,25 @@
       (define codable-types (device-codable-named-types device-rpcs))
       (void schema-types)
       (validate-device-rpcs! device-rpcs)
+      ;; Android consumes the typed client from the shared generated tree
+      ;; until generated Compose projects exist; the package layout keeps
+      ;; the file drop-in for Gradle source sets. Only projects declaring a
+      ;; companion-device API get the Kotlin client: a desktop-only product
+      ;; has no consumer for it, and a file nobody consumes must not be a
+      ;; required part of the fresh tree the release gate diffs against —
+      ;; `.rivet/` is gitignored in the standard layout, so the
+      ;; always-emitted Kotlin client failed every desktop-only product's
+      ;; freshness check (issue #311).
+      (define pairs-with-kotlin
+        (if (null? device-rpcs)
+            '()
+            (list (cons (project-path project ".rivet" "generated" "kotlin" "dev" "rivet"
+                                      "generated" "GeneratedBackend.kt")
+                        (generate-kotlin rpcs events states records enums device-rpcs
+                                         module-name entry-name display-name version build
+                                         identifier release-channel)))))
       (define pairs
-        (list
+        (list*
          (cons (project-path project "macos-host" "Sources" "RivetHost" "GeneratedBackend.swift")
                (parameterize ([current-swift-codable-types codable-types])
                  (generate-swift rpcs events states records enums device-rpcs
@@ -63,14 +81,7 @@
                (generate-cpp rpcs events states records enums
                              module-name entry-name display-name version build
                              identifier release-channel "rivet::windows"))
-         ;; Android consumes the typed client from the shared generated tree
-         ;; until generated Compose projects exist; the package layout keeps
-         ;; the file drop-in for Gradle source sets.
-         (cons (project-path project ".rivet" "generated" "kotlin" "dev" "rivet"
-                             "generated" "GeneratedBackend.kt")
-               (generate-kotlin rpcs events states records enums device-rpcs
-                                module-name entry-name display-name version build
-                                identifier release-channel))))
+         pairs-with-kotlin))
       (define linux-host (project-path project "linux"))
       (if (directory-exists? linux-host)
           (cons (cons (build-path linux-host "GeneratedBackend.hpp")
