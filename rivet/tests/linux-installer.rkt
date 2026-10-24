@@ -297,6 +297,23 @@
                              #:production? #t
                              #:launch-smoke? #f))))))
 
+      ;; Regression for rivet #320: the native-installer verification loop
+      ;; named its variable `format`, shadowing the builtin, so verifying a
+      ;; project with linux-formats applied the string "deb" as a procedure.
+      ;; Building and verifying a real deb exercises that branch end to end.
+      (define deb-project
+        (rivet-project package-root (hasheq 'name "Smoke" 'linux-formats '("deb"))))
+      (with-production-env
+       (lambda ()
+         (create-installer! deb-project package #:production? #t)))
+      (check-equal?
+       (with-production-env
+        (lambda ()
+          (verify-package! deb-project package
+                           #:production? #t
+                           #:launch-smoke? #f)))
+       package)
+
     (delete-file private-key-path)
     (delete-file public-key-path))
 
