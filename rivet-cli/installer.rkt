@@ -486,8 +486,9 @@
   ;; deb/rpm integrate with the distribution package manager, while AppImage
   ;; carries its own GTK4 dependency closure and becomes the signed in-place
   ;; update payload when enabled.
-  (for ([format (in-list (project-linux-formats project))])
-    (case format
+  ;; `fmt`, not `format`: the builtin stays reachable inside the branches.
+  (for ([fmt (in-list (project-linux-formats project))])
+    (case fmt
       [("deb") (create-deb! project package)]
       [("rpm") (create-rpm! project package)]
       [("appimage") (create-appimage! project package)]))

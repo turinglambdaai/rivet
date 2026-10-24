@@ -247,14 +247,14 @@
      (say "release installer: ~a" installer)
      (say "portable zip: ~a" portable-zip)
      (when (eq? (system-type 'os) 'unix)
-       (for ([format (in-list ((command "project" 'project-linux-formats)
-                               (current-project!)))])
+       (for ([fmt (in-list ((command "project" 'project-linux-formats)
+                            (current-project!)))])
          (define extra
-           (case format
+           (case fmt
              [("deb") ((command "deb" 'deb-installer-path) (current-project!))]
              [("rpm") ((command "rpm" 'rpm-installer-path) (current-project!))]
              [("appimage") ((command "appimage" 'appimage-installer-path) (current-project!))]))
-         (say "release ~a: ~a" format extra)))
+         (say "release ~a: ~a" fmt extra)))
      (if manifest
          (say "signed update manifest: ~a" manifest)
          (say "update manifest: skipped (--without-updates)"))
