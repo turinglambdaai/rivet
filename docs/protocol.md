@@ -169,6 +169,19 @@ Declared RPC, Event, and State API names are limited to 1024 UTF-8 bytes. Incomi
 
 Schema types are `String`, `Int64`, `Bool`, `Bytes`, `Void`, `Any`, `(List T)`, `(Optional T)`, and names introduced by `define-record` or `define-enum`. State and Event payloads accept the same value types except `Void`. Optional null uses Null/Void. A Record uses List in declaration order and requires exactly the declared fields. An Enum uses its declared case name as a String and rejects unknown cases. All reuse existing RVT1 value tags.
 
+### Authoring values on the Racket side
+
+The Racket backend represents schema values as ordinary Racket data, validated at the boundary when an RPC is dispatched, an Event is emitted, or a State is set:
+
+- `String` is a Racket string, `Int64` an exact integer within the 64-bit range, `Bool` a boolean, `Bytes` a byte string.
+- `(List T)` is a Racket list; `'()` is the empty list.
+- `(Optional T)` uses `(void)` as the absent value — it is the only Racket value that encodes as Optional null. `'()` and `#f` are rejected for an Optional field even though `'()` is a legal empty `(List T)`; the representation is type-directed, not value-directed.
+- `define-record` generates a constructor named after the type — `(Task 1 "ship docs" 1761300000000)` for `(define-record Task ([id : Int64] [title : String] [created-at-ms : Int64]))`. Field access uses `(record-ref value 'title)` (the field name may be a symbol or a string, and is contract-checked). Records are opaque structs: `match` patterns and generated accessors do not exist, so use the constructor and `record-ref`. A record value is tied to the module instance that declared its type; a test that re-instantiates the backend module under a fresh namespace must also take `record-ref` from that namespace, because the predicate rejects values from another instance.
+- `define-enum` likewise generates a constructor named after the type taking the case (`(Priority "high")`), and `enum-case` reads the case back as a symbol.
+- `define-state` binds a State descriptor; `state-ref` and `state-set!` read and write it, and `state-set!` validates and pre-encodes the `$state` Event before committing. `emit-event!` publishes a typed Event from anywhere in the backend.
+
+`raco rivet build` regenerates the native clients from these declarations; the Racket forms above are the single source of truth for both sides.
+
 Generated State accessors use `$state/get` and `$state/set` internally; applications normally call the typed Swift/C++/Kotlin API rather than constructing those reserved requests directly.
 
 Code generation rejects declarations that normalize to the same Swift or C++ identifier. Rivet reports the conflicting source declarations instead of writing native source that later fails with an opaque compiler error.
