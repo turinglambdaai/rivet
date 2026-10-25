@@ -110,6 +110,8 @@ private let pairedScope = RivetDeviceScope(
     )
     let payload = Data("encoded state args".utf8)
 
+    // State operations are only reachable through invokeStateRPC; the
+    // ordinary RPC route denies both directions.
     await #expect(throws: RivetDeviceGatewayError.forbidden) {
         try await session.invokeRPC(
             remoteRequestID: 20,
@@ -118,24 +120,46 @@ private let pairedScope = RivetDeviceScope(
         )
     }
     await #expect(throws: RivetDeviceGatewayError.forbidden) {
-        try await session.invokeStateRPC(
+        try await session.invokeRPC(
             remoteRequestID: 21,
+            name: "$state/set",
+            payload: payload
+        )
+    }
+    await #expect(throws: RivetDeviceGatewayError.forbidden) {
+        try await session.invokeStateRPC(
+            remoteRequestID: 22,
             name: "$state/get",
             stateName: "private.state",
             payload: payload
         )
     }
+    await #expect(throws: RivetDeviceGatewayError.forbidden) {
+        try await session.invokeStateRPC(
+            remoteRequestID: 23,
+            name: "$state/set",
+            stateName: "private.state",
+            payload: payload
+        )
+    }
 
-    let response = try await session.invokeStateRPC(
-        remoteRequestID: 22,
+    let read = try await session.invokeStateRPC(
+        remoteRequestID: 24,
         name: "$state/get",
         stateName: "sync.status",
         payload: payload
     )
-    #expect(response == payload)
+    #expect(read == payload)
+    let write = try await session.invokeStateRPC(
+        remoteRequestID: 25,
+        name: "$state/set",
+        stateName: "sync.preference",
+        payload: payload
+    )
+    #expect(write == payload)
     let starts = await host.starts
-    #expect(starts.map(\.name) == ["$state/get"])
-    #expect(starts.map(\.payload) == [payload])
+    #expect(starts.map(\.name) == ["$state/get", "$state/set"])
+    #expect(starts.map(\.payload) == [payload, payload])
 }
 
 @Test func remoteRequestIDsMapToHostIDsAndCancellationStaysInSession() async throws {

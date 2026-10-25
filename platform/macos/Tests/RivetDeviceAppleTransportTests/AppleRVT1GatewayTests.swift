@@ -50,6 +50,10 @@ private actor MemoryByteStream: RivetDeviceAppleApplicationByteStream {
         try sent.map { try decodeRivetFrame($0) }
     }
 
+    func errorFrameCount() throws -> Int {
+        try sentFrames().filter { $0.type == .error }.count
+    }
+
     private func take(_ maximumLength: Int) -> Data {
         let count = min(maximumLength, incoming.count)
         let result = Data(incoming.prefix(count))
@@ -67,6 +71,27 @@ private actor MemoryByteStream: RivetDeviceAppleApplicationByteStream {
             }
         }
     }
+}
+
+/// Models a backend dispatch that never completes and ignores cancellation:
+/// the exact shape that used to permanently shrink the gateway's request
+/// capacity (issue #312).
+private actor WedgedGatewayHost: RivetDeviceGatewayHost {
+    private var starts = 0
+
+    func startRPC(name: String, payload: Data) async throws -> RivetDeviceGatewayHostCall {
+        starts += 1
+        let task = Task<Data, any Error> {
+            try await withCheckedThrowingContinuation {
+                (_: CheckedContinuation<Data, any Error>) in
+                // Never resumed: cancellation is deliberately ignored.
+            }
+        }
+        return RivetDeviceGatewayHostCall(id: UInt64(starts), response: task)
+    }
+
+    func cancelRPC(id: UInt64) async {}
+    func startCount() -> Int { starts }
 }
 
 private actor SlowGatewayHost: RivetDeviceGatewayHost {
@@ -192,6 +217,34 @@ private func helloFrame() throws -> Data {
     #expect(await stream.isClosed())
 }
 
+@Test func appleRVT1ClientTimesOutASilentPeerWithTheHelloDeadline() async throws {
+    let stream = MemoryByteStream()
+    let client = RivetDeviceAppleRVT1Client(stream: stream, helloTimeout: 0.2)
+    await #expect(throws: RivetDeviceAppleRVT1ClientError.handshakeTimedOut) {
+        try await client.start()
+    }
+    #expect(await stream.isClosed())
+}
+
+@Test func appleRVT1ClientTypesPreHelloTransportFailures() async throws {
+    // Valid magic and version, unknown message type: frame decoding fails
+    // before any hello, and the raw protocol error must surface through the
+    // typed client error instead (issue #312).
+    let garbage = Data([0x52, 0x56, 0x54, 0x31, rivetProtocolVersion, 0xFF]) + Data(count: 12)
+    let stream = MemoryByteStream(incoming: garbage)
+    let client = RivetDeviceAppleRVT1Client(stream: stream)
+    do {
+        try await client.start()
+        Issue.record("the handshake must fail on an undecodable frame")
+    } catch let error as RivetDeviceAppleRVT1ClientError {
+        guard case .handshakeFailed = error else {
+            Issue.record("unexpected error: \(error)")
+            return
+        }
+    }
+    #expect(await stream.isClosed())
+}
+
 @Test func appleRVT1ClientRunOwnsConnectionLifetimeUntilStopped() async throws {
     let stream = MemoryByteStream(incoming: try helloFrame())
     let client = RivetDeviceAppleRVT1Client(stream: stream)
@@ -262,6 +315,12 @@ private func helloFrame() throws -> Data {
                    payload: try encodeRivetValue(.list([.string("$state/get"), .string("volume")]))),
         RivetFrame(type: .request, id: 9,
                    payload: try encodeRivetValue(.list([.string("$state/get"), .string("private.state")]))),
+        // End-to-end write denial: the scope reads "volume" but cannot
+        // write any state (issue #312).
+        RivetFrame(type: .request, id: 10,
+                   payload: try encodeRivetValue(.list([
+                       .string("$state/set"), .string("volume"), .int64(11)
+                   ]))),
     ]
     for frame in frames { incoming.append(try encodedFrame(frame)) }
     let stream = MemoryByteStream(incoming: incoming)
@@ -270,10 +329,10 @@ private func helloFrame() throws -> Data {
     )
     let running = Task { try await server.run() }
     for _ in 0..<2_000 {
-        if await stream.sentCount() >= 4 { break }
+        if await stream.sentCount() >= 5 { break }
         await Task.yield()
     }
-    #expect(await stream.sentCount() >= 4)
+    #expect(await stream.sentCount() >= 5)
     await stream.enqueue(try encodedFrame(RivetFrame(type: .shutdown, id: 0)))
     try await running.value
 
@@ -285,8 +344,11 @@ private func helloFrame() throws -> Data {
     #expect(byID[7]?.type == .response)
     #expect(byID[8]?.type == .response)
     #expect(byID[9]?.type == .error)
+    #expect(byID[10]?.type == .error)
     let denied = try #require(byID[9])
     #expect(try decodeRivetValue(denied.payload) == .string("operation not permitted"))
+    let writeDenied = try #require(byID[10])
+    #expect(try decodeRivetValue(writeDenied.payload) == .string("operation not permitted"))
     #expect(Set(await host.names()) == Set(["player.play", "$state/get"]))
     #expect(await gateway.sessionCount() == 0)
 }
@@ -361,6 +423,53 @@ private func helloFrame() throws -> Data {
 
     let sent = try await stream.sentFrames()
     #expect(sent.map(\.type) == [.hello])
+    #expect(await gateway.sessionCount() == 0)
+}
+
+@Test func appleRVT1GatewayReclaimsCancelledSlotsWhenBackendIgnoresCancellation() async throws {
+    let host = WedgedGatewayHost()
+    let gateway = RivetDeviceGateway(host: host)
+    let session = try await gateway.openSession(
+        pairedDeviceID: UUID(),
+        scopes: [RivetDeviceScope(name: "companion", rpcs: ["player.play"])]
+    )
+    // Fill the pending capacity with dispatches that never complete, then
+    // cancel one: its wire slot must return to the pool even though the
+    // wedged backend task keeps running (issue #312).
+    var incoming = Data()
+    for id in 1...rivetDeviceDefaultMaximumPendingRequests {
+        incoming.append(try encodedFrame(RivetFrame(
+            type: .request,
+            id: UInt64(id),
+            payload: try encodeRivetValue(.list([.string("player.play")]))
+        )))
+    }
+    incoming.append(try encodedFrame(RivetFrame(type: .cancel, id: 1)))
+    incoming.append(try encodedFrame(RivetFrame(
+        type: .request,
+        id: UInt64(rivetDeviceDefaultMaximumPendingRequests + 1),
+        payload: try encodeRivetValue(.list([.string("player.play")]))
+    )))
+    let stream = MemoryByteStream(incoming: incoming)
+    let server = RivetDeviceAppleRVT1GatewayServer(
+        stream: stream, gateway: gateway, session: session
+    )
+    let running = Task { try await server.run() }
+
+    for _ in 0..<2_000 {
+        let starts = await host.startCount()
+        let errors = (try? await stream.errorFrameCount()) ?? 1
+        if starts >= rivetDeviceDefaultMaximumPendingRequests + 1 || errors > 0 {
+            break
+        }
+        await Task.yield()
+    }
+    #expect(await host.startCount() >= rivetDeviceDefaultMaximumPendingRequests)
+
+    await stream.enqueue(try encodedFrame(RivetFrame(type: .shutdown, id: 0)))
+    try await running.value
+    let sent = try await stream.sentFrames()
+    #expect(!sent.contains { $0.type == .error })
     #expect(await gateway.sessionCount() == 0)
 }
 

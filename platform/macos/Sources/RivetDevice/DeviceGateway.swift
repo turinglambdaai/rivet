@@ -292,14 +292,15 @@ public actor RivetDeviceGatewaySession {
     /// Cancellation is deliberately silent for unknown IDs so one session
     /// cannot probe request ownership in another session.
     public func cancel(remoteRequestID: UInt64) async {
-        guard var entry = pending[remoteRequestID] else {
+        // The pending slot is reclaimed immediately: a host that ignores the
+        // cancellation would otherwise pin this entry — and the session's
+        // pending capacity — until the connection ends. A completion arriving
+        // after removal still reports cancellation (cancellationWasRequested
+        // treats a vanished entry as cancelled), and a second cancel for the
+        // same id finds no entry and stays silent.
+        guard let entry = pending.removeValue(forKey: remoteRequestID) else {
             return
         }
-        guard !entry.cancellationRequested else {
-            return
-        }
-        entry.cancellationRequested = true
-        pending[remoteRequestID] = entry
         if let hostRequestID = entry.hostRequestID {
             await host.cancelRPC(id: hostRequestID)
         }

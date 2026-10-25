@@ -11,6 +11,15 @@ public enum RivetDeviceAppleRVT1GatewayServerError: Error, Equatable, Sendable {
     case duplicateRequestID(UInt64)
 }
 
+/// Identity for one request dispatch. A backend that ignores cancellation
+/// never completes its task, so completions are matched by per-dispatch
+/// token: a late dispatch for a retired request id cannot answer a newer
+/// request that reused the id (issue #312).
+private struct RequestDispatch: Sendable {
+    let token: UUID
+    let task: Task<Void, Never>
+}
+
 /// Terminates the post-RVD1 RVT1 stream and applies per-pairing gateway
 /// permissions before dispatching any RPC to the embedded backend.
 public actor RivetDeviceAppleRVT1GatewayServer {
@@ -28,8 +37,7 @@ public actor RivetDeviceAppleRVT1GatewayServer {
     private var stopping = false
     private var closed = false
     private var activeIDs = Set<UInt64>()
-    private var cancelledIDs = Set<UInt64>()
-    private var requestTasks: [UInt64: Task<Void, Never>] = [:]
+    private var requestTasks: [UInt64: RequestDispatch] = [:]
 
     public init(
         connection: RivetDeviceAppleConnection,
@@ -160,12 +168,11 @@ public actor RivetDeviceAppleRVT1GatewayServer {
         stopping = true
         let ids = Array(activeIDs)
         for id in ids {
-            cancelledIDs.insert(id)
             await session.cancel(remoteRequestID: id)
         }
         let tasks = Array(requestTasks.values)
-        for task in tasks {
-            task.cancel()
+        for dispatch in tasks {
+            dispatch.task.cancel()
         }
         await channel.close()
         await gateway.closeSession(id: session.id)
@@ -209,8 +216,12 @@ public actor RivetDeviceAppleRVT1GatewayServer {
             }
             let payload = try encodeRivetValue(.list(arguments))
             let session = self.session
-            let task = Task { [weak self] in
+            let token = UUID()
+            let dispatch = RequestDispatch(token: token, task: Task { [weak self] in
                 do {
+                    // A dispatch cancelled before it starts is stopped by
+                    // the session's own isCancelled guard, so it never
+                    // registers a pending call.
                     let response: Data
                     switch route {
                     case .rpc:
@@ -227,12 +238,16 @@ public actor RivetDeviceAppleRVT1GatewayServer {
                             payload: payload
                         )
                     }
-                    await self?.completeRequest(id: frame.id, response: response)
+                    await self?.completeRequest(
+                        id: frame.id, token: token, response: response
+                    )
                 } catch {
-                    await self?.completeRequest(id: frame.id, error: error)
+                    await self?.completeRequest(
+                        id: frame.id, token: token, error: error
+                    )
                 }
-            }
-            requestTasks[frame.id] = task
+            })
+            requestTasks[frame.id] = dispatch
         } catch {
             activeIDs.remove(frame.id)
             try await sendError(id: frame.id, message: safeMessage(for: error))
@@ -241,27 +256,24 @@ public actor RivetDeviceAppleRVT1GatewayServer {
 
     private func cancelRequest(id: UInt64) async {
         guard id != 0, activeIDs.contains(id) else { return }
-        cancelledIDs.insert(id)
-        // Cancel the dispatch task as well as forwarding cancellation to the
-        // session. If dispatch has not entered the gateway yet, its
-        // Task.isCancelled guard prevents a cancelled RPC from starting.
-        requestTasks[id]?.cancel()
+        // The peer retired this id when it sent the cancel, so the wire slot
+        // is freed immediately; a dispatch that ignores cancellation keeps
+        // running but its late completion no longer matches (issue #312).
+        activeIDs.remove(id)
+        requestTasks.removeValue(forKey: id)?.task.cancel()
         await session.cancel(remoteRequestID: id)
     }
 
     private func completeRequest(
         id: UInt64,
+        token: UUID,
         response: Data? = nil,
         error: (any Error)? = nil
     ) async {
-        guard activeIDs.contains(id) else { return }
-        if cancelledIDs.remove(id) != nil || closed {
-            activeIDs.remove(id)
-            requestTasks.removeValue(forKey: id)
-            return
-        }
-        activeIDs.remove(id)
+        guard requestTasks[id]?.token == token else { return }
         requestTasks.removeValue(forKey: id)
+        activeIDs.remove(id)
+        guard !closed else { return }
         do {
             if let response {
                 try await channel.send(RivetFrame(type: .response, id: id, payload: response))
