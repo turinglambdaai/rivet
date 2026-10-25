@@ -33,6 +33,24 @@
                     "quotes in display names must be AppleScript-escaped")
 
 ;; ---------------------------------------------------------------------------
+;; Staged background normalization (macOS: raster-pixel-size shells to sips)
+
+(module+ test
+  (when (equal? 'macosx (system-type 'os))
+    (define sips (find-executable-path "sips"))
+    (when sips
+      (define one-by-one-png
+        (base64-decode
+         #"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
+      (define probe (make-temporary-file "rivet-dmg-pixel-~a.png"))
+      (call-with-output-file probe
+        #:exists 'truncate/replace
+        (lambda (out) (write-bytes one-by-one-png out)))
+      (check-equal? (raster-pixel-size probe sips) '(1 1)
+                    "the reader must report the PNG's own pixel size")
+      (delete-file probe))))
+
+;; ---------------------------------------------------------------------------
 ;; Live branded DMG build (macOS hosts with Finder automation)
 
 (module+ test
@@ -93,8 +111,9 @@
   (make-file-or-directory-link "Versions/Current/Racket"
                                (build-path fw "Racket"))
 
-  ;; A 1x1 PNG is enough for the live run: Finder scales the background to
-  ;; the window bounds.
+  ;; A 1x1 PNG is enough for the live run: the packager resamples whatever
+  ;; it is given to the window's point size before staging (Finder draws
+  ;; the backdrop at native pixel size and never scales it — issue #322).
   (define tiny-png
     (base64-decode
      #"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
@@ -136,6 +155,13 @@
                 "the Applications shortcut must be a symlink")
   (check-true (file-exists? (build-path mnt ".background" "background.png"))
               "the background asset must ride in the hidden folder")
+  ;; The staged backdrop must be exactly the window's point size: Finder
+  ;; draws it 1:1 at native pixel size, so anything else crops the layout
+  ;; (issue #322).
+  (let ([staged (raster-pixel-size (build-path mnt ".background" "background.png")
+                                   (find-executable-path "sips"))])
+    (check-equal? staged '(660 400)
+                  "the staged background must match the window point size"))
   (check-true (file-exists? (build-path mnt ".DS_Store"))
               "the Finder styling must have written the icon layout")
 
