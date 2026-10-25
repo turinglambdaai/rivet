@@ -45,6 +45,31 @@ Event, a stable accessibility-tree assertion, and orderly close. Test-only
 protocol messages and a cross-platform selector language are deliberately not
 extension points.
 
+## Launching the packaged application on macOS
+
+The macOS driver receives the application's process id (`--pid`) and an
+evidence output directory (`--output`); the suite command owns launching and
+reaping the application around it. A proven shape for that runner:
+
+1. `raco rivet package` produces the development distributable; locate the
+   newest bundle under `dist/` and its executable with
+   `plutil -extract CFBundleExecutable raw` on the bundle's `Info.plist`.
+2. Launch the executable in the background with a disposable data root in the
+   environment (the application's own override hook — never the developer's
+   real profile), and take `$!` as the pid for the driver.
+3. Poll `kill -0` for an orderly exit after the driver finishes, then run a
+   second launch against the same data root to assert persisted effects.
+4. Compile the Swift driver with `swiftc` (or precompile it in the suite
+   directory); the driver requires the process to hold Accessibility trust,
+   so CI runners must grant it to the test host.
+
+Keep the scenario's keyboard path real: `focus` (asserting
+`kAXFocusedAttribute`), `typeText` (CGEvent unicode-string events), and
+`postKey` (Return is keycode 36, Escape is 53) are part of the reference
+driver for exactly this purpose — a text field driven only through
+`AXUIElementSetValue` skips the event path the user actually exercises. Fixed
+sleeps are not a substitute for the bounded `waitFor` probes.
+
 Keep snapshots small: cap recursion depth, record semantic fields rather than
 platform object dumps, and never include user data or secret values. Failure
 artifacts should be retained only as long as the repository's normal CI logs.

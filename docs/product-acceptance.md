@@ -103,6 +103,67 @@ commit with the acceptance report. A dirty, diverged, or unreachable checkout
 is a reason to stop and report the state, not a reason to stash, reset, or
 claim evidence against an unknown base.
 
+## Drive the embedded backend in-process
+
+Contract suites need the backend's real behavior, not mocks. A backend is an
+ordinary Racket module: requiring it runs the `define-*` declarations, and
+`serve` from `rivet/backend` speaks RVT1 over any binary ports, so one test
+process can exercise a real embedded-backend round trip:
+
+1. Instantiate the backend module under test (declarations register when the
+   module is instantiated); use a fresh namespace when a test needs a
+   "restarted" backend, and take `record-ref` from that same namespace.
+2. Build a pipe pair, run `(serve in out)` on a thread under a custodian, and
+   remember that `serve` blocks until the session ends; closing the client's
+   output port ends it.
+3. The backend writes the hello frame at startup, before it reads anything,
+   so the first `read-frame` on the client side observes it.
+4. Speak RVT1 with `rivet/protocol`: `write-frame`, `read-frame`, and
+   `encode-value`/`decode-value` are public. There is no separate in-process
+   RPC entry point — the protocol boundary is the contract under test.
+5. Assert wire-visible outcomes: the response payload for an accepted call,
+   an error frame for a rejected input, and the reserved `$state` Event that
+   a State mutation emits before the response frame.
+
+```racket
+(require rivet/backend
+         rivet/protocol)
+
+;; Instantiate the backend module under test (declarations register here).
+(dynamic-require (build-path (current-directory) "backend.rkt") #f)
+
+(define-values (backend-in client-out) (make-pipe))
+(define-values (client-in backend-out) (make-pipe))
+(define server (thread (lambda () (serve backend-in backend-out))))
+
+;; The backend writes the hello frame before reading anything.
+(define hello (read-frame client-in))
+(unless (eq? (frame-type hello) message:hello)
+  (error 'check "expected hello, got ~a" (frame-type hello)))
+
+(write-frame (frame message:request 1
+                    (encode-value (list "bump" 41)))
+             client-out)
+;; A State mutation inside the RPC emits the reserved $state event before
+;; the response frame; a rejected input arrives as an error frame instead.
+(define state-event (read-frame client-in))
+(unless (and (eq? (frame-type state-event) message:event)
+             (equal? (decode-value (frame-payload state-event))
+                     (list "$state" (list "counter" 41))))
+  (error 'check "unexpected $state event: ~e" state-event))
+(define response (read-frame client-in))
+(define result (decode-value (frame-payload response)))
+(unless (equal? result 41)
+  (error 'check "expected 41, got ~e" result))
+
+(close-output-port client-out)
+(thread-wait server)
+```
+
+Pair this with unit tests for pure logic and with the native-ui suites below;
+the three together are what "real storage and real protocol boundary" means
+for a contract requirement.
+
 ## Classify desktop capabilities
 
 Not every desktop capability carries the same parity obligation. Declare each

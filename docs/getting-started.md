@@ -110,7 +110,7 @@ Save the file and run:
 raco rivet dev
 ```
 
-During the build, Rivet reads the backend schema and regenerates the typed native API. On macOS the generated Swift client exposes native async methods and places Records/Enums under `RivetTypes` (for example, `RivetTypes.Task`); on Windows the generated C++ API exposes completion-driven methods; Kotlin gets a typed suspend client at `.rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt` for Android applications. You do not hand-write protocol frames or marshal Racket values across UI threads.
+During the build, Rivet reads the backend schema and regenerates the typed native API. On macOS the generated Swift client exposes native async methods and places Records/Enums under `RivetTypes` (for example, `RivetTypes.Task`); on Windows the generated C++ API exposes completion-driven methods; Kotlin gets a typed suspend client at `.rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt` for Android applications. You do not hand-write protocol frames or marshal Racket values across UI threads. Native identifiers follow the declarations: snake_case end to end (a declared `created-at-ms` field becomes `created_at_ms`), so run a build and read the regenerated client before writing native UI code — the generated files shipped in a fresh scaffold are templates until the first build.
 
 The generated project already contains `rivet-schema.json`. Commit that compatibility baseline and make CI check it; refresh it only when an API change is intentional:
 

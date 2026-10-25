@@ -116,6 +116,55 @@ func statusText(_ element: AXUIElement) -> String {
     return candidates.first { !$0.isEmpty } ?? ""
 }
 
+// Keyboard scenarios cannot be covered by AXPress alone: a text field needs
+// real user-path key events after focus is asserted, which is how products
+// exercise type/Return/Escape flows end to end.
+func focus(_ element: AXUIElement, description: String) throws {
+    let result = AXUIElementSetAttributeValue(
+        element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+    guard result == .success else {
+        throw DriverError.failure("AX focus failed for \(description): \(result.rawValue)")
+    }
+    guard boolAttribute(element, kAXFocusedAttribute) else {
+        throw DriverError.failure("\(description) did not take focus")
+    }
+}
+
+func postKey(_ keyCode: CGKeyCode) throws {
+    guard let down = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true),
+          let up = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: false) else {
+        throw DriverError.failure("could not create key events for keycode \(keyCode)")
+    }
+    down.post(tap: .cghidEventTap)
+    up.post(tap: .cghidEventTap)
+}
+
+func typeText(_ text: String) throws {
+    for char in text.unicodeScalars {
+        guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
+              let up = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) else {
+            throw DriverError.failure("could not create typing events")
+        }
+        let utf16 = Array(String(char).utf16)
+        down.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
+        up.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
+    }
+}
+
+let kReturnKeyCode: CGKeyCode = 36
+let kEscapeKeyCode: CGKeyCode = 53
+
+func closeWindowOrderly(_ window: AXUIElement, description: String) throws {
+    if let closeButtonValue = attribute(window, kAXCloseButtonAttribute) {
+        let closeButton = closeButtonValue as! AXUIElement
+        try press(closeButton, description: description)
+    } else {
+        throw DriverError.failure("\(description) has no native close button")
+    }
+}
+
 do {
     let options = try parseOptions()
     try FileManager.default.createDirectory(
@@ -209,12 +258,7 @@ do {
         throw DriverError.failure("screencapture exited with status \(screenshot.terminationStatus)")
     }
 
-    if let closeButtonValue = attribute(window, kAXCloseButtonAttribute) {
-        let closeButton = closeButtonValue as! AXUIElement
-        try press(closeButton, description: "window close button")
-    } else {
-        throw DriverError.failure("Taskboard window has no native close button")
-    }
+    try closeWindowOrderly(window, description: "Taskboard window")
 } catch {
     FileHandle.standardError.write(Data("native macOS UI test failed: \(error)\n".utf8))
     exit(1)
