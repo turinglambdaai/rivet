@@ -54,6 +54,9 @@ reaping the application around it. A proven shape for that runner:
 1. `raco rivet package` produces the development distributable; locate the
    newest bundle under `dist/` and its executable with
    `plutil -extract CFBundleExecutable raw` on the bundle's `Info.plist`.
+   By default `package` also launches the artifact once as a launch smoke —
+   pass `--skip-launch-smoke` when the suite itself owns launching, so the
+   run stays hermetic.
 2. Launch the executable in the background with a disposable data root in the
    environment (the application's own override hook — never the developer's
    real profile), and take `$!` as the pid for the driver.

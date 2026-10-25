@@ -171,6 +171,35 @@ package, and `raco rivet verify` behavior identical on all three platforms.
 
 Projects created before this feature remain valid because all three settings are optional. To embed a Windows icon in an older generated host, add Rivet's conditional `RIVET_WINDOWS_ICON_RC` `ResourceCompile` item from the current host template or regenerate the host project while preserving application UI sources.
 
+## Application data directories
+
+Resources are read-only and ship with the application. Mutable user data —
+documents, preferences, caches, databases — is written at runtime by the
+product, and Rivet deliberately provides no API for it: the location follows
+each platform's convention and stays under the product's control.
+
+- **Windows**: `%APPDATA%\<publisher>\<name>` (roaming; use `%LOCALAPPDATA%`
+  for large caches).
+- **macOS**: `~/Library/Application Support/<identifier>` (plus `~/Library/Caches/<identifier>`
+  for purgeable caches).
+- **Linux**: `$XDG_DATA_HOME/<identifier>` when `XDG_DATA_HOME` is set,
+  otherwise `~/.local/share/<identifier>`; caches under
+  `$XDG_CACHE_HOME` or `~/.cache`.
+
+Never write into the user's home root, the install directory, or
+`dist/`/`build/` (Rivet-owned generated roots). The application identifier
+from `rivet.rktd` is the conventional directory name.
+
+Products should keep one small, testable resolver for that directory and
+honor an environment-variable override (for example `<PREFIX>_DATA_DIR`),
+so acceptance suites can inject disposable roots instead of touching a
+developer's real profile — see [product acceptance evidence](product-acceptance.md)
+and the native-UI launch orchestration, both of which rely on that hook.
+Write files atomically (write to a temporary file in the same directory,
+then rename), and load defensively: a truncated or corrupt file is a reason
+to fall back to defaults (and surface a diagnostic), not to crash on
+startup.
+
 ## User-visible strings: shared/i18n
 
 Projects that show user-facing strings keep one flat single source:
