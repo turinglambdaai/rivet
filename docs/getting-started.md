@@ -1,5 +1,7 @@
 # Getting Started with Rivet
 
+**English** · [简体中文](getting-started.zh-CN.md)
+
 This guide takes a fresh machine from “Rivet is installed” to a running native application and a distributable build. The starter project is intentionally small: a Racket backend plus native WinUI 3, SwiftUI, and GTK4 hosts.
 
 ## 1. Install Rivet
@@ -228,3 +230,5 @@ for the boundary you are changing.
 ## Troubleshooting rule of thumb
 
 Start with `raco rivet doctor`. If the toolchain is healthy but `dev`, `build`, or `package` fails, keep the first `rivet: error:` message and the native compiler output immediately around it. Rivet aims to fail at the earliest actionable boundary rather than hide native build failures behind generic errors.
+
+[Upgrades, maturity and support](USING.md).

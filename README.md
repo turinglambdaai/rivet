@@ -8,6 +8,12 @@ Build first-party native desktop apps with [Racket](https://racket-lang.org/). U
 
 **English** · [中文](README.zh-CN.md)
 
+## Start here
+
+Choose Rivet when first-party native interaction is worth maintaining separate SwiftUI, WinUI 3 and GTK4 UIs. Racket owns shared domain logic; native hosts own rendering and OS interaction. For a shared HTML/CSS interface, evaluate Glaze instead.
+
+[Fit, maturity, upgrades and support](docs/USING.md) · [简体中文](docs/USING.zh-CN.md)
+
 ## Quick Start
 
 Install Rivet from the Racket Package Catalog with the `raco` from the Racket CS installation you want to embed:

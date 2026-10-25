@@ -19,6 +19,12 @@
             --accent-bright: #67E8F9;
         }
     </style>
+<style id="product-start-style">
+.product-start{max-width:1120px;margin:64px auto;padding:32px 24px;border-top:1px solid var(--border,#aaa);font:inherit;line-height:1.65}
+.product-start h2{font-size:clamp(1.7rem,3vw,2.4rem);letter-spacing:-.025em;margin:0 0 16px}.product-start h3{font-size:1.05rem;margin:0 0 10px}.product-start p{margin:0 0 16px;max-width:74ch}.product-start-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;margin:28px 0}.product-start a{text-decoration:underline;text-underline-offset:4px;overflow-wrap:anywhere}.product-start a:focus-visible{outline:2px solid currentColor;outline-offset:5px}.product-start .start-links{display:flex;gap:16px 24px;flex-wrap:wrap}.product-start .start-status{font-weight:600}.product-start .start-limits{font-size:.95em}
+html:lang(en) .reader-zh,html:lang(zh) .reader-en{display:none!important}@media(max-width:700px){.product-start{margin:40px auto;padding:24px 20px}.product-start-grid{grid-template-columns:1fr;gap:18px}}
+</style>
+<style>.lang-menu li.lang-choice{padding:0}.lang-menu .lang-choice button{display:block;width:100%;padding:8px 12px;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.lang-menu .lang-choice button:focus-visible{outline:2px solid currentColor;outline-offset:-2px;border-radius:4px}</style>
 </head>
 
 <body>
@@ -53,8 +59,8 @@
                         <span id="current-lang-label" data-en="English" data-zh="简体中文">English</span>
                     </button>
                     <ul class="lang-menu">
-                        <li onclick="setLanguage('en')">English</li>
-                        <li onclick="setLanguage('zh')">简体中文</li>
+                        <li class="lang-choice"><button type="button" onclick="setLanguage('en')">English</button></li>
+                        <li class="lang-choice"><button type="button" onclick="setLanguage('zh')">简体中文</button></li>
                     </ul>
                 </li>
             </ul>
@@ -274,7 +280,8 @@ backend.onProgress { pct <span class="kw">in</span>
     </section>
 
     <!-- Footer -->
-    <footer>
+    <section id="adoption" class="product-start"><h2 class="reader-en " lang="en">Build one verifiable result.</h2><h2 class="reader-zh " lang="zh">先完成一个可验证的结果。</h2><p class="reader-en " lang="en">Choose Rivet when first-party native interaction is worth maintaining separate SwiftUI, WinUI 3 and GTK4 UIs. Racket owns shared domain logic; native hosts own rendering and OS interaction. For a shared HTML/CSS interface, evaluate Glaze instead.</p><p class="reader-zh " lang="zh">当第一方原生交互值得维护 SwiftUI、WinUI 3、GTK4 三份界面时，选择 Rivet。共享领域逻辑归 Racket，渲染与系统交互归原生宿主。需要共享 HTML/CSS 界面时可评估 Glaze。</p><p class="reader-en " lang="en">Racket CS 9.0+ and the target platform’s native toolchain. Desktop delivery has explicit capability/acceptance classes; mobile runtime or companion foundations are not a generated, signed and packaged app workflow.</p><p class="reader-zh " lang="zh">需要 Racket CS 9.0+ 和目标平台原生工具链。桌面交付有明确能力与验收分级；移动运行时或伴随端基础不等于已生成、签名和打包的应用工作流。</p><p class="reader-en " lang="en">Run inspect and doctor in the generated project, complete one backend mutation and observe its persisted result in the packaged native app. Keep one product interaction contract across hosts and adapt shortcuts, focus and window behavior to each OS. A unit test or screenshot alone does not establish product parity.</p><p class="reader-zh " lang="zh">在生成项目内运行 inspect 和 doctor，完成一个后端修改，并在打包原生应用中观察持久化结果。跨宿主保持一个产品交互契约，快捷键、焦点和窗口行为遵循各系统习惯。单元测试或截图本身不能证明产品一致性。</p><div class="start-links"><a class="reader-en" lang="en" href="https://github.com/turinglambdaai/rivet/blob/main/docs/USING.md">Getting started, compatibility &amp; support</a><a class="reader-zh" lang="zh" href="https://github.com/turinglambdaai/rivet/blob/main/docs/USING.zh-CN.md">入门、兼容与支持</a></div></section>
+<footer>
         <div class="footer-content">
             <div class="footer-brand">
                 <svg width="22" height="22" viewBox="0 0 512 512" fill="none">

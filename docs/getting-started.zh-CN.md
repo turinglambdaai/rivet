@@ -1,5 +1,7 @@
 # Rivet 快速上手
 
+[English](getting-started.md) · **简体中文**
+
 这份教程的目标很明确：从一台刚装好开发环境的电脑开始，尽快跑起第一个 Rivet 原生应用，并最终得到可以分发的构建结果。脚手架保持最小化：共享的 Racket 后端 + Windows 的 WinUI 3 宿主 + macOS 的 SwiftUI 宿主 + Linux 的 GTK4 宿主。
 
 ## 1. 安装 Rivet
@@ -226,3 +228,5 @@ raco rivet release    # 生成完整签名发布物
 ## 排查问题的第一原则
 
 先运行 `raco rivet doctor`。如果工具链正常但 `dev`、`build` 或 `package` 失败，优先保留第一条 `rivet: error:` 以及它附近的 native compiler 输出。Rivet 的目标是尽可能在最早、最可操作的边界失败，而不是把原生构建错误隐藏成模糊提示。
+
+[升级、成熟度与支持](USING.zh-CN.md)。
