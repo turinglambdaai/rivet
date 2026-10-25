@@ -149,8 +149,11 @@ PLTUSERHOME="$user_home" racket -e '
           "generated-clients.kotlin.path")
 '
 
-# The published archive must still generate every typed client, including the
-# Kotlin client that Android applications consume from the shared tree.
+# The published archive must still generate every typed client. The Kotlin
+# client exists only for projects with a declared companion API (issue #311 —
+# a desktop-only scaffold carries no Kotlin file nothing consumes), so declare
+# the starter's `greet` RPC before generating and assert the file appears.
+racket -e '(require racket/file) (define p "rivet.rktd") (define c (call-with-input-file p read)) (call-with-output-file p #:exists (quote truncate/replace) (lambda (out) (write (hash-set c (quote device-rpcs) (list (quote greet))) out)))'
 PLTUSERHOME="$user_home" \
   raco rivet generate
 test -s .rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt

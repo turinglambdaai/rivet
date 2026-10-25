@@ -164,13 +164,21 @@ RKT
     (define stale-report (check-generated-clients project))
     (check-equal? (hash-ref stale-report 'stale) (list windows-header))
 
+    ;; Issue #311: the demo project declares no companion device RPCs, so
+    ;; the Kotlin client is not part of the fresh output set at all —
+    ;; desktop-only products keep `.rivet/` gitignored and still pass the
+    ;; gate without committing a file nothing consumes.
     (define kotlin-generated
       (build-path project-root ".rivet" "generated" "kotlin" "dev" "rivet"
                   "generated" "GeneratedBackend.kt"))
-    (delete-file kotlin-generated)
+    (check-false
+     (for/or ([pair (in-list (car (client-outputs project)))])
+       (string=? (path->string (car pair)) (path->string kotlin-generated))))
+
+    (delete-file windows-header)
     (define missing-report (check-generated-clients project))
-    (check-equal? (hash-ref missing-report 'missing) (list kotlin-generated))
-    (check-equal? (hash-ref missing-report 'stale) (list windows-header))
+    (check-equal? (hash-ref missing-report 'missing) (list windows-header))
+    (check-equal? (hash-ref missing-report 'stale) '())
 
     (void (generate-clients! project))
     (define repaired-report (check-generated-clients project))
@@ -213,11 +221,6 @@ RKT
     (define linux-cpp
       (file->string
        (build-path project-root "linux" "GeneratedBackend.hpp")))
-    (define kotlin
-      (file->string
-       (build-path project-root
-                   ".rivet" "generated" "kotlin" "dev" "rivet" "generated"
-                   "GeneratedBackend.kt")))
 
     (check-true (string-contains? swift "public protocol RivetGeneratedRPCClient: Sendable"))
     (check-true (string-contains? swift "extension RivetClient: RivetGeneratedRPCClient {}"))
@@ -272,6 +275,21 @@ RKT
      (regexp-match? #rx"rivet::linux_runtime::CallResult rivet_result" linux-cpp))
     (check-false (regexp-match? #rx"rivet::windows" linux-cpp))
 
+    ;; Issue #311: declare a companion API so the Kotlin client joins the
+    ;; fresh output set, then generate and assert its content. (The fresh-set
+    ;; assertion above proves a desktop-only project omits the file.)
+    (define config-path (build-path project-root "rivet.rktd"))
+    (define base-config (call-with-input-file config-path read))
+    (call-with-output-file config-path
+      #:exists 'truncate
+      (lambda (out) (write (hash-set base-config 'device-rpcs '(greet)) out)))
+    (set! project (load-project project-root))
+    (generate-clients! project)
+    (define kotlin
+      (file->string
+       (build-path project-root
+                   ".rivet" "generated" "kotlin" "dev" "rivet" "generated"
+                   "GeneratedBackend.kt")))
     ;; The typed Kotlin client targets the coroutine runtime. State accessors
     ;; are package-level extension functions, so the imports are load-bearing.
     (check-true (regexp-match? #rx"package dev.rivet.generated" kotlin))
@@ -308,6 +326,13 @@ RKT
      (regexp-match? #rx"data class Progress\\(val value: Long\\) : RivetEvent" kotlin))
     (check-true
      (regexp-match? #rx"\"progress\" -> Progress\\(decode_Int64\\(value\\)\\)" kotlin))
+
+    ;; Restore the desktop-only manifest: the remaining sections reuse the
+    ;; same project binding with backends that declare no `greet`.
+    (call-with-output-file config-path
+      #:exists 'truncate
+      (lambda (out) (write (hash-set base-config 'device-rpcs '()) out)))
+    (set! project (load-project project-root))
 
     ;; A versioned snapshot is suitable for source control and CI. Additions are
     ;; compatible, while changing a published signature is reported and fails.
@@ -458,6 +483,13 @@ RKT
     (check-regexp-match #rx"func echo_role\\(role: RivetTypes.Role\\) async throws -> RivetTypes.Role" enum-swift)
     (check-regexp-match #rx"enum class Role \\{ admin, member \\};" enum-cpp)
     (check-regexp-match #rx"std::future<Role> echo_role\\(Role role\\)" enum-cpp)
+    ;; The Kotlin checks need a companion API for the client to exist at all
+    ;; (issue #311); declaring one also switches Swift into the RivetTypes
+    ;; device surface, so this flip happens after the Swift/C++ assertions.
+    (call-with-output-file config-path #:exists 'truncate
+      (lambda (out) (write (hash-set base-config 'device-rpcs '(echo-role)) out)))
+    (set! project (load-project project-root))
+    (generate-clients! project)
     (define enum-kotlin
       (file->string
        (build-path project-root
@@ -467,6 +499,9 @@ RKT
     (check-regexp-match #rx"admin\\(\"admin\"\\)," enum-kotlin)
     (check-regexp-match #rx"suspend fun echo_role\\(role: Role\\): Role" enum-kotlin)
     (check-regexp-match #rx"Role\\.fromWireName" enum-kotlin)
+    (call-with-output-file config-path #:exists 'truncate
+      (lambda (out) (write (hash-set base-config 'device-rpcs '()) out)))
+    (set! project (load-project project-root))
 
     (define enum-baseline-path (build-path project-root "enum-schema.json"))
     (write-schema-snapshot! project enum-baseline-path)

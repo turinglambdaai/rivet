@@ -77,7 +77,7 @@ The Racket backend declares the API shared by all three native hosts:
   (serve-fds in-fd out-fd))
 ```
 
-`raco rivet build` reads the RPC, Event, State, Record, and Enum schema and generates typed native clients. Swift gets methods such as `increment(value:)`, `get_counter()`, and `set_counter(_:)`; C++ gets their native equivalents; Kotlin gets suspend methods such as `increment(value)` in `.rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt`.
+`raco rivet build` reads the RPC, Event, State, Record, and Enum schema and generates typed native clients. Swift gets methods such as `increment(value:)`, `get_counter()`, and `set_counter(_:)`; C++ gets their native equivalents; Kotlin gets the same surface in `.rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt` for projects that declare companion `device-rpcs` (a desktop-only project has no Kotlin consumer, so the file is not part of its fresh output set).
 
 ### How it compares
 
