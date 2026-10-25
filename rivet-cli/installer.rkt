@@ -324,9 +324,10 @@
     (run! 'create-installer! xcrun "stapler" "staple" (path->string output)))
   output)
 
-;; Branded DMG layout constants. The window geometry matches the generated
-;; background artwork aspect ratio (products render 1320x800 PNGs for the
-;; 660x400 window), and both icons sit on the horizontal midline.
+;; Branded DMG layout constants. The window geometry defines the staged
+;; background's point size (products may author 2x artwork for sharpness;
+;; it is downsampled before staging), and both icons sit on the horizontal
+;; midline.
 (define dmg-window-origin-x 200)
 (define dmg-window-origin-y 120)
 (define dmg-window-width 660)
@@ -379,6 +380,25 @@
   (when (file-exists? path) (delete-file path))
   (when (directory-exists? path) (delete-directory/files path)))
 
+;; `sips -g` answers one "  pixelWidth: 1320" style line per requested
+;; property; the dimensions decide whether the staged backdrop needs
+;; resampling and verify the result afterwards.
+(define (raster-pixel-size path sips)
+  (define output
+    (with-output-to-string
+      (lambda ()
+        (run! 'create-installer! sips
+              "-g" "pixelWidth" "-g" "pixelHeight"
+              (path->string path)))))
+  (define width (regexp-match #px"pixelWidth:\\s*([0-9]+)" output))
+  (define height (regexp-match #px"pixelHeight:\\s*([0-9]+)" output))
+  (unless (and width height)
+    (error 'create-installer!
+           "could not read the dmg background pixel size"
+           "background" path))
+  (list (string->number (cadr width))
+        (string->number (cadr height))))
+
 ;; Commercial drag-to-install image: stage the volume contents (bundle,
 ;; /Applications link, hidden background asset), attach a read/write image,
 ;; let Finder size the window and place both icons, then convert to the
@@ -415,7 +435,30 @@
   (make-file-or-directory-link "/Applications"
                                (build-path staging "Applications"))
   (make-directory* (build-path staging ".background"))
-  (copy-file background (build-path staging ".background" "background.png"))
+  (define staged-background (build-path staging ".background" "background.png"))
+  (copy-file background staged-background)
+  ;; Finder draws the backdrop 1:1 at its native pixel size — it does not
+  ;; scale it to the window, so a 2x artwork rendered only its top-left
+  ;; quarter and the bottom of the layout fell outside the view (issue
+  ;; #322). Stage the raster at the window's point size so what Finder
+  ;; draws matches the window exactly; products keep authoring 2x artwork
+  ;; for sharpness, and the artwork aspect must already match the window
+  ;; geometry (a mismatch resamples distorted rather than hiding layout).
+  (define sips (find-executable-path "sips"))
+  (unless sips
+    (error 'create-installer! "sips is required to stage the dmg background"))
+  (unless (equal? (raster-pixel-size staged-background sips)
+                  (list dmg-window-width dmg-window-height))
+    (run! 'create-installer! sips "-z"
+          (number->string dmg-window-height)
+          (number->string dmg-window-width)
+          (path->string staged-background))
+    (unless (equal? (raster-pixel-size staged-background sips)
+                    (list dmg-window-width dmg-window-height))
+      (error 'create-installer!
+             "the staged dmg background did not resample to the window size"
+             "background" staged-background
+             "expected" (list dmg-window-width dmg-window-height))))
   (delete-optional! rw-image)
   (run! 'create-installer! hdiutil "create" "-fs" "HFS+" "-volname" volume-name
         "-srcfolder" (path->string staging)
@@ -507,4 +550,5 @@
            ensure-wix-extensions!
            text->rtf
            dmg-style-applescript
+           raster-pixel-size
            create-macos-installer!))
