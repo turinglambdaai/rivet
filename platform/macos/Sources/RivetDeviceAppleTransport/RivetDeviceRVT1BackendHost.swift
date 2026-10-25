@@ -46,7 +46,10 @@ public actor RivetDeviceRVT1BackendHost: RivetDeviceGatewayHost {
     }
 
     public func cancelRPC(id: UInt64) async {
-        work[id]?.cancel()
+        // Drop the entry now: a backend call that ignores cancellation never
+        // reaches finish(), and the abandoned response task no-ops when it
+        // removes an id that is already gone.
+        work.removeValue(forKey: id)?.cancel()
     }
 
     private func allocateID() throws -> UInt64 {

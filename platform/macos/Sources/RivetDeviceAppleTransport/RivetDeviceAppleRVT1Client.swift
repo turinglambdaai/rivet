@@ -1,5 +1,6 @@
 import Foundation
 import RivetDevice
+import RivetDeviceSession
 import RivetRuntime
 
 public enum RivetDeviceAppleRVT1ClientError: Error, Equatable, Sendable {
@@ -7,6 +8,8 @@ public enum RivetDeviceAppleRVT1ClientError: Error, Equatable, Sendable {
     case invalidHello
     case invalidResponse
     case invalidState
+    case handshakeTimedOut
+    case handshakeFailed(String)
     case tooManyPendingRequests(Int)
     case messageTooLarge(actual: Int, maximum: Int)
     case remote(String)
@@ -25,6 +28,7 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
     public typealias EventHandler = @Sendable (String, RivetValue) -> Void
     private let channel: RivetDeviceAppleRVT1Channel
     private let maximumPendingRequests: Int
+    private let helloTimeout: TimeInterval
     private var nextRequestID: UInt64 = 1
     private var pending: [UInt64: RivetDeviceApplePendingRequest] = [:]
     private var started = false
@@ -34,25 +38,48 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
     private var terminated = false
     private var terminalError: (any Error)?
     private var terminationWaiters: [CheckedContinuation<Void, Never>] = []
+    // Guards the one-shot hello deadline: the watchdog fires only when this
+    // token still names the in-flight handshake attempt.
+    private var helloAttempt = 0
+    private var helloTimedOut = false
 
     public init(connection: RivetDeviceAppleConnection,
-                maximumPendingRequests: Int = rivetDeviceDefaultMaximumPendingRequests) {
+                maximumPendingRequests: Int = rivetDeviceDefaultMaximumPendingRequests,
+                helloTimeout: TimeInterval = rivetDeviceSessionPostTLSTimeout) {
         precondition(maximumPendingRequests > 0)
+        precondition(helloTimeout.isFinite && helloTimeout > 0)
         channel = RivetDeviceAppleRVT1Channel(connection: connection)
         self.maximumPendingRequests = maximumPendingRequests
+        self.helloTimeout = helloTimeout
     }
 
     package init(stream: any RivetDeviceAppleApplicationByteStream,
-                 maximumPendingRequests: Int = rivetDeviceDefaultMaximumPendingRequests) {
+                 maximumPendingRequests: Int = rivetDeviceDefaultMaximumPendingRequests,
+                 helloTimeout: TimeInterval = rivetDeviceSessionPostTLSTimeout) {
         precondition(maximumPendingRequests > 0)
+        precondition(helloTimeout.isFinite && helloTimeout > 0)
         channel = RivetDeviceAppleRVT1Channel(stream: stream)
         self.maximumPendingRequests = maximumPendingRequests
+        self.helloTimeout = helloTimeout
     }
 
     public func start(onEvent: EventHandler? = nil) async throws {
         guard !started, !stopped else {
             throw RivetDeviceAppleRVT1ClientError.alreadyStarted
         }
+        // A peer that RVD1 authenticated but then goes silent must not hold
+        // the session open forever: the hello read carries the same post-TLS
+        // deadline policy the RVD1 session layer applies (issue #312).
+        helloTimedOut = false
+        helloAttempt += 1
+        let attempt = helloAttempt
+        let timeout = helloTimeout
+        let watchdog = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(timeout))
+            guard !Task.isCancelled else { return }
+            await self?.expireHello(unlessAttemptIs: attempt)
+        }
+        defer { watchdog.cancel() }
         let hello: RivetFrame
         do {
             hello = try await withTaskCancellationHandler {
@@ -61,11 +88,19 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
                 Task { await self.stop() }
             }
         } catch {
+            helloAttempt += 1
             stopped = true
             await channel.close()
             if Task.isCancelled { throw CancellationError() }
-            throw error
+            if helloTimedOut {
+                throw RivetDeviceAppleRVT1ClientError.handshakeTimedOut
+            }
+            throw Self.typedHandshakeError(error)
         }
+        // Invalidate the watchdog before any further await so a deadline
+        // that raced the hello cannot close a session that already holds it.
+        helloAttempt += 1
+        watchdog.cancel()
         guard hello.type == .hello, hello.id == 0 else {
             stopped = true
             await channel.close()
@@ -85,6 +120,24 @@ public actor RivetDeviceAppleRVT1Client: RivetRPCClient {
         eventHandler = onEvent
         started = true
         readerTask = Task { [weak self] in await self?.readLoop() }
+    }
+
+    /// Closes the channel so the suspended hello read fails promptly, and
+    /// marks the handshake as deadline-expired for the catch above.
+    private func expireHello(unlessAttemptIs attempt: Int) async {
+        guard helloAttempt == attempt, !stopped else { return }
+        helloAttempt += 1
+        helloTimedOut = true
+        await channel.close()
+    }
+
+    private static func typedHandshakeError(
+        _ error: any Error
+    ) -> RivetDeviceAppleRVT1ClientError {
+        if let clientError = error as? RivetDeviceAppleRVT1ClientError {
+            return clientError
+        }
+        return .handshakeFailed(String(describing: error))
     }
 
     /// Runs the RVT1 session until the peer disconnects or this client stops.
