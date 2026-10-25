@@ -54,6 +54,8 @@ The supported suite kinds are:
 Suite ids are unique symbols. Platforms are a non-empty subset of `windows`,
 `macos`, and `linux`. A command is a non-empty list of argv strings; shell
 syntax, redirection, pipes, and command interpolation are not interpreted.
+Every suite command runs with the project root as its current directory, so
+paths in a suite command are relative to the project.
 Timeouts are positive integers capped at two hours. Evidence entries are file
 paths below `.rivet/acceptance/`. Rivet removes each declared file before the
 suite starts and then requires the suite to recreate it, so a stale artifact
@@ -111,19 +113,34 @@ ordinary Racket module: requiring it runs the `define-*` declarations, and
 process can exercise a real embedded-backend round trip:
 
 1. Instantiate the backend module under test (declarations register when the
-   module is instantiated); use a fresh namespace when a test needs a
-   "restarted" backend, and take `record-ref` from that same namespace.
+   module is instantiated). A test that needs a "restarted" backend must
+   re-instantiate the module under a fresh namespace, take `serve` (and any
+   `record-ref`) from that same namespace, and require the module by file
+   path — a quoted symbol resolves only in the namespace that already knows it:
+
+   ```racket
+   (define ns (make-base-empty-namespace))
+   (parameterize ([current-namespace ns])
+     (namespace-require/copy `(file ,(path->string backend-path))))
+   (define serve-proc
+     (parameterize ([current-namespace ns]) (eval #'serve)))
+   ```
 2. Build a pipe pair, run `(serve in out)` on a thread under a custodian, and
    remember that `serve` blocks until the session ends; closing the client's
    output port ends it.
 3. The backend writes the hello frame at startup, before it reads anything,
    so the first `read-frame` on the client side observes it.
-4. Speak RVT1 with `rivet/protocol`: `write-frame`, `read-frame`, and
-   `encode-value`/`decode-value` are public. There is no separate in-process
-   RPC entry point — the protocol boundary is the contract under test.
+4. Speak RVT1 with `rivet/protocol`, which publicly exports the full testing
+   surface: `protocol-version`, the `frame` struct and its accessors,
+   `message:hello`, `message:request`, `message:response`, `message:error`,
+   `message:event`, `message:cancel`, `message:shutdown`, `write-frame`,
+   `read-frame`, `encode-value`, `decode-value`, and the limit constants.
+   There is no separate in-process RPC entry point — the protocol boundary is
+   the contract under test.
 5. Assert wire-visible outcomes: the response payload for an accepted call,
-   an error frame for a rejected input, and the reserved `$state` Event that
-   a State mutation emits before the response frame.
+   an error frame for a rejected input (its payload is an encoded String
+   value), and the reserved `$state` Event that a State mutation emits before
+   the response frame.
 
 ```racket
 (require rivet/backend

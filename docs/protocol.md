@@ -107,7 +107,7 @@ Void procedures return the Null/Void value. `$state/get` and `$state/set` return
 
 ## Error
 
-Errors associated with requests reuse the request id. The v1 error payload is a UTF-8 String containing a human-readable message.
+Errors associated with requests reuse the request id. The v1 error payload is a UTF-8 String containing a human-readable message. On the wire that string is an RVT1-encoded String value — clients decode it with the value decoder (`decode-value` on Racket, the generated client's value decoding on native sides) and receive a plain string; the payload bytes are not the raw UTF-8 text. The Swift runtime surfaces a backend Error frame as `ClientError.backend(String)` from the generated calls, carrying that decoded message (with a generic fallback when the payload is not a String value).
 
 The Racket backend bounds generated Error diagnostics to 4096 Unicode characters. Longer exception or rejection messages are truncated and end with `[truncated]`. For admitted requests, Rivet encodes this bounded Error payload before competing with cancellation for terminal-response ownership, so an Error serialization failure cannot silently consume the request without sending a terminal frame.
 
@@ -178,7 +178,8 @@ The Racket backend represents schema values as ordinary Racket data, validated a
 - `(Optional T)` uses `(void)` as the absent value — it is the only Racket value that encodes as Optional null. `'()` and `#f` are rejected for an Optional field even though `'()` is a legal empty `(List T)`; the representation is type-directed, not value-directed.
 - `define-record` generates a constructor named after the type — `(Task 1 "ship docs" 1761300000000)` for `(define-record Task ([id : Int64] [title : String] [created-at-ms : Int64]))`. Field access uses `(record-ref value 'title)` (the field name may be a symbol or a string, and is contract-checked). Records are opaque structs: `match` patterns and generated accessors do not exist, so use the constructor and `record-ref`. A record value is tied to the module instance that declared its type; a test that re-instantiates the backend module under a fresh namespace must also take `record-ref` from that namespace, because the predicate rejects values from another instance.
 - `define-enum` likewise generates a constructor named after the type taking the case (`(Priority "high")`), and `enum-case` reads the case back as a symbol.
-- `define-state` binds a State descriptor; `state-ref` and `state-set!` read and write it, and `state-set!` validates and pre-encodes the `$state` Event before committing. `emit-event!` publishes a typed Event from anywhere in the backend.
+- `define-state` binds a State descriptor; `state-ref` and `state-set!` read and write it, and `state-set!` validates and pre-encodes the `$state` Event before committing. `emit-event!` publishes a typed Event from anywhere in the backend. Calling `state-set!` before a session exists is safe: the cell commits and no Event is emitted (there is no transport to deliver it on yet), so initialization-time writes behave like ordinary mutation.
+- `define-rpc` procedures take their declared arguments. A zero-argument RPC omits the argument list: `(define-rpc (ping : String) "pong")`. Its wire request payload is the single-element list `["ping"]`.
 
 `raco rivet build` regenerates the native clients from these declarations; the Racket forms above are the single source of truth for both sides.
 
