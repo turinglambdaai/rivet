@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed
+
+- WatchConnectivity immediate watch-to-iPhone requests now have a configurable
+  15-second default deadline (1–120 seconds) and cancellation-safe, exactly-once
+  completion. Late and duplicate native callbacks cannot resume a cancelled
+  or expired request. Portable Swift tests cover duplicate responses,
+  pre-registration cancellation and timeout; paired hardware validation
+  remains outstanding.
+
 ### Added
 
 - `macos-resource-files`: a rivet.rktd key listing project-relative files

@@ -31,7 +31,13 @@ WCSession. The iPhone must register and scope the permitted routes on
 its own `RivetDeviceRouter` and own the authorized desktop connection:
 the watch transport itself neither exposes backend RPCs nor pairs
 directly with a desktop. Invalid or oversized WatchConnectivity
-requests/replies fail closed. `RivetWatchCompanionView` provides a small
+requests/replies fail closed. Outgoing immediate messages have a 15-second
+default response deadline (configurable from 1 to 120 seconds), and task
+cancellation finishes the caller even if WCSession never invokes its native
+callbacks. Late or duplicate success/error callbacks are ignored after the
+first terminal result. This is a local request guarantee, not proof that a
+previously sent command was not executed by the iPhone.
+`RivetWatchCompanionView` provides a small
 watchOS shell that displays paired-iPhone reachability and invokes one
 product-supplied typed action only while reachable; it never invents RPC
 routes or implies direct watch-to-desktop access.
