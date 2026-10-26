@@ -23,26 +23,41 @@ public enum RivetWatchRelayError: Error, Equatable, Sendable, RivetDeviceRemoteE
     }
 }
 
+/// A session lease for one *specific* successful RVD1 authentication.
+/// connectionID must be a fresh UUID for every connection (not the stable
+/// paired-device ID). Rotating this value on reconnect or revocation prevents
+/// an in-flight Watch RPC from returning an old session's response.
+public struct RivetWatchAuthenticatedDesktopSession: Sendable {
+    public let connectionID: UUID
+    public let client: any RivetRPCClient
+
+    public init(connectionID: UUID, client: any RivetRPCClient) {
+        self.connectionID = connectionID
+        self.client = client
+    }
+}
+
 /// An iPhone-side WatchConnectivity router that forwards only explicitly
 /// registered typed Watch actions to a current RVD1-authenticated desktop
 /// RVT1 client. A reachable Watch does NOT grant desktop authorization.
 ///
-/// The product must return only its currently authenticated client from
-/// activeClient; do not return a local in-process backend or a revoked session.
-/// This provider is consulted anew for each Watch request. The product
+/// The product must return only its current session lease from activeSession;
+/// do not return an in-process backend or a revoked session. Every successful
+/// RVD1 connection gets a fresh connectionID. The provider is checked before
+/// dispatch and again before delivering an RPC result. The product
 /// registers actions before activating WCSession, then passes router to
 /// RivetWatchConnectivityTransport(router:).
 public actor RivetWatchAuthenticatedRPCRelay {
     public nonisolated let router: RivetDeviceRouter
 
-    private let activeClient: @Sendable () async -> (any RivetRPCClient)?
+    private let activeSession: @Sendable () async -> RivetWatchAuthenticatedDesktopSession?
 
     public init(
         messagePolicy: RivetWatchMessagePolicy = RivetWatchMessagePolicy(),
-        activeClient: @escaping @Sendable () async -> (any RivetRPCClient)?
+        activeSession: @escaping @Sendable () async -> RivetWatchAuthenticatedDesktopSession?
     ) {
         router = RivetDeviceRouter(maximumMessageSize: messagePolicy.maximumBytes)
-        self.activeClient = activeClient
+        self.activeSession = activeSession
     }
 
     /// Register one exact, product-selected backend RPC. The Watch cannot
@@ -58,13 +73,19 @@ public actor RivetWatchAuthenticatedRPCRelay {
         guard Self.isValidRPCName(rpcName) else {
             throw RivetWatchRelayError.invalidRPC(rpcName)
         }
-        let provider = activeClient
+        let provider = activeSession
         try await router.register(request) { value in
-            guard let client = await provider() else {
+            guard let session = await provider() else {
                 throw RivetWatchRelayError.desktopUnavailable
             }
             let values = try arguments(value)
-            let result = try await client.call(rpcName, arguments: values)
+            let result = try await session.client.call(rpcName, arguments: values)
+            // A reconnect or revocation may race a successful RPC response.
+            // Never return results from an obsolete authenticated session.
+            guard let current = await provider(),
+                  current.connectionID == session.connectionID else {
+                throw RivetWatchRelayError.desktopUnavailable
+            }
             return try response(result)
         }
     }

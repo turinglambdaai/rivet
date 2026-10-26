@@ -32,10 +32,12 @@ private struct WatchRelayLoopbackTransport: RivetDeviceTransport {
 }
 
 private actor WatchRelaySessionBox {
-    private var client: (any RivetRPCClient)?
+    private var session: RivetWatchAuthenticatedDesktopSession?
 
-    func current() -> (any RivetRPCClient)? { client }
-    func set(_ newClient: (any RivetRPCClient)?) { client = newClient }
+    func current() -> RivetWatchAuthenticatedDesktopSession? { session }
+    func set(_ newSession: RivetWatchAuthenticatedDesktopSession?) {
+        session = newSession
+    }
 }
 
 private actor WatchRelayFakeDesktop: RivetRPCClient {
@@ -70,7 +72,7 @@ private func registerSeek(_ relay: RivetWatchAuthenticatedRPCRelay) async throws
 @Test func watchRelayRequiresCurrentAuthenticatedDesktopSession() async throws {
     let box = WatchRelaySessionBox()
     let desktop = WatchRelayFakeDesktop()
-    let relay = RivetWatchAuthenticatedRPCRelay(activeClient: { await box.current() })
+    let relay = RivetWatchAuthenticatedRPCRelay(activeSession: { await box.current() })
     try await registerSeek(relay)
 
     let watch = RivetDeviceClient(
@@ -84,7 +86,9 @@ private func registerSeek(_ relay: RivetWatchAuthenticatedRPCRelay) async throws
         try await watch.send(WatchSeek(position: 10))
     }
 
-    await box.set(desktop)
+    await box.set(RivetWatchAuthenticatedDesktopSession(
+        connectionID: UUID(), client: desktop
+    ))
     let reply = try await watch.send(WatchSeek(position: 10))
     #expect(reply == WatchSeekReply(position: 11))
     let calls = await desktop.snapshot()
@@ -106,8 +110,10 @@ private func registerSeek(_ relay: RivetWatchAuthenticatedRPCRelay) async throws
 @Test func watchRelayOnlyDispatchesRegisteredTypesAndExactRPCs() async throws {
     let box = WatchRelaySessionBox()
     let desktop = WatchRelayFakeDesktop()
-    await box.set(desktop)
-    let relay = RivetWatchAuthenticatedRPCRelay(activeClient: { await box.current() })
+    await box.set(RivetWatchAuthenticatedDesktopSession(
+        connectionID: UUID(), client: desktop
+    ))
+    let relay = RivetWatchAuthenticatedRPCRelay(activeSession: { await box.current() })
     try await registerSeek(relay)
     let watch = RivetDeviceClient(
         transport: WatchRelayLoopbackTransport(router: relay.router)
@@ -137,10 +143,12 @@ private func registerSeek(_ relay: RivetWatchAuthenticatedRPCRelay) async throws
 @Test func watchRelayEnforcesForegroundBudgetAtPhoneRouter() async throws {
     let box = WatchRelaySessionBox()
     let desktop = WatchRelayFakeDesktop()
-    await box.set(desktop)
+    await box.set(RivetWatchAuthenticatedDesktopSession(
+        connectionID: UUID(), client: desktop
+    ))
     let relay = RivetWatchAuthenticatedRPCRelay(
         messagePolicy: RivetWatchMessagePolicy(maximumBytes: 160),
-        activeClient: { await box.current() }
+        activeSession: { await box.current() }
     )
     try await registerSeek(relay)
     let watch = RivetDeviceClient(

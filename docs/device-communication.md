@@ -53,21 +53,26 @@ The iPhone can relay a **product-selected** watch action to the current
 RVD1-authenticated desktop RVT1 client without giving WCSession itself
 desktop authority. `RivetWatchAuthenticatedRPCRelay` starts with no routes
 and resolves the current authenticated session **on every request**.
+The provider returns `RivetWatchAuthenticatedDesktopSession`, with a fresh
+`connectionID` per successful RVD1 connection (not the persistent device ID).
+The relay checks that same connection remains active before returning results,
+so in-flight replies from a revoked/replaced session are discarded.
 Only the iPhone app registers a typed watch request with one exact desktop
 RPC and explicit RivetValue conversions:
 
 ```swift
 // Product-owned WatchSeek/WatchSeekReply types conform to Codable/Sendable.
-// Return nil once the authenticated desktop connection is no longer active.
+enum DecodeError: Error { case unexpectedValue }
+// Return nil when disconnected; refresh connectionID on every new RVD1 session.
 let relay = RivetWatchAuthenticatedRPCRelay(
-    activeClient: { await sessionStore.currentAuthenticatedClient() }
+    activeSession: { await sessionStore.currentAuthenticatedSession() }
 )
 try await relay.register(
     WatchSeek.self,
     rpc: "player.seek",
     arguments: { [.int64($0.position)] },
     response: { value in
-        guard case .int64(let position) = value else { throw DecodeError() }
+        guard case .int64(let position) = value else { throw DecodeError.unexpectedValue }
         return WatchSeekReply(position: position)
     }
 )
