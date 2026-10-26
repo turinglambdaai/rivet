@@ -297,11 +297,11 @@ RKT
     #<<RKT
 #hasheq(
  (version . 1)
- (requirements . (#hasheq((kind . contract) (platforms . (windows macos)))))
+ (requirements . (#hasheq((kind . contract) (platforms . (windows macos linux)))))
  (suites
   . (#hasheq((id . marker)
              (kind . contract)
-             (platforms . (windows macos))
+             (platforms . (windows macos linux))
              (command . ("racket" "-e" "(call-with-output-file \"marker.txt\" (lambda (o) (display \"ran\" o)))"))))))
 RKT
     )
@@ -332,11 +332,11 @@ RKT
     #<<RKT
 #hasheq(
  (version . 1)
- (requirements . (#hasheq((kind . contract) (platforms . (windows macos)))))
+ (requirements . (#hasheq((kind . contract) (platforms . (windows macos linux)))))
  (suites
   . (#hasheq((id . missing-tool)
              (kind . contract)
-             (platforms . (windows macos))
+             (platforms . (windows macos linux))
              (command . ("definitely-not-a-real-tool-328"))))))
 RKT
     )
@@ -351,11 +351,11 @@ RKT
     #<<RKT
 #hasheq(
  (version . 1)
- (requirements . (#hasheq((kind . native-ui) (platforms . (windows macos)))))
+ (requirements . (#hasheq((kind . native-ui) (platforms . (windows macos linux)))))
  (suites
   . (#hasheq((id . outside-ui)
              (kind . native-ui)
-             (platforms . (windows macos))
+             (platforms . (windows macos linux))
              (command . ("pwsh" "-File" "scripts/ui.ps1"))
              (evidence . ("artifacts/outside.txt"))))))
 RKT
