@@ -40,6 +40,8 @@
     "  raco rivet inspect --json          emit the agent-readable project contract\n"
     "  raco rivet acceptance              run the current platform's declared acceptance suites\n"
     "  raco rivet acceptance --json       emit bounded machine-readable acceptance evidence\n"
+    "  raco rivet acceptance --dry-run    validate the manifest and resolve this platform's\n"
+    "                                     suites without launching any command\n"
     "  raco rivet matrix <report.json>... aggregate per-platform acceptance reports into the\n"
     "                                     cross-platform verification matrix\n"
     "  raco rivet matrix <report.json>... --json  emit the machine-readable matrix\n"

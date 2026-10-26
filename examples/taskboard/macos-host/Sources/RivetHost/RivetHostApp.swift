@@ -4,6 +4,51 @@ import RivetRuntime
 import RivetSystem
 import RivetUI
 
+/// SIGTERM must route through the same orderly stop as the quit Apple Event.
+/// The embedded Racket CS runtime maps SIGTERM to a Racket break, which a GUI
+/// host otherwise swallows — process managers and acceptance suites that
+/// terminate the packaged app then hang it forever. The C-level handler only
+/// writes one byte to a self-pipe (async-signal-safe); the main run loop's
+/// dispatch source performs the real NSApplication.terminate, which runs the
+/// applicationShouldTerminate hook and the embedded backend's shutdown.
+/// Only the main thread writes the descriptor and the signal handler only
+/// reads it; `write` is async-signal-safe, which is what the handler needs.
+private nonisolated(unsafe) var orderlySignalWriteFD: Int32 = -1
+
+private func handleOrderlyTerminationSignal(_ signal: Int32) {
+    var byte: UInt8 = 1
+    _ = write(orderlySignalWriteFD, &byte, 1)
+}
+
+@MainActor
+enum OrderlySignalHandling {
+    private static var pipeFDs: (read: Int32, write: Int32)?
+    private static var source: DispatchSourceRead?
+
+    /// Installs (or re-asserts) the SIGTERM handling. Call once at launch and
+    /// again after the embedded backend starts: the backend's runtime boot
+    /// installs its own signal handlers, so the last installation wins.
+    static func install() {
+        if pipeFDs == nil {
+            var fds: [Int32] = [0, 0]
+            guard pipe(&fds) == 0 else { return }
+            fcntl(fds[0], F_SETFL, fcntl(fds[0], F_GETFL) | O_NONBLOCK)
+            pipeFDs = (fds[0], fds[1])
+            let source = DispatchSource.makeReadSource(
+                fileDescriptor: fds[0], queue: .main)
+            source.setEventHandler {
+                var byte: UInt8 = 0
+                _ = read(pipeFDs?.read ?? -1, &byte, 1)
+                NSApplication.shared.terminate(nil)
+            }
+            source.resume()
+            self.source = source
+        }
+        orderlySignalWriteFD = pipeFDs?.write ?? -1
+        signal(SIGTERM, handleOrderlyTerminationSignal)
+    }
+}
+
 @main
 struct RivetHostApp: App {
     @NSApplicationDelegateAdaptor(ApplicationDelegate.self)
@@ -16,7 +61,10 @@ struct RivetHostApp: App {
             ContentView()
                 .environmentObject(model)
                 .frame(minWidth: 760, minHeight: 480)
-                .task { model.start() }
+                .task {
+                    OrderlySignalHandling.install()
+                    model.start()
+                }
                 .onOpenURL { url in activationRouter.handle([url]) }
         }
     }
@@ -131,6 +179,10 @@ final class AppModel: ObservableObject {
                         }
                         Task { @MainActor in relay.receive(event) }
                     }
+                    // The backend's runtime boot re-installed its own
+                    // SIGTERM handling; ours must win afterwards so a
+                    // process manager can stop the packaged app orderly.
+                    await MainActor.run { OrderlySignalHandling.install() }
                     let api = RivetAPI(client: backend.client)
                     async let loadedTasks = api.list_tasks()
                     async let selected = api.get_selected_task_id()

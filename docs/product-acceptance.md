@@ -93,6 +93,21 @@ code, and missing evidence. Archive it even when the job fails. Use `--suite
 <id>` only for diagnosis; the required merge gate should run the complete
 current-platform set.
 
+Validate a manifest without running anything first — a hand-edited
+`rivet-acceptance.rktd` with a syntax error should fail in seconds, not
+minutes into a packaged suite:
+
+```bash
+raco rivet acceptance --dry-run
+```
+
+The dry run loads and validates the manifest (shape, requirement coverage),
+resolves the current platform's suites and their executables, checks the
+evidence path rules, and exits before launching any child. Its report is
+flagged `"dry-run": true` with per-suite `"dry-run"` statuses; it is a
+validation record, not acceptance evidence, and must not feed `raco rivet
+matrix` as a platform leg.
+
 For an alternative manifest during migration:
 
 ```bash
