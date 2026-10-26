@@ -35,8 +35,11 @@ requests/replies fail closed. Outgoing immediate messages have a 15-second
 default response deadline (configurable from 1 to 120 seconds), and task
 cancellation finishes the caller even if WCSession never invokes its native
 callbacks. Late or duplicate success/error callbacks are ignored after the
-first terminal result. This is a local request guarantee, not proof that a
-previously sent command was not executed by the iPhone.
+first terminal result. The iPhone-side relay also bounds its native reply
+handler to the same deadline, requests cancellation of a stalled route handler,
+and sends one empty failure response if no valid payload is ready. This is a
+local request guarantee, not proof that a previously sent command was not
+executed by the iPhone.
 `RivetWatchCompanionView` provides a small
 watchOS shell that displays paired-iPhone reachability and invokes one
 product-supplied typed action only while reachable; it never invents RPC
