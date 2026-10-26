@@ -197,3 +197,10 @@ private final class WatchReplyRecorder: @unchecked Sendable {
     #expect(budget.acquire())
     budget.release()
 }
+
+
+@Test func watchTimeoutMessageDoesNotPromiseTheActionWasNotExecuted() {
+    let message = RivetWatchConnectivityError.requestTimedOut.userFacingMessage
+    #expect(message.contains("may have completed"))
+    #expect(message.contains("before retrying"))
+}

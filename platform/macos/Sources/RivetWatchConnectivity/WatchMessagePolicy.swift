@@ -78,6 +78,21 @@ public enum RivetWatchConnectivityError: Error, Equatable, Sendable, CustomStrin
         case .tooManyPendingRequests: "too many concurrent WatchConnectivity requests"
         }
     }
+
+    /// Keep ambiguous timeout outcomes explicit: the iPhone might already
+    /// have applied a command even when no reply reached the Watch.
+    public var userFacingMessage: String {
+        switch self {
+        case .notSupported: "This device cannot contact a paired iPhone."
+        case .notReachable: "Open the iPhone app to connect."
+        case .notActivated: "Waiting for the iPhone connection to activate."
+        case .emptyReply: "The iPhone could not complete that request."
+        case .requestTimedOut:
+            "No reply from iPhone. The action may have completed; check its result before retrying."
+        case .tooManyPendingRequests:
+            "Too many requests in progress. Try again after they finish."
+        }
+    }
 }
 
 /// Once-only completion for callbacks that may arrive after task cancellation

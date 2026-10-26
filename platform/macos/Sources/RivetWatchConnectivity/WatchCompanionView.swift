@@ -62,6 +62,8 @@ public struct RivetWatchCompanionView: View {
                             defer { isBusy = false }
                             do {
                                 result = try await action()
+                            } catch let error as RivetWatchConnectivityError {
+                                result = error.userFacingMessage
                             } catch {
                                 result = "Request failed. Check the iPhone connection."
                             }
