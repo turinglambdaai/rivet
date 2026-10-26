@@ -56,3 +56,84 @@ public enum RivetWatchConnectivityState: Equatable, Sendable {
         }
     }
 }
+
+
+/// The immediate watch-to-phone relay must not leave an RPC suspended when
+/// WatchConnectivity drops a reply callback during a network transition.
+public enum RivetWatchConnectivityError: Error, Equatable, Sendable, CustomStringConvertible {
+    case notSupported
+    case notReachable
+    case notActivated
+    case emptyReply
+    case requestTimedOut
+
+    public var description: String {
+        switch self {
+        case .notSupported: "WatchConnectivity is not supported on this device"
+        case .notReachable: "the paired WatchConnectivity peer is not reachable"
+        case .notActivated: "the paired WatchConnectivity session is not activated"
+        case .emptyReply: "the WatchConnectivity peer returned an invalid empty reply"
+        case .requestTimedOut: "the paired WatchConnectivity peer did not reply before the deadline"
+        }
+    }
+}
+
+/// Once-only completion for callbacks that may arrive after task cancellation
+/// or a deadline. Pre-install cancellation is saved and immediately delivered
+/// when the checked continuation becomes available.
+final class RivetWatchPendingReply: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Data, Error>?
+    private var completed: Result<Data, Error>?
+    private var timeoutTask: Task<Void, Never>?
+
+    @discardableResult
+    func install(_ next: CheckedContinuation<Data, Error>) -> Bool {
+        lock.lock()
+        if let completed {
+            lock.unlock()
+            next.resume(with: completed)
+            return false
+        }
+        precondition(continuation == nil, "a pending reply has only one waiter")
+        continuation = next
+        lock.unlock()
+        return true
+    }
+
+    func complete(_ result: Result<Data, Error>) {
+        lock.lock()
+        guard completed == nil else {
+            lock.unlock()
+            return
+        }
+        completed = result
+        let waiter = continuation
+        continuation = nil
+        let timer = timeoutTask
+        timeoutTask = nil
+        lock.unlock()
+        timer?.cancel()
+        waiter?.resume(with: result)
+    }
+
+    func armTimeout(nanoseconds: UInt64) {
+        let timer = Task.detached { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: nanoseconds)
+            } catch {
+                return
+            }
+            self?.complete(.failure(RivetWatchConnectivityError.requestTimedOut))
+        }
+        lock.lock()
+        if completed != nil {
+            lock.unlock()
+            timer.cancel()
+            return
+        }
+        precondition(timeoutTask == nil, "a pending reply has only one deadline")
+        timeoutTask = timer
+        lock.unlock()
+    }
+}

@@ -93,3 +93,40 @@ private struct PhoneRelayLoopback: RivetDeviceTransport {
         try await client.send(WatchDenied(text: "cannot escalate"))
     }
 }
+
+
+private func awaitPendingWatchReply(
+    _ pending: RivetWatchPendingReply,
+    deadline: UInt64? = nil
+) async throws -> Data {
+    try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<Data, Error>) in
+        guard pending.install(continuation) else { return }
+        if let deadline { pending.armTimeout(nanoseconds: deadline) }
+    }
+}
+
+@Test func watchReplyCompletionIgnoresDuplicateAndLateCallbacks() async throws {
+    let pending = RivetWatchPendingReply()
+    let wait = Task { try await awaitPendingWatchReply(pending) }
+    pending.complete(.success(Data([0x34])))
+    pending.complete(.failure(RivetWatchConnectivityError.emptyReply))
+    #expect(try await wait.value == Data([0x34]))
+}
+
+@Test func watchReplyCancellationBeforeRegistrationResumesExactlyOnce() async {
+    let pending = RivetWatchPendingReply()
+    pending.complete(.failure(CancellationError()))
+    let wait = Task { try await awaitPendingWatchReply(pending) }
+    pending.complete(.success(Data([1])))
+    await #expect(throws: CancellationError.self) { try await wait.value }
+}
+
+@Test func watchReplyDeadlineIsFiniteAndRejectsLateSuccess() async {
+    let pending = RivetWatchPendingReply()
+    let wait = Task { try await awaitPendingWatchReply(pending, deadline: 10_000_000) }
+    await #expect(throws: RivetWatchConnectivityError.requestTimedOut) {
+        try await wait.value
+    }
+    pending.complete(.success(Data([0x01])))
+}
