@@ -66,6 +66,7 @@ public enum RivetWatchConnectivityError: Error, Equatable, Sendable, CustomStrin
     case notActivated
     case emptyReply
     case requestTimedOut
+    case tooManyPendingRequests
 
     public var description: String {
         switch self {
@@ -74,6 +75,7 @@ public enum RivetWatchConnectivityError: Error, Equatable, Sendable, CustomStrin
         case .notActivated: "the paired WatchConnectivity session is not activated"
         case .emptyReply: "the WatchConnectivity peer returned an invalid empty reply"
         case .requestTimedOut: "the paired WatchConnectivity peer did not reply before the deadline"
+        case .tooManyPendingRequests: "too many concurrent WatchConnectivity requests"
         }
     }
 }
@@ -180,6 +182,36 @@ final class RivetWatchReply: @unchecked Sendable {
         }
         precondition(timeoutTask == nil, "one reply has only one deadline")
         timeoutTask = timer
+        lock.unlock()
+    }
+}
+
+
+/// Bounded simultaneous foreground requests in each direction. A cancelled
+/// but non-cooperative iPhone handler retains its slot until it exits, so an
+/// unresponsive route cannot trigger unlimited new handler tasks.
+final class RivetWatchRequestBudget: @unchecked Sendable {
+    private let lock = NSLock()
+    private let maximumConcurrentRequests: Int
+    private var active = 0
+
+    init(maximumConcurrentRequests: Int) {
+        precondition((1...32).contains(maximumConcurrentRequests))
+        self.maximumConcurrentRequests = maximumConcurrentRequests
+    }
+
+    func acquire() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard active < maximumConcurrentRequests else { return false }
+        active += 1
+        return true
+    }
+
+    func release() {
+        lock.lock()
+        precondition(active > 0, "request budget release without reservation")
+        active -= 1
         lock.unlock()
     }
 }

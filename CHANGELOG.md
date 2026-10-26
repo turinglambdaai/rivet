@@ -7,8 +7,10 @@
 - WatchConnectivity immediate watch-to-iPhone requests now have a configurable
   15-second default deadline (1–120 seconds) and cancellation-safe, exactly-once
   completion. Late and duplicate native callbacks cannot resume a cancelled
-  or expired request. The iPhone-side reply handler also has a finite
-  deadline and cancels a stalled route handler before sending one empty
+  or expired request. At most four foreground requests can run in each
+  direction by default; excess calls fail closed. The iPhone-side reply
+  handler also has a finite deadline and cancels a stalled route handler
+  before sending one empty
   fail-closed response. Portable Swift tests cover duplicate responses,
   pre-registration cancellation, timeout and one-shot incoming replies;
   paired hardware validation remains outstanding.

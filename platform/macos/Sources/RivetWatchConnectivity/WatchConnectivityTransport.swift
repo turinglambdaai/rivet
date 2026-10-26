@@ -8,6 +8,8 @@ public final class RivetWatchConnectivityTransport: NSObject, RivetDeviceTranspo
     private let router: RivetDeviceRouter?
     private let messagePolicy: RivetWatchMessagePolicy
     private let requestTimeoutNanoseconds: UInt64
+    private let outgoingBudget: RivetWatchRequestBudget
+    private let incomingBudget: RivetWatchRequestBudget
     private let stateContinuation: AsyncStream<RivetWatchConnectivityState>.Continuation
     public let stateChanges: AsyncStream<RivetWatchConnectivityState>
 
@@ -15,13 +17,17 @@ public final class RivetWatchConnectivityTransport: NSObject, RivetDeviceTranspo
         session: WCSession = .default,
         router: RivetDeviceRouter? = nil,
         messagePolicy: RivetWatchMessagePolicy = RivetWatchMessagePolicy(),
-        requestTimeout: TimeInterval = 15
+        requestTimeout: TimeInterval = 15,
+        maximumConcurrentRequests: Int = 4
     ) {
         precondition(requestTimeout.isFinite && requestTimeout >= 1 && requestTimeout <= 120)
+        precondition((1...32).contains(maximumConcurrentRequests))
         self.session = session
         self.router = router
         self.messagePolicy = messagePolicy
         requestTimeoutNanoseconds = UInt64(requestTimeout * 1_000_000_000)
+        outgoingBudget = RivetWatchRequestBudget(maximumConcurrentRequests: maximumConcurrentRequests)
+        incomingBudget = RivetWatchRequestBudget(maximumConcurrentRequests: maximumConcurrentRequests)
         let (stateChanges, stateContinuation) = AsyncStream.makeStream(
             of: RivetWatchConnectivityState.self,
             bufferingPolicy: .bufferingNewest(16)
@@ -71,6 +77,10 @@ public final class RivetWatchConnectivityTransport: NSObject, RivetDeviceTranspo
         guard session.isReachable else {
             throw RivetWatchConnectivityError.notReachable
         }
+        guard outgoingBudget.acquire() else {
+            throw RivetWatchConnectivityError.tooManyPendingRequests
+        }
+        defer { outgoingBudget.release() }
         let policy = messagePolicy
         let pending = RivetWatchPendingReply()
         return try await withTaskCancellationHandler {
@@ -136,8 +146,14 @@ extension RivetWatchConnectivityTransport: WCSessionDelegate {
             reply.send(Data())
             return
         }
+        guard incomingBudget.acquire() else {
+            reply.send(Data())
+            return
+        }
+        let budget = incomingBudget
         let policy = messagePolicy
         let work = Task {
+            defer { budget.release() }
             do {
                 let data = try await router.handle(messageData)
                 try policy.validate(data)

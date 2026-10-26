@@ -182,3 +182,18 @@ private final class WatchReplyRecorder: @unchecked Sendable {
     #expect(snapshot.replies == [Data([0x71])])
     #expect(snapshot.timeouts == 0)
 }
+
+
+@Test func watchRequestBudgetBoundsConcurrentRequestsAndReusesSlots() {
+    let budget = RivetWatchRequestBudget(maximumConcurrentRequests: 2)
+    #expect(budget.acquire())
+    #expect(budget.acquire())
+    #expect(!budget.acquire())
+    budget.release()
+    #expect(budget.acquire())
+    #expect(!budget.acquire())
+    budget.release()
+    budget.release()
+    #expect(budget.acquire())
+    budget.release()
+}
