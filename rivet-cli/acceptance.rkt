@@ -344,9 +344,10 @@
                            "executable" raw))
   resolved)
 
-(define (prepare-evidence! project suite)
-  ;; Evidence belongs under Rivet's generated root, so removing stale files is
-  ;; both safe and necessary: an earlier green run must not satisfy this run.
+;; Evidence paths must stay inside Rivet's generated acceptance root with no
+;; link hops and no directory targets. Validation is separate from mutation so
+;; `--dry-run` can surface path problems without touching the tree.
+(define (check-evidence-paths! project suite)
   (for ([entry (in-list (acceptance-suite-evidence suite))])
     (define relative (car entry))
     (define path (project-path project relative))
@@ -365,9 +366,15 @@
       (raise-arguments-error 'acceptance-report
                              "suite evidence must be a file, not a directory"
                              "suite" (acceptance-suite-id suite)
-                             "evidence" relative))
-    (when (file-exists? path)
-      (delete-file path))))
+                             "evidence" relative))))
+
+(define (prepare-evidence! project suite)
+  ;; Evidence belongs under Rivet's generated root, so removing stale files is
+  ;; both safe and necessary: an earlier green run must not satisfy this run.
+  (check-evidence-paths! project suite)
+  (for ([entry (in-list (acceptance-suite-evidence suite))])
+    (when (file-exists? (project-path project (car entry)))
+      (delete-file (project-path project (car entry))))))
 
 (define (evidence-missing project suite)
   (for/list ([entry (in-list (acceptance-suite-evidence suite))]
@@ -470,7 +477,8 @@
                            #:manifest [manifest default-acceptance-manifest-name]
                            #:suite [selected-suite #f]
                            #:platform [platform (current-platform)]
-                           #:runner [runner execute-suite])
+                           #:runner [runner execute-suite]
+                           #:dry-run? [dry-run? #f])
   (define-values (path suites requirements)
     (load-acceptance-manifest project manifest))
   (unless (memq platform supported-platforms)
@@ -494,39 +502,84 @@
                            "no acceptance suite applies to this platform"
                            "platform" platform
                            "selected-suite" selected-suite))
-  (define results (map (lambda (suite) (runner project suite)) applicable))
-  (define passed
-    (count (lambda (result) (string=? (hash-ref result 'status) "pass"))
-           results))
-  (define failed (- (length results) passed))
-  (hash 'format-version 1
-        'project (project-name project)
-        'platform (symbol->string platform)
-        'manifest (path->string path)
-        'configured-suites (length suites)
-        'configured-requirements
-        (for/list ([requirement (in-list requirements)])
-          (hash 'kind (symbol->string (car requirement))
-                'platforms (map symbol->string (cdr requirement))))
-        'selected-suite (if selected-suite (symbol->string selected-suite) 'null)
-        'status (if (zero? failed) "pass" "fail")
-        'passed passed
-        'failed failed
-        'suites results))
+  (cond
+    [dry-run?
+     ;; Validate everything this machine would run — manifest shape,
+     ;; requirement coverage (checked at load), suite resolution, executable
+     ;; lookup, and evidence path rules — then stop before launching any
+     ;; child. A hand-written manifest that cannot parse fails here in
+     ;; seconds instead of minutes into a packaged suite (issue #328).
+     (for ([suite (in-list applicable)])
+       (resolve-executable project (car (acceptance-suite-command suite)))
+       (check-evidence-paths! project suite))
+     (hash 'format-version 1
+           'project (project-name project)
+           'platform (symbol->string platform)
+           'manifest (path->string path)
+           'dry-run #t
+           'configured-suites (length suites)
+           'configured-requirements
+           (for/list ([requirement (in-list requirements)])
+             (hash 'kind (symbol->string (car requirement))
+                   'platforms (map symbol->string (cdr requirement))))
+           'selected-suite (if selected-suite (symbol->string selected-suite) 'null)
+           'status "pass"
+           'validated (length applicable)
+           'passed 0
+           'failed 0
+           'suites
+           (for/list ([suite (in-list applicable)])
+             (hash 'id (symbol->string (acceptance-suite-id suite))
+                   'kind (symbol->string (acceptance-suite-kind suite))
+                   'command (acceptance-suite-command suite)
+                   'status "dry-run"
+                   'evidence
+                   (for/list ([entry (in-list (acceptance-suite-evidence suite))])
+                     (hash 'path (car entry)
+                           'kind (symbol->string (cdr entry)))))))]
+    [else
+     (define results (map (lambda (suite) (runner project suite)) applicable))
+     (define passed
+       (count (lambda (result) (string=? (hash-ref result 'status) "pass"))
+              results))
+     (define failed (- (length results) passed))
+     (hash 'format-version 1
+           'project (project-name project)
+           'platform (symbol->string platform)
+           'manifest (path->string path)
+           'dry-run #f
+           'configured-suites (length suites)
+           'configured-requirements
+           (for/list ([requirement (in-list requirements)])
+             (hash 'kind (symbol->string (car requirement))
+                   'platforms (map symbol->string (cdr requirement))))
+           'selected-suite (if selected-suite (symbol->string selected-suite) 'null)
+           'status (if (zero? failed) "pass" "fail")
+           'passed passed
+           'failed failed
+           'suites results)]))
 
 (define (display-report report)
-  (printf "Rivet acceptance: ~a on ~a — ~a passed, ~a failed\n"
-          (hash-ref report 'project)
-          (hash-ref report 'platform)
-          (hash-ref report 'passed)
-          (hash-ref report 'failed))
+  (if (hash-ref report 'dry-run #f)
+      (printf "Rivet acceptance (dry run): ~a on ~a — ~a suites validated, nothing executed\n"
+              (hash-ref report 'project)
+              (hash-ref report 'platform)
+              (hash-ref report 'validated))
+      (printf "Rivet acceptance: ~a on ~a — ~a passed, ~a failed\n"
+              (hash-ref report 'project)
+              (hash-ref report 'platform)
+              (hash-ref report 'passed)
+              (hash-ref report 'failed)))
   (for ([result (in-list (hash-ref report 'suites))])
-    (printf "  [~a] ~a (~a, ~a ms)\n"
+    (printf "  [~a] ~a (~a~a)\n"
             (hash-ref result 'status)
             (hash-ref result 'id)
             (hash-ref result 'kind)
-            (hash-ref result 'duration-ms))
-    (when (string=? (hash-ref result 'status) "fail")
+            (if (hash-ref report 'dry-run #f)
+                (format ", ~a" (hash-ref result 'command))
+                (format ", ~a ms" (hash-ref result 'duration-ms))))
+    (when (and (not (hash-ref report 'dry-run #f))
+               (string=? (hash-ref result 'status) "fail"))
       (unless (string=? (hash-ref result 'stdout) "")
         (printf "    stdout:\n~a\n" (hash-ref result 'stdout)))
       (unless (string=? (hash-ref result 'stderr) "")
@@ -538,33 +591,41 @@
 (define (parse-arguments args)
   (let loop ([remaining args]
              [json? #f]
+             [dry-run? #f]
              [manifest default-acceptance-manifest-name]
              [manifest-set? #f]
              [suite #f])
     (match remaining
-      ['() (values json? manifest suite)]
+      ['() (values json? dry-run? manifest suite)]
       [(cons "--json" tail)
        (when json?
          (raise-arguments-error 'rivet-acceptance "duplicate --json option"))
-       (loop tail #t manifest manifest-set? suite)]
+       (loop tail #t dry-run? manifest manifest-set? suite)]
+      [(cons "--dry-run" tail)
+       (when dry-run?
+         (raise-arguments-error 'rivet-acceptance "duplicate --dry-run option"))
+       (loop tail json? #t manifest manifest-set? suite)]
       [(list* "--manifest" value tail)
        (when manifest-set?
          (raise-arguments-error 'rivet-acceptance "duplicate --manifest option"))
-       (loop tail json? value #t suite)]
+       (loop tail json? dry-run? value #t suite)]
       [(list* "--suite" value tail)
        (when suite
          (raise-arguments-error 'rivet-acceptance "duplicate --suite option"))
-       (loop tail json? manifest manifest-set? (string->symbol value))]
+       (loop tail json? dry-run? manifest manifest-set? (string->symbol value))]
       [_
        (raise-arguments-error
         'rivet-acceptance
-        "expected [--json] [--manifest <path>] [--suite <id>]"
+        "expected [--json] [--dry-run] [--manifest <path>] [--suite <id>]"
         "arguments" args)])))
 
 (define (run-acceptance-command project args)
-  (define-values (json? manifest suite) (parse-arguments args))
+  (define-values (json? dry-run? manifest suite) (parse-arguments args))
   (define report
-    (acceptance-report project #:manifest manifest #:suite suite))
+    (acceptance-report project
+                       #:manifest manifest
+                       #:suite suite
+                       #:dry-run? dry-run?))
   (if json?
       (begin
         (write-json report)

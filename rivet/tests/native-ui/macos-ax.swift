@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import Carbon.HIToolbox
 import Foundation
 
 struct Options {
@@ -155,13 +156,72 @@ func typeText(_ text: String) throws {
 
 let kReturnKeyCode: CGKeyCode = 36
 let kEscapeKeyCode: CGKeyCode = 53
+let kQKeyCode: CGKeyCode = 12
 
-func closeWindowOrderly(_ window: AXUIElement, description: String) throws {
-    if let closeButtonValue = attribute(window, kAXCloseButtonAttribute) {
-        let closeButton = closeButtonValue as! AXUIElement
-        try press(closeButton, description: description)
-    } else {
-        throw DriverError.failure("\(description) has no native close button")
+// Posted CGEvents route to whatever application the session currently has
+// focused, so every keyboard step needs proof that the app under test is
+// frontmost — on a shared desktop a driver that skips this check can pour
+// Cmd+A and Delete into a developer's editor (fail fast instead).
+func keyboardGuard(_ application: AXUIElement, _ what: String) throws {
+    if boolAttribute(application, kAXFrontmostAttribute) { return }
+    _ = AXUIElementSetAttributeValue(
+        application, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+    if boolAttribute(application, kAXFrontmostAttribute) { return }
+    _ = try waitFor("the application to take frontmost for \(what)") {
+        boolAttribute(application, kAXFrontmostAttribute) ? true : nil
+    }
+}
+
+// Third-party input methods intercept the text-input path: typed characters
+// (and even Escape) never reach the app. Keyboard phases run under an
+// ASCII-capable layout and restore the user's source afterwards.
+var savedInputSource: TISInputSource?
+
+func asciiCapable(_ source: TISInputSource) -> Bool {
+    guard let property = TISGetInputSourceProperty(
+        source, kTISPropertyInputSourceIsASCIICapable) else { return false }
+    let value = Unmanaged<CFTypeRef>.fromOpaque(property).takeUnretainedValue()
+    return (value as? Bool) == true
+}
+
+func inputSourceID(_ source: TISInputSource) -> String {
+    guard let property = TISGetInputSourceProperty(
+        source, kTISPropertyInputSourceID) else { return "" }
+    return Unmanaged<CFString>.fromOpaque(property).takeUnretainedValue() as String
+}
+
+func selectASCIILayout() {
+    savedInputSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue()
+    guard let sources = TISCreateInputSourceList(nil, false)?.takeRetainedValue()
+            as? [TISInputSource] else { return }
+    var pick: TISInputSource?
+    for source in sources where asciiCapable(source) {
+        if inputSourceID(source) == "com.apple.keylayout.ABC" { pick = source; break }
+        if pick == nil { pick = source }
+    }
+    if let pick { TISSelectInputSource(pick) }
+}
+
+func restoreInputSource() {
+    if let savedInputSource { TISSelectInputSource(savedInputSource) }
+}
+
+// Orderly exit goes through the quit Apple Event (what Cmd+Q delivers): on
+// current macOS, SIGTERM, programmatic termination, and the window close
+// button can all be swallowed by a packaged app while the main thread idles,
+// while the quit Apple Event reliably runs the shutdown. The frontmost guard
+// keeps a sick instance from dropping Cmd+Q into the user's focused app; the
+// suite's bounded kill reaps that case instead.
+func quitOrderly(_ application: AXUIElement) {
+    guard boolAttribute(application, kAXFrontmostAttribute) else { return }
+    for keyDown in [true, false] {
+        guard let event = CGEvent(keyboardEventSource: nil,
+                                  virtualKey: kQKeyCode, keyDown: keyDown) else {
+            return
+        }
+        event.flags = .maskCommand
+        event.post(tap: .cghidEventTap)
+        Thread.sleep(forTimeInterval: 0.05)
     }
 }
 
@@ -213,15 +273,19 @@ do {
               description: "new-task")
     _ = try waitFor("the RPC-created task row") { find(window, identifier: "task-row-4") }
 
-    let status: AXUIElement = try waitFor("application-status") {
-        find(window, identifier: "application-status")
-    }
     try press(try waitFor("generate-demo button") { find(window, identifier: "generate-demo") },
               description: "generate-demo")
     var observed: [String] = []
     let eventDeadline = Date().addingTimeInterval(6)
     var sawEvent = false
+    // The status element is re-found from the live tree on every probe: a
+    // view that passes through an empty state can rebuild its controls and
+    // turn captured AXUIElement references into zombies (issue #328).
     while Date() < eventDeadline {
+        guard let status = find(window, identifier: "application-status") else {
+            Thread.sleep(forTimeInterval: 0.01)
+            continue
+        }
         let value = statusText(status)
         if !value.isEmpty && observed.last != value { observed.append(value) }
         if value.hasPrefix("Preparing task ") { sawEvent = true; break }
@@ -232,7 +296,10 @@ do {
             "operation-progress Event never reached AX; observed=\(observed)")
     }
     _ = try waitFor("the RPC-driven 1,000-row state", timeout: 20) {
-        statusText(status) == "Generated 1000 tasks" ? true : nil
+        guard let status = find(window, identifier: "application-status") else {
+            return nil as Bool?
+        }
+        return statusText(status) == "Generated 1000 tasks" ? true : nil
     }
 
     try writeJSON(snapshot(application), to: options.output.appendingPathComponent("accessibility-after.json"))
@@ -258,7 +325,8 @@ do {
         throw DriverError.failure("screencapture exited with status \(screenshot.terminationStatus)")
     }
 
-    try closeWindowOrderly(window, description: "Taskboard window")
+    try keyboardGuard(application, "the orderly quit")
+    quitOrderly(application)
 } catch {
     FileHandle.standardError.write(Data("native macOS UI test failed: \(error)\n".utf8))
     exit(1)

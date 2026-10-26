@@ -287,7 +287,82 @@ RKT
    (check-equal? (hash-ref screenshot-entry 'kind) "screenshot")
    (check-equal? (hash-ref screenshot-entry 'present) #f)
    (check-equal? (hash-ref screenshot-entry 'sha256) 'null)
-   (check-equal? (hash-ref screenshot-entry 'bytes) 'null))
+   (check-equal? (hash-ref screenshot-entry 'bytes) 'null)
+
+   ;; --dry-run validates everything this machine would run and stops before
+   ;; launching any child (issue #328): a hand-written manifest that cannot
+   ;; parse fails in seconds instead of minutes into a packaged suite.
+   (write-manifest
+    root
+    #<<RKT
+#hasheq(
+ (version . 1)
+ (requirements . (#hasheq((kind . contract) (platforms . (windows macos)))))
+ (suites
+  . (#hasheq((id . marker)
+             (kind . contract)
+             (platforms . (windows macos))
+             (command . ("racket" "-e" "(call-with-output-file \"marker.txt\" (lambda (o) (display \"ran\" o)))"))))))
+RKT
+    )
+   (define dry-report (acceptance-report project #:platform 'windows #:dry-run? #t))
+   (check-equal? (hash-ref dry-report 'dry-run) #t)
+   (check-equal? (hash-ref dry-report 'status) "pass")
+   (check-equal? (hash-ref dry-report 'validated) 1)
+   (define dry-suite (first (hash-ref dry-report 'suites)))
+   (check-equal? (hash-ref dry-suite 'status) "dry-run")
+   (check-false (file-exists? (build-path root "marker.txt")))
+
+   ;; The same manifest through the command path with --dry-run exits green
+   ;; without running the command; --json keeps the machine-readable shape.
+   (check-equal? (run-acceptance-command project '("--dry-run" "--json")) 0)
+   (check-false (file-exists? (build-path root "marker.txt")))
+
+   ;; A manifest that fails to parse surfaces at dry-run time.
+   (call-with-output-file (build-path root default-acceptance-manifest-name)
+     #:exists 'truncate/replace
+     (lambda (output) (display "#hasheq((version . 1) (requirements" output)))
+   (check-exn exn:fail?
+              (lambda ()
+                (run-acceptance-command project '("--dry-run"))))
+
+   ;; A missing executable is a dry-run failure before any child starts.
+   (write-manifest
+    root
+    #<<RKT
+#hasheq(
+ (version . 1)
+ (requirements . (#hasheq((kind . contract) (platforms . (windows macos)))))
+ (suites
+  . (#hasheq((id . missing-tool)
+             (kind . contract)
+             (platforms . (windows macos))
+             (command . ("definitely-not-a-real-tool-328"))))))
+RKT
+    )
+   (check-exn #rx"suite executable was not found"
+              (lambda ()
+                (run-acceptance-command project '("--dry-run"))))
+
+   ;; Evidence path rules still apply at dry-run time, without deleting or
+   ;; creating anything.
+   (write-manifest
+    root
+    #<<RKT
+#hasheq(
+ (version . 1)
+ (requirements . (#hasheq((kind . native-ui) (platforms . (windows macos)))))
+ (suites
+  . (#hasheq((id . outside-ui)
+             (kind . native-ui)
+             (platforms . (windows macos))
+             (command . ("pwsh" "-File" "scripts/ui.ps1"))
+             (evidence . ("artifacts/outside.txt"))))))
+RKT
+    )
+   (check-exn #rx"invalid suite evidence"
+              (lambda ()
+                (run-acceptance-command project '("--dry-run")))))
  (lambda ()
    (when (directory-exists? temp-root)
      (delete-directory/files temp-root))))
