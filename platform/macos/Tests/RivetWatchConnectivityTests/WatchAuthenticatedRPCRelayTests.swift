@@ -55,6 +55,34 @@ private actor WatchRelayFakeDesktop: RivetRPCClient {
     func snapshot() -> [(String, [RivetValue])] { calls }
 }
 
+private actor WatchRelayDeferredDesktop: RivetRPCClient {
+    private var started = false
+    private var startWaiter: CheckedContinuation<Void, Never>?
+    private var completion: CheckedContinuation<RivetValue, Never>?
+
+    func call(_ name: String, arguments: [RivetValue]) async throws -> RivetValue {
+        await withCheckedContinuation { continuation in
+            completion = continuation
+            started = true
+            startWaiter?.resume()
+            startWaiter = nil
+        }
+    }
+
+    func waitUntilDispatched() async {
+        if started { return }
+        await withCheckedContinuation { continuation in
+            startWaiter = continuation
+        }
+    }
+
+    func finish(_ result: RivetValue) {
+        let continuation = completion
+        completion = nil
+        continuation?.resume(returning: result)
+    }
+}
+
 private func registerSeek(_ relay: RivetWatchAuthenticatedRPCRelay) async throws {
     try await relay.register(
         WatchSeek.self,
@@ -105,6 +133,59 @@ private func registerSeek(_ relay: RivetWatchAuthenticatedRPCRelay) async throws
     }
     let afterDisconnect = await desktop.snapshot()
     #expect(afterDisconnect.count == 1)
+}
+
+@Test func watchRelayDropsInflightResultAfterDesktopSessionRevocation() async throws {
+    let box = WatchRelaySessionBox()
+    let desktop = WatchRelayDeferredDesktop()
+    await box.set(RivetWatchAuthenticatedDesktopSession(
+        connectionID: UUID(), client: desktop
+    ))
+    let relay = RivetWatchAuthenticatedRPCRelay(activeSession: { await box.current() })
+    try await registerSeek(relay)
+    let watch = RivetDeviceClient(
+        transport: WatchRelayLoopbackTransport(router: relay.router)
+    )
+    let pending = Task { try await watch.send(WatchSeek(position: 9)) }
+
+    await desktop.waitUntilDispatched()
+    await box.set(nil)
+    await desktop.finish(.int64(10))
+    await #expect(throws: RivetDeviceError.remote(
+        code: "desktop_unavailable",
+        message: "no authenticated desktop session"
+    )) {
+        try await pending.value
+    }
+}
+
+@Test func watchRelayDropsInflightResultAfterDesktopReconnect() async throws {
+    let box = WatchRelaySessionBox()
+    let oldClient = WatchRelayDeferredDesktop()
+    let replacement = WatchRelayFakeDesktop()
+    await box.set(RivetWatchAuthenticatedDesktopSession(
+        connectionID: UUID(), client: oldClient
+    ))
+    let relay = RivetWatchAuthenticatedRPCRelay(activeSession: { await box.current() })
+    try await registerSeek(relay)
+    let watch = RivetDeviceClient(
+        transport: WatchRelayLoopbackTransport(router: relay.router)
+    )
+    let pending = Task { try await watch.send(WatchSeek(position: 5)) }
+
+    await oldClient.waitUntilDispatched()
+    await box.set(RivetWatchAuthenticatedDesktopSession(
+        connectionID: UUID(), client: replacement
+    ))
+    await oldClient.finish(.int64(6))
+    await #expect(throws: RivetDeviceError.remote(
+        code: "desktop_unavailable",
+        message: "no authenticated desktop session"
+    )) {
+        try await pending.value
+    }
+    let replacementCalls = await replacement.snapshot()
+    #expect(replacementCalls.isEmpty)
 }
 
 @Test func watchRelayOnlyDispatchesRegisteredTypesAndExactRPCs() async throws {
