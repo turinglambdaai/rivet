@@ -3,23 +3,6 @@
 import Foundation
 import RivetDevice
 
-private final class RivetWatchReply: @unchecked Sendable {
-    private let lock = NSLock()
-    private var handler: ((Data) -> Void)?
-
-    init(_ handler: @escaping (Data) -> Void) {
-        self.handler = handler
-    }
-
-    func send(_ data: Data) {
-        lock.lock()
-        let handler = self.handler
-        self.handler = nil
-        lock.unlock()
-        handler?(data)
-    }
-}
-
 public final class RivetWatchConnectivityTransport: NSObject, RivetDeviceTransport, @unchecked Sendable {
     private let session: WCSession
     private let router: RivetDeviceRouter?
@@ -154,7 +137,7 @@ extension RivetWatchConnectivityTransport: WCSessionDelegate {
             return
         }
         let policy = messagePolicy
-        Task {
+        let work = Task {
             do {
                 let data = try await router.handle(messageData)
                 try policy.validate(data)
@@ -162,6 +145,9 @@ extension RivetWatchConnectivityTransport: WCSessionDelegate {
             } catch {
                 reply.send(Data())
             }
+        }
+        reply.armTimeout(nanoseconds: requestTimeoutNanoseconds) {
+            work.cancel()
         }
     }
 

@@ -137,3 +137,49 @@ final class RivetWatchPendingReply: @unchecked Sendable {
         lock.unlock()
     }
 }
+
+
+/// iPhone-side one-shot reply gate. A slow or non-cooperative product router
+/// cannot leave WatchConnectivity waiting indefinitely for its reply handler.
+final class RivetWatchReply: @unchecked Sendable {
+    private let lock = NSLock()
+    private var handler: ((Data) -> Void)?
+    private var timeoutTask: Task<Void, Never>?
+
+    init(_ handler: @escaping (Data) -> Void) {
+        self.handler = handler
+    }
+
+    func send(_ data: Data) {
+        lock.lock()
+        let completion = handler
+        handler = nil
+        let timer = timeoutTask
+        timeoutTask = nil
+        lock.unlock()
+        timer?.cancel()
+        completion?(data)
+    }
+
+    func armTimeout(nanoseconds: UInt64, onTimeout: @escaping @Sendable () -> Void) {
+        let timer = Task.detached { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: nanoseconds)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            onTimeout()
+            self?.send(Data())
+        }
+        lock.lock()
+        guard handler != nil else {
+            lock.unlock()
+            timer.cancel()
+            return
+        }
+        precondition(timeoutTask == nil, "one reply has only one deadline")
+        timeoutTask = timer
+        lock.unlock()
+    }
+}

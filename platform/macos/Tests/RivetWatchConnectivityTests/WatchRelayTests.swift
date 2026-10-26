@@ -130,3 +130,55 @@ private func awaitPendingWatchReply(
     }
     pending.complete(.success(Data([0x01])))
 }
+
+
+private final class WatchReplyRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var replies: [Data] = []
+    private var timeouts = 0
+
+    func record(_ reply: Data) {
+        lock.lock()
+        replies.append(reply)
+        lock.unlock()
+    }
+
+    func timeout() {
+        lock.lock()
+        timeouts += 1
+        lock.unlock()
+    }
+
+    func snapshot() -> (replies: [Data], timeouts: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (replies, timeouts)
+    }
+}
+
+@Test func phoneRelaySendsNativeReplyOnceEvenAfterTimeout() async throws {
+    let recorder = WatchReplyRecorder()
+    let reply = RivetWatchReply { recorder.record($0) }
+    reply.armTimeout(nanoseconds: 10_000_000) {
+        recorder.timeout()
+    }
+    try await Task.sleep(nanoseconds: 40_000_000)
+    reply.send(Data([0x01]))
+    let snapshot = recorder.snapshot()
+    #expect(snapshot.replies == [Data()])
+    #expect(snapshot.timeouts == 1)
+}
+
+@Test func phoneRelayCancelsDeadlineAfterDeliveringReply() async throws {
+    let recorder = WatchReplyRecorder()
+    let reply = RivetWatchReply { recorder.record($0) }
+    reply.armTimeout(nanoseconds: 20_000_000) {
+        recorder.timeout()
+    }
+    reply.send(Data([0x71]))
+    reply.send(Data())
+    try await Task.sleep(nanoseconds: 50_000_000)
+    let snapshot = recorder.snapshot()
+    #expect(snapshot.replies == [Data([0x71])])
+    #expect(snapshot.timeouts == 0)
+}
