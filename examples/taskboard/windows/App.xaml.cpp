@@ -37,6 +37,26 @@ void App::OnLaunched(Microsoft::UI::Xaml::LaunchActivatedEventArgs const&) {
     Microsoft::UI::Xaml::Application::Current().Exit();
   });
   window_.Activate();
+
+  // An explicitly requested test-only second top-level window proves that
+  // the same executable icon resource is usable by non-scaffold windows.
+  // It does not change the reference app's normal single-window UX.
+  wchar_t probe_flag[2]{};
+  if (::GetEnvironmentVariableW(L"RIVET_TEST_ICON_PROBE", probe_flag, 2) == 1 &&
+      probe_flag[0] == L'1') {
+    icon_probe_window_ = Microsoft::UI::Xaml::Window();
+    icon_probe_window_.Title(L"Rivet Icon Probe");
+    if (!rivet::system::ApplyAppIcon(icon_probe_window_)) {
+      winrt::throw_hresult(E_FAIL);
+    }
+    // Missing resource must return false without crashing or changing the
+    // icon that was just applied from the real EXE resource.
+    if (rivet::system::detail::ApplyIconResource(
+            icon_probe_window_, ::GetModuleHandleW(nullptr), 0xFFFF)) {
+      winrt::throw_hresult(E_FAIL);
+    }
+    icon_probe_window_.Activate();
+  }
 }
 
 }  // namespace winrt::RivetHost::implementation

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Windows WinUI hosts expose `rivet::system::ApplyAppIcon` for each titled
+  top-level window, including secondary settings windows. The shared resource
+  ID 1 helper preserves native fallback for unbranded executables.
+
 - Add an iPhone-side, default-deny Apple Watch RPC relay that binds explicitly
   registered typed watch requests to the current authenticated desktop RVT1
   client. It rechecks session availability per message, preserves desktop RPC
