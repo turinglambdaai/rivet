@@ -162,7 +162,14 @@ private final class WatchReplyRecorder: @unchecked Sendable {
     reply.armTimeout(nanoseconds: 10_000_000) {
         recorder.timeout()
     }
-    try await Task.sleep(nanoseconds: 40_000_000)
+    // Do not race an arbitrary sleep against the detached timeout task:
+    // CI may schedule 183 Swift tests concurrently and delay the timer.
+    // Observe the native timeout reply itself before injecting a late callback.
+    // The bounded poll also fails the test if the deadline never completes.
+    for _ in 0..<200 {
+        if !recorder.snapshot().replies.isEmpty { break }
+        try await Task.sleep(nanoseconds: 25_000_000)
+    }
     reply.send(Data([0x01]))
     let snapshot = recorder.snapshot()
     #expect(snapshot.replies == [Data()])
