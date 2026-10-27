@@ -55,6 +55,35 @@ MainWindow::MainWindow() {
 }
 ```
 
+## Application icon for WinUI title bars
+
+Windows App SDK / WinUI 3 does **not** automatically reuse the EXE icon for
+each top-level `AppWindow`. Rivet embeds a project-declared `windows-icon`
+in the generated Windows executable as icon group resource **ID 1**.
+Use the opt-in WinUI header helper on **every titled** window that should
+display that product identity:
+
+```cpp
+#include "winui_window.hpp"  // platform/windows/system/winui_window.hpp
+
+// Called on the WinUI thread, after InitializeComponent, before or after Activate.
+(void)rivet::system::ApplyAppIcon(*this);  // MainWindow or SettingsWindow
+```
+
+The helper uses the embedded Win32 icon resource and
+`AppWindow.SetIcon(IconId)`, **not** `SetIcon(executable_path)`. The string
+overload expects the pathname of a real `.ico` file, not the executable
+containing one. `ApplyAppIcon` returns `true` when an embedded icon was
+found and applied. It returns `false` if no product icon was embedded,
+leaving the native title-bar fallback untouched; callers should not crash
+or invent an icon in that case.
+
+`LoadIconW` returns a shared resource handle owned by the loaded EXE.
+Do **not** call `DestroyIcon` on it; the executable resource outlives all
+Windows App SDK windows in the process. Call from the owning WinUI UI thread.
+The API never forces title bars on borderless overlays and does not alter
+native title-bar decisions on macOS or Linux.
+
 ## Non-blocking generated API
 
 The generated C++ client exposes two compatible styles for every RPC and
