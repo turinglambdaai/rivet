@@ -97,7 +97,7 @@ let package = Package(
         ),
         .target(
             name: "RivetWatchConnectivity",
-            dependencies: ["RivetDevice"],
+            dependencies: ["RivetDevice", "RivetRuntime"],
             path: "Sources/RivetWatchConnectivity"
         ),
         .target(
@@ -134,7 +134,7 @@ let package = Package(
         ),
         .testTarget(
             name: "RivetWatchConnectivityTests",
-            dependencies: ["RivetWatchConnectivity", "RivetDevice"],
+            dependencies: ["RivetWatchConnectivity", "RivetDevice", "RivetRuntime"],
             path: "Tests/RivetWatchConnectivityTests"
         ),
         .testTarget(
