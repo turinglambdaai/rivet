@@ -337,8 +337,9 @@ acceptance remain open gates.
 Apple companion coverage extends to iOS and iPadOS through the shared
 iOS transport, and watchOS through a separate WatchConnectivity request
 relay to its paired iPhone. The relay requires activated/reachable
-WCSession state, non-empty bounded messages and replies, and an
-iPhone-owned route allowlist and authenticated desktop session. CI now
+WCSession state, non-empty bounded messages and replies, a finite immediate
+request deadline with cancellation-safe callback completion, and an iPhone-owned
+route allowlist and authenticated desktop session. CI now
 includes iOS/watchOS device and simulator framework compilations and
 deterministic Swift relay tests. Neither standalone iPad/watch
 applications nor real-device pairing, background connectivity,

@@ -3,54 +3,31 @@
 import Foundation
 import RivetDevice
 
-public enum RivetWatchConnectivityError: Error, Sendable, CustomStringConvertible {
-    case notSupported
-    case notReachable
-    case notActivated
-    case emptyReply
-
-    public var description: String {
-        switch self {
-        case .notSupported: return "WatchConnectivity is not supported on this device"
-        case .notReachable: return "the paired WatchConnectivity peer is not reachable"
-        case .notActivated: return "the paired WatchConnectivity session is not activated"
-        case .emptyReply: return "the WatchConnectivity peer returned an invalid empty reply"
-        }
-    }
-}
-
-private final class RivetWatchReply: @unchecked Sendable {
-    private let lock = NSLock()
-    private var handler: ((Data) -> Void)?
-
-    init(_ handler: @escaping (Data) -> Void) {
-        self.handler = handler
-    }
-
-    func send(_ data: Data) {
-        lock.lock()
-        let handler = self.handler
-        self.handler = nil
-        lock.unlock()
-        handler?(data)
-    }
-}
-
 public final class RivetWatchConnectivityTransport: NSObject, RivetDeviceTransport, @unchecked Sendable {
     private let session: WCSession
     private let router: RivetDeviceRouter?
     private let messagePolicy: RivetWatchMessagePolicy
+    private let requestTimeoutNanoseconds: UInt64
+    private let outgoingBudget: RivetWatchRequestBudget
+    private let incomingBudget: RivetWatchRequestBudget
     private let stateContinuation: AsyncStream<RivetWatchConnectivityState>.Continuation
     public let stateChanges: AsyncStream<RivetWatchConnectivityState>
 
     public init(
         session: WCSession = .default,
         router: RivetDeviceRouter? = nil,
-        messagePolicy: RivetWatchMessagePolicy = RivetWatchMessagePolicy()
+        messagePolicy: RivetWatchMessagePolicy = RivetWatchMessagePolicy(),
+        requestTimeout: TimeInterval = 15,
+        maximumConcurrentRequests: Int = 4
     ) {
+        precondition(requestTimeout.isFinite && requestTimeout >= 1 && requestTimeout <= 120)
+        precondition((1...32).contains(maximumConcurrentRequests))
         self.session = session
         self.router = router
         self.messagePolicy = messagePolicy
+        requestTimeoutNanoseconds = UInt64(requestTimeout * 1_000_000_000)
+        outgoingBudget = RivetWatchRequestBudget(maximumConcurrentRequests: maximumConcurrentRequests)
+        incomingBudget = RivetWatchRequestBudget(maximumConcurrentRequests: maximumConcurrentRequests)
         let (stateChanges, stateContinuation) = AsyncStream.makeStream(
             of: RivetWatchConnectivityState.self,
             bufferingPolicy: .bufferingNewest(16)
@@ -100,26 +77,42 @@ public final class RivetWatchConnectivityTransport: NSObject, RivetDeviceTranspo
         guard session.isReachable else {
             throw RivetWatchConnectivityError.notReachable
         }
+        guard outgoingBudget.acquire() else {
+            throw RivetWatchConnectivityError.tooManyPendingRequests
+        }
+        defer { outgoingBudget.release() }
         let policy = messagePolicy
-        return try await withCheckedThrowingContinuation { continuation in
-            session.sendMessageData(
-                request,
-                replyHandler: { data in
-                    if data.isEmpty {
-                        continuation.resume(throwing: RivetWatchConnectivityError.emptyReply)
-                    } else {
-                        do {
-                            try policy.validate(data)
-                            continuation.resume(returning: data)
-                        } catch {
-                            continuation.resume(throwing: error)
-                        }
-                    }
-                },
-                errorHandler: { error in
-                    continuation.resume(throwing: error)
+        let pending = RivetWatchPendingReply()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Data, Error>) in
+                guard pending.install(continuation) else { return }
+                guard !Task.isCancelled else {
+                    pending.complete(.failure(CancellationError()))
+                    return
                 }
-            )
+                pending.armTimeout(nanoseconds: requestTimeoutNanoseconds)
+                session.sendMessageData(
+                    request,
+                    replyHandler: { data in
+                        if data.isEmpty {
+                            pending.complete(.failure(RivetWatchConnectivityError.emptyReply))
+                        } else {
+                            do {
+                                try policy.validate(data)
+                                pending.complete(.success(data))
+                            } catch {
+                                pending.complete(.failure(error))
+                            }
+                        }
+                    },
+                    errorHandler: { error in
+                        pending.complete(.failure(error))
+                    }
+                )
+            }
+        } onCancel: {
+            pending.complete(.failure(CancellationError()))
         }
     }
 }
@@ -153,8 +146,14 @@ extension RivetWatchConnectivityTransport: WCSessionDelegate {
             reply.send(Data())
             return
         }
+        guard incomingBudget.acquire() else {
+            reply.send(Data())
+            return
+        }
+        let budget = incomingBudget
         let policy = messagePolicy
-        Task {
+        let work = Task {
+            defer { budget.release() }
             do {
                 let data = try await router.handle(messageData)
                 try policy.validate(data)
@@ -162,6 +161,9 @@ extension RivetWatchConnectivityTransport: WCSessionDelegate {
             } catch {
                 reply.send(Data())
             }
+        }
+        reply.armTimeout(nanoseconds: requestTimeoutNanoseconds) {
+            work.cancel()
         }
     }
 

@@ -56,3 +56,177 @@ public enum RivetWatchConnectivityState: Equatable, Sendable {
         }
     }
 }
+
+
+/// The immediate watch-to-phone relay must not leave an RPC suspended when
+/// WatchConnectivity drops a reply callback during a network transition.
+public enum RivetWatchConnectivityError: Error, Equatable, Sendable, CustomStringConvertible {
+    case notSupported
+    case notReachable
+    case notActivated
+    case emptyReply
+    case requestTimedOut
+    case tooManyPendingRequests
+
+    public var description: String {
+        switch self {
+        case .notSupported: "WatchConnectivity is not supported on this device"
+        case .notReachable: "the paired WatchConnectivity peer is not reachable"
+        case .notActivated: "the paired WatchConnectivity session is not activated"
+        case .emptyReply: "the WatchConnectivity peer returned an invalid empty reply"
+        case .requestTimedOut: "the paired WatchConnectivity peer did not reply before the deadline"
+        case .tooManyPendingRequests: "too many concurrent WatchConnectivity requests"
+        }
+    }
+
+    /// Keep ambiguous timeout outcomes explicit: the iPhone might already
+    /// have applied a command even when no reply reached the Watch.
+    public var userFacingMessage: String {
+        switch self {
+        case .notSupported: "This device cannot contact a paired iPhone."
+        case .notReachable: "Open the iPhone app to connect."
+        case .notActivated: "Waiting for the iPhone connection to activate."
+        case .emptyReply: "The iPhone could not complete that request."
+        case .requestTimedOut:
+            "No reply from iPhone. The action may have completed; check its result before retrying."
+        case .tooManyPendingRequests:
+            "Too many requests in progress. Try again after they finish."
+        }
+    }
+}
+
+/// Once-only completion for callbacks that may arrive after task cancellation
+/// or a deadline. Pre-install cancellation is saved and immediately delivered
+/// when the checked continuation becomes available.
+final class RivetWatchPendingReply: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Data, Error>?
+    private var completed: Result<Data, Error>?
+    private var timeoutTask: Task<Void, Never>?
+
+    @discardableResult
+    func install(_ next: CheckedContinuation<Data, Error>) -> Bool {
+        lock.lock()
+        if let completed {
+            lock.unlock()
+            next.resume(with: completed)
+            return false
+        }
+        precondition(continuation == nil, "a pending reply has only one waiter")
+        continuation = next
+        lock.unlock()
+        return true
+    }
+
+    func complete(_ result: Result<Data, Error>) {
+        lock.lock()
+        guard completed == nil else {
+            lock.unlock()
+            return
+        }
+        completed = result
+        let waiter = continuation
+        continuation = nil
+        let timer = timeoutTask
+        timeoutTask = nil
+        lock.unlock()
+        timer?.cancel()
+        waiter?.resume(with: result)
+    }
+
+    func armTimeout(nanoseconds: UInt64) {
+        let timer = Task.detached { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: nanoseconds)
+            } catch {
+                return
+            }
+            self?.complete(.failure(RivetWatchConnectivityError.requestTimedOut))
+        }
+        lock.lock()
+        if completed != nil {
+            lock.unlock()
+            timer.cancel()
+            return
+        }
+        precondition(timeoutTask == nil, "a pending reply has only one deadline")
+        timeoutTask = timer
+        lock.unlock()
+    }
+}
+
+
+/// iPhone-side one-shot reply gate. A slow or non-cooperative product router
+/// cannot leave WatchConnectivity waiting indefinitely for its reply handler.
+final class RivetWatchReply: @unchecked Sendable {
+    private let lock = NSLock()
+    private var handler: ((Data) -> Void)?
+    private var timeoutTask: Task<Void, Never>?
+
+    init(_ handler: @escaping (Data) -> Void) {
+        self.handler = handler
+    }
+
+    func send(_ data: Data) {
+        lock.lock()
+        let completion = handler
+        handler = nil
+        let timer = timeoutTask
+        timeoutTask = nil
+        lock.unlock()
+        timer?.cancel()
+        completion?(data)
+    }
+
+    func armTimeout(nanoseconds: UInt64, onTimeout: @escaping @Sendable () -> Void) {
+        let timer = Task.detached { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: nanoseconds)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            onTimeout()
+            self?.send(Data())
+        }
+        lock.lock()
+        guard handler != nil else {
+            lock.unlock()
+            timer.cancel()
+            return
+        }
+        precondition(timeoutTask == nil, "one reply has only one deadline")
+        timeoutTask = timer
+        lock.unlock()
+    }
+}
+
+
+/// Bounded simultaneous foreground requests in each direction. A cancelled
+/// but non-cooperative iPhone handler retains its slot until it exits, so an
+/// unresponsive route cannot trigger unlimited new handler tasks.
+final class RivetWatchRequestBudget: @unchecked Sendable {
+    private let lock = NSLock()
+    private let maximumConcurrentRequests: Int
+    private var active = 0
+
+    init(maximumConcurrentRequests: Int) {
+        precondition((1...32).contains(maximumConcurrentRequests))
+        self.maximumConcurrentRequests = maximumConcurrentRequests
+    }
+
+    func acquire() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard active < maximumConcurrentRequests else { return false }
+        active += 1
+        return true
+    }
+
+    func release() {
+        lock.lock()
+        precondition(active > 0, "request budget release without reservation")
+        active -= 1
+        lock.unlock()
+    }
+}

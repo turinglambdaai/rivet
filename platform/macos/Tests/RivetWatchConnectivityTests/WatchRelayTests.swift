@@ -93,3 +93,121 @@ private struct PhoneRelayLoopback: RivetDeviceTransport {
         try await client.send(WatchDenied(text: "cannot escalate"))
     }
 }
+
+
+private func awaitPendingWatchReply(
+    _ pending: RivetWatchPendingReply,
+    deadline: UInt64? = nil
+) async throws -> Data {
+    try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<Data, Error>) in
+        guard pending.install(continuation) else { return }
+        if let deadline { pending.armTimeout(nanoseconds: deadline) }
+    }
+}
+
+@Test func watchReplyCompletionIgnoresDuplicateAndLateCallbacks() async throws {
+    let pending = RivetWatchPendingReply()
+    let wait = Task { try await awaitPendingWatchReply(pending) }
+    pending.complete(.success(Data([0x34])))
+    pending.complete(.failure(RivetWatchConnectivityError.emptyReply))
+    #expect(try await wait.value == Data([0x34]))
+}
+
+@Test func watchReplyCancellationBeforeRegistrationResumesExactlyOnce() async {
+    let pending = RivetWatchPendingReply()
+    pending.complete(.failure(CancellationError()))
+    let wait = Task { try await awaitPendingWatchReply(pending) }
+    pending.complete(.success(Data([1])))
+    await #expect(throws: CancellationError.self) { try await wait.value }
+}
+
+@Test func watchReplyDeadlineIsFiniteAndRejectsLateSuccess() async {
+    let pending = RivetWatchPendingReply()
+    let wait = Task { try await awaitPendingWatchReply(pending, deadline: 10_000_000) }
+    await #expect(throws: RivetWatchConnectivityError.requestTimedOut) {
+        try await wait.value
+    }
+    pending.complete(.success(Data([0x01])))
+}
+
+
+private final class WatchReplyRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var replies: [Data] = []
+    private var timeouts = 0
+
+    func record(_ reply: Data) {
+        lock.lock()
+        replies.append(reply)
+        lock.unlock()
+    }
+
+    func timeout() {
+        lock.lock()
+        timeouts += 1
+        lock.unlock()
+    }
+
+    func snapshot() -> (replies: [Data], timeouts: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (replies, timeouts)
+    }
+}
+
+@Test func phoneRelaySendsNativeReplyOnceEvenAfterTimeout() async throws {
+    let recorder = WatchReplyRecorder()
+    let reply = RivetWatchReply { recorder.record($0) }
+    reply.armTimeout(nanoseconds: 10_000_000) {
+        recorder.timeout()
+    }
+    // Do not race an arbitrary sleep against the detached timeout task:
+    // CI may schedule 183 Swift tests concurrently and delay the timer.
+    // Observe the native timeout reply itself before injecting a late callback.
+    // The bounded poll also fails the test if the deadline never completes.
+    for _ in 0..<200 {
+        if !recorder.snapshot().replies.isEmpty { break }
+        try await Task.sleep(nanoseconds: 25_000_000)
+    }
+    reply.send(Data([0x01]))
+    let snapshot = recorder.snapshot()
+    #expect(snapshot.replies == [Data()])
+    #expect(snapshot.timeouts == 1)
+}
+
+@Test func phoneRelayCancelsDeadlineAfterDeliveringReply() async throws {
+    let recorder = WatchReplyRecorder()
+    let reply = RivetWatchReply { recorder.record($0) }
+    reply.armTimeout(nanoseconds: 20_000_000) {
+        recorder.timeout()
+    }
+    reply.send(Data([0x71]))
+    reply.send(Data())
+    try await Task.sleep(nanoseconds: 50_000_000)
+    let snapshot = recorder.snapshot()
+    #expect(snapshot.replies == [Data([0x71])])
+    #expect(snapshot.timeouts == 0)
+}
+
+
+@Test func watchRequestBudgetBoundsConcurrentRequestsAndReusesSlots() {
+    let budget = RivetWatchRequestBudget(maximumConcurrentRequests: 2)
+    #expect(budget.acquire())
+    #expect(budget.acquire())
+    #expect(!budget.acquire())
+    budget.release()
+    #expect(budget.acquire())
+    #expect(!budget.acquire())
+    budget.release()
+    budget.release()
+    #expect(budget.acquire())
+    budget.release()
+}
+
+
+@Test func watchTimeoutMessageDoesNotPromiseTheActionWasNotExecuted() {
+    let message = RivetWatchConnectivityError.requestTimedOut.userFacingMessage
+    #expect(message.contains("may have completed"))
+    #expect(message.contains("before retrying"))
+}
