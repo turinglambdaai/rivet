@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `raco rivet build` and `raco rivet i18n` no longer regenerate files for
+  platform hosts a project removed: the Swift and Windows typed clients and
+  embedded i18n tables are emitted only when their host directory exists,
+  matching the rule linux already followed and the conditional Kotlin client
+  (issue #311). Single-platform products no longer get deleted host
+  directories resurrected on every build, and the release freshness gate
+  stops demanding files nobody consumes.
+
 - Windows WinUI hosts expose `rivet::system::ApplyAppIcon` for each titled
   top-level window, including secondary settings windows. The shared resource
   ID 1 helper preserves native fallback for unbranded executables.

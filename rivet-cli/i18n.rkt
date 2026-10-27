@@ -193,13 +193,20 @@
   (define table (load-i18n-table project))
   (when (null? table)
     (error 'i18n "the i18n tables are empty; add keys to shared/i18n"))
+  ;; Only platforms the project still ships get embedded tables: guard on
+  ;; the host directory like the client codegen does, so regenerating a
+  ;; single-platform product does not resurrect the hosts it removed.
   (define outputs
-    (list*
-     (cons (project-path project "macos-host" "Sources" "RivetHost"
-                         "GeneratedI18n.swift")
-           (swift-i18n-source table))
-     (cons (project-path project "windows" "GeneratedI18n.hpp")
-           (cpp-i18n-header table))
+    (append
+     (if (directory-exists? (project-path project "macos-host"))
+         (list (cons (project-path project "macos-host" "Sources" "RivetHost"
+                                   "GeneratedI18n.swift")
+                     (swift-i18n-source table)))
+         '())
+     (if (directory-exists? (project-path project "windows"))
+         (list (cons (project-path project "windows" "GeneratedI18n.hpp")
+                     (cpp-i18n-header table)))
+         '())
      (let ([linux-host (project-path project "linux")])
        (if (directory-exists? linux-host)
            (list (cons (build-path linux-host "GeneratedI18n.hpp")

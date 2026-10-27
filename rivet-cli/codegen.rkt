@@ -70,26 +70,38 @@
                         (generate-kotlin rpcs events states records enums device-rpcs
                                          module-name entry-name display-name version build
                                          identifier release-channel)))))
-      (define pairs
-        (list*
-         (cons (project-path project "macos-host" "Sources" "RivetHost" "GeneratedBackend.swift")
-               (parameterize ([current-swift-codable-types codable-types])
-                 (generate-swift rpcs events states records enums device-rpcs
-                                 module-name entry-name display-name version build
-                                 identifier release-channel)))
-         (cons (project-path project "windows" "GeneratedBackend.hpp")
-               (generate-cpp rpcs events states records enums
-                             module-name entry-name display-name version build
-                             identifier release-channel "rivet::windows"))
-         pairs-with-kotlin))
+      ;; A platform the project no longer ships must not get generated
+      ;; files: emit each desktop host's typed client only when its host
+      ;; directory exists — the rule linux already follows here, and the
+      ;; same principle as the conditional Kotlin client (issue #311).
+      ;; Unconditional emission resurrected removed host directories on
+      ;; every build and made the release freshness gate demand files
+      ;; nobody consumes in single-platform products.
+      (define macos-host (project-path project "macos-host"))
+      (define windows-host (project-path project "windows"))
       (define linux-host (project-path project "linux"))
-      (if (directory-exists? linux-host)
-          (cons (cons (build-path linux-host "GeneratedBackend.hpp")
-                      (generate-cpp rpcs events states records enums
-                                    module-name entry-name display-name version build
-                                    identifier release-channel "rivet::linux_runtime"))
-                pairs)
-          pairs)))
+      (append
+       (if (directory-exists? macos-host)
+           (list (cons (project-path project "macos-host" "Sources" "RivetHost"
+                                     "GeneratedBackend.swift")
+                       (parameterize ([current-swift-codable-types codable-types])
+                         (generate-swift rpcs events states records enums device-rpcs
+                                         module-name entry-name display-name version build
+                                         identifier release-channel))))
+           '())
+       (if (directory-exists? windows-host)
+           (list (cons (project-path project "windows" "GeneratedBackend.hpp")
+                       (generate-cpp rpcs events states records enums
+                                     module-name entry-name display-name version build
+                                     identifier release-channel "rivet::windows")))
+           '())
+       pairs-with-kotlin
+       (if (directory-exists? linux-host)
+           (list (cons (build-path linux-host "GeneratedBackend.hpp")
+                       (generate-cpp rpcs events states records enums
+                                     module-name entry-name display-name version build
+                                     identifier release-channel "rivet::linux_runtime")))
+           '()))))
   (cons outputs (list rpcs states events records enums)))
 
 (define (generate-clients! project)

@@ -724,7 +724,38 @@ RKT
 RKT
      )
     (check-exn #rx"native API name collision"
-               (lambda () (generate-clients! project))))
+               (lambda () (generate-clients! project)))
+
+    ;; Removed platforms stay removed — the host-directory guard mirrors
+    ;; the conditional Kotlin client (issue #311): a single-platform
+    ;; product must not get its deleted hosts resurrected by codegen,
+    ;; and the freshness gate must not demand files nobody consumes.
+    (delete-directory/files (build-path project-root "macos-host"))
+    (delete-directory/files (build-path project-root "linux"))
+    (write-backend!
+     project-root
+     #<<RKT
+#lang racket/base
+
+(require rivet/backend)
+(provide start)
+
+(define-rpc (ping : String) "pong")
+(define (start in-fd out-fd)
+  (serve-fds in-fd out-fd))
+RKT
+     )
+    (generate-clients! project)
+    (check-false (directory-exists? (build-path project-root "macos-host")))
+    (check-false (directory-exists? (build-path project-root "linux")))
+    (check-true
+     (file-exists? (build-path project-root "windows" "GeneratedBackend.hpp")))
+    (check-false
+     (for/or ([pair (in-list (car (client-outputs project)))])
+       (string-contains? (path->string (car pair)) "macos-host")))
+    (define removed-host-report (check-generated-clients project))
+    (check-equal? (hash-ref removed-host-report 'missing) '())
+    (check-equal? (hash-ref removed-host-report 'stale) '()))
   (lambda ()
     (when (directory-exists? temp-root)
       (delete-directory/files temp-root))))
