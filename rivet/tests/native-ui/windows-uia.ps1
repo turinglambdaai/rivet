@@ -19,6 +19,10 @@ public static class RivetNativeUi {
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool PostMessage(
         IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr SendMessage(
+        IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
 }
 '@
 
@@ -97,15 +101,61 @@ function Save-Screenshot {
     }
 }
 
-$process = Start-Process -FilePath (Resolve-Path -LiteralPath $Executable) -PassThru
+$priorProbe = [Environment]::GetEnvironmentVariable('RIVET_TEST_ICON_PROBE', 'Process')
+[Environment]::SetEnvironmentVariable('RIVET_TEST_ICON_PROBE', '1', 'Process')
+try {
+    $process = Start-Process -FilePath (Resolve-Path -LiteralPath $Executable) -PassThru
+} finally {
+    [Environment]::SetEnvironmentVariable('RIVET_TEST_ICON_PROBE', $priorProbe, 'Process')
+}
 $window = $null
+$probeWindow = $null
 try {
     $processCondition = [System.Windows.Automation.PropertyCondition]::new(
         [System.Windows.Automation.AutomationElement]::ProcessIdProperty,
         $process.Id)
     $window = Wait-Until 'the Taskboard WinUI window' {
-        [System.Windows.Automation.AutomationElement]::RootElement.FindFirst(
+        $matches = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
             [System.Windows.Automation.TreeScope]::Children, $processCondition)
+        foreach ($candidate in $matches) {
+            if ($candidate.Current.Name -like 'Rivet Taskboard*') { return $candidate }
+        }
+        return $null
+    }
+    $probeWindow = Wait-Until 'the second titled WinUI icon-probe window' {
+        $matches = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
+            [System.Windows.Automation.TreeScope]::Children, $processCondition)
+        foreach ($candidate in $matches) {
+            if ($candidate.Current.Name -eq 'Rivet Icon Probe') { return $candidate }
+        }
+        return $null
+    }
+
+    # Both top-level windows must expose the exact solid-color icon fixture
+    # embedded into the packaged EXE as Win32 group icon resource ID 1.
+    foreach ($entry in @(
+        @{ label = 'Taskboard'; element = $window },
+        @{ label = 'secondary icon probe'; element = $probeWindow }
+    )) {
+        $hwnd = [IntPtr]$entry.element.Current.NativeWindowHandle
+        if ($hwnd -eq [IntPtr]::Zero) { throw "$($entry.label) has no native HWND" }
+        $iconHandle = [RivetNativeUi]::SendMessage($hwnd, 0x007F, [IntPtr]0, [IntPtr]::Zero)
+        if ($iconHandle -eq [IntPtr]::Zero) {
+            $iconHandle = [RivetNativeUi]::SendMessage($hwnd, 0x007F, [IntPtr]1, [IntPtr]::Zero)
+        }
+        if ($iconHandle -eq [IntPtr]::Zero) {
+            throw "$($entry.label) did not publish the packaged executable icon"
+        }
+        # The fixture is a 16x16 fully opaque bitmap with RGB(25,115,186).
+        $bitmap = [System.Drawing.Icon]::FromHandle($iconHandle).ToBitmap()
+        try {
+            $pixel = $bitmap.GetPixel(8, 8)
+            if ($pixel.R -ne 25 -or $pixel.G -ne 115 -or $pixel.B -ne 186) {
+                throw "$($entry.label) published a different title-bar icon: $pixel"
+            }
+        } finally {
+            $bitmap.Dispose()
+        }
     }
 
     $required = [ordered]@{
@@ -174,6 +224,7 @@ try {
         observedStatus = @($observedStatus)
         assertions = @(
             'native WinUI window exposed'
+            'two titled WinUI windows exposed the expected packaged icon'
             'stable control types and AutomationIds exposed'
             'RPC-created task appeared'
             'operation-progress Event appeared'
@@ -206,6 +257,7 @@ try {
     $generate = $null
     $status = $null
     $window = $null
+    $probeWindow = $null
     [GC]::Collect()
     [GC]::WaitForPendingFinalizers()
     [GC]::Collect()
