@@ -86,6 +86,18 @@ both ship it. Report a wedge with its diagnostic bundle (process sample,
 spin signature, app log) as a runtime defect rather than retrying forever;
 a wedged instance never self-heals and must be killed by exact pid.
 
+The reference macOS AX driver now records a bounded `ps` snapshot into
+`startup-spin-process.txt` if a **CI** run times out before finding its
+first native window. If that exact test PID remains above 200% CPU, it also
+attempts `sample PID 3 -file startup-spin.sample.txt` for a three-second
+native thread stack sample; permission errors are recorded but do not hide
+the original AX failure. The existing `if: always()` CI artifact uploads
+include these files only when captured. Do not infer a Chez GC deadlock from
+the CPU signature alone: the stack evidence must be inspected before
+modifying the runtime. A developer's local run does not automatically sample
+a potentially sensitive process; CI evidence may contain host stack paths and
+is governed by repository CI retention/access controls.
+
 ## Driving keyboards and focus on macOS
 
 The reference driver's helpers exist for the real event path — `focus`,
