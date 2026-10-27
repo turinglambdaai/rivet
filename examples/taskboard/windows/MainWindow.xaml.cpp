@@ -66,6 +66,7 @@ std::wstring status_text(rivet_app::TaskStatus status) {
 MainWindow::MainWindow() {
   InitializeComponent();
   Title(L"Rivet Taskboard — Racket + WinUI 3");
+  (void)rivet::system::ApplyAppIcon(*this);
   TaskList().ItemsSource(task_rows_);
   ChartHost().Content(chart_);
   chart_.set_title("offsetFromMaster / meanPathDelay");
