@@ -133,6 +133,18 @@ CPP
     (void (generate-i18n! project))
     (check-false (hash? (check-generated-i18n project)))
 
+    ;; Removed platforms stay removed: deleting a host directory and
+    ;; regenerating must not resurrect it, and the freshness gate must
+    ;; stop demanding its table (single-platform products).
+    (delete-directory/files (build-path project-root "macos-host"))
+    (define-values (keys-after-removal tables-after-removal)
+      (apply values (generate-i18n! project)))
+    (check-equal? keys-after-removal 3)
+    (check-equal? tables-after-removal 2 "windows + linux tables only")
+    (check-false (directory-exists? (build-path project-root "macos-host")))
+    (check-false (hash? (check-generated-i18n project))
+                 "the freshness gate ignores removed hosts")
+
     ;; Parity failures for doctor: non-flat structures and drifted key sets
     ;; both surface as messages, and a project without shared/i18n skips.
     (write-table! "en" "{\"nested\": {\"key\": \"value\"}}")
