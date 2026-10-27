@@ -82,6 +82,54 @@ func waitFor<T>(
     throw DriverError.failure("timed out waiting for \(description)")
 }
 
+// Issue #329: capture the *real* wedged process on a CI launch failure.
+// A successful backend handshake without an AX window can indicate a rare
+// embedded Chez/Racket startup spin. Static stack guesses are not evidence.
+// Only CI may capture a bounded sample, and only for the exact test PID.
+func captureStartupSpinEvidence(pid: pid_t, output: URL) {
+    guard ProcessInfo.processInfo.environment["CI"] == "true", pid > 0 else { return }
+    func capture(_ executable: String, _ arguments: [String]) -> (Int32, String)? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        guard (try? process.run()) != nil else { return nil }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return (process.terminationStatus, String(decoding: data, as: UTF8.self))
+    }
+
+    let ps = capture("/bin/ps", ["-p", String(pid), "-o", "pid=,ppid=,stat=,%cpu=,etime=,comm="])
+    let report = ps?.1 ?? "ps failed or process already exited"
+    try? report.write(to: output.appendingPathComponent("startup-spin-process.txt"),
+                      atomically: true, encoding: .utf8)
+    // Sampling a healthy but slow startup wastes time and can expose
+    // unrelated runner activity. Only sample a high-CPU candidate.
+    let cpuText = capture("/bin/ps", ["-p", String(pid), "-o", "%cpu="])?.1 ?? ""
+    guard let cpu = Double(cpuText.trimmingCharacters(in: .whitespacesAndNewlines)),
+          cpu >= 200 else { return }
+
+    let file = output.appendingPathComponent("startup-spin.sample.txt")
+    // 'sample PID DURATION -file PATH' is bounded to three seconds on macOS.
+    // Permission denial is kept as separate evidence, never hides the AX
+    // failure and never broadens sampling to other processes.
+    let command = Process()
+    command.executableURL = URL(fileURLWithPath: "/usr/bin/sample")
+    command.arguments = [String(pid), "3", "-file", file.path]
+    let errors = Pipe()
+    command.standardError = errors
+    command.standardOutput = FileHandle.nullDevice
+    if (try? command.run()) != nil {
+        let errorData = errors.fileHandleForReading.readDataToEndOfFile()
+        command.waitUntilExit()
+        if !errorData.isEmpty {
+            try? errorData.write(to: output.appendingPathComponent("startup-spin-sample-stderr.txt"))
+        }
+    }
+}
+
 func snapshot(_ element: AXUIElement, depth: Int = 0) -> [String: Any] {
     var result: [String: Any] = [
         "role": stringAttribute(element, kAXRoleAttribute),
@@ -235,8 +283,14 @@ do {
     }
 
     let application = AXUIElementCreateApplication(options.pid)
-    let window: AXUIElement = try waitFor("the Taskboard window") {
-        (attribute(application, kAXWindowsAttribute) as? [AXUIElement])?.first
+    let window: AXUIElement
+    do {
+        window = try waitFor("the Taskboard window") {
+            (attribute(application, kAXWindowsAttribute) as? [AXUIElement])?.first
+        }
+    } catch {
+        captureStartupSpinEvidence(pid: options.pid, output: options.output)
+        throw error
     }
     _ = AXUIElementSetAttributeValue(
         application, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
