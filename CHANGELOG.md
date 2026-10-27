@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add an iPhone-side, default-deny Apple Watch RPC relay that binds explicitly
+  registered typed watch requests to the current authenticated desktop RVT1
+  client. It rechecks session availability per message, preserves desktop RPC
+  scope enforcement and the 64 KiB WatchConnectivity envelope budget, and
+  includes deterministic route, revocation, and budget tests. App packaging
+  and physical-device acceptance remain separate release gates.
+
 ### Fixed
 
 - WatchConnectivity immediate watch-to-iPhone requests now have a configurable

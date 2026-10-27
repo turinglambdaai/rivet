@@ -47,6 +47,46 @@ reachability and a product-supplied typed action. The action should use the
 same generated client and explicit route allowlist shown above; the view is a
 reusable component, not a complete signed watch application.
 
+### Authenticated Apple Watch → iPhone → desktop relay
+
+The iPhone can relay a **product-selected** watch action to the current
+RVD1-authenticated desktop RVT1 client without giving WCSession itself
+desktop authority. `RivetWatchAuthenticatedRPCRelay` starts with no routes
+and resolves the current authenticated session **on every request**.
+The provider returns `RivetWatchAuthenticatedDesktopSession`, with a fresh
+`connectionID` per successful RVD1 connection (not the persistent device ID).
+The relay checks that same connection remains active before returning results,
+so in-flight replies from a revoked/replaced session are discarded.
+Only the iPhone app registers a typed watch request with one exact desktop
+RPC and explicit RivetValue conversions:
+
+```swift
+// Product-owned WatchSeek/WatchSeekReply types conform to Codable/Sendable.
+enum DecodeError: Error { case unexpectedValue }
+// Return nil when disconnected; refresh connectionID on every new RVD1 session.
+let relay = RivetWatchAuthenticatedRPCRelay(
+    activeSession: { await sessionStore.currentAuthenticatedSession() }
+)
+try await relay.register(
+    WatchSeek.self,
+    rpc: "player.seek",
+    arguments: { [.int64($0.position)] },
+    response: { value in
+        guard case .int64(let position) = value else { throw DecodeError.unexpectedValue }
+        return WatchSeekReply(position: position)
+    }
+)
+let phoneTransport = RivetWatchConnectivityTransport(router: relay.router)
+try phoneTransport.activate()
+```
+
+The watch uses its generated `RivetDeviceClient` with the standard
+`RivetWatchConnectivityTransport`. Revoking the desktop session removes
+relay authority even while the paired iPhone remains reachable. The desktop
+gateway **also** enforces the companion's RPC scope independently of the
+watch route allowlist. Request/reply envelopes remain limited to 64 KiB.
+This is framework support, not a signed/watch-ready app or proof of
+background/physical-device behavior.
 The allowlist is empty by default. Missing RPC names fail generation. Selected
 arguments and results must be representable by `Codable`: the primitive,
 `List`, `Optional`, Record, and Enum schema types are supported, while `Any` is
