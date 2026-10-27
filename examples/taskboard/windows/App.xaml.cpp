@@ -49,6 +49,12 @@ void App::OnLaunched(Microsoft::UI::Xaml::LaunchActivatedEventArgs const&) {
     if (!rivet::system::ApplyAppIcon(icon_probe_window_)) {
       winrt::throw_hresult(E_FAIL);
     }
+    // Missing resource must return false without crashing or changing the
+    // icon that was just applied from the real EXE resource.
+    if (rivet::system::detail::ApplyIconResource(
+            icon_probe_window_, ::GetModuleHandleW(nullptr), 0xFFFF)) {
+      winrt::throw_hresult(E_FAIL);
+    }
     icon_probe_window_.Activate();
   }
 }
