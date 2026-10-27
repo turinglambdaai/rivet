@@ -150,7 +150,13 @@ try {
         $bitmap = [System.Drawing.Icon]::FromHandle($iconHandle).ToBitmap()
         try {
             $pixel = $bitmap.GetPixel(8, 8)
-            if ($pixel.R -ne 25 -or $pixel.G -ne 115 -or $pixel.B -ne 186) {
+            # Win32 may premultiply the fully opaque ICO DIB through a
+            # 254/255 alpha round-trip; tolerate one channel level but reject
+            # any generic/default title-bar icon or unrelated product art.
+            if ([Math]::Abs([int]$pixel.R - 25) -gt 1 -or
+                [Math]::Abs([int]$pixel.G - 115) -gt 1 -or
+                [Math]::Abs([int]$pixel.B - 186) -gt 1 -or
+                $pixel.A -lt 254) {
                 throw "$($entry.label) published a different title-bar icon: $pixel"
             }
         } finally {
