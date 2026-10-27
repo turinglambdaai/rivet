@@ -67,17 +67,7 @@ rivet::windows::RacketRuntimeConfig runtime_config() {
 MainWindow::MainWindow() {
   InitializeComponent();
   Title(L"Rivet — Racket + WinUI 3");
-  // WinUI shows a generic placeholder in the title bar unless the
-  // window is handed an icon explicitly; rivet embeds the project
-  // icon in the exe at resource ID 1 (rivet-cli/build.rkt), so
-  // surface it here. Projects without a windows-icon declaration
-  // keep the placeholder.
-  if (HICON const icon =
-          ::LoadIconW(::GetModuleHandleW(nullptr), MAKEINTRESOURCEW(1))) {
-    AppWindow().SetIcon(winrt::Microsoft::UI::IconId{
-        static_cast<std::uint64_t>(reinterpret_cast<UINT_PTR>(icon))});
-  }
-  // Ordinary window close and OS session end (logoff/shutdown) both funnel
+  // Only titled windows opt in; absent brand resources keep the native default.\n  (void)rivet::system::ApplyAppIcon(*this);\n  // Ordinary window close and OS session end (logoff/shutdown) both funnel
   // into the same orderly backend stop. The console-control callback runs
   // on its own thread, so it only touches the thread-safe stop() — never
   // XAML state.
