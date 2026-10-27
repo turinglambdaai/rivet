@@ -11,6 +11,8 @@ struct App : AppT<App> {
 
  private:
   Microsoft::UI::Xaml::Window window_{nullptr};
+  // Only instantiated by the packaged Windows native UI icon regression.
+  Microsoft::UI::Xaml::Window icon_probe_window_{nullptr};
 };
 
 }  // namespace winrt::RivetHost::implementation
