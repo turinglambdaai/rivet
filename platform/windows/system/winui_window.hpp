@@ -26,25 +26,35 @@ template <typename Window>
   return handle;
 }
 
- // Opt-in icon identity for titled WinUI 3 desktop windows. Rivet's Windows
- // packager embeds the product icon as RT_GROUP_ICON resource ID 1 in the EXE.
- // A secondary Settings/About window can call the same helper after its
- // InitializeComponent() (either before or after Activate()).
- //
- // LoadIconW returns a *shared*, module-owned icon handle: do not DestroyIcon.
- // The executable resource remains loaded for the lifetime of the process.
- // An absent icon resource is normal for unbranded templates: leave the
- // AppWindow icon unchanged and return false, rather than trying to use an
- // executable filename as the SetIcon(path-to-ico) overload.
- template <typename Window>
- [[nodiscard]] bool ApplyAppIcon(Window const& window) {
-   HMODULE const module = ::GetModuleHandleW(nullptr);
-   if (!module) return false;
-   HICON const icon = ::LoadIconW(module, MAKEINTRESOURCEW(1));
-   if (!icon) return false;
-   window.AppWindow().SetIcon(winrt::Microsoft::UI::IconId{
-       static_cast<std::uint64_t>(reinterpret_cast<UINT_PTR>(icon))});
-   return true;
- }
+
+namespace detail {
+// Injectable resource ID makes the no-resource fallback testable without
+// changing the public app icon identity (which remains RT_GROUP_ICON ID 1).
+template <typename Window>
+[[nodiscard]] bool ApplyIconResource(Window const& window,
+                                     HMODULE module, WORD resource_id) {
+  if (!module) return false;
+  HICON const icon = ::LoadIconW(module, MAKEINTRESOURCEW(resource_id));
+  if (!icon) return false;
+  window.AppWindow().SetIcon(winrt::Microsoft::UI::IconId{
+      static_cast<std::uint64_t>(reinterpret_cast<UINT_PTR>(icon))});
+  return true;
+}
+}  // namespace detail
+
+// Opt-in icon identity for titled WinUI 3 desktop windows. Rivet's Windows
+// packager embeds the product icon as RT_GROUP_ICON resource ID 1 in the EXE.
+// Secondary Settings/About windows call this helper after their
+// InitializeComponent() (before or after Activate()).
+//
+// LoadIconW returns a *shared*, module-owned icon handle: do not DestroyIcon.
+// The executable resource remains loaded for the lifetime of the process.
+// Missing resources are normal for unbranded templates; return false and
+// leave the existing native title-bar icon unchanged. The SetIcon(String)
+// overload expects an .ico path, not an executable filename.
+template <typename Window>
+[[nodiscard]] bool ApplyAppIcon(Window const& window) {
+  return detail::ApplyIconResource(window, ::GetModuleHandleW(nullptr), 1);
+}
 
 }  // namespace rivet::system
