@@ -255,7 +255,7 @@
                            "deb-installed executable")
            (define desktop-entry
              (build-path extraction "usr" "share" "applications"
-                         (string-append name ".desktop")))
+                         (string-append (project-linux-desktop-id project) ".desktop")))
            (required-file! who desktop-entry "deb-installed desktop entry")
            (unless (regexp-match?
                     (regexp
@@ -279,7 +279,7 @@
                                      (project-name project)
                                      (project-linux-binary-name project))
                              (format "/usr/share/applications/~a.desktop"
-                                     (project-name project))))])
+                                     (project-linux-desktop-id project))))])
          (unless (regexp-match? (regexp (regexp-quote required)) listing)
            (raise-arguments-error who
                                   "rpm installer does not contain a required path"
@@ -304,7 +304,7 @@
            (required-file! who (build-path squashfs-root "usr" "bin" binary-name)
                            "AppImage payload executable")
            (required-file! who (build-path squashfs-root
-                                           (string-append name ".desktop"))
+                                           (string-append (project-linux-desktop-id project) ".desktop"))
                            "AppImage desktop entry")
            (required-file! who (build-path squashfs-root (string-append name ".png"))
                            "AppImage icon"))
