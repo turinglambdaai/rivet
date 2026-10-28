@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+
+- Document the thread-scoped event emitter required for live chart tickers
+  (issue #341): event publishers must be spawned from a server-owned RPC
+  handler, not started before `serve`. An unbound ticker now receives an
+  actionable error, and the regression test covers both thread origins.
+
 - `raco rivet build` and `raco rivet i18n` no longer regenerate files for
   platform hosts a project removed: the Swift and Windows typed clients and
   embedded i18n tables are emitted only when their host directory exists,
