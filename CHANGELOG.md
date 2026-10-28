@@ -2,13 +2,12 @@
 
 ## Unreleased
 
-### Fixed
+- Add an opt-in reverse-DNS `linux-desktop-id` project setting that is
+  honored by native deb/rpm/AppImage desktop entry staging and verification.
+  This lets GNOME 50 GlobalShortcuts consumers register a stable, valid
+  portal identity without renaming their package, executable or icon.
+  Omitting the setting preserves legacy installer filenames.
 
-- The CLI no longer fails a completed command when the ambient log
-  transport dies (issue #339): a failed write on stdout/stderr — the
-  hosted CI log pipe among them — is now degraded to dropped output
-  while the child's exit code remains the only success signal. Healthy
-  transports pass output through byte-for-byte.
 
 - `raco rivet build` and `raco rivet i18n` no longer regenerate files for
   platform hosts a project removed: the Swift and Windows typed clients and
@@ -30,6 +29,11 @@
   and physical-device acceptance remain separate release gates.
 
 ### Fixed
+
+- The CLI no longer fails a completed command when the ambient log
+  transport dies (issue #339): failed stdout/stderr writes drop only the
+  affected output, preserving the child process result. Tolerant wrappers
+  also preserve caller-owned ambient ports when closed.
 
 - WatchConnectivity immediate watch-to-iPhone requests now have a configurable
   15-second default deadline (1–120 seconds) and cancellation-safe, exactly-once

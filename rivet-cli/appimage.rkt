@@ -233,7 +233,8 @@
         (copy-directory/files source (build-path appdir "usr" "bin" entry))
         (copy-file source (build-path appdir "usr" "bin" entry))))
   (mark-executable! (build-path appdir "usr" "bin" binary-name))
-  (write-desktop-entry! project (build-path appdir (string-append name ".desktop")))
+  (write-desktop-entry! project (build-path appdir
+                                           (string-append (project-linux-desktop-id project) ".desktop")))
   ;; Fail closed: the AppImage format requires a top-level icon, and a
   ;; placeholder would ship an invisible product tile to users' app grids.
   (unless (project-linux-icon project)
