@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add an opt-in reverse-DNS `linux-desktop-id` project setting that is
+  honored by native deb/rpm/AppImage desktop entry staging and verification.
+  This lets GNOME 50 GlobalShortcuts consumers register a stable, valid
+  portal identity without renaming their package, executable or icon.
+  Omitting the setting preserves legacy installer filenames.
+
+
 - `raco rivet build` and `raco rivet i18n` no longer regenerate files for
   platform hosts a project removed: the Swift and Windows typed clients and
   embedded i18n tables are emitted only when their host directory exists,
