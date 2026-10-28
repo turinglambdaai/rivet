@@ -56,6 +56,8 @@
                (version . "1.2.0")
                (build . 7)
                (identifier . "dev.rivet.demo")
+               ;; Identity consumed by the Wayland GlobalShortcuts portal.
+               (linux-desktop-id . "dev.rivet.demo")
                (linux-icon . "branding/app.png")
                (linux-binary-name . "demo-app"))))
 
@@ -83,7 +85,8 @@
     (check-true (file-exists? (build-path deb-root "opt" "Demo_App" "res" "core.zo")))
     (define desktop
       (file->string (build-path deb-root "usr" "share" "applications"
-                                "Demo_App.desktop")))
+                                "dev.rivet.demo.desktop")))
+    (check-equal? (project-linux-desktop-id project) "dev.rivet.demo")
     (check-true (regexp-match? #rx"(?m:^Type=Application$)" desktop))
     (check-true (regexp-match? #rx"(?m:^Exec=/opt/Demo_App/demo-app$)" desktop))
     (check-true (regexp-match? #rx"(?m:^TryExec=/opt/Demo_App/demo-app$)" desktop))
@@ -116,6 +119,7 @@
     (check-true (regexp-match? #rx"(?m:^Name: Demo_App$)" spec))
     (check-true (regexp-match? #rx"(?m:^Version: 1\\.2\\.0$)" spec))
     (check-true (regexp-match? #rx"(?m:^Release: 7$)" spec))
+    (check-true (string-contains? spec "/usr/share/applications/dev.rivet.demo.desktop"))
     (check-true (regexp-match? #rx"(?m:^Requires: gtk4$)" spec))
     (check-true (regexp-match? #rx"(?m:^Requires: ncurses-libs$)" spec))
     (check-true
@@ -132,7 +136,7 @@
     (define appdir (stage-appdir! project package-dir))
     (check-true (file-exists? (build-path appdir "usr" "bin" "demo-app")))
     (check-true (file-exists? (build-path appdir "usr" "bin" "res" "core.zo")))
-    (check-true (file-exists? (build-path appdir "Demo_App.desktop")))
+    (check-true (file-exists? (build-path appdir "dev.rivet.demo.desktop")))
     (check-true (file-exists? (build-path appdir "Demo_App.png")))
     (define apprun (file->string (build-path appdir "AppRun")))
     (check-true (regexp-match? #rx"LD_LIBRARY_PATH" apprun))
@@ -167,7 +171,10 @@
       (rivet-project temp-root
                      #hasheq((name . "Demo_App")
                              (linux-formats . ("deb")))))
-    (check-equal? (project-linux-formats deb-only) '("deb")))
+    (check-equal? (project-linux-formats deb-only) '("deb"))
+    ;; Existing Rivet projects without the override must retain the legacy
+    ;; product-name desktop path; only opted-in projects switch identities.
+    (check-equal? (project-linux-desktop-id deb-only) "Demo_App"))
   (lambda ()
     (when (directory-exists? temp-root)
       (delete-directory/files temp-root))))
