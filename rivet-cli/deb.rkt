@@ -72,7 +72,7 @@
   (write-desktop-entry!
    project
    (build-path root (installed-share-root) "applications"
-               (string-append name ".desktop")))
+               (string-append (project-linux-desktop-id project) ".desktop")))
   (stage-native-icon!
    project
    (build-path root (installed-share-root) "pixmaps" (string-append name ".png")))

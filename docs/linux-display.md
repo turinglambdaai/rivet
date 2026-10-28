@@ -41,6 +41,22 @@ let the user assign that command in compositor settings. Always-on-top
 overlays and other compositor-specific features are not implied by the GTK4
 host baseline.
 
+## Native package desktop identity
+
+GlobalShortcuts on GNOME 50 requires a valid reverse-DNS app ID backed by
+an installed `.desktop` entry. A product whose Linux host registers its
+portal identity may set `(linux-desktop-id . "org.example.MyApp")` in
+`rivet.rktd`. Native DEB/RPM installers and AppImage then name the entry
+`org.example.MyApp.desktop`, consistently with the portal id. The package
+name, executable path and icon basename retain the project name. Existing
+projects that omit this setting retain their previous desktop filename;
+changing it is an explicit migration and warrants an installed-upgrade test.
+
+This metadata does **not** call the portal Registry itself: registration
+must occur in the Linux host before any portal method, on the same live
+D-Bus connection used for GlobalShortcuts. The compositor's consent and
+actual activation still need real desktop evidence, not only packaging CI.
+
 ## CI contract
 
 The Linux round-trip workflow:
