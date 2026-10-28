@@ -21,9 +21,9 @@
    (lambda (bytes start end non-block? enable-break?)
      (with-handlers ([exn:fail? (lambda (_) (- end start))])
        (write-bytes bytes base start end)))
-   (lambda ()
-     (with-handlers ([exn:fail? void])
-       (close-output-port base)))))
+   ;; Ambient stdout/stderr are borrowed, not owned. Closing the wrapper
+   ;; must never close the caller's original terminal or CI log transport.
+   (lambda () (void))))
 
 (define (call-with-tolerant-logging thunk)
   (define out (tolerant-output-port (current-output-port)))
