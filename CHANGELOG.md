@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+
+- The CLI no longer fails a completed command when the ambient log
+  transport dies (issue #339): a failed write on stdout/stderr — the
+  hosted CI log pipe among them — is now degraded to dropped output
+  while the child's exit code remains the only success signal. Healthy
+  transports pass output through byte-for-byte.
+
 - `raco rivet build` and `raco rivet i18n` no longer regenerate files for
   platform hosts a project removed: the Swift and Windows typed clients and
   embedded i18n tables are emitted only when their host directory exists,
