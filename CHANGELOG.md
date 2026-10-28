@@ -2,12 +2,12 @@
 
 ## Unreleased
 
-### Fixed
+- Add an opt-in reverse-DNS `linux-desktop-id` project setting that is
+  honored by native deb/rpm/AppImage desktop entry staging and verification.
+  This lets GNOME 50 GlobalShortcuts consumers register a stable, valid
+  portal identity without renaming their package, executable or icon.
+  Omitting the setting preserves legacy installer filenames.
 
-- Document the thread-scoped event emitter required for live chart tickers
-  (issue #341): event publishers must be spawned from a server-owned RPC
-  handler, not started before `serve`. An unbound ticker now receives an
-  actionable error, and the regression test covers both thread origins.
 
 - `raco rivet build` and `raco rivet i18n` no longer regenerate files for
   platform hosts a project removed: the Swift and Windows typed clients and
@@ -29,6 +29,11 @@
   and physical-device acceptance remain separate release gates.
 
 ### Fixed
+
+- Document the thread-scoped event emitter required for live chart tickers
+  (issue #341): event publishers must be spawned from a server-owned RPC
+  handler, not started before `serve`. An unbound ticker now receives an
+  actionable error, and the regression test covers both thread origins.
 
 - WatchConnectivity immediate watch-to-iPhone requests now have a configurable
   15-second default deadline (1–120 seconds) and cancellation-safe, exactly-once

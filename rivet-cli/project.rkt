@@ -35,6 +35,7 @@
          project-windows-license
          project-windows-installer-bitmaps
          project-linux-formats
+         project-linux-desktop-id
          project-linux-binary-name
          project-macos-min-version
          project-windows-min-version)
@@ -246,6 +247,17 @@
   (optional 'linux-icon
             (lambda (v) (path-string-has-extension? v ".png"))
             "project-relative .png path")
+  ;; The installed .desktop file basename is a portal identity on GNOME.
+  ;; Override the legacy product-name basename with a stable reverse-DNS id
+  ;; when an application uses GlobalShortcuts on Wayland. Keep the historical
+  ;; default for compatibility with existing Rivet native installers.
+  (optional 'linux-desktop-id
+            (lambda (v)
+              (and (string? v)
+                   (regexp-match?
+                    #px"^[A-Za-z][A-Za-z0-9_-]*(?:[.][A-Za-z][A-Za-z0-9_-]*)+$"
+                    v)))
+            "reverse-DNS desktop file ID, for example org.example.MyApp")
   (optional 'linux-formats
             (lambda (v)
               (and (list? v)
@@ -386,6 +398,9 @@
 
 (define (project-linux-formats project)
   (project-ref project 'linux-formats (lambda () '("deb" "rpm" "appimage"))))
+
+(define (project-linux-desktop-id project)
+  (project-ref project 'linux-desktop-id (lambda () (project-name project))))
 
 ;; The staged Linux executable name. Defaults to the scaffold binary name
 ;; so existing projects build unchanged; apps that want the product name

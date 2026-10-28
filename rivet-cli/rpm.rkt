@@ -90,7 +90,8 @@
       (display "\n%files\n" out)
       (fprintf out "%dir \"/opt/~a\"\n" name)
       (fprintf out "\"/opt/~a/*\"\n" name)
-      (fprintf out "\"/usr/share/applications/~a.desktop\"\n" name)
+      (fprintf out "\"/usr/share/applications/~a.desktop\"\n"
+               (project-linux-desktop-id project))
       (when (project-linux-icon project)
         (fprintf out "\"/usr/share/pixmaps/~a.png\"\n" name))))
   destination)
@@ -120,7 +121,7 @@
   (write-desktop-entry!
    project
    (build-path staged (installed-share-root) "applications"
-               (string-append name ".desktop")))
+               (string-append (project-linux-desktop-id project) ".desktop")))
   (stage-native-icon!
    project
    (build-path staged (installed-share-root) "pixmaps"
