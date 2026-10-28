@@ -34,13 +34,23 @@
     (flush-output))
   (check-true #t))
 
-;; A failing close on the transport must not escape either.
-(parameterize ([current-output-port
-                (tolerant-output-port
-                 (make-output-port
-                  'broken-close always-evt
-                  (lambda (_b _s _e _nb _eb) (- _e _s))
-                  (lambda () (raise (make-exn:fail "close died"
-                                                   (current-continuation-marks))))))])
-  (displayln "bye")
-  (check-true #t))
+;; The wrapper does not own the ambient output port. Closing it must not
+;; close stdout/stderr for the caller or trigger a broken base close handler.
+(define borrowed-sink (open-output-string))
+(define proxy (tolerant-output-port borrowed-sink))
+(display "before" proxy)
+(close-output-port proxy)
+(check-false (port-closed? borrowed-sink))
+(display "after" borrowed-sink)
+(check-equal? (get-output-string borrowed-sink) "beforeafter")
+
+(define close-count (box 0))
+(define borrowed-with-close-hook
+  (make-output-port
+   'borrowed always-evt
+   (lambda (_b _s _e _nb _eb) (- _e _s))
+   (lambda () (set-box! close-count (add1 (unbox close-count)))
+             (error 'borrowed "caller owns close"))))
+(close-output-port (tolerant-output-port borrowed-with-close-hook))
+(check-equal? (unbox close-count) 0)
+(check-false (port-closed? borrowed-with-close-hook))
