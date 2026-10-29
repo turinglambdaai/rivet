@@ -241,6 +241,33 @@ date pickers and accessibility mechanisms to differ. A platform exception has
 a user-visible fallback and its own evidence. Do not generalize a launcher's
 hide-on-blur rule into every application.
 
+### Review the running app, not an assumed mockup
+
+An external design or prototyping tool is **optional**. For routine interaction
+work, the packaged first-party native app is the prototype: define the scenario,
+implement the narrow native change, run it, inspect the actual window, and
+iterate. Use sketches when alternatives are expensive or hard to communicate;
+never translate a Web prototype into a hidden cross-platform UI abstraction.
+
+A fresh coding agent should review the scenario before implementation and
+again against the real product: can the user discover the primary action, tell
+whether a change is saved versus still a draft, cancel or recover without data
+loss, complete the flow with keyboard/IME, and understand empty, loading and
+error states? When a date chooser or sheet dismisses, specify whether that
+commits, cancels, or preserves pending edits. Review layout hierarchy, text
+clipping, scaling, contrast, and native affordances from a captured real window
+where the platform supports capture. Screenshots are supporting evidence, not a
+machine-verifiable declaration that a design is beautiful or usable.
+
+For a product's critical flow, use the native platform drivers in
+[native UI end-to-end testing](native-ui-testing.md) to exercise the packaged
+application, not a toy view or a backend-only test. Verify accessible
+identifiers, real focus and input routing, persisted effects across restart,
+and failure/recovery. Classify missing screen captures, human design review,
+or platform runs as *unverified* rather than passed. Let the product's existing
+`rivet-acceptance.rktd` declare required native suites; do not silently add
+a universal screenshot-only gate or promise automatic aesthetic judgment.
+
 Rivet owns platform adapters, typed contracts, discovery, diagnostics and
 evidence orchestration. The product owns information architecture, interaction
 meaning and brand. Guidance belongs in this guide and product specifications;

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- New Rivet projects now tell coding agents to design and verify native
+  interaction through the real packaged app, not require a separate mockup.
+  The generated AGENTS.md/README cover save/draft/focus/recovery and native
+  visual/keyboard evidence; `raco rivet inspect --json` exposes the same
+  product-owned scenario and review requirements as structured guidance.
+  This is a development contract, not automatic aesthetic certification.
+
 - Add an opt-in reverse-DNS `linux-desktop-id` project setting that is
   honored by native deb/rpm/AppImage desktop entry staging and verification.
   This lets GNOME 50 GlobalShortcuts consumers register a stable, valid
