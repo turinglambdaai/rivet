@@ -386,7 +386,9 @@
    timing-markers-lock
    (lambda () (set! timing-markers '()))))
 
-(define (start in-fd out-fd)
+;; The portable initialization is shared with the RVT1 pipe test. Native
+;; embedding supplies OS file descriptors to serve-fds, not Racket ports.
+(define (initialize-taskboard!)
   ;; A corrupt, unsupported, or unreadable snapshot aborts startup instead
   ;; of silently replacing user data with the three demo tasks.
   (define root (task-store-root))
@@ -400,11 +402,15 @@
        (state-set! selected-task-id
                    (if (null? restored) (void) (task-id (car restored))))
        (set! next-task-id (vector-ref snapshot 0)))
-     (set! storage-root root)))
+     (set! storage-root root))))
+
+(define (start in-fd out-fd)
+  (initialize-taskboard!)
   (serve-fds in-fd out-fd))
 
 (module+ test-support
-  (provide BoardTask
+  (provide initialize-taskboard!
+           BoardTask
            TaskStatus
            ImportProgress
            tasks
