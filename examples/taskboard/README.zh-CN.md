@@ -95,11 +95,11 @@ git diff -- rivet-schema.json
 Windows 的 WinUI 3 参考界面现已提供 **Edit title → Save / Discard
 draft**（编辑标题、保存、丢弃草稿），对应原生自动化标识
 `edit-task-title`、`save-task` 和 `cancel-task-edit`。用户需要显式
-保存；按 Enter 不会在输入法候选词确认时误提交。编辑框中按 Escape 或点击
+应用；按 Enter 不会在输入法候选词确认时误提交。编辑框中按 Escape 或点击
 **Discard draft** 会取消本次编辑。编辑期间暂时禁用任务列表及其他修改操作；
 Racket 的 `update-task` RPC 验证标题。保存被拒绝时保留草稿并显示可恢复的
 错误。Windows UI Automation 测试覆盖已打包原生应用中的取消、验证失败和
-成功保存。
+成功应用会话内修改。
 
 **这尚未满足** [Issue #347](https://github.com/turinglambdaai/rivet/issues/347)
 的全部跨平台及持久化验收条件。目前 Taskboard 后端仅在进程内存保存任务：
