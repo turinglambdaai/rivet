@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Taskboard now provides an **opt-in, isolated persistent test profile** via
+  `RIVET_TASKBOARD_STORE_PATH` (issue #347). All task mutations write a
+  bounded versioned snapshot before updating Rivet State; failed writes
+  preserve the old State, while malformed snapshots refuse startup rather
+  than silently resetting. The default Taskboard remains session-only until
+  native WinUI/SwiftUI/GTK4 save and restart acceptance is proven; this is
+  a test foundation, not a general Rivet storage service or a release claim.
+
 - New Rivet projects now tell coding agents to design and verify native
   interaction through the real packaged app, not require a separate mockup.
   The generated AGENTS.md/README cover save/draft/focus/recovery and native
