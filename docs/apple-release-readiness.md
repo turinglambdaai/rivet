@@ -44,6 +44,16 @@ missing essential platform evidence. Neither exit 0 nor a valid manifest
 guarantees Apple review approval. For an actual Developer ID release also
 run `raco rivet verify --production` to verify stapling and Gatekeeper.
 
+## Known runtime exception requiring qualification
+
+The current macOS packager always writes
+`com.apple.security.cs.allow-unsigned-executable-memory=true` into its
+entitlements. This is a **real, not hypothetical** least-privilege review risk.
+The new preflight detects the signed effective entitlement and warns, but
+changing that default requires packaged Racket CS startup/RVT1 tests before
+and after signing on both Apple architectures. Do not disable it speculatively,
+and do not infer Mac App Store compatibility from Developer ID notarization.
+
 ## Shared Rivet responsibility
 
 - Precompile and bundle executable application modules and signed dependencies.
