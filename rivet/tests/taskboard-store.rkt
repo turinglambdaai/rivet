@@ -1,6 +1,7 @@
 #lang racket/base
 
 (require rackunit
+         racket/list
          racket/file
          "../../examples/taskboard/app/store.rkt")
 
