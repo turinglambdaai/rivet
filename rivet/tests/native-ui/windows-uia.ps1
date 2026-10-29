@@ -197,6 +197,61 @@ try {
         Find-ByAutomationId $window 'task-row-4'
     } | Out-Null
 
+    # Exercise real WinUI edit/draft/save behavior through native UI Automation.
+    # Backend validation rejects blank titles; the failure must keep the draft
+    # editable rather than discarding it or silently showing a saved state.
+    $edit = Wait-Until 'an enabled Edit title action' {
+        $candidate = Find-ByAutomationId $window 'edit-task'
+        if ($null -ne $candidate -and $candidate.Current.IsEnabled) { return $candidate }
+        return $null
+    }
+    $edit.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    $editor = Wait-Until 'editable task title' {
+        $candidate = Find-ByAutomationId $window 'edit-task-title'
+        if ($null -ne $candidate -and $candidate.Current.IsEnabled) { return $candidate }
+        return $null
+    }
+    $editor.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('Discard this draft')
+    $discard = Find-ByAutomationId $window 'cancel-task-edit'
+    $discard.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Wait-Until 'cancel restores the original title' {
+        $titleElement = Find-ByAutomationId $window 'task-title'
+        $editElement = Find-ByAutomationId $window 'edit-task'
+        $null -ne $titleElement -and $titleElement.Current.Name -eq 'New task' -and
+            $null -ne $editElement -and $editElement.Current.IsEnabled
+    } | Out-Null
+
+    $edit.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    $editor = Wait-Until 'editor reopened after cancel' {
+        $candidate = Find-ByAutomationId $window 'edit-task-title'
+        if ($null -ne $candidate -and $candidate.Current.IsEnabled) { return $candidate }
+        return $null
+    }
+    $editor.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('   ')
+    $save = Find-ByAutomationId $window 'save-task'
+    $save.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    $status = Find-ByAutomationId $window 'application-status'
+    Wait-Until 'failed save leaves the draft editable' {
+        $candidate = Find-ByAutomationId $window 'edit-task-title'
+        if ($null -eq $candidate -or -not $candidate.Current.IsEnabled) { return $false }
+        $retained = $candidate.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+        $message = Get-StatusText $status
+        ($retained -eq '   ') -and ($message -like '*Save failed; draft retained*')
+    } | Out-Null
+
+    $editor = Find-ByAutomationId $window 'edit-task-title'
+    $editor.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('Edited via native UIA')
+    $save = Find-ByAutomationId $window 'save-task'
+    $save.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Wait-Until 'saved title visible in the native detail pane' {
+        $candidate = Find-ByAutomationId $window 'task-title'
+        $null -ne $candidate -and $candidate.Current.Name -eq 'Edited via native UIA'
+    } | Out-Null
+    $edit = $null
+    $editor = $null
+    $save = $null
+    $discard = $null
+
     $generate = Find-ByAutomationId $window 'generate-demo'
     $generate.GetCurrentPattern(
         [System.Windows.Automation.InvokePattern]::Pattern).Invoke()
