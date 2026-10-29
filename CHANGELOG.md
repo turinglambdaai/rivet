@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Taskboard's macOS SwiftUI reference now has an explicit title draft,
+  Apply-for-this-session and Discard flow with focus management and retained
+  validation errors (issue #347). The packaged macOS AX driver exercises
+  cancellation, rejected whitespace, successful update and keyboard Escape.
+  This is a native interaction preview, not durable persistence or full
+  three-platform acceptance.
+
 - New Rivet projects now tell coding agents to design and verify native
   interaction through the real packaged app, not require a separate mockup.
   The generated AGENTS.md/README cover save/draft/focus/recovery and native
