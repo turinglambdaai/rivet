@@ -2,6 +2,7 @@
 // access stays on the GLib main loop; generated-client completions are delivered
 // with g_idle_add, and the long demo request remains explicitly cancellable.
 #include <gtk/gtk.h>
+#include <gdk/gdkkeysyms.h>
 
 #include <algorithm>
 #include <atomic>
@@ -721,13 +722,35 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_label_set_wrap(GTK_LABEL(task_notes), TRUE);
   gtk_widget_set_vexpand(task_notes, TRUE);
   auto* detail_actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  auto* edit_task = gtk_button_new_with_label("Edit title");
   auto* advance = gtk_button_new_with_label("Start Task");
   auto* remove = gtk_button_new_with_label("Delete");
+  gtk_box_append(GTK_BOX(detail_actions), edit_task);
   gtk_box_append(GTK_BOX(detail_actions), advance);
   gtk_box_append(GTK_BOX(detail_actions), remove);
+  // Vertical action layout keeps the explicit save/discard controls readable
+  // at the minimum native pane width (the original row must not be clipped).
+  auto* edit_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+  auto* title_edit = gtk_entry_new();
+  gtk_entry_set_max_length(GTK_ENTRY(title_edit), 4000);
+  gtk_entry_set_placeholder_text(GTK_ENTRY(title_edit),
+                                 "Task title (session-only)");
+  gtk_widget_set_hexpand(title_edit, TRUE);
+  auto* save_task = gtk_button_new_with_label("Apply for this session");
+  auto* cancel_task_edit = gtk_button_new_with_label("Discard draft");
+  auto* title_edit_error = gtk_label_new("");
+  gtk_label_set_wrap(GTK_LABEL(title_edit_error), TRUE);
+  gtk_label_set_xalign(GTK_LABEL(title_edit_error), 0.0F);
+  gtk_widget_add_css_class(title_edit_error, "error");
+  gtk_box_append(GTK_BOX(edit_box), title_edit);
+  gtk_box_append(GTK_BOX(edit_box), save_task);
+  gtk_box_append(GTK_BOX(edit_box), cancel_task_edit);
+  gtk_box_append(GTK_BOX(edit_box), title_edit_error);
+  gtk_widget_set_visible(edit_box, FALSE);
   gtk_box_append(GTK_BOX(detail), task_title);
   gtk_box_append(GTK_BOX(detail), task_status);
   gtk_box_append(GTK_BOX(detail), task_notes);
+  gtk_box_append(GTK_BOX(detail), edit_box);
   gtk_box_append(GTK_BOX(detail), detail_actions);
   gtk_paned_set_end_child(GTK_PANED(paned), detail);
 
@@ -762,6 +785,11 @@ void on_activate(GtkApplication* app, gpointer) {
   set_accessible_identity(cancel, "cancel-generation", "Cancel generation");
   set_accessible_identity(advance, "advance-task", "Advance task status");
   set_accessible_identity(remove, "delete-task", "Delete task");
+  set_accessible_identity(edit_task, "edit-task", "Edit title");
+  set_accessible_identity(title_edit, "edit-task-title", "Task title draft");
+  set_accessible_identity(save_task, "save-task", "Apply for this session");
+  set_accessible_identity(cancel_task_edit, "cancel-task-edit", "Discard draft");
+  set_accessible_identity(title_edit_error, "task-edit-error", "Task edit error");
   set_accessible_identity(g_state.chart->widget(), "timing-chart", "Live timing chart");
   set_accessible_identity(stream_toggle, "stream-toggle", "Toggle timing stream");
   gtk_box_append(GTK_BOX(actions), new_task);
@@ -788,6 +816,12 @@ void on_activate(GtkApplication* app, gpointer) {
   g_state.cancel = GTK_BUTTON(cancel);
   g_state.advance = GTK_BUTTON(advance);
   g_state.remove = GTK_BUTTON(remove);
+  g_state.edit_task = GTK_BUTTON(edit_task);
+  g_state.title_edit = GTK_ENTRY(title_edit);
+  g_state.title_edit_box = edit_box;
+  g_state.save_task = GTK_BUTTON(save_task);
+  g_state.cancel_task_edit = GTK_BUTTON(cancel_task_edit);
+  g_state.title_edit_error = GTK_LABEL(title_edit_error);
   g_state.stream_toggle = GTK_BUTTON(stream_toggle);
 
   gtk_widget_set_sensitive(new_task, FALSE);
@@ -795,6 +829,15 @@ void on_activate(GtkApplication* app, gpointer) {
   gtk_widget_set_sensitive(generate, FALSE);
   gtk_widget_set_sensitive(advance, FALSE);
   gtk_widget_set_sensitive(remove, FALSE);
+  gtk_widget_set_sensitive(edit_task, FALSE);
+  auto* escape_keys = gtk_event_controller_key_new();
+  g_signal_connect(escape_keys, "key-pressed",
+                   G_CALLBACK(on_title_edit_key), nullptr);
+  gtk_widget_add_controller(title_edit, escape_keys);
+  g_signal_connect(edit_task, "clicked", G_CALLBACK(on_edit_clicked), nullptr);
+  g_signal_connect(save_task, "clicked", G_CALLBACK(on_save_edit_clicked), nullptr);
+  g_signal_connect(cancel_task_edit, "clicked",
+                   G_CALLBACK(on_discard_edit_clicked), nullptr);
   g_signal_connect(task_list, "row-selected", G_CALLBACK(on_task_selected), nullptr);
   g_signal_connect(new_task, "clicked", G_CALLBACK(on_new_clicked), nullptr);
   g_signal_connect(samples, "clicked", G_CALLBACK(on_samples_clicked), nullptr);
