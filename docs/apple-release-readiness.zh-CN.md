@@ -43,6 +43,16 @@ JSON 协议版本是 `rivet.apple-review-preflight.v1`，包含 `blockers`、
 任何一种结果均不表示苹果已经批准应用。正式 Developer ID 产物还应执行
 `raco rivet verify --production` 检查公证票据与 Gatekeeper。
 
+## 已知且必须验证的运行时例外
+
+Rivet 当前 macOS 打包器会统一写入
+`com.apple.security.cs.allow-unsigned-executable-memory=true`。
+这不是假设风险，而是真实存在、需要最小权限审查的配置。新增预检会根据
+实际签名后的 entitlement 提醒开发者，但调整默认值前，必须在 Apple
+Silicon 与 Intel 的已打包应用上验证 Racket CS 启动及 RVT1 行为，
+不能为了避免审核问题而未经测试直接禁用；Developer ID 公证不等于
+Mac App Store 合规。
+
 ## Rivet 框架应承担
 
 - 编译并打包全部可执行业务模块与签名依赖，禁止在审核后下载 Racket
