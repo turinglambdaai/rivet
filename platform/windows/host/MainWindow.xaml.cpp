@@ -67,7 +67,9 @@ rivet::windows::RacketRuntimeConfig runtime_config() {
 MainWindow::MainWindow() {
   InitializeComponent();
   Title(L"Rivet — Racket + WinUI 3");
-  // Only titled windows opt in; absent brand resources keep the native default.\n  (void)rivet::system::ApplyAppIcon(*this);\n  // Ordinary window close and OS session end (logoff/shutdown) both funnel
+  // Only titled windows opt in; absent brand resources keep the native default.
+  (void)rivet::system::ApplyAppIcon(*this);
+  // Ordinary window close and OS session end (logoff/shutdown) both funnel
   // into the same orderly backend stop. The console-control callback runs
   // on its own thread, so it only touches the thread-safe stop() — never
   // XAML state.

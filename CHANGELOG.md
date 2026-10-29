@@ -35,6 +35,11 @@
   handler, not started before `serve`. An unbound ticker now receives an
   actionable error, and the regression test covers both thread origins.
 
+- The CLI no longer fails a completed command when the ambient log
+  transport dies (issue #339): failed stdout/stderr writes drop only the
+  affected output, preserving the child process result. Tolerant wrappers
+  also preserve caller-owned ambient ports when closed.
+
 - WatchConnectivity immediate watch-to-iPhone requests now have a configurable
   15-second default deadline (1–120 seconds) and cancellation-safe, exactly-once
   completion. Late and duplicate native callbacks cannot resume a cancelled
