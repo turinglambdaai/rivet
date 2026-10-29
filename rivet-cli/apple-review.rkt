@@ -41,8 +41,7 @@
 
 (define (run-apple-review-command args)
   (define-values (channel app json?) (parse-apple-review-options args))
-  (define python (or (find-executable-path "python3")
-                     (find-executable-path "python")))
+  (define python (find-executable-path "python3"))
   (cond
     [(not python)
      (define message
