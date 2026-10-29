@@ -58,7 +58,7 @@
                         AutomationProperties.AutomationId="task-title" />
                     <TextBox
                         x:Name="EditTitleBox"
-                        Header="Task title (session-only; resets on restart)"
+                        Header="Task title"
                         MaxLength="4000"
                         Visibility="Collapsed"
                         KeyDown="EditTitle_KeyDown"
@@ -95,7 +95,7 @@
                         <StackPanel Spacing="8">
                             <Button
                                 x:Name="SaveEditButton"
-                                Content="Apply for this session"
+                                Content="Save"
                                 HorizontalAlignment="Left"
                                 Visibility="Collapsed"
                                 Click="SaveEdit_Click"
