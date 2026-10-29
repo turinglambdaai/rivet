@@ -39,6 +39,10 @@ After signing, Rivet runs the normal DLL dependency audit and `signtool verify /
 
 ## macOS
 
+This production path is **Developer ID website distribution**, not a Mac App
+Store submission. For the separate macOS Store/iOS risk boundaries and the
+read-only Apple bundle preflight, see [Apple release readiness](apple-release-readiness.md).
+
 Production macOS packaging requires a Developer ID Application certificate installed in the active keychain and a `notarytool` keychain profile.
 
 Set:
