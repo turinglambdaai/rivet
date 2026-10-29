@@ -379,16 +379,65 @@ do {
         return true
     }
 
-    try setText(try waitFor("retained title TextField") {
+    // The first write exercises AXValue accessibility. On retry, use the
+    // actual keyboard input path: some SwiftUI TextField/AX implementations
+    // expose an updated AXValue without propagating it to the SwiftUI binding.
+    // A native user can recover by typing, so validate that route explicitly.
+    let retryEditor = try waitFor("retained title TextField") {
         find(window, identifier: "edit-task-title")
-    }, to: "Edited via macOS AX")
+    }
+    try keyboardGuard(application, "retrying native title edit")
+    selectASCIILayout()
+    do {
+        defer { restoreInputSource() }
+        try focus(retryEditor, description: "retained native title field")
+        func commandA() throws {
+            for down in [true, false] {
+                guard let event = CGEvent(
+                    keyboardEventSource: nil, virtualKey: 0, keyDown: down
+                ) else {
+                    throw DriverError.failure("could not create Command+A key event")
+                }
+                event.flags = .maskCommand
+                event.post(tap: .cghidEventTap)
+            }
+        }
+        try commandA()
+        try typeText("Edited via macOS AX")
+        _ = try waitFor("retry title visible in native TextField") {
+            guard let field = find(window, identifier: "edit-task-title"),
+                  stringAttribute(field, kAXValueAttribute) == "Edited via macOS AX" else {
+                return nil as Bool?
+            }
+            return true
+        }
+    }
     try press(try waitFor("retry Apply title button") {
         find(window, identifier: "save-task")
     }, description: "save-task retry")
-    _ = try waitFor("saved native detail title") {
-        guard let label = find(window, identifier: "task-title"),
-              statusText(label) == "Edited via macOS AX" else { return nil as Bool? }
-        return true
+    do {
+        _ = try waitFor("saved native detail title") {
+            guard let label = find(window, identifier: "task-title"),
+                  statusText(label) == "Edited via macOS AX" else { return nil as Bool? }
+            return true
+        }
+    } catch {
+        // Capture *actual* AX values on failure. A timeout without status/error
+        // made the earlier failed run impossible to diagnose responsibly.
+        let status = find(window, identifier: "application-status")
+            .map(statusText) ?? "<missing>"
+        let errorText = find(window, identifier: "task-edit-error")
+            .map(statusText) ?? "<none>"
+        let visibleTitle = find(window, identifier: "task-title")
+            .map(statusText) ?? "<missing>"
+        let draft = find(window, identifier: "edit-task-title")
+            .map { stringAttribute($0, kAXValueAttribute) } ?? "<missing>"
+        try? writeJSON(snapshot(application),
+                       to: options.output.appendingPathComponent("edit-failure-accessibility.json"))
+        throw DriverError.failure(
+            "title retry failed: status=\(status) error=\(errorText) " +
+            "visibleTitle=\(visibleTitle) draft=\(draft); underlying=\(error)"
+        )
     }
     _ = try waitFor("explicit session-only save feedback") {
         guard let status = find(window, identifier: "application-status"),
