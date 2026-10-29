@@ -25,6 +25,29 @@ raco rivet dev
 `dev` compiles the backend, regenerates the typed client, builds the current
 platform UI, stages the exact Racket CS runtime, and launches the application.
 
+## Opt-in persistent test profile (not yet the default UI contract)
+
+Taskboard is **session-only by default** until #347's packaged native edit/save,
+close/restart, and failure-recovery acceptance is complete on all three systems.
+For isolated persistence testing, set `RIVET_TASKBOARD_STORE_PATH` to an explicit
+writable file **before** starting the packaged host or `raco rivet dev`:
+
+```bash
+RIVET_TASKBOARD_STORE_PATH=/tmp/rivet-taskboard-test/tasks.rktd raco rivet dev
+```
+
+On Windows PowerShell, set
+`$env:RIVET_TASKBOARD_STORE_PATH = "$env:TEMP\\rivet-taskboard-test\\tasks.rktd"`
+before launching. With the opt-in path configured, successful task mutations
+atomically replace a bounded, versioned Racket-data snapshot; restarting the
+backend with the **same path** restores the tasks. A failed file write returns
+an RPC error without showing an in-memory save; malformed or unknown-version
+store data blocks startup rather than being discarded. The snapshot is a local
+user-data file, not a packaged resource, and is not an fsync/power-loss promise.
+Back up or delete the isolated test profile explicitly; never point automated
+tests at your real preferences. No native host currently claims persistent
+"Saved" semantics, and a session-only UI must not claim them until #347 passes.
+
 The first screen is deliberately the same information architecture everywhere:
 a task list, task details, status actions, sample-data reload, and a bounded
 1,000-row workload with an explicit cancel action. The widgets and platform
