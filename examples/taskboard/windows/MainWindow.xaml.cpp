@@ -223,6 +223,7 @@ void MainWindow::ShowSelectedTask() {
     TaskNotes().Text(L"Task details are provided by the shared Racket backend.");
     AdvanceButton().IsEnabled(false);
     DeleteButton().IsEnabled(false);
+    EditButton().IsEnabled(false);
     return;
   }
   TaskTitle().Text(winrt::to_hstring(found->title));
@@ -231,7 +232,8 @@ void MainWindow::ShowSelectedTask() {
   AdvanceButton().Content(winrt::box_value(
       found->status == rivet_app::TaskStatus::backlog ? L"Start Task" : L"Mark Done"));
   AdvanceButton().IsEnabled(found->status != rivet_app::TaskStatus::done);
-  DeleteButton().IsEnabled(true);
+  DeleteButton().IsEnabled(!title_editing_);
+  EditButton().IsEnabled(!title_editing_);
 }
 
 void MainWindow::NotifyCompleted(std::string const& title) {
@@ -330,6 +332,106 @@ void MainWindow::Cancel_Click(
   if (backend_ && generation_request_) backend_->cancel(*generation_request_);
 }
 
+// A draft is isolated from list navigation and mutations until the user
+// explicitly saves or discards it. Failed RPCs retain the TextBox contents.
+void MainWindow::Edit_Click(
+    winrt::Windows::Foundation::IInspectable const&,
+    Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  if (title_editing_ || !backend_ || !selected_id_) return;
+  auto found = std::find_if(tasks_.begin(), tasks_.end(),
+      [this](auto const& task) { return task.id == *selected_id_; });
+  if (found == tasks_.end()) return;
+  EditTitleBox().Text(winrt::to_hstring(found->title));
+  title_editing_ = true;
+  title_save_pending_ = false;
+  EditTitleBox().Visibility(Microsoft::UI::Xaml::Visibility::Visible);
+  SaveEditButton().Visibility(Microsoft::UI::Xaml::Visibility::Visible);
+  CancelEditButton().Visibility(Microsoft::UI::Xaml::Visibility::Visible);
+  SetBusy(false);
+  StatusBar().Severity(Microsoft::UI::Xaml::Controls::InfoBarSeverity::Informational);
+  StatusBar().Message(L"Unsaved draft — select Save or Discard draft.");
+  EditTitleBox().Focus(Microsoft::UI::Xaml::FocusState::Programmatic);
+}
+
+void MainWindow::FinishTitleEdit() {
+  title_editing_ = false;
+  title_save_pending_ = false;
+  EditTitleBox().Visibility(Microsoft::UI::Xaml::Visibility::Collapsed);
+  SaveEditButton().Visibility(Microsoft::UI::Xaml::Visibility::Collapsed);
+  CancelEditButton().Visibility(Microsoft::UI::Xaml::Visibility::Collapsed);
+  SetBusy(false);
+  EditButton().Focus(Microsoft::UI::Xaml::FocusState::Programmatic);
+}
+
+void MainWindow::CancelEdit_Click(
+    winrt::Windows::Foundation::IInspectable const&,
+    Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  if (!title_editing_ || title_save_pending_) return;
+  FinishTitleEdit();
+  StatusBar().Severity(Microsoft::UI::Xaml::Controls::InfoBarSeverity::Informational);
+  StatusBar().Message(L"Draft discarded — no changes saved.");
+}
+
+void MainWindow::EditTitle_KeyDown(
+    winrt::Windows::Foundation::IInspectable const&,
+    Microsoft::UI::Xaml::Input::KeyRoutedEventArgs const& args) {
+  // Do not bind Enter to Save: IME composition must never submit a draft.
+  if (args.Key() == winrt::Windows::System::VirtualKey::Escape &&
+      title_editing_ && !title_save_pending_) {
+    args.Handled(true);
+    CancelEdit_Click(nullptr, nullptr);
+  }
+}
+
+void MainWindow::SaveEdit_Click(
+    winrt::Windows::Foundation::IInspectable const&,
+    Microsoft::UI::Xaml::RoutedEventArgs const&) {
+  if (!title_editing_ || title_save_pending_ || !backend_ || !selected_id_) return;
+  auto found = std::find_if(tasks_.begin(), tasks_.end(),
+      [this](auto const& task) { return task.id == *selected_id_; });
+  if (found == tasks_.end()) return;
+  auto const id = found->id;
+  auto const title = winrt::to_string(EditTitleBox().Text());
+  auto const notes = found->notes;
+  auto const status = found->status;
+  title_save_pending_ = true;
+  SetBusy(true);
+  StatusBar().Severity(Microsoft::UI::Xaml::Controls::InfoBarSeverity::Informational);
+  StatusBar().Message(L"Saving title…");
+  auto const dispatcher = DispatcherQueue();
+  auto const weak = get_weak();
+  rivet_app::API api(*backend_);
+  (void)api.update_task_async(id, title, notes, status,
+    [dispatcher, weak, id](auto result) {
+      try {
+        (void)result.get();
+        dispatcher.TryEnqueue([weak, id] {
+          if (auto window = weak.get()) {
+            window->FinishTitleEdit();
+            window->StatusBar().Severity(
+                Microsoft::UI::Xaml::Controls::InfoBarSeverity::Success);
+            window->StatusBar().Message(L"Title saved.");
+            window->LoadTasksAsync(id);
+          }
+        });
+      } catch (std::exception const& e) {
+        auto message = std::string(e.what());
+        dispatcher.TryEnqueue([weak, message = std::move(message)] {
+          if (auto window = weak.get()) {
+            window->title_save_pending_ = false;
+            window->SetBusy(false);
+            window->StatusBar().Severity(
+                Microsoft::UI::Xaml::Controls::InfoBarSeverity::Error);
+            window->StatusBar().Message(
+                winrt::to_hstring("Save failed; draft retained: " + message));
+            window->EditTitleBox().Focus(
+                Microsoft::UI::Xaml::FocusState::Programmatic);
+          }
+        });
+      }
+    });
+}
+
 void MainWindow::Advance_Click(
     winrt::Windows::Foundation::IInspectable const&,
     Microsoft::UI::Xaml::RoutedEventArgs const&) {
@@ -365,10 +467,20 @@ void MainWindow::Delete_Click(
 }
 
 void MainWindow::SetBusy(bool busy) {
-  NewButton().IsEnabled(!busy);
-  SamplesButton().IsEnabled(!busy);
-  GenerateButton().IsEnabled(!busy);
-  TaskList().IsEnabled(!busy);
+  auto const can_mutate = !busy && !title_editing_;
+  NewButton().IsEnabled(can_mutate);
+  SamplesButton().IsEnabled(can_mutate);
+  GenerateButton().IsEnabled(can_mutate);
+  TaskList().IsEnabled(can_mutate);
+  EditButton().IsEnabled(can_mutate && selected_id_.has_value());
+  SaveEditButton().IsEnabled(title_editing_ && !busy);
+  CancelEditButton().IsEnabled(title_editing_ && !busy);
+  EditTitleBox().IsEnabled(title_editing_ && !busy);
+  auto found = std::find_if(tasks_.begin(), tasks_.end(),
+      [this](auto const& task) { return selected_id_ && task.id == *selected_id_; });
+  AdvanceButton().IsEnabled(can_mutate && found != tasks_.end() &&
+      found->status != rivet_app::TaskStatus::done);
+  DeleteButton().IsEnabled(can_mutate && found != tasks_.end());
   if (!busy) CancelButton().Visibility(Microsoft::UI::Xaml::Visibility::Collapsed);
 }
 
