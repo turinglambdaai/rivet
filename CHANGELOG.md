@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Taskboard WinUI 3 reference: add explicit title draft/save/discard controls,
+  keep drafts on rejected backend updates, and exercise the interaction using
+  packaged-app UI Automation. Windows-only preview: cross-platform parity,
+  relaunch persistence, and full acceptance remain tracked in #347.
+
 - Add an opt-in reverse-DNS `linux-desktop-id` project setting that is
   honored by native deb/rpm/AppImage desktop entry staging and verification.
   This lets GNOME 50 GlobalShortcuts consumers register a stable, valid
