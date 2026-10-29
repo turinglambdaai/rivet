@@ -3,6 +3,8 @@ import RivetUI
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
+    @FocusState private var titleFieldFocused: Bool
+    @FocusState private var editButtonFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,6 +31,7 @@ struct ContentView: View {
                         }
                     }
                     .accessibilityIdentifier("task-list")
+                    .disabled(model.titleEditing)
                 }
 
                 HStack {
@@ -42,16 +45,49 @@ struct ContentView: View {
                 }
                 .buttonStyle(.borderless)
                 .padding(12)
-                .disabled(!model.ready || model.generating)
+                .disabled(!model.ready || model.generating || model.titleEditing)
             }
             .navigationTitle("Rivet Taskboard")
             .frame(minWidth: 280)
         } detail: {
             if let task = model.selectedTask {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text(task.title)
-                        .font(.largeTitle.bold())
-                        .accessibilityIdentifier("task-title")
+                    if model.titleEditing {
+                        VStack(alignment: .leading, spacing: 10) {
+                            TextField("Task title (session-only)", text: $model.titleDraft)
+                                .textFieldStyle(.roundedBorder)
+                                .accessibilityIdentifier("edit-task-title")
+                                .focused($titleFieldFocused)
+                                .onExitCommand { model.discardTitleEdit() }
+                                .disabled(model.titleSaving)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Button("Apply for this session") { model.saveTitleEdit() }
+                                    .buttonStyle(.borderedProminent)
+                                    .accessibilityIdentifier("save-task")
+                                Button("Discard draft", role: .cancel) {
+                                    model.discardTitleEdit()
+                                }
+                                .accessibilityIdentifier("cancel-task-edit")
+                            }
+                            .disabled(model.titleSaving)
+                            if let error = model.titleError {
+                                Text(error)
+                                    .font(.callout)
+                                    .foregroundStyle(.red)
+                                    .accessibilityIdentifier("task-edit-error")
+                            }
+                        }
+                        .accessibilityElement(children: .contain)
+                    } else {
+                        Text(task.title)
+                            .font(.largeTitle.bold())
+                            .accessibilityIdentifier("task-title")
+                        Button("Edit title") { model.beginTitleEdit() }
+                            .buttonStyle(.bordered)
+                            .accessibilityIdentifier("edit-task")
+                            .focused($editButtonFocused)
+                            .disabled(!model.ready || model.generating)
+                    }
                     Text(model.label(for: task.status))
                         .font(.headline)
                         .foregroundStyle(.secondary)
@@ -69,7 +105,7 @@ struct ContentView: View {
                         Button("Delete", role: .destructive) { model.deleteSelectedTask() }
                             .accessibilityIdentifier("delete-task")
                     }
-                    .disabled(model.generating)
+                    .disabled(model.generating || model.titleEditing)
                 }
                 .padding(32)
             } else {
@@ -83,7 +119,7 @@ struct ContentView: View {
         .toolbar {
             ToolbarItemGroup {
                 Button("Generate 1,000") { model.generateDemoTasks() }
-                    .disabled(!model.ready || model.generating)
+                    .disabled(!model.ready || model.generating || model.titleEditing)
                     .accessibilityIdentifier("generate-demo")
                 if model.generating {
                     Button("Cancel", role: .cancel) { model.cancelGeneration() }
@@ -108,6 +144,15 @@ struct ContentView: View {
             chartSection
         }
         .onChange(of: model.selectedID) { _, id in model.persistSelection(id) }
+        .onChange(of: model.titleEditing) { _, editing in
+            if editing {
+                titleFieldFocused = true
+                editButtonFocused = false
+            } else {
+                titleFieldFocused = false
+                editButtonFocused = true
+            }
+        }
     }
 
     private var chartSection: some View {
