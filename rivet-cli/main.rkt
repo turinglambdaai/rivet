@@ -9,7 +9,8 @@
 ;; prints the working remedy. See issue #145.
 
 (require json
-         racket/match)
+         racket/match
+         "tolerant-log.rkt")
 
 (define (say fmt . args)
   (apply printf (string-append "rivet: " fmt "\n") args))
@@ -360,4 +361,4 @@
                                         (exn-message e))
                      (stale-cache-remedy))
                    (die "~a" (exn-message e)))])
-  (main))
+  (call-with-tolerant-logging main))
