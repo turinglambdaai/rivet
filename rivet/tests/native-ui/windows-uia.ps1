@@ -27,6 +27,11 @@ public static class RivetNativeUi {
 '@
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
+# The packaged UI must never write into the CI runner's real preferences.
+# Reuse this disposable profile for the second process to verify persistence.
+$dataDirectory = Join-Path $OutputDirectory ('profile-' + [guid]::NewGuid().ToString('N'))
+$priorDataDirectory = [Environment]::GetEnvironmentVariable('RIVET_TASKBOARD_DATA_DIR', 'Process')
+[Environment]::SetEnvironmentVariable('RIVET_TASKBOARD_DATA_DIR', $dataDirectory, 'Process')
 
 function Wait-Until {
     param(
@@ -277,6 +282,30 @@ try {
         (Get-StatusText $status) -eq 'Generated 1000 tasks'
     } -TimeoutSeconds 20 | Out-Null
 
+    # Generating samples replaces the task list. Edit the resulting first
+    # task so the exact user interaction must survive process relaunch.
+    $edit = Wait-Until 'edit action after generating tasks' {
+        $candidate = Find-ByAutomationId $window 'edit-task'
+        if ($null -ne $candidate -and $candidate.Current.IsEnabled) { return $candidate }
+        return $null
+    }
+    $edit.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    $editor = Wait-Until 'post-generation native title editor' {
+        $candidate = Find-ByAutomationId $window 'edit-task-title'
+        if ($null -ne $candidate -and $candidate.Current.IsEnabled) { return $candidate }
+        return $null
+    }
+    $editor.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('Persists across native relaunch')
+    $save = Find-ByAutomationId $window 'save-task'
+    $save.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Wait-Until 'the persisted title after native Save' {
+        $candidate = Find-ByAutomationId $window 'task-title'
+        $null -ne $candidate -and $candidate.Current.Name -eq 'Persists across native relaunch'
+    } | Out-Null
+    $edit = $null
+    $editor = $null
+    $save = $null
+
     Convert-Element $window | ConvertTo-Json -Depth 20 |
         Set-Content -LiteralPath (Join-Path $OutputDirectory 'accessibility-after.json') -Encoding utf8
     [ordered]@{
@@ -332,6 +361,61 @@ try {
     if ($process.ExitCode -ne 0) {
         throw "Taskboard exited with status $($process.ExitCode)"
     }
+
+    # Reopen the same packaged EXE with the identical profile, use UIA (not a
+    # backend-only query) to prove the last edit was durably loaded.
+    $relaunch = $null
+    $relaunchWindow = $null
+    try {
+        $relaunch = Start-Process -FilePath (Resolve-Path -LiteralPath $Executable) -PassThru
+        $relaunchCondition = [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::ProcessIdProperty,
+            $relaunch.Id)
+        $relaunchWindow = Wait-Until 'restarted packaged WinUI window' {
+            $matches = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
+                [System.Windows.Automation.TreeScope]::Children, $relaunchCondition)
+            foreach ($candidate in $matches) {
+                if ($candidate.Current.Name -like 'Rivet Taskboard*') { return $candidate }
+            }
+            return $null
+        }
+        Wait-Until 'saved title restored after packaged application relaunch' {
+            $candidate = Find-ByAutomationId $relaunchWindow 'task-title'
+            $null -ne $candidate -and $candidate.Current.Name -eq 'Persists across native relaunch'
+        } | Out-Null
+        [ordered]@{
+            profileIsolation = $true
+            packagedRelaunch = $true
+            persistedTitle = 'Persists across native relaunch'
+            visibleAfterRestart = $true
+        } | ConvertTo-Json | Set-Content -LiteralPath (
+            Join-Path $OutputDirectory 'relaunch-trace.json') -Encoding utf8
+        Save-Screenshot (Join-Path $OutputDirectory 'relaunch-screen.png')
+        $relaunchHwnd = [IntPtr]$relaunchWindow.Current.NativeWindowHandle
+        if ($relaunchHwnd -eq [IntPtr]::Zero -or
+            -not [RivetNativeUi]::PostMessage(
+                $relaunchHwnd, 0x0111, [IntPtr]2, [IntPtr]::Zero)) {
+            throw 'Restarted Taskboard lacks its native tray Exit command'
+        }
+        $relaunchWindow = $null
+        [GC]::Collect()
+        [GC]::WaitForPendingFinalizers()
+        if (-not $relaunch.WaitForExit(10000)) {
+            throw 'Restarted Taskboard failed to exit cleanly'
+        }
+        if ($relaunch.ExitCode -ne 0) {
+            throw "Restarted Taskboard exited with status $($relaunch.ExitCode)"
+        }
+    } finally {
+        $relaunchWindow = $null
+        if ($null -ne $relaunch) {
+            if (-not $relaunch.HasExited) {
+                Stop-Process -Id $relaunch.Id -Force -ErrorAction SilentlyContinue
+                $relaunch.WaitForExit()
+            }
+            $relaunch.Dispose()
+        }
+    }
 } catch {
     try { Save-Screenshot (Join-Path $OutputDirectory 'failure-screen.png') } catch {}
     if ($null -ne $window) {
@@ -347,4 +431,5 @@ try {
         $process.WaitForExit()
     }
     $process.Dispose()
+    [Environment]::SetEnvironmentVariable('RIVET_TASKBOARD_DATA_DIR', $priorDataDirectory, 'Process')
 }
