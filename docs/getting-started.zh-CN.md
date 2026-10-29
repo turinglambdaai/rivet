@@ -15,7 +15,7 @@ raco pkg install --auto rivet
 只有在开发 Rivet 框架本身时，才需要使用源码 link 安装：
 
 ```bash
-git clone https://github.com/turinglambdaai/rivet.git
+git clone https://github.com/turlamai/rivet.git
 cd rivet
 raco pkg install --auto --name rivet --link "$(pwd)"
 ```

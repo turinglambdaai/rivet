@@ -18,7 +18,7 @@ let package = Package(
         // A released SwiftPM package, not a source-checkout path. Package.resolved
         // pins the concrete tag; `from` lets routine Rivet upgrades arrive as a
         // normal dependency-resolution change.
-        .package(url: "https://github.com/turinglambdaai/rivet.git", from: "0.10.0")
+        .package(url: "https://github.com/turlamai/rivet.git", from: "0.10.0")
     ],
     targets: [
         .executableTarget(

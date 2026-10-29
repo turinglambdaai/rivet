@@ -127,7 +127,7 @@
          "clean-machine and offline-runtime verification")
    'documentation
    (hash 'installed "raco docs rivet"
-         'source "https://github.com/turinglambdaai/rivet/blob/main/docs/agent-native.md#capability-sourcing")))
+         'source "https://github.com/turlamai/rivet/blob/main/docs/agent-native.md#capability-sourcing")))
 
 ;; Keep the UX decision contract machine-readable for agent tooling. Products
 ;; own their layout, brand, scenario text and evidence. Rivet exposes only the
@@ -160,8 +160,8 @@
          "actual-window visual review and screenshot when supported"
          "all declared platform acceptance legs, or explicitly pending")
    'documentation
-   (hash 'interaction "https://github.com/turinglambdaai/rivet/blob/main/docs/agent-native.md#author-the-product-interaction-contract"
-         'native-ui "https://github.com/turinglambdaai/rivet/blob/main/docs/native-ui-testing.md")))
+   (hash 'interaction "https://github.com/turlamai/rivet/blob/main/docs/agent-native.md#author-the-product-interaction-contract"
+         'native-ui "https://github.com/turlamai/rivet/blob/main/docs/native-ui-testing.md")))
 
 ;; RVT1 v1 deliberately stays smaller than Keel's transport-neutral value
 ;; contract. Keep this boundary machine-readable so agents and mobile tooling
