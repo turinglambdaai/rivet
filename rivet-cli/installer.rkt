@@ -380,6 +380,42 @@
   (when (file-exists? path) (delete-file path))
   (when (directory-exists? path) (delete-directory/files path)))
 
+;; `hdiutil attach` identifies the mounted filesystem by both a device node and
+;; a Finder-visible path. Detaching the path is racy after Finder closes its
+;; icon-view window: `hdiutil` can report "resource busy", complete the forced
+;; detach, and then report "no such file or directory" to the caller. Target
+;; the stable device node and accept an already-disappeared mount as success.
+(define (attached-image-location output)
+  (define mounted-line
+    (for/last ([line (in-list (string-split (string-trim output) "\n"))]
+               #:when (regexp-match? #px"^/dev/[^[:space:]]+.*\t/" line))
+      line))
+  (unless mounted-line
+    (error 'create-installer! "hdiutil did not report a mounted filesystem"))
+  (define fields (string-split mounted-line "\t" #:trim? #f))
+  (values (string-trim (first fields))
+          (string-trim (last fields))))
+
+(define (detach-mounted-image! hdiutil device mount-path
+                               #:run! [runner run!]
+                               #:mounted? [mounted?
+                                           (lambda ()
+                                             (directory-exists? mount-path))])
+  (define (attempt force?)
+    (with-handlers ([exn:fail? (lambda (_) #f)])
+      (if force?
+          (runner 'create-installer! hdiutil "detach" "-force" device)
+          (runner 'create-installer! hdiutil "detach" device))
+      #t))
+  (unless (or (attempt #f)
+              (not (mounted?))
+              (attempt #t)
+              (not (mounted?)))
+    (raise-arguments-error 'create-installer!
+                           "hdiutil could not detach the branded DMG"
+                           "device" device
+                           "mount-path" mount-path)))
+
 ;; `sips -g` answers one "  pixelWidth: 1320" style line per requested
 ;; property; the dimensions decide whether the staged backdrop needs
 ;; resampling and verify the result afterwards.
@@ -472,20 +508,15 @@
       (lambda ()
         (run! 'create-installer! hdiutil "attach" (path->string rw-image)
               "-noautoopen" "-readwrite"))))
-  (define mount-path
-    (let* ([line (last (string-split (string-trim attach-output) "\n"))]
-           [fields (string-split line "\t")])
-      (string-trim (last fields))))
+  (define-values (mounted-device mount-path)
+    (attached-image-location attach-output))
   (define disk-name (last (string-split mount-path "/")))
   (call-with-output-file script-path
     #:exists 'truncate/replace
     (lambda (out)
       (display (dmg-style-applescript disk-name app-name) out)))
   (define (detach!)
-    (with-handlers ([exn:fail? (lambda (_)
-                                 (run! 'create-installer! hdiutil "detach"
-                                       "-force" mount-path))])
-      (run! 'create-installer! hdiutil "detach" mount-path)))
+    (detach-mounted-image! hdiutil mounted-device mount-path))
   (with-handlers ([exn:fail?
                    (lambda (e)
                      (with-handlers ([exn:fail? void]) (detach!))
@@ -551,4 +582,6 @@
            text->rtf
            dmg-style-applescript
            raster-pixel-size
+           attached-image-location
+           detach-mounted-image!
            create-macos-installer!))
