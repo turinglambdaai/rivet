@@ -35,6 +35,16 @@ struct AppState {
   GtkButton* cancel{nullptr};
   GtkButton* advance{nullptr};
   GtkButton* remove{nullptr};
+  GtkButton* edit_task{nullptr};
+  GtkEntry* title_edit{nullptr};
+  GtkWidget* title_edit_box{nullptr};
+  GtkButton* save_task{nullptr};
+  GtkButton* cancel_task_edit{nullptr};
+  GtkLabel* title_edit_error{nullptr};
+  bool task_busy{false};
+  bool title_editing{false};
+  bool title_save_pending{false};
+  std::optional<std::int64_t> editing_task_id;
 
   std::unique_ptr<rivet::linux_runtime::Backend> backend;
   std::unique_ptr<rivet_app::API> api;
@@ -101,11 +111,32 @@ void set_accessible_identity(GtkWidget* widget, char const* id,
 }
 
 void set_busy(bool busy) {
-  gtk_widget_set_sensitive(GTK_WIDGET(g_state.new_task), !busy);
-  gtk_widget_set_sensitive(GTK_WIDGET(g_state.samples), !busy);
-  gtk_widget_set_sensitive(GTK_WIDGET(g_state.generate), !busy);
-  gtk_widget_set_sensitive(GTK_WIDGET(g_state.task_list), !busy);
-  gtk_widget_set_visible(GTK_WIDGET(g_state.cancel), busy && g_state.generation_request.has_value());
+  g_state.task_busy = busy;
+  bool const can_mutate = !busy && !g_state.title_editing;
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.new_task), can_mutate);
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.samples), can_mutate);
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.generate), can_mutate);
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.task_list), can_mutate);
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.edit_task),
+                           can_mutate && g_state.selected_id.has_value());
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.save_task),
+                           g_state.title_editing && !busy);
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.cancel_task_edit),
+                           g_state.title_editing && !busy);
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.title_edit),
+                           g_state.title_editing && !busy);
+  auto const selected = std::find_if(
+      g_state.tasks.begin(), g_state.tasks.end(),
+      [](auto const& task) {
+        return g_state.selected_id && task.id == *g_state.selected_id;
+      });
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.advance),
+                           can_mutate && selected != g_state.tasks.end() &&
+                               selected->status != rivet_app::TaskStatus::done);
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.remove),
+                           can_mutate && selected != g_state.tasks.end());
+  gtk_widget_set_visible(GTK_WIDGET(g_state.cancel),
+                         busy && g_state.generation_request.has_value());
 }
 
 void show_selected_task() {
@@ -119,6 +150,7 @@ void show_selected_task() {
                        "Task details are provided by the shared Racket backend.");
     gtk_widget_set_sensitive(GTK_WIDGET(g_state.advance), FALSE);
     gtk_widget_set_sensitive(GTK_WIDGET(g_state.remove), FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(g_state.edit_task), FALSE);
     return;
   }
   gtk_label_set_text(g_state.task_title, found->title.c_str());
@@ -129,8 +161,12 @@ void show_selected_task() {
                            ? "Start Task"
                            : "Mark Done");
   gtk_widget_set_sensitive(GTK_WIDGET(g_state.advance),
-                           found->status != rivet_app::TaskStatus::done);
-  gtk_widget_set_sensitive(GTK_WIDGET(g_state.remove), TRUE);
+                           !g_state.task_busy && !g_state.title_editing &&
+                               found->status != rivet_app::TaskStatus::done);
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.remove),
+                           !g_state.task_busy && !g_state.title_editing);
+  gtk_widget_set_sensitive(GTK_WIDGET(g_state.edit_task),
+                           !g_state.task_busy && !g_state.title_editing);
 }
 
 void apply_tasks(std::vector<rivet_app::BoardTask> tasks,
@@ -449,8 +485,114 @@ void start_backend() {
   });
 }
 
+
+// All draft widget access stays on the GLib main loop. An unsuccessful
+// Racket RPC keeps the editor and its text untouched for a retry.
+void finish_title_edit() {
+  g_state.title_editing = false;
+  g_state.title_save_pending = false;
+  g_state.editing_task_id.reset();
+  gtk_widget_set_visible(g_state.title_edit_box, FALSE);
+  gtk_label_set_text(g_state.title_edit_error, "");
+  set_busy(false);
+  gtk_widget_grab_focus(GTK_WIDGET(g_state.edit_task));
+}
+
+void on_edit_clicked(GtkButton*, gpointer) {
+  if (g_state.title_editing || g_state.task_busy || !g_state.api ||
+      !g_state.selected_id) return;
+  auto const found = std::find_if(g_state.tasks.begin(), g_state.tasks.end(),
+      [](auto const& task) {
+        return g_state.selected_id && task.id == *g_state.selected_id;
+      });
+  if (found == g_state.tasks.end()) return;
+  g_state.title_editing = true;
+  g_state.title_save_pending = false;
+  g_state.editing_task_id = found->id;
+  gtk_editable_set_text(GTK_EDITABLE(g_state.title_edit), found->title.c_str());
+  gtk_label_set_text(g_state.title_edit_error, "");
+  gtk_widget_set_visible(g_state.title_edit_box, TRUE);
+  set_busy(false);
+  g_state.set_status("Draft pending — Apply for this session or Discard draft.");
+  gtk_widget_grab_focus(GTK_WIDGET(g_state.title_edit));
+}
+
+void on_discard_edit_clicked(GtkButton*, gpointer) {
+  if (!g_state.title_editing || g_state.title_save_pending) return;
+  finish_title_edit();
+  g_state.set_status("Draft discarded — no changes saved.");
+}
+
+gboolean on_title_edit_key(GtkEventControllerKey*, guint keyval, guint,
+                           GdkModifierType, gpointer) {
+  // Enter is deliberately not a submit shortcut. GTK4's native GtkEntry
+  // IME preedit must never become an accidental save action.
+  if (keyval != GDK_KEY_Escape || !g_state.title_editing ||
+      g_state.title_save_pending) return FALSE;
+  on_discard_edit_clicked(nullptr, nullptr);
+  return TRUE;
+}
+
+struct TitleEditDelivery {
+  std::int64_t id;
+  std::string error;
+};
+
+int on_title_edit_delivered(gpointer user_data) {
+  std::unique_ptr<TitleEditDelivery> delivered(
+      static_cast<TitleEditDelivery*>(user_data));
+  if (g_state.shutting_down.load(std::memory_order_acquire) ||
+      !g_state.title_editing || !g_state.editing_task_id ||
+      *g_state.editing_task_id != delivered->id) return G_SOURCE_REMOVE;
+  if (!delivered->error.empty()) {
+    g_state.title_save_pending = false;
+    set_busy(false);
+    gtk_label_set_text(g_state.title_edit_error,
+                       ("Update failed; draft retained: " + delivered->error).c_str());
+    g_state.set_status("Update failed; draft retained — edit and retry.");
+    gtk_widget_grab_focus(GTK_WIDGET(g_state.title_edit));
+  } else {
+    auto const id = delivered->id;
+    finish_title_edit();
+    g_state.set_status("Title updated for this session (resets on restart).");
+    load_tasks(id);
+  }
+  return G_SOURCE_REMOVE;
+}
+
+void on_save_edit_clicked(GtkButton*, gpointer) {
+  if (!g_state.title_editing || g_state.title_save_pending ||
+      !g_state.api || !g_state.editing_task_id) return;
+  auto const found = std::find_if(g_state.tasks.begin(), g_state.tasks.end(),
+      [](auto const& task) {
+        return g_state.editing_task_id && task.id == *g_state.editing_task_id;
+      });
+  if (found == g_state.tasks.end()) return;
+  auto const id = found->id;
+  auto const draft = std::string(gtk_editable_get_text(GTK_EDITABLE(g_state.title_edit)));
+  auto const notes = found->notes;
+  auto const status = found->status;
+  g_state.title_save_pending = true;
+  gtk_label_set_text(g_state.title_edit_error, "");
+  set_busy(true);
+  g_state.set_status("Applying title for this session…");
+  (void)g_state.api->update_task_async(
+      id, draft, notes, status,
+      [id](auto result) {
+        auto* delivered = new TitleEditDelivery{id, {}};
+        try {
+          (void)result.get();
+        } catch (std::exception const& error) {
+          delivered->error = error.what();
+        } catch (...) {
+          delivered->error = "unknown backend failure";
+        }
+        g_idle_add(on_title_edit_delivered, delivered);
+      });
+}
+
 void on_task_selected(GtkListBox*, GtkListBoxRow* row, gpointer) {
-  if (row == nullptr) return;
+  if (g_state.title_editing || row == nullptr) return;
   int const index = gtk_list_box_row_get_index(row);
   if (index < 0 || static_cast<std::size_t>(index) >= g_state.tasks.size()) return;
   g_state.selected_id = g_state.tasks[static_cast<std::size_t>(index)].id;
@@ -461,7 +603,7 @@ void on_task_selected(GtkListBox*, GtkListBoxRow* row, gpointer) {
 }
 
 void on_new_clicked(GtkButton*, gpointer) {
-  if (!g_state.api) return;
+  if (!g_state.api || g_state.title_editing) return;
   set_busy(true);
   (void)g_state.api->create_task_async(
       "New task", "Edit the Racket backend to make this workflow your own.",
@@ -474,14 +616,14 @@ void on_new_clicked(GtkButton*, gpointer) {
 }
 
 void on_samples_clicked(GtkButton*, gpointer) {
-  if (!g_state.api) return;
+  if (!g_state.api || g_state.title_editing) return;
   set_busy(true);
   (void)g_state.api->reload_sample_tasks_async(
       [](auto result) { deliver_tasks(std::move(result)); });
 }
 
 void on_generate_clicked(GtkButton*, gpointer) {
-  if (!g_state.api) return;
+  if (!g_state.api || g_state.title_editing) return;
   set_busy(true);
   g_state.set_status("Preparing the bounded 1,000-row workload…");
   g_state.generation_request = g_state.api->generate_demo_tasks_async(
@@ -496,7 +638,7 @@ void on_cancel_clicked(GtkButton*, gpointer) {
 }
 
 void on_advance_clicked(GtkButton*, gpointer) {
-  if (!g_state.api || !g_state.selected_id) return;
+  if (!g_state.api || !g_state.selected_id || g_state.title_editing) return;
   auto found = std::find_if(g_state.tasks.begin(), g_state.tasks.end(), [](auto const& task) {
     return task.id == *g_state.selected_id;
   });
@@ -530,7 +672,7 @@ void on_stream_toggled(GtkButton*, gpointer) {
 }
 
 void on_delete_clicked(GtkButton*, gpointer) {
-  if (!g_state.api || !g_state.selected_id) return;
+  if (!g_state.api || !g_state.selected_id || g_state.title_editing) return;
   set_busy(true);
   (void)g_state.api->delete_task_async(
       *g_state.selected_id, [](auto result) { deliver_mutation(std::move(result)); });
