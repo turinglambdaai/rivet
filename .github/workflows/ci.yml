@@ -484,7 +484,7 @@ jobs:
           # Exercise the bundle scanner on a real packaged macOS host.
           # Code 2 is missing Store/privacy evidence, not an accepted release.
           preflight="$RUNNER_TEMP/rivet-apple-preflight.json"
-          if python3 "$GITHUB_WORKSPACE/.github/scripts/apple-review-preflight.py" --channel developer-id --app dist/Smoke.app --json > "$preflight"; then
+          if raco rivet apple-review --channel developer-id --app dist/Smoke.app --json > "$preflight"; then
             :
           else
             result=$?
