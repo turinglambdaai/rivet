@@ -4,9 +4,9 @@
 
 Before starting the next bounded slice, refresh remote state safely and re-read
 this root AGENTS file, the repository's canonical implementation handoff, and
-the current [family delivery standard](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/docs/PRODUCT-STANDARD.md),
-[documentation language policy](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/docs/DOCUMENTATION-LANGUAGES.md)
-and [portfolio decisions](https://github.com/turinglambdaai/turinglambdaai.github.io/blob/master/PORTFOLIO.md).
+the current [family delivery standard](https://github.com/turlamai/turinglambdaai.github.io/blob/master/docs/PRODUCT-STANDARD.md),
+[documentation language policy](https://github.com/turlamai/turinglambdaai.github.io/blob/master/docs/DOCUMENTATION-LANGUAGES.md)
+and [portfolio decisions](https://github.com/turlamai/turinglambdaai.github.io/blob/master/PORTFOLIO.md).
 Follow the corresponding Chinese links when preferred; both public user paths
 must express the same promises. Product-specific plans and technical protocol
 owners remain in their owning repositories.
@@ -43,7 +43,7 @@ composed by the product: `product -> rivet`, `product -> permit`, and optional
 Update-signing keys, platform publisher credentials, Permit
 credential-signing keys, and Commerce secrets are separate trust domains. The
 normative local rights boundary is
-[`permit/docs/framework-integration.md`](https://github.com/turinglambdaai/permit/blob/main/docs/framework-integration.md);
+[`permit/docs/framework-integration.md`](https://github.com/turlamai/permit/blob/main/docs/framework-integration.md);
 do not restate it here.
 
 Before roadmap, desktop-closeout, or mobile-delivery work, read
@@ -65,7 +65,7 @@ base. Record the starting commit in the handoff evidence.
 
 The five-repository dependency graph, repository ownership, change routing,
 release order, and trust boundaries are maintained in Keel's
-[`docs/family-architecture.md`](https://github.com/turinglambdaai/keel/blob/main/docs/family-architecture.md).
+[`docs/family-architecture.md`](https://github.com/turlamai/keel/blob/main/docs/family-architecture.md).
 Rivet's active milestones remain owned by
 `docs/desktop-closeout-mobile-plan.md`; do not copy its queue into a family
 document.

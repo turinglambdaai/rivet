@@ -261,18 +261,18 @@ The Racket-facing modules are `rivet/distribution` and `rivet/system`. Native ad
 
 Commercial product rights stay outside that application-services boundary. A
 product may compose Rivet with
-[Permit](https://github.com/turinglambdaai/permit/blob/main/docs/framework-integration.md),
+[Permit](https://github.com/turlamai/permit/blob/main/docs/framework-integration.md),
 but Rivet does not depend on Permit and does not define entitlement, trial,
 activation, seat, subscription, payment, or account policy. Rivet secure
 storage remains general-purpose even when a product uses it for Permit state.
 Online products may separately use
-[Commerce](https://github.com/turinglambdaai/commerce) for provider events,
+[Commerce](https://github.com/turlamai/commerce) for provider events,
 commercial projections, and credential delivery; Rivet supplies no Commerce
 client semantics and never imports it. Provider secrets, Commerce secrets,
 update-manifest signing, OS publisher credentials, and Permit credential
 signing are separate trust domains with separate keys and rotation procedures.
 The cross-repository dependency and change-routing rules are defined by the
-[family architecture](https://github.com/turinglambdaai/keel/blob/main/docs/family-architecture.md).
+[family architecture](https://github.com/turlamai/keel/blob/main/docs/family-architecture.md).
 
 Cross-device communication is a second, explicit trust boundary. `RivetDevice`
 associates every Codable request with its response type, routes
