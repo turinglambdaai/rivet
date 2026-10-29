@@ -25,11 +25,15 @@ Rivet 不能承诺苹果审核通过，也不能保证审核速度。本指南�
 在 Rivet 仓库中，对**实际生成的 macOS .app** 执行：
 
 ```bash
-python3 .github/scripts/apple-review-preflight.py --channel developer-id --app dist/MyApp.app --json
+raco rivet apple-review --channel developer-id --app dist/MyApp.app --json
 # Mac App Store 仅是风险分类，不会产生可上架的商店归档：
-python3 .github/scripts/apple-review-preflight.py --channel mac-app-store --app dist/MyApp.app --json
+raco rivet apple-review --channel mac-app-store --app dist/MyApp.app --json
 python3 .github/scripts/test-apple-review-preflight.py
 ```
+
+命令通过已安装的 Rivet CLI 调用打包在 `rivet-cli` 中的 Python 3 标准库扫描器；
+应用项目不需要复制本仓库的 `.github` 目录。机器缺少 Python 3 时会报告
+`needs-evidence`，绝不冒充预检成功。
 
 这个只读脚本不需要开发者密钥。它检查 Info.plist、应用主可执行文件、
 Bundle ID、隐私清单的基本结构；在 macOS 上还检查真实代码签名、
