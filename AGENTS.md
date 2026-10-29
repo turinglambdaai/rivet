@@ -4,9 +4,9 @@
 
 Before starting the next bounded slice, refresh remote state safely and re-read
 this root AGENTS file, the repository's canonical implementation handoff, and
-the current [family delivery standard](https://github.com/turlamai/turinglambdaai.github.io/blob/master/docs/PRODUCT-STANDARD.md),
-[documentation language policy](https://github.com/turlamai/turinglambdaai.github.io/blob/master/docs/DOCUMENTATION-LANGUAGES.md)
-and [portfolio decisions](https://github.com/turlamai/turinglambdaai.github.io/blob/master/PORTFOLIO.md).
+the current [family delivery standard](https://github.com/turlamai/turlamai.github.io/blob/master/docs/PRODUCT-STANDARD.md),
+[documentation language policy](https://github.com/turlamai/turlamai.github.io/blob/master/docs/DOCUMENTATION-LANGUAGES.md)
+and [portfolio decisions](https://github.com/turlamai/turlamai.github.io/blob/master/PORTFOLIO.md).
 Follow the corresponding Chinese links when preferred; both public user paths
 must express the same promises. Product-specific plans and technical protocol
 owners remain in their owning repositories.
