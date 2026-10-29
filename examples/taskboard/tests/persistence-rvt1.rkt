@@ -50,6 +50,9 @@
 (dynamic-wind
   (lambda () (putenv "RIVET_TASKBOARD_DATA_DIR" (path->string root)))
   (lambda ()
+    ;; Keep this deterministic even if raco test loads multiple files into
+    ;; one Racket process with an already-instantiated backend module.
+    (reset-reference-state!)
     (let-values ([(input output worker) (open-session)])
       (define first-row (first (rpc-call input output "list-tasks")))
       (define saved (rpc-call input output "update-task"
