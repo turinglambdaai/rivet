@@ -41,6 +41,8 @@ jobs:
       - name: Test bounded apt retry wrapper
         shell: bash
         run: bash .github/scripts/test-apt-retry.sh
+      - name: Test Apple release preflight without publisher credentials
+        run: python3 .github/scripts/test-apple-review-preflight.py
       - name: Set up Racket CS
         uses: Bogdanp/setup-racket@2466913449df77df2bad149d1f2fc4e1ea4795dd # v1.15
         with:
