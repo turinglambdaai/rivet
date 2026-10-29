@@ -41,6 +41,8 @@ jobs:
       - name: Test bounded apt retry wrapper
         shell: bash
         run: bash .github/scripts/test-apt-retry.sh
+      - name: Test Apple release preflight without publisher credentials
+        run: python3 .github/scripts/test-apple-review-preflight.py
       - name: Set up Racket CS
         uses: Bogdanp/setup-racket@2466913449df77df2bad149d1f2fc4e1ea4795dd # v1.15
         with:
@@ -479,6 +481,27 @@ jobs:
           test "$(cat dist/Smoke.app/Contents/Resources/app/assets/nested/product.txt)" = packaged-resource
           codesign --verify --deep --strict dist/Smoke.app
           test "$(plutil -extract LSMinimumSystemVersion raw -o - dist/Smoke.app/Contents/Info.plist)" = "14.1"
+          # Exercise the bundle scanner on a real packaged macOS host.
+          # Code 2 is missing Store/privacy evidence, not an accepted release.
+          preflight="$RUNNER_TEMP/rivet-apple-preflight.json"
+          if python3 "$GITHUB_WORKSPACE/.github/scripts/apple-review-preflight.py" --channel developer-id --app dist/Smoke.app --json > "$preflight"; then
+            :
+          else
+            result=$?
+            if [ "$result" -ne 2 ]; then
+              cat "$preflight"
+              exit "$result"
+            fi
+          fi
+          python3 - "$preflight" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              result = json.load(handle)
+          assert result["schema"] == "rivet.apple-review-preflight.v1"
+          assert not result["blockers"]
+          assert result["status"] in ("needs-evidence", "automated-checks-passed")
+          assert result["manual_review"], "manual review must not disappear"
+          PY
           raco rivet clean
           test ! -e .rivet
           test ! -e build
