@@ -29,8 +29,51 @@
 
 ;; AppleScript strings escape volume and bundle names.
 (check-regexp-match #rx"tell disk \"Smoke \\\\\"App\\\\\"\""
-                    (dmg-style-applescript "Smoke \"App\"" "Smoke.app")
-                    "quotes in display names must be AppleScript-escaped")
+                     (dmg-style-applescript "Smoke \"App\"" "Smoke.app")
+                     "quotes in display names must be AppleScript-escaped")
+
+;; ---------------------------------------------------------------------------
+;; hdiutil mount identity and detach recovery
+
+(define attach-output
+  (string-append
+   "/dev/disk7\tApple_partition_scheme\t\n"
+   "/dev/disk7s1\tApple_partition_map\t\n"
+   "/dev/disk7s2\tApple_HFS\t/Volumes/Smoke App\n"))
+(define-values (attached-device attached-path)
+  (attached-image-location attach-output))
+(check-equal? attached-device "/dev/disk7s2")
+(check-equal? attached-path "/Volumes/Smoke App")
+
+(let ([calls '()]
+      [mounted? #t])
+  (define (fake-run _who _hdiutil . arguments)
+    (set! calls (cons arguments calls))
+    (cond
+      [(equal? arguments '("detach" "/dev/disk7s2"))
+       (error 'fake-hdiutil "resource busy")]
+      [else (set! mounted? #f)]))
+  (detach-mounted-image! "hdiutil" attached-device attached-path
+                         #:run! fake-run
+                         #:mounted? (lambda () mounted?))
+  (check-equal? (reverse calls)
+                '(("detach" "/dev/disk7s2")
+                  ("detach" "-force" "/dev/disk7s2"))
+                "a busy volume must be force-detached by device node"))
+
+(let ([calls 0]
+      [mounted? #t])
+  (define (already-detached _who _hdiutil . _arguments)
+    (set! calls (add1 calls))
+    (set! mounted? #f)
+    (error 'fake-hdiutil "no such file or directory"))
+  (check-not-exn
+   (lambda ()
+     (detach-mounted-image! "hdiutil" attached-device attached-path
+                            #:run! already-detached
+                            #:mounted? (lambda () mounted?))))
+  (check-equal? calls 1
+                "a failed detach is successful once its mount disappeared"))
 
 ;; ---------------------------------------------------------------------------
 ;; Staged background normalization (macOS: raster-pixel-size shells to sips)

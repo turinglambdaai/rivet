@@ -37,6 +37,11 @@
 
 ### Fixed
 
+- Branded macOS DMG creation now detaches the mounted image by its stable
+  device node and treats an already-disappeared mount as success. Finder's
+  close/flush race can otherwise make `hdiutil` report `resource busy`, finish
+  a forced detach, then fail the release with `no such file or directory`.
+
 - Document the thread-scoped event emitter required for live chart tickers
   (issue #341): event publishers must be spawned from a server-owned RPC
   handler, not started before `serve`. An unbound ticker now receives an
