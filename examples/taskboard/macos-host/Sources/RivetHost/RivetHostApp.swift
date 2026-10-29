@@ -148,6 +148,14 @@ final class AppModel: ObservableObject {
     @Published var ready = false
     @Published var generating = false
     @Published var streaming = false
+    // A title draft never mutates the visible task until the backend confirms
+    // the RPC. Session-only wording stays honest while #347 persistence gates
+    // remain incomplete across native desktop hosts.
+    @Published var titleEditing = false
+    @Published var titleSaving = false
+    @Published var titleDraft = ""
+    @Published var titleError: String?
+    private var editingTaskID: Int64?
     let chartModel = RivetChartModel()
 
     private var backend: EmbeddedRacketBackend?
@@ -203,7 +211,62 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func beginTitleEdit() {
+        guard ready, !generating, !titleEditing, backend != nil,
+              let task = selectedTask else { return }
+        editingTaskID = task.id
+        titleDraft = task.title
+        titleError = nil
+        titleSaving = false
+        titleEditing = true
+        status = "Draft pending — Apply for this session or Discard draft."
+    }
+
+    func discardTitleEdit() {
+        guard titleEditing, !titleSaving else { return }
+        titleEditing = false
+        editingTaskID = nil
+        titleDraft = ""
+        titleError = nil
+        status = "Draft discarded — no changes saved."
+    }
+
+    func saveTitleEdit() {
+        guard titleEditing, !titleSaving, ready, let backend,
+              let id = editingTaskID,
+              let task = tasks.first(where: { $0.id == id }) else { return }
+        // Explicit Save only: Return must remain available to IME composition
+        // and must never accidentally submit the draft.
+        let draft = titleDraft
+        titleError = nil
+        titleSaving = true
+        status = "Applying title for this session…"
+        Task {
+            do {
+                let updated = try await RivetAPI(client: backend.client)
+                    .update_task(id: id, title: draft,
+                                 notes: task.notes, status: task.status)
+                guard editingTaskID == id, titleEditing else { return }
+                replace(updated)
+                titleSaving = false
+                titleEditing = false
+                editingTaskID = nil
+                titleDraft = ""
+                titleError = nil
+                status = "Title updated for this session (resets on restart)."
+            } catch {
+                // Backend text validation and transport failure must not lose
+                // the user's draft. The user can retry or explicitly discard.
+                guard editingTaskID == id, titleEditing else { return }
+                titleSaving = false
+                titleError = "Update failed; draft retained: \(error)"
+                status = titleError ?? "Update failed; draft retained."
+            }
+        }
+    }
+
     func createTask() {
+        guard !titleEditing else { return }
         perform("Create failed") { api in
             let created = try await api.create_task(
                 title: "New task",
@@ -215,7 +278,7 @@ final class AppModel: ObservableObject {
     }
 
     func advanceSelectedTask() {
-        guard let task = selectedTask else { return }
+        guard !titleEditing, let task = selectedTask else { return }
         let next: RivetTypes.TaskStatus = task.status == .backlog ? .active : .done
         perform("Update failed") { api in
             let updated = try await api.update_task(
@@ -243,7 +306,7 @@ final class AppModel: ObservableObject {
     }
 
     func deleteSelectedTask() {
-        guard let id = selectedID else { return }
+        guard !titleEditing, let id = selectedID else { return }
         perform("Delete failed") { api in
             guard try await api.delete_task(id: id) else { return }
             self.tasks.removeAll { $0.id == id }
@@ -252,6 +315,7 @@ final class AppModel: ObservableObject {
     }
 
     func reloadSamples() {
+        guard !titleEditing else { return }
         perform("Sample reload failed") { api in
             self.tasks = try await api.reload_sample_tasks()
             self.selectedID = self.tasks.first?.id
@@ -259,7 +323,7 @@ final class AppModel: ObservableObject {
     }
 
     func generateDemoTasks() {
-        guard let backend, ready, generationTask == nil else { return }
+        guard !titleEditing, let backend, ready, generationTask == nil else { return }
         generating = true
         status = "Preparing the bounded 1,000-row workload…"
         generationTask = Task { [weak self] in
@@ -326,7 +390,7 @@ final class AppModel: ObservableObject {
     }
 
     func persistSelection(_ id: Int64?) {
-        guard let id, let backend, ready else { return }
+        guard !titleEditing, let id, let backend, ready else { return }
         Task {
             do {
                 _ = try await RivetAPI(client: backend.client).select_task(id: id)
