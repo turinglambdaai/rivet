@@ -137,7 +137,7 @@
   (hash
    'version 1
    'prototype-policy "Direct native UI iteration; external prototypes are optional."
-   'source-of-truth "Existing product-owned design/product specification"
+   'source-of-truth "Product-owned canonical spec or README when no spec exists"
    'scenario-fields
    (list "scenario" "initial state" "user action" "visible result"
          "persisted effect" "failure/recovery" "per-platform presentation"

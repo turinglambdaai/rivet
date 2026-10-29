@@ -140,9 +140,10 @@ state; never hide it with stash, reset, or generated-file cleanup.
 
 Treat the running first-party native application as the interactive prototype.
 A separate mockup or design tool is optional, not a precondition for coding.
-Before changing a user-facing flow, read the product's existing canonical
-design/product specification; do not create a parallel specification. Record a
-scenario with these fields:
+Before changing a user-facing flow, read the product's canonical design
+specification if one exists. If none exists, place the first scenario in the
+product README or create one canonical spec, not a competing document. Record
+a scenario with these fields:
 
 `scenario -> initial state -> user action -> visible result -> persisted effect
 -> failure/recovery -> per-platform presentation -> acceptance evidence`.
