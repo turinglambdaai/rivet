@@ -90,6 +90,12 @@ git diff -- rivet-schema.json
 授权、Linux 缺少 session bus 或通知服务不可用时不会把已成功的领域操作变成失败；
 任务状态仍会正常显示在列表中。
 
+## 原生标题编辑（Linux GTK4 预览）
+
+Linux GTK4 示例现已提供 **Edit title → Apply for this session / Discard draft**（编辑标题 → 本次运行应用 / 丢弃草稿），通过现有 Racket `update-task` RPC 修改任务。`GtkEntry` 草稿不会提前替换已保存任务；Enter 不绑定保存（避免输入法误提交），Escape 丢弃草稿，校验失败则保留可编辑内容、显示错误并允许重试。编辑期间禁止切换任务和其他冲突操作。原生无障碍标识包含 `edit-task`、`edit-task-title`、`save-task`、`cancel-task-edit`、`task-edit-error`。Wayland/AT-SPI 打包验收覆盖取消、空白标题失败保留输入及真实后端修改成功。
+
+**当前仍为会话内修改**。需要等叠加在 Windows #350 上的持久化 PR #352 通过并合并，且三个平台真正完成关闭重启、恢复和错误路径验收，才能承诺落盘保存。macOS #353 提供独立的 SwiftUI 交互预览；三个平台的键盘/输入法/无障碍证据和真人界面可读性检查仍属于 [#347](https://github.com/turinglambdaai/rivet/issues/347) 未完成的验收条件。
+
 ## 无障碍与性能契约
 
 三个 host 提供同一组稳定标识，包括 `task-list`、`task-title`、`advance-task`、
