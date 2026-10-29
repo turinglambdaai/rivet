@@ -129,6 +129,40 @@
    (hash 'installed "raco docs rivet"
          'source "https://github.com/turinglambdaai/rivet/blob/main/docs/agent-native.md#capability-sourcing")))
 
+;; Keep the UX decision contract machine-readable for agent tooling. Products
+;; own their layout, brand, scenario text and evidence. Rivet exposes only the
+;; workflow and native-platform ownership: no UI DSL, design-service dependency,
+;; shared selector language or automatic claim of visual quality.
+(define interaction-guidance
+  (hash
+   'version 1
+   'prototype-policy "Direct native UI iteration; external prototypes are optional."
+   'source-of-truth "Product-owned canonical spec or README when no spec exists"
+   'scenario-fields
+   (list "scenario" "initial state" "user action" "visible result"
+         "persisted effect" "failure/recovery" "per-platform presentation"
+         "acceptance evidence")
+   'review-checks
+   (list "discoverable primary action and navigation"
+         "selection versus activation"
+         "explicit save or auto-save semantics and draft preservation"
+         "cancel, Escape, undo and focus restoration"
+         "keyboard, IME, accessibility and large text"
+         "empty, loading, error and offline recovery states")
+   'implementation
+   (hash 'windows "WinUI 3 / C++/WinRT"
+         'macos "SwiftUI / AppKit"
+         'linux "GTK4")
+   'required-evidence
+   (list "packaged native workflow and visible feedback"
+         "native accessibility/keyboard interaction trace"
+         "persisted effect and failure/recovery scenario"
+         "actual-window visual review and screenshot when supported"
+         "all declared platform acceptance legs, or explicitly pending")
+   'documentation
+   (hash 'interaction "https://github.com/turinglambdaai/rivet/blob/main/docs/agent-native.md#author-the-product-interaction-contract"
+         'native-ui "https://github.com/turinglambdaai/rivet/blob/main/docs/native-ui-testing.md")))
+
 ;; RVT1 v1 deliberately stays smaller than Keel's transport-neutral value
 ;; contract. Keep this boundary machine-readable so agents and mobile tooling
 ;; do not infer support from Keel types that the four RVT1 codecs cannot yet
@@ -250,6 +284,8 @@
               (source-report project ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt" 'file))
         'capability-sourcing
         capability-sourcing
+        'interaction-guidance
+        interaction-guidance
         'edit-points
         (hash 'shared-logic
               (list (source-report project backend 'file))

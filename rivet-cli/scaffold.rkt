@@ -86,6 +86,8 @@ ACCEPTANCE
     "- App identity/deployment targets: `rivet.rktd`\n"
     "- Versioned public API baseline: `rivet-schema.json`\n"
     "- Executable completion evidence: `rivet-acceptance.rktd`\n\n"
+    "## Design and verify the native interaction\n\n"
+    "Use the running native app as the interactive prototype; a separate mockup is optional. Before coding a user-facing flow, write its behavior into the product's existing design/spec: initial state, action, visible result, saved effect, error/recovery, per-platform presentation, and evidence. Follow `AGENTS.md` for save/cancel/focus/keyboard and accessibility rules. Review the packaged window, capture a screenshot when supported, and exercise the workflow through native UI automation. A green build alone is not a UX pass.\n\n"
     "## When Racket does not already have the capability\n\n"
     "Run `raco rivet inspect --json` and read `capability-sourcing`. Prefer a built-in or maintained Racket package; keep platform-owned features in the native host; use a small safe FFI wrapper for a stable C ABI; use an argv-based subprocess for coarse-grained tools; reserve a sidecar for persistent or crash-isolated runtimes. The generated `AGENTS.md` contains the safety and packaging checks.\n\n"
     "## Ship a build\n\n"
@@ -133,6 +135,38 @@ state; never hide it with stash, reset, or generated-file cleanup.
 - Do not introduce a cross-platform UI DSL or bypass RVT1 with an ad-hoc IPC.
 - iOS/iPadOS/watchOS and Android are foundation targets until their
   generated app, embedding, packaging, signing, and device workflows exist.
+
+## Native interaction workflow
+
+Treat the running first-party native application as the interactive prototype.
+A separate mockup or design tool is optional, not a precondition for coding.
+Before changing a user-facing flow, read the product's canonical design
+specification if one exists. If none exists, place the first scenario in the
+product README or create one canonical spec, not a competing document. Record
+a scenario with these fields:
+
+`scenario -> initial state -> user action -> visible result -> persisted effect
+-> failure/recovery -> per-platform presentation -> acceptance evidence`.
+
+Define the primary action and navigation, selection versus activation, draft
+lifetime, explicit-save versus auto-save behavior, cancellation, Escape order,
+focus restoration, undo, keyboard/IME behavior, and empty/loading/error/offline
+states before writing the host views. Users must be able to tell whether an
+edit was saved, is pending, or failed; never silently discard a draft.
+
+Implement the same user-visible semantics with each OS's own controls and
+conventions, not pixel-identical layouts. Give native elements stable accessible
+names and identifiers, keyboard reachability, readable scaling, and clear
+focus/error feedback. Review real packaged windows with screenshots where
+supported and exercise the primary workflow using native UI automation.
+Verify the visible result AND persisted effect across restart, plus cancel
+and failure/recovery paths. A green build, RPC-only test, or screenshot alone
+is not UX acceptance; if a native leg or visual review is missing, say so
+rather than reporting it as passed.
+
+Rivet's interaction contract and platform driver guidance:
+https://github.com/turinglambdaai/rivet/blob/main/docs/agent-native.md#author-the-product-interaction-contract
+https://github.com/turinglambdaai/rivet/blob/main/docs/native-ui-testing.md
 
 ## Capability sourcing
 
