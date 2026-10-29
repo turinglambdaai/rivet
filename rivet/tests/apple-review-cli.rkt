@@ -4,7 +4,7 @@
          racket/runtime-path
          rivet-cli/apple-review)
 
-(define-runtime-path scanner "../rivet-cli/apple-review-preflight.py")
+(define-runtime-path scanner "../../rivet-cli/apple-review-preflight.py")
 
 (check-true (file-exists? scanner)
             "The installed CLI package must ship the Apple scanner.")
