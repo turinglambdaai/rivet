@@ -8,16 +8,18 @@
 (dynamic-wind
   void
   (lambda ()
-    (check-false (read-task-snapshot root))
     (define tasks (list (list 1 "Draft that survives restart" "" 'active)
                         (list 2 "Task two" "notes" 'done)))
+    (define changed (list (list 1 "Saved" "unchanged notes" 'done)))
+    (define not-a-directory (build-path root "a-file"))
+    (define snapshot (build-path root "tasks-v1.rktd"))
+    (check-false (read-task-snapshot root))
     (write-task-snapshot! root 3 tasks)
     (define restored (read-task-snapshot root))
     (check-equal? (vector-ref restored 0) 3)
     (check-equal? (vector-ref restored 1) tasks)
 
     ;; A completed save replaces the previous snapshot as a whole.
-    (define changed (list (list 1 "Saved" "unchanged notes" 'done)))
     (write-task-snapshot! root 4 changed)
     (check-equal? (vector-ref (read-task-snapshot root) 1) changed)
 
@@ -32,7 +34,6 @@
     (check-equal? (vector-ref (read-task-snapshot root) 1) changed)
 
     ;; A directory failure is propagated; do not report a successful save.
-    (define not-a-directory (build-path root "a-file"))
     (call-with-output-file not-a-directory
       (lambda (out) (display "not a directory" out)))
     (check-exn exn:fail?
@@ -41,7 +42,6 @@
 
     ;; Corrupt or future-format data must fail closed instead of silently
     ;; resetting user tasks to the packaged demonstration defaults.
-    (define snapshot (build-path root "tasks-v1.rktd"))
     (call-with-output-file snapshot
       (lambda (out) (display "#hash((version . 999) (next-id . 1) (tasks . ()))" out))
       #:exists 'truncate)
