@@ -52,6 +52,8 @@ jobs:
         run: raco pkg install --auto --no-docs --name rivet --link "$PWD"
       - name: Test
         run: raco test rivet/tests/
+      - name: Test Taskboard real RVT1 persistence and storage failures
+        run: raco test examples/taskboard/tests/
       - name: Build Scribble documentation
         shell: bash
         run: |
