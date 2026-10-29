@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add a read-only, JSON-reporting Apple channel preflight for packaged macOS
+  bundles. It detects malformed bundle/privacy metadata, checks effective
+  entitlements and code signatures on macOS, flags Store sandbox/unsafe runtime
+  exceptions and explicitly reports missing iOS standalone/Store evidence.
+  The paired English/Chinese guide distinguishes Developer ID notarization
+  from App Store review; this is not automatic Apple approval.
+
 - New Rivet projects now tell coding agents to design and verify native
   interaction through the real packaged app, not require a separate mockup.
   The generated AGENTS.md/README cover save/draft/focus/recovery and native
