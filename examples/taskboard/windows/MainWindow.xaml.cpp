@@ -379,7 +379,9 @@ void MainWindow::EditTitle_KeyDown(
   if (args.Key() == winrt::Windows::System::VirtualKey::Escape &&
       title_editing_ && !title_save_pending_) {
     args.Handled(true);
-    CancelEdit_Click(nullptr, nullptr);
+    FinishTitleEdit();
+    StatusBar().Severity(Microsoft::UI::Xaml::Controls::InfoBarSeverity::Informational);
+    StatusBar().Message(L"Draft discarded — no changes saved.");
   }
 }
 
