@@ -3,13 +3,15 @@
 (require rackunit
          racket/file
          racket/list
+         rivet/backend
          rivet/protocol
          "../app/backend.rkt"
          (submod "../app/backend.rkt" test-support)
          "../app/task-store.rkt")
 
-;; Prove the public, embedded Racket entrypoint loads a previously committed
-;; snapshot on a second RVT1 session, not just that the serializer round-trips.
+;; Prove the exact startup initializer used by the native fd entrypoint
+;; reloads a committed snapshot on a second real RVT1 pipe session.
+;; serve-fds requires OS descriptors, so this test uses serve with ports.
 (define root (make-temporary-file "rivet-taskboard-relaunch~a" 'directory))
 (define original-env (getenv "RIVET_TASKBOARD_DATA_DIR"))
 (define next-request-id 1)
@@ -17,7 +19,10 @@
 (define (open-session)
   (define-values (server-in client-out) (make-pipe))
   (define-values (client-in server-out) (make-pipe))
-  (define worker (thread (lambda () (start server-in server-out))))
+  (define worker
+    (thread (lambda ()
+              (initialize-taskboard!)
+              (serve server-in server-out))))
   (check-equal? (frame-type (read-frame client-in)) message:hello)
   (values client-in client-out worker))
 
