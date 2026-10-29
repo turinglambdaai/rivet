@@ -28,6 +28,15 @@
   includes deterministic route, revocation, and budget tests. App packaging
   and physical-device acceptance remain separate release gates.
 
+### Added
+
+- Application threads can now emit events. `emit-event!` falls back to
+  the active server's emitter when the thread-local parameter is unset
+  (`send!` is already thread-safe through the writer channel), so file
+  watchers, network workers, and other backend threads can notify the
+  UI without polling. Events emitted after the server stops raise as
+  before.
+
 ### Fixed
 
 - The CLI no longer fails a completed command when the ambient log

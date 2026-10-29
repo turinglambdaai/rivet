@@ -51,6 +51,11 @@
 (define record-registry (make-hash))
 (define enum-registry (make-hash))
 (define current-event-emitter (make-parameter #f))
+;; The active server's emitter, registered so application threads (which
+;; do not carry the reader thread's parameterization) can also emit
+;; events. send! is thread-safe: frames are handed to the dedicated
+;; writer thread through a backpressured async channel.
+(define active-server-emitter (box #f))
 
 (define diagnostic-schema "rivet.diagnostic.v1")
 
@@ -492,9 +497,12 @@
 (define (emit-event! name value)
   (unless (or (symbol? name) (string? name))
     (raise-argument-error 'emit-event! "(or/c symbol? string?)" name))
-  (define emitter (current-event-emitter))
+  ;; Prefer the request-thread parameter (preserves request-scoped
+  ;; semantics), then fall back to the active server so application
+  ;; worker threads can emit too.
+  (define emitter (or (current-event-emitter) (unbox active-server-emitter)))
   (unless emitter
-    (error 'emit-event! "no Rivet server is active on the current Racket thread"))
+    (error 'emit-event! "no Rivet server is active"))
   (emitter (if (symbol? name) (symbol->string name) name)
            (wire-safe-value value)))
 
@@ -1134,25 +1142,31 @@
                                  (raise value)
                                  (error 'rivet/backend
                                         "backend requested exit with non-exception value")))])
-             (diagnose! "racket-backend" "backend-init" "success")
-             (send! (frame message:hello 0
-                           (encode-value (list "rivet" protocol-version))))
-             (diagnose! "protocol" "handshake" "success")
-             (let loop ()
-               (unless stopped?
-                 (define f (read-frame in))
-                 (if (eof-object? f)
-                     (set! stopped? #t)
-                     (begin
-                       (dispatch! f)
-                       ;; Give a newly admitted request worker a scheduling
-                       ;; opportunity before this reader waits for the next
-                       ;; frame. In an embedded Racket CS runtime, immediately
-                       ;; re-entering an idle file-descriptor read can otherwise
-                       ;; leave the only runnable request behind the sleeping
-                       ;; reader until another frame arrives.
-                       (sleep 0)
-                       (loop)))))))))))
+             ;; Register the emitter for application threads; cleared when
+             ;; the reader exits so a retired server receives nothing.
+             (dynamic-wind
+               (lambda () (set-box! active-server-emitter emit!))
+               (lambda ()
+                 (diagnose! "racket-backend" "backend-init" "success")
+                 (send! (frame message:hello 0
+                               (encode-value (list "rivet" protocol-version))))
+                 (diagnose! "protocol" "handshake" "success")
+                 (let loop ()
+                   (unless stopped?
+                     (define f (read-frame in))
+                     (if (eof-object? f)
+                         (set! stopped? #t)
+                         (begin
+                           (dispatch! f)
+                           ;; Give a newly admitted request worker a scheduling
+                           ;; opportunity before this reader waits for the next
+                           ;; frame. In an embedded Racket CS runtime, immediately
+                           ;; re-entering an idle file-descriptor read can otherwise
+                           ;; leave the only runnable request behind the sleeping
+                           ;; reader until another frame arrives.
+                           (sleep 0)
+                           (loop))))))
+               (lambda () (set-box! active-server-emitter #f)))))))))
   (define reader-dead-evt (thread-dead-evt reader))
 
   (define cleanup-done? #f)

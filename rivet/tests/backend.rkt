@@ -388,3 +388,25 @@
 
 (write-frame (frame message:shutdown 0 #"") limited-client-out)
 (thread-wait limited-server-thread)
+
+;; Application threads can emit events: the emitter registered by the
+;; active server backs emit-event! when the thread-local parameter is
+;; unset (RPC handler threads carry it; worker threads do not).
+(define-values (thread-server-in thread-client-out) (make-pipe))
+(define-values (thread-client-in thread-server-out) (make-pipe))
+
+(define thread-server-thread
+  (thread (lambda () (serve thread-server-in thread-server-out))))
+
+(define thread-hello (read-frame/timeout thread-client-in))
+(check-equal? (frame-type thread-hello) message:hello)
+
+(define emitter-thread
+  (thread (lambda () (emit-event! 'progress 99))))
+
+(define background-event (read-frame/timeout thread-client-in 5))
+(check-equal? (frame-type background-event) message:event)
+(check-equal? (decode-value (frame-payload background-event))
+              (list "progress" 99))
+(check-true (thread-dead? emitter-thread)
+            "the worker thread completed its emit and exited")
