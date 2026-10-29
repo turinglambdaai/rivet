@@ -4,7 +4,9 @@ Rivet is pre-1.0, so keep changes small, testable, and compatible with the archi
 
 For Racket/runtime changes, run `raco test rivet/tests/`. For the shared C++ protocol, configure `runtime/` with `RIVET_BUILD_TESTS=ON` and run CTest. On macOS, run `swift test --package-path platform/macos`.
 
-Platform-specific UI code belongs under `platform/windows` or `platform/macos`. Do not move platform UI semantics into RVT1. Protocol changes require matching Racket, C++, Swift, tests, and `docs/protocol.md` updates.
+Framework-owned desktop UI adapters belong under `platform/windows`, `platform/macos`, and `platform/linux`. The Android protocol/client and native integration foundation lives under `platform/android`; it is **not** a shipped standalone Android application generator. The maintained Taskboard reference has its own first-party UI sources in `examples/taskboard/windows`, `examples/taskboard/macos-host`, and `examples/taskboard/linux`. Generated projects own their corresponding native host files. Do not move product UI semantics into RVT1 or create a shared cross-platform widget DSL. Protocol changes require matching Racket, C++, Swift, Kotlin, golden/property tests, and `docs/protocol.md` updates.
+
+Before claiming a guaranteed desktop UI or packaging change complete, run the relevant native packaged-app acceptance suite on **Windows, macOS, and Linux** and record the linked CI artifact/evidence. A skipped, queued, timed-out, or unavailable platform leg remains unverified. Use [native UI testing](docs/native-ui-testing.md), [product acceptance](docs/product-acceptance.md), and the maintainer contract in [AGENTS.md](AGENTS.md) rather than replacing real UI verification with backend-only tests. These gates apply to the changed capability; a documentation-only correction does not require pretending a native suite was newly run.
 
 Prefer a focused pull request with a clear failure mode and regression test. Avoid adding dependencies when the platform or Racket standard libraries already provide the required primitive.
 
