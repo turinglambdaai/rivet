@@ -90,7 +90,12 @@ def find_named(root, name, role=None):
 
 
 def find_status(root):
-    prefixes = ("Starting embedded Racket CS", "Loaded ", "Preparing task ")
+    prefixes = (
+        "Starting embedded Racket CS",
+        "Loaded ",
+        "Preparing task ",
+        "Title updated for this session",
+    )
     return next(
         (
             node
@@ -106,6 +111,15 @@ def press(node):
     actions = node.queryAction()
     if actions.nActions < 1 or not actions.doAction(0):
         raise AssertionError(f"AT-SPI action failed for {node.name!r}")
+
+
+def edit_text(node, content):
+    try:
+        node.queryEditableText().setTextContents(content)
+    except Exception as exc:
+        raise AssertionError(
+            f"native task title field is not AT-SPI editable: {exc}"
+        ) from exc
 
 
 def is_enabled(node):
@@ -177,6 +191,60 @@ def main():
         > new_task_count,
     )
 
+    # Real GTK4/AT-SPI draft/cancel/error/retry path. This touches the
+    # packaged native app and sends real typed Racket RPCs, not a mock UI.
+    def begin_edit():
+        edit = wait_for(
+            "enabled Edit title action",
+            lambda: find_named(window, "Edit title", "push button")
+            if (candidate := find_named(window, "Edit title", "push button"))
+            and is_enabled(candidate)
+            else None,
+        )
+        press(edit)
+        return wait_for(
+            "editable native title draft",
+            lambda: find_named(window, "Task title draft"),
+        )
+
+    draft = begin_edit()
+    edit_text(draft, "Discard via native AT-SPI")
+    press(wait_for(
+        "Discard draft action",
+        lambda: find_named(window, "Discard draft", "push button"),
+    ))
+    wait_for(
+        "discard preserves original selected title",
+        lambda: text_value(find_named(window, "Selected task title")) == "New task",
+    )
+    draft = begin_edit()
+    edit_text(draft, "   ")
+    press(wait_for(
+        "Apply title action",
+        lambda: find_named(window, "Apply for this session", "push button"),
+    ))
+    wait_for(
+        "rejected backend edit keeps text and explains the error",
+        lambda: (
+            (field := find_named(window, "Task title draft"))
+            and text_value(field) == "   "
+            and (message := find_named(window, "Task edit error"))
+            and "Update failed; draft retained" in (text_value(message) or "")
+            and is_enabled(field)
+        ),
+    )
+    draft = find_named(window, "Task title draft")
+    edit_text(draft, "Edited via native AT-SPI")
+    press(wait_for(
+        "retry Apply action",
+        lambda: find_named(window, "Apply for this session", "push button"),
+    ))
+    wait_for(
+        "successful edit updates the selected detail title",
+        lambda: text_value(find_named(window, "Selected task title"))
+        == "Edited via native AT-SPI",
+    )
+
     status = wait_for("the live application status", lambda: find_status(window))
     press(find_named(window, "Generate 1,000", "push button"))
     observed_progress = []
@@ -207,12 +275,19 @@ def main():
         json.dumps(
             {
                 "application": args.application,
-                "actions": ["press:new-task", "press:generate-demo"],
+                "actions": [
+                    "press:new-task", "edit:title", "discard:title",
+                    "reject:empty-title", "retry:title", "apply:title",
+                    "press:generate-demo",
+                ],
                 "observedStatus": observed_progress,
                 "assertions": [
                     "native frame exposed",
                     "stable roles and names exposed",
                     "RPC-created task appeared",
+                    "GTK4 edit draft cancel left the task unchanged",
+                    "invalid title preserved the editable draft and reported failure",
+                    "successful title reached Racket and the selected detail view",
                     "operation-progress Event appeared",
                     "1,000-row State reached the UI",
                 ],
