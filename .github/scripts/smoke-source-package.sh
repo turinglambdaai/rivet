@@ -42,6 +42,9 @@ grep -Eq '(^|/)rivet-cli/codegen/naming.rkt$' "$archive_entries"
 grep -Eq '(^|/)rivet-cli/codegen/snapshot.rkt$' "$archive_entries"
 grep -Eq '(^|/)rivet-cli/codegen/swift.rkt$' "$archive_entries"
 grep -Eq '(^|/)rivet-cli/codegen/type-graph.rkt$' "$archive_entries"
+# The public Apple preflight must be included in the release archive.
+grep -Eq '(^|/)rivet-cli/apple-review.rkt$' "$archive_entries"
+grep -Eq '(^|/)rivet-cli/apple-review-preflight.py$' "$archive_entries"
 
 # The canonical learning project and both walkthrough languages are public
 # package content, not files that happen to exist only in the Git checkout.
@@ -88,6 +91,29 @@ test -f "$installed_root/examples/taskboard/app/backend.rkt"
 test -f "$installed_root/examples/taskboard/README.md"
 test -f "$installed_root/examples/taskboard/README.zh-CN.md"
 test -f "$installed_root/examples/taskboard/PERFORMANCE.md"
+test -f "$installed_root/rivet-cli/apple-review.rkt"
+test -f "$installed_root/rivet-cli/apple-review-preflight.py"
+
+# Qualify the exact Racket source release archive in an isolated user profile.
+apple_result="$tmp/apple-preflight.json"
+set +e
+PLTUSERHOME="$user_home" raco rivet apple-review \
+  --channel ios-app-store --app "$tmp/never-built.app" --json > "$apple_result"
+apple_code=$?
+set -e
+if [[ "$apple_code" -ne 1 ]]; then
+  echo "installed Apple preflight did not reject unsupported iOS delivery" >&2
+  exit 1
+fi
+python3 - "$apple_result" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    report = json.load(handle)
+assert report["schema"] == "rivet.apple-review-preflight.v1"
+assert report["status"] == "blocked"
+assert any(item["code"] == "standalone-ios-not-shipped"
+           for item in report["blockers"])
+PY
 
 # Exercise packaged scaffold resources too. A source archive that omitted CLI
 # templates or other package data can load its modules yet still fail here.

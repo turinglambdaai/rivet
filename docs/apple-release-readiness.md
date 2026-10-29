@@ -25,11 +25,16 @@ and Rivet [production signing](production-signing.md).
 From the Rivet repository checkout after building the actual macOS .app:
 
 ```bash
-python3 .github/scripts/apple-review-preflight.py --channel developer-id --app dist/MyApp.app --json
+raco rivet apple-review --channel developer-id --app dist/MyApp.app --json
 # Mac App Store is an experimental classification, NOT a signed Store archive:
-python3 .github/scripts/apple-review-preflight.py --channel mac-app-store --app dist/MyApp.app --json
+raco rivet apple-review --channel mac-app-store --app dist/MyApp.app --json
 python3 .github/scripts/test-apple-review-preflight.py
 ```
+
+The installed Rivet CLI runs its packaged Python 3 standard-library scanner;
+applications do not need to copy this repository's `.github` directory.
+Missing Python 3 reports `needs-evidence` rather than pretending that the
+preflight passed.
 
 The read-only script needs no publisher credentials. It checks Info.plist,
 the app executable, bundle identifier, basic privacy-manifest structure, and

@@ -7,7 +7,7 @@ import tempfile
 import types
 import unittest
 
-SOURCE = Path(__file__).with_name("apple-review-preflight.py")
+SOURCE = Path(__file__).resolve().parents[2] / "rivet-cli" / "apple-review-preflight.py"
 spec = importlib.util.spec_from_file_location("apple_release_preflight", SOURCE)
 preflight = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(preflight)
