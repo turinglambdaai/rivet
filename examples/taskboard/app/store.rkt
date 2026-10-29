@@ -86,22 +86,16 @@
   (define target (path->complete-path path))
   (define parent (path-only target))
   (make-directory* parent)
-  ;; Write alongside the destination, close fully, then replace it with
-  ;; one rename. A failed write leaves the previous complete snapshot alone.
-  ;; The atomic rename is not a claim of power-loss fsync durability.
-  (define temporary (make-temporary-file "rivet-taskboard-~a.tmp" #f parent))
-  (with-handlers ([exn:fail?
-                   (lambda (e)
-                     (when (file-exists? temporary) (delete-file temporary))
-                     (raise e))])
-    (call-with-output-file
-     temporary
-     (lambda (out)
-       (write (list store-tag rows) out)
-       (newline out)
-       (flush-output out))
-     #:exists 'truncate)
-    (when (> (file-size temporary) maximum-store-bytes)
-      (error 'write-taskboard-rows! "store exceeds the bounded 16 MiB limit"))
-    (rename-file-or-directory temporary target #t))
+  ;; Use Racket's own staged-output helper: it closes the new file before
+  ;; replacement and handles temporary cleanup and Windows open-reader quirks.
+  ;; The rename is atomic on Unix/macOS, but Racket explicitly does NOT
+  ;; guarantee atomic replacement on Windows. Never call this fsync durability.
+  (call-with-atomic-output-file
+   target
+   (lambda (out temporary)
+     (write (list store-tag rows) out)
+     (newline out)
+     (flush-output out)
+     (when (> (file-size temporary) maximum-store-bytes)
+       (error 'write-taskboard-rows! "store exceeds the bounded 16 MiB limit"))))
   (void))
