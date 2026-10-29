@@ -78,6 +78,8 @@
     "  raco rivet measure                 report packaged artifact sizes and launch survival\n"
     "  raco rivet measure size --budget <file>  fail when artifacts exceed budgets\n"
     "  raco rivet compliance              generate SBOM/notices and run the license audit\n"
+    "  raco rivet apple-review --channel <developer-id|mac-app-store|ios-app-store>\n" 
+    "                          --app <path.app> [--json]  inspect actual Apple artifact\n" 
     "  raco rivet verify                  re-verify the current packaged artifact\n"
     "  raco rivet verify --production     verify production trust/notarization requirements\n"
     "  raco rivet verify --skip-launch-smoke  verify without starting the GUI artifact\n"
@@ -302,6 +304,10 @@
      (define sign-manifest! (command "sign-manifest" 'sign-manifest!))
      (define output (sign-manifest! artifacts options))
      (say "signed update manifest: ~a" output)]
+    [(cons "apple-review" review-args)
+     (define run-apple-review-command
+       (command "apple-review" 'run-apple-review-command))
+     (exit (run-apple-review-command review-args))]
     [(list "verify")
      (define verify-project-package! (command "verify" 'verify-project-package!))
      (define output (verify-project-package! (current-project!)))
