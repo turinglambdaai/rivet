@@ -45,26 +45,26 @@
 (dynamic-wind
   (lambda () (putenv "RIVET_TASKBOARD_DATA_DIR" (path->string root)))
   (lambda ()
-    (define-values (input output worker) (open-session))
-    (define first-row (first (rpc-call input output "list-tasks")))
-    (check-equal? (list-ref first-row 1) "Read the architecture guide")
-    (define saved (rpc-call input output "update-task"
-                            1 "Survives process relaunch" "real RVT1 operation" "active"))
-    (check-equal? (list-ref saved 1) "Survives process relaunch")
-    (close-session input output worker)
-
-    (define snapshot (read-task-snapshot root))
-    (check-not-false snapshot)
-    (check-equal? (list-ref (first (vector-ref snapshot 1)) 1)
-                  "Survives process relaunch")
-    ;; Throw away current in-memory state and open a fresh transport. The
-    ;; next startup must explicitly rehydrate the state from the snapshot.
+    (let-values ([(input output worker) (open-session)])
+      (define first-row (first (rpc-call input output "list-tasks")))
+      (define saved (rpc-call input output "update-task"
+                              1 "Survives process relaunch"
+                              "real RVT1 operation" "active"))
+      (check-equal? (list-ref first-row 1) "Read the architecture guide")
+      (check-equal? (list-ref saved 1) "Survives process relaunch")
+      (close-session input output worker))
+    (let ([snapshot (read-task-snapshot root)])
+      (check-not-false snapshot)
+      (check-equal? (list-ref (first (vector-ref snapshot 1)) 1)
+                    "Survives process relaunch"))
+    ;; Throw away the in-memory State and launch a second server. This is
+    ;; not a duplicate call to the serializer; startup must load the file.
     (reset-reference-state!)
-    (define-values (restarted-in restarted-out restarted-worker) (open-session))
-    (define after-restart (first (rpc-call restarted-in restarted-out "list-tasks")))
-    (check-equal? (list-ref after-restart 1) "Survives process relaunch")
-    (check-equal? (list-ref after-restart 2) "real RVT1 operation")
-    (close-session restarted-in restarted-out restarted-worker))
+    (let-values ([(input output worker) (open-session)])
+      (define after-restart (first (rpc-call input output "list-tasks")))
+      (check-equal? (list-ref after-restart 1) "Survives process relaunch")
+      (check-equal? (list-ref after-restart 2) "real RVT1 operation")
+      (close-session input output worker)))
   (lambda ()
     (putenv "RIVET_TASKBOARD_DATA_DIR" (or original-env ""))
     (delete-directory/files root)))
