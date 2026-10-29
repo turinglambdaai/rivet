@@ -39,11 +39,13 @@ RIVET_TASKBOARD_STORE_PATH=/tmp/rivet-taskboard-test/tasks.rktd raco rivet dev
 On Windows PowerShell, set
 `$env:RIVET_TASKBOARD_STORE_PATH = "$env:TEMP\\rivet-taskboard-test\\tasks.rktd"`
 before launching. With the opt-in path configured, successful task mutations
-atomically replace a bounded, versioned Racket-data snapshot; restarting the
+stage and replace a bounded, versioned Racket-data snapshot; restarting the
 backend with the **same path** restores the tasks. A failed file write returns
 an RPC error without showing an in-memory save; malformed or unknown-version
 store data blocks startup rather than being discarded. The snapshot is a local
-user-data file, not a packaged resource, and is not an fsync/power-loss promise.
+user-data file, not a packaged resource. Replacement is atomic on Unix/macOS,
+but Racket does not guarantee atomic replacement on Windows; neither platform
+gets an fsync/power-loss guarantee.
 Back up or delete the isolated test profile explicitly; never point automated
 tests at your real preferences. No native host currently claims persistent
 "Saved" semantics, and a session-only UI must not claim them until #347 passes.
