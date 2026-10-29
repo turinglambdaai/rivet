@@ -34,10 +34,11 @@ RIVET_TASKBOARD_STORE_PATH=/tmp/rivet-taskboard-test/tasks.rktd raco rivet dev
 
 Windows PowerShell 可先设置：
 `$env:RIVET_TASKBOARD_STORE_PATH = "$env:TEMP\\rivet-taskboard-test\\tasks.rktd"`。
-启用后，任务修改成功时原子替换有大小上限、带版本信息的本地数据快照；使用**相同路径**
+启用后，任务修改成功时先写入同目录临时文件，再替换有大小上限、带版本信息的本地数据快照；使用**相同路径**
 重启后端会恢复任务。磁盘写入失败会返回 RPC 错误，不会错误报告内存保存成功；
 数据文件损坏或版本未知时启动会报错，不会悄悄丢弃并覆盖已有任务。
-快照属于本地用户数据，不是应用安装资源；原子替换不等于断电级 fsync 保证。
+快照属于本地用户数据，不是应用安装资源；Unix/macOS 上的替换为原子操作，
+Windows 上 Racket 不保证原子替换，且所有平台均不承诺断电级 fsync 持久性。
 应明确备份或删除隔离测试文件，不要让自动化测试碰真实用户配置。在 #347 跨平台验收完成前，
 原生 UI **不能**将会话内更新宣传为持久保存。
 
