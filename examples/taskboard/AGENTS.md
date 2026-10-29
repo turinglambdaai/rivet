@@ -82,6 +82,29 @@ Generated output you should not hand-edit:
 remove transient build output while keeping the generated client sources that
 make the native API reviewable.
 
+## Persistent data ownership
+
+The task list's local, versioned snapshot is owned by
+`app/task-store.rkt` and committed by `app/backend.rkt`, not by
+Rivet's protocol or native UI hosts. A failed local write must not report a
+successful mutation or silently discard an existing snapshot. Read failures
+for corrupt/future formats fail closed and require explicit user recovery.
+Use `RIVET_TASKBOARD_DATA_DIR` only to select an isolated test profile;
+the normal application stores data under its Racket preferences directory.
+This reference has no automatic backups, future-format migration or
+multi-process writer coordination.
+
+Before modifying storage or native save semantics, run:
+
+```bash
+raco test examples/taskboard/tests/
+raco rivet schema check rivet-schema.json --json
+```
+
+On Windows, macOS and Linux, also run the **packaged** native acceptance
+workflow for affected edit/relaunch behavior. Never substitute a direct
+backend test for an actual UI/IME/focus/persistence scenario.
+
 ## Verification loop
 
 This project includes a source-controlled `rivet-schema.json` API baseline.
