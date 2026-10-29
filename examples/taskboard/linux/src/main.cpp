@@ -45,6 +45,7 @@ struct AppState {
   bool task_busy{false};
   bool title_editing{false};
   bool title_save_pending{false};
+  bool title_save_feedback_pending{false};
   std::optional<std::int64_t> editing_task_id;
 
   std::unique_ptr<rivet::linux_runtime::Backend> backend;
@@ -224,12 +225,20 @@ int on_tasks_delivered(gpointer user_data) {
   std::unique_ptr<TasksDelivery> delivered(static_cast<TasksDelivery*>(user_data));
   if (!delivered->error.empty()) {
     g_state.generation_request.reset();
+    g_state.title_save_feedback_pending = false;
     set_busy(false);
     g_state.set_status("Backend error: " + delivered->error);
   } else {
     apply_tasks(std::move(delivered->tasks), delivered->preferred);
-    g_state.set_status("Loaded " + std::to_string(g_state.tasks.size()) +
-                       " tasks");
+    if (g_state.title_save_feedback_pending) {
+      g_state.title_save_feedback_pending = false;
+      // A successful save must remain visible even after the following
+      // list refresh; do not immediately replace it with "Loaded N tasks".
+      g_state.set_status("Title updated for this session (resets on restart).");
+    } else {
+      g_state.set_status("Loaded " + std::to_string(g_state.tasks.size()) +
+                         " tasks");
+    }
   }
   return G_SOURCE_REMOVE;
 }
@@ -555,6 +564,7 @@ int on_title_edit_delivered(gpointer user_data) {
   } else {
     auto const id = delivered->id;
     finish_title_edit();
+    g_state.title_save_feedback_pending = true;
     g_state.set_status("Title updated for this session (resets on restart).");
     load_tasks(id);
   }
