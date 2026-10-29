@@ -15,7 +15,7 @@
 ;; Bounds apply to both imports and exports; even a malformed on-disk file
 ;; cannot force unbounded reader work or become executable Racket source.
 (define maximum-snapshot-bytes 400000)
-(define maximum-task-count 1000)
+(define maximum-task-count 10000)
 (define maximum-task-text 4000)
 (define max-id (sub1 (expt 2 63)))
 
