@@ -787,6 +787,12 @@ void on_activate(GtkApplication* app, gpointer) {
   set_accessible_identity(status, "application-status", "Application status");
   set_accessible_identity(task_list, "task-list", "Tasks");
   set_accessible_identity(task_title, "task-title", "Selected task title");
+  // GtkLabel's live text supplies its AT-SPI accessible name. Keep a stable
+  // description as the lookup anchor instead of assuming the name remains
+  // the supplied label when the task title changes.
+  gtk_accessible_update_property(GTK_ACCESSIBLE(task_title),
+                                 GTK_ACCESSIBLE_PROPERTY_DESCRIPTION,
+                                 "Selected task title", -1);
   set_accessible_identity(task_status, "task-status", "Selected task status");
   set_accessible_identity(task_notes, "task-notes", "Selected task notes");
   set_accessible_identity(new_task, "new-task", "New task");
@@ -797,9 +803,15 @@ void on_activate(GtkApplication* app, gpointer) {
   set_accessible_identity(remove, "delete-task", "Delete task");
   set_accessible_identity(edit_task, "edit-task", "Edit title");
   set_accessible_identity(title_edit, "edit-task-title", "Task title draft");
+  gtk_accessible_update_property(GTK_ACCESSIBLE(title_edit),
+                                 GTK_ACCESSIBLE_PROPERTY_DESCRIPTION,
+                                 "Task title draft", -1);
   set_accessible_identity(save_task, "save-task", "Apply for this session");
   set_accessible_identity(cancel_task_edit, "cancel-task-edit", "Discard draft");
   set_accessible_identity(title_edit_error, "task-edit-error", "Task edit error");
+  gtk_accessible_update_property(GTK_ACCESSIBLE(title_edit_error),
+                                 GTK_ACCESSIBLE_PROPERTY_DESCRIPTION,
+                                 "Task edit error", -1);
   set_accessible_identity(g_state.chart->widget(), "timing-chart", "Live timing chart");
   set_accessible_identity(stream_toggle, "stream-toggle", "Toggle timing stream");
   gtk_box_append(GTK_BOX(actions), new_task);
