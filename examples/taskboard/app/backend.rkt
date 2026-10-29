@@ -5,7 +5,8 @@
          racket/string
          rivet/backend
          rivet/chart
-         rivet/resources)
+         rivet/resources
+         "store.rkt")
 
 (provide start)
 
@@ -211,6 +212,49 @@
 
 (define board-lock (make-semaphore 1))
 (define next-task-id 4)
+;; No implicit disk access while #347's native UI/close/restart acceptance is
+;; incomplete. A dedicated, disposable profile enables opt-in storage.
+(define active-board-store-path #f)
+
+(define (task->stored-row task)
+  (list (record-ref task 'id)
+        (record-ref task 'title)
+        (record-ref task 'notes)
+        (enum-case (record-ref task 'status))))
+
+(define (commit-board-tasks! updated)
+  ;; Only report success after a complete snapshot has been written. This is
+  ;; one bounded cancellation-protected commit: failed writes leave both the
+  ;; existing in-memory State and disk contents untouched.
+  (call-with-semaphore
+   board-lock
+   (lambda ()
+     (parameterize-break #f
+       (when active-board-store-path
+         (write-taskboard-rows! active-board-store-path
+                                (map task->stored-row updated)))
+       (state-set! tasks updated)))))
+
+(define (restore-board-from-store! [path (taskboard-store-path)])
+  ;; Startup must fail *without overwriting* an invalid or unreadable store.
+  ;; In particular, a corrupt snapshot is never silently replaced by samples.
+  (define stored (and path (read-taskboard-rows path)))
+  (define restored
+    (if stored
+        (for/list ([row (in-list stored)])
+          (BoardTask (first row) (second row) (third row)
+                     (TaskStatus (fourth row))))
+        initial-tasks))
+  (state-set! tasks restored)
+  (state-set! selected-task-id
+              (cond [(null? restored) (void)]
+                    [(find-task 2 restored) 2]
+                    [else (task-id (car restored))]))
+  (set! next-task-id
+        (add1 (for/fold ([maximum 3]) ([task (in-list restored)])
+                (max maximum (task-id task)))))
+  (set! active-board-store-path path)
+  (void))
 
 (define (allocate-task-id!)
   (call-with-semaphore
@@ -250,12 +294,13 @@
   (or task (void)))
 
 (define-rpc (create-task [title : String] [notes : String] : BoardTask)
+  (define valid-title (validate-text 'create-task "title" title))
+  (define valid-notes
+    (validate-text 'create-task "notes" notes #:allow-empty? #t))
   (define task
     (BoardTask (allocate-task-id!)
-          (validate-text 'create-task "title" title)
-          (validate-text 'create-task "notes" notes #:allow-empty? #t)
-          (TaskStatus 'backlog)))
-  (state-set! tasks (append (state-ref tasks) (list task)))
+               valid-title valid-notes (TaskStatus 'backlog)))
+  (commit-board-tasks! (append (state-ref tasks) (list task)))
   (task-saved task)
   task)
 
@@ -271,8 +316,7 @@
           (validate-text 'update-task "title" title)
           (validate-text 'update-task "notes" notes #:allow-empty? #t)
           status))
-  (state-set!
-   tasks
+  (commit-board-tasks!
    (for/list ([task (in-list (state-ref tasks))])
      (if (= (task-id task) id) updated task)))
   (task-saved updated)
@@ -284,7 +328,7 @@
     (filter (lambda (task) (not (= (task-id task) id))) before))
   (define deleted? (< (length after) (length before)))
   (when deleted?
-    (state-set! tasks after)
+    (commit-board-tasks! after)
     (when (equal? (state-ref selected-task-id) id)
       (state-set! selected-task-id (void))))
   deleted?)
@@ -308,7 +352,7 @@
   (unless (list? entries)
     (error 'reload-sample-tasks "sample-tasks.rktd must contain a list"))
   (define loaded (map sample-entry->task entries))
-  (state-set! tasks loaded)
+  (commit-board-tasks! loaded)
   (state-set! selected-task-id
               (if (null? loaded) (void) (task-id (car loaded))))
   loaded)
@@ -338,7 +382,7 @@
                           [(0) 'backlog]
                           [(1) 'active]
                           [else 'done])))))
-  (state-set! tasks generated)
+  (commit-board-tasks! generated)
   (state-set! selected-task-id
               (if (null? generated) (void) (task-id (car generated))))
   generated)
@@ -355,6 +399,7 @@
    (lambda () (set! timing-markers '()))))
 
 (define (start in-fd out-fd)
+  (restore-board-from-store!)
   (serve-fds in-fd out-fd))
 
 (module+ test-support
@@ -370,4 +415,5 @@
            update-task
            delete-task
            reload-sample-tasks
+           restore-board-from-store!
            reset-reference-state!))
