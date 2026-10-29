@@ -222,18 +222,24 @@
         (record-ref task 'notes)
         (enum-case (record-ref task 'status))))
 
-(define (commit-board-tasks! updated)
-  ;; Only report success after a complete snapshot has been written. This is
-  ;; one bounded cancellation-protected commit: failed writes leave both the
-  ;; existing in-memory State and disk contents untouched.
+(define (mutate-board-tasks! transform)
+  ;; Transform the latest State *under the same lock* that owns the snapshot.
+  ;; Concurrent edit/create requests must not overwrite each other's lists.
+  ;; Only report success after a complete snapshot has been written. A failed
+  ;; file write leaves both the old State and last good snapshot untouched.
   (call-with-semaphore
    board-lock
    (lambda ()
      (parameterize-break #f
+       (define updated (transform (state-ref tasks)))
        (when active-board-store-path
          (write-taskboard-rows! active-board-store-path
                                 (map task->stored-row updated)))
-       (state-set! tasks updated)))))
+       (state-set! tasks updated)
+       updated))))
+
+(define (commit-board-tasks! updated)
+  (mutate-board-tasks! (lambda (_current) updated)))
 
 (define (restore-board-from-store! [path (taskboard-store-path)])
   ;; Startup must fail *without overwriting* an invalid or unreadable store.
@@ -300,7 +306,7 @@
   (define task
     (BoardTask (allocate-task-id!)
                valid-title valid-notes (TaskStatus 'backlog)))
-  (commit-board-tasks! (append (state-ref tasks) (list task)))
+  (mutate-board-tasks! (lambda (current) (append current (list task))))
   (task-saved task)
   task)
 
@@ -316,9 +322,13 @@
           (validate-text 'update-task "title" title)
           (validate-text 'update-task "notes" notes #:allow-empty? #t)
           status))
-  (commit-board-tasks!
-   (for/list ([task (in-list (state-ref tasks))])
-     (if (= (task-id task) id) updated task)))
+  (mutate-board-tasks!
+   (lambda (current)
+     ;; Another request may have deleted this task after require-task.
+     (unless (find-task id current)
+       (error 'update-task "task no longer exists: ~a" id))
+     (for/list ([task (in-list current)])
+       (if (= (task-id task) id) updated task))))
   (task-saved updated)
   updated)
 
