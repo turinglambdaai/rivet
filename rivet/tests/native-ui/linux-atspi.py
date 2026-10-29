@@ -89,6 +89,32 @@ def find_named(root, name, role=None):
     return None
 
 
+def find_described(root, description, role=None):
+    """GTK's dynamic label text owns AX name; description stays stable."""
+    for node in walk(root):
+        try:
+            if node.description != description:
+                continue
+            if role is None or role_name(node) == role:
+                return node
+        except Exception:
+            continue
+    return None
+
+
+def selected_title(window):
+    label = find_described(window, "Selected task title", "label")
+    return text_value(label) if label is not None else None
+
+
+def find_edit_draft(window):
+    return find_described(window, "Task title draft")
+
+
+def find_edit_error(window):
+    return find_described(window, "Task edit error", "label")
+
+
 def find_status(root):
     prefixes = (
         "Starting embedded Racket CS",
@@ -191,6 +217,13 @@ def main():
         > new_task_count,
     )
 
+    # New Task's list row can become visible before the detail selection
+    # settles; prove that the *selected* native detail actually changed.
+    wait_for(
+        "the new task selected in the detail pane",
+        lambda: selected_title(window) == "New task",
+    )
+
     # Real GTK4/AT-SPI draft/cancel/error/retry path. This touches the
     # packaged native app and sends real typed Racket RPCs, not a mock UI.
     def begin_edit():
@@ -204,7 +237,7 @@ def main():
         press(edit)
         return wait_for(
             "editable native title draft",
-            lambda: find_named(window, "Task title draft"),
+            lambda: find_edit_draft(window),
         )
 
     draft = begin_edit()
@@ -215,7 +248,7 @@ def main():
     ))
     wait_for(
         "discard preserves original selected title",
-        lambda: text_value(find_named(window, "Selected task title")) == "New task",
+        lambda: selected_title(window) == "New task",
     )
     draft = begin_edit()
     edit_text(draft, "   ")
@@ -226,14 +259,14 @@ def main():
     wait_for(
         "rejected backend edit keeps text and explains the error",
         lambda: (
-            (field := find_named(window, "Task title draft"))
+            (field := find_edit_draft(window))
             and text_value(field) == "   "
-            and (message := find_named(window, "Task edit error"))
+            and (message := find_edit_error(window))
             and "Update failed; draft retained" in (text_value(message) or "")
             and is_enabled(field)
         ),
     )
-    draft = find_named(window, "Task title draft")
+    draft = find_edit_draft(window)
     edit_text(draft, "Edited via native AT-SPI")
     press(wait_for(
         "retry Apply action",
@@ -241,8 +274,7 @@ def main():
     ))
     wait_for(
         "successful edit updates the selected detail title",
-        lambda: text_value(find_named(window, "Selected task title"))
-        == "Edited via native AT-SPI",
+        lambda: selected_title(window) == "Edited via native AT-SPI",
     )
 
     status = wait_for("the live application status", lambda: find_status(window))
