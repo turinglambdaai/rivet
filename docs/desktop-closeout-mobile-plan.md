@@ -31,13 +31,13 @@ Rivet is a **conditional go** for mobile development.
   as CI does.
 - Current Rivet CI, protocol fuzzing, desktop architecture jobs, native UI
   end-to-end jobs, and the `v0.11.0` release are green.
-- The closed [0.7 production milestone](https://github.com/turinglambdaai/rivet/milestone/1)
+- The closed [0.7 production milestone](https://github.com/turlamai/rivet/milestone/1)
   records real Linux lifecycle evidence, first-party update installation,
   native UI end-to-end gates, and characterization-protected refactoring in
-  issues [#182](https://github.com/turinglambdaai/rivet/issues/182),
-  [#183](https://github.com/turinglambdaai/rivet/issues/183),
-  [#184](https://github.com/turinglambdaai/rivet/issues/184), and
-  [#185](https://github.com/turinglambdaai/rivet/issues/185).
+  issues [#182](https://github.com/turlamai/rivet/issues/182),
+  [#183](https://github.com/turlamai/rivet/issues/183),
+  [#184](https://github.com/turlamai/rivet/issues/184), and
+  [#185](https://github.com/turlamai/rivet/issues/185).
 - Fifteen top-level product repositories and one nested studio project consume
   Rivet. Their latest product CI runs were green at this review point.
 - The latest PodLens release run is not green: the macOS x64 release build on

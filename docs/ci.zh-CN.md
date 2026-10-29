@@ -52,7 +52,7 @@ jobs:
           distribution: full
           variant: CS
           version: '9.3'
-      - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.13.0'
+      - run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#v0.13.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
       - run: raco rivet acceptance --json > acceptance-report.json
@@ -78,7 +78,7 @@ jobs:
           distribution: full
           variant: CS
           version: '9.3'
-      - run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.13.0'
+      - run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#v0.13.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
       - run: raco rivet acceptance --json > acceptance-report.json
@@ -101,7 +101,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes libgtk-4-dev
       - name: Install the matching Rivet package and dependencies
-        run: raco pkg install --auto --no-docs 'https://github.com/turinglambdaai/rivet.git#v0.13.0'
+        run: raco pkg install --auto --no-docs 'https://github.com/turlamai/rivet.git#v0.13.0'
       - run: raco rivet doctor
       - run: raco rivet schema check rivet-schema.json
       - run: raco rivet acceptance --json > acceptance-report.json

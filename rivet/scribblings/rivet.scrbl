@@ -1074,4 +1074,4 @@ application or to Rivet.
 The source repository contains the full getting-started guides, architecture,
 RVT1 protocol specification, runtime limits, production signing guide, system
 services guide, and release/update threat model. See
-@url{https://github.com/turinglambdaai/rivet}.
+@url{https://github.com/turlamai/rivet}.
