@@ -42,6 +42,1501 @@ grep -Eq '(^|/)rivet-cli/codegen/naming.rkt$' "$archive_entries"
 grep -Eq '(^|/)rivet-cli/codegen/snapshot.rkt$' "$archive_entries"
 grep -Eq '(^|/)rivet-cli/codegen/swift.rkt$' "$archive_entries"
 grep -Eq '(^|/)rivet-cli/codegen/type-graph.rkt
+# The canonical learning project and both walkthrough languages are public
+# package content, not files that happen to exist only in the Git checkout.
+grep -Eq '(^|/)examples/taskboard/app/backend.rkt$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/rivet-schema.json$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.zh-CN.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/PERFORMANCE.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/windows/MainWindow.xaml$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/macos-host/Sources/RivetHost/ContentView.swift$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/linux/src/main.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/macos/Sources/RivetSystem/FileDialogs.swift$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/system/file_dialogs.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.cpp$' "$archive_entries"
+user_home="$tmp/racket-user"
+work="$tmp/work"
+mkdir -p "$user_home" "$work"
+
+# Install the exact archive into a fresh user package scope. The repository's
+# Force applies only to the fresh user scope: it lets the archive shadow a
+# maintainer machine's installation-scope link. The pkg-directory assertion
+# below proves all commands resolve this exact archive, not the checkout.
+PLTUSERHOME="$user_home" \
+  raco pkg install --auto --no-docs --scope user --force --name rivet "$archive"
+
+PLTUSERHOME="$user_home" \
+  racket -e '(require rivet/backend rivet/protocol rivet/resources)'
+PLTUSERHOME="$user_home" \
+  raco rivet help >/dev/null
+
+installed_root="$(PLTUSERHOME="$user_home" racket -e \
+  '(require pkg/lib) (display (path->string (pkg-directory "rivet")))')"
+case "$installed_root" in
+  "$user_home"/*) ;;
+  *)
+    echo "source package did not take precedence in the isolated user scope: $installed_root" >&2
+    exit 1
+    ;;
+esac
+test -f "$installed_root/examples/taskboard/app/backend.rkt"
+test -f "$installed_root/examples/taskboard/README.md"
+test -f "$installed_root/examples/taskboard/README.zh-CN.md"
+test -f "$installed_root/examples/taskboard/PERFORMANCE.md"
+test -f "$installed_root/rivet-cli/apple-review.rkt"
+test -f "$installed_root/rivet-cli/apple-review-preflight.py"
+
+# Validate the exact archived CLI outside this checkout or any app project.
+apple_result="$tmp/apple-preflight.json"
+set +e
+PLTUSERHOME="$user_home" raco rivet apple-review \
+  --channel ios-app-store --app "$tmp/never-built.app" --json > "$apple_result"
+apple_code=$?
+set -e
+if [[ "$apple_code" -ne 1 ]]; then
+  echo "installed Apple preflight did not reject unsupported iOS delivery" >&2
+  exit 1
+fi
+python3 - "$apple_result" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    report = json.load(handle)
+assert report["schema"] == "rivet.apple-review-preflight.v1"
+assert report["status"] == "blocked"
+assert any(item["code"] == "standalone-ios-not-shipped"
+           for item in report["blockers"])
+PY
+
+# Exercise packaged scaffold resources too. A source archive that omitted CLI
+# templates or other package data can load its modules yet still fail here.
+cd "$work"
+PLTUSERHOME="$user_home" \
+  raco rivet new ArchiveSmoke
+
+test -f ArchiveSmoke/README.md
+test -f ArchiveSmoke/AGENTS.md
+test -f ArchiveSmoke/rivet.rktd
+test -f ArchiveSmoke/app/backend.rkt
+test -f ArchiveSmoke/windows/RivetHost.vcxproj
+test -f ArchiveSmoke/macos-host/Package.swift
+test -f ArchiveSmoke/linux/CMakeLists.txt
+test -f ArchiveSmoke/linux/src/main.cpp
+grep -Fq '(resources . ())' ArchiveSmoke/rivet.rktd
+grep -Fq 'RIVET_WINDOWS_ICON_RC' ArchiveSmoke/windows/RivetHost.vcxproj
+
+# The starter should remain self-guiding: installing a release archive and
+# running `new` must leave a developer with the normal diagnosis/run path and a
+# route to both walkthroughs, without requiring the Rivet checkout nearby.
+grep -Fq 'raco rivet doctor' ArchiveSmoke/README.md
+grep -Fq 'raco rivet inspect --json' ArchiveSmoke/AGENTS.md
+grep -Fq 'raco rivet dev' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.md' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.zh-CN.md' ArchiveSmoke/README.md
+
+cd ArchiveSmoke
+PLTUSERHOME="$user_home" \
+  raco rivet inspect --json > inspect.json
+PLTUSERHOME="$user_home" racket -e '
+  (require json)
+  (define report (call-with-input-file "inspect.json" read-json))
+  (define (expect actual expected label)
+    (unless (equal? actual expected)
+      (raise-arguments-error
+       (quote source-package-smoke)
+       "inspect report did not match the packaged scaffold"
+       "field" label
+       "expected" expected
+       "actual" actual)))
+  (expect (hash-ref report (quote contract-version)) 1 "contract-version")
+  (expect (hash-ref (hash-ref report (quote project)) (quote name))
+          "ArchiveSmoke"
+          "project.name")
+  (expect (hash-ref (hash-ref (hash-ref report (quote backend)) (quote source))
+                    (quote exists))
+          #t
+          "backend.source.exists")
+  (expect (hash-ref (car (hash-ref (hash-ref report (quote edit-points))
+                                  (quote windows-ui)))
+                    (quote exists))
+          #t
+          "edit-points.windows-ui[0].exists")
+  (expect (hash-ref (hash-ref (hash-ref report (quote generated-clients))
+                             (quote kotlin))
+                    (quote path))
+          ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
+          "generated-clients.kotlin.path")
+'
+
+# The published archive must still generate every typed client. The Kotlin
+# client exists only for projects with a declared companion API (issue #311 —
+# a desktop-only scaffold carries no Kotlin file nothing consumes), so declare
+# the starter's `greet` RPC before generating and assert the file appears.
+racket -e '(require racket/file) (define p "rivet.rktd") (define c (call-with-input-file p read)) (call-with-output-file p #:exists (quote truncate/replace) (lambda (out) (write (hash-set c (quote device-rpcs) (list (quote greet))) out)))'
+PLTUSERHOME="$user_home" \
+  raco rivet generate
+test -s .rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt
+
+printf 'source package smoke test passed: %s\n' "$archive"
+ "$archive_entries"
+# Public scanner and CLI must be included in the archived Racket package.
+grep -Eq '(^|/)rivet-cli/apple-review.rkt
+
+# The canonical learning project and both walkthrough languages are public
+# package content, not files that happen to exist only in the Git checkout.
+grep -Eq '(^|/)examples/taskboard/app/backend.rkt$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/rivet-schema.json$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.zh-CN.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/PERFORMANCE.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/windows/MainWindow.xaml$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/macos-host/Sources/RivetHost/ContentView.swift$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/linux/src/main.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/macos/Sources/RivetSystem/FileDialogs.swift$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/system/file_dialogs.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.cpp$' "$archive_entries"
+user_home="$tmp/racket-user"
+work="$tmp/work"
+mkdir -p "$user_home" "$work"
+
+# Install the exact archive into a fresh user package scope. The repository's
+# Force applies only to the fresh user scope: it lets the archive shadow a
+# maintainer machine's installation-scope link. The pkg-directory assertion
+# below proves all commands resolve this exact archive, not the checkout.
+PLTUSERHOME="$user_home" \
+  raco pkg install --auto --no-docs --scope user --force --name rivet "$archive"
+
+PLTUSERHOME="$user_home" \
+  racket -e '(require rivet/backend rivet/protocol rivet/resources)'
+PLTUSERHOME="$user_home" \
+  raco rivet help >/dev/null
+
+installed_root="$(PLTUSERHOME="$user_home" racket -e \
+  '(require pkg/lib) (display (path->string (pkg-directory "rivet")))')"
+case "$installed_root" in
+  "$user_home"/*) ;;
+  *)
+    echo "source package did not take precedence in the isolated user scope: $installed_root" >&2
+    exit 1
+    ;;
+esac
+test -f "$installed_root/examples/taskboard/app/backend.rkt"
+test -f "$installed_root/examples/taskboard/README.md"
+test -f "$installed_root/examples/taskboard/README.zh-CN.md"
+test -f "$installed_root/examples/taskboard/PERFORMANCE.md"
+
+# Exercise packaged scaffold resources too. A source archive that omitted CLI
+# templates or other package data can load its modules yet still fail here.
+cd "$work"
+PLTUSERHOME="$user_home" \
+  raco rivet new ArchiveSmoke
+
+test -f ArchiveSmoke/README.md
+test -f ArchiveSmoke/AGENTS.md
+test -f ArchiveSmoke/rivet.rktd
+test -f ArchiveSmoke/app/backend.rkt
+test -f ArchiveSmoke/windows/RivetHost.vcxproj
+test -f ArchiveSmoke/macos-host/Package.swift
+test -f ArchiveSmoke/linux/CMakeLists.txt
+test -f ArchiveSmoke/linux/src/main.cpp
+grep -Fq '(resources . ())' ArchiveSmoke/rivet.rktd
+grep -Fq 'RIVET_WINDOWS_ICON_RC' ArchiveSmoke/windows/RivetHost.vcxproj
+
+# The starter should remain self-guiding: installing a release archive and
+# running `new` must leave a developer with the normal diagnosis/run path and a
+# route to both walkthroughs, without requiring the Rivet checkout nearby.
+grep -Fq 'raco rivet doctor' ArchiveSmoke/README.md
+grep -Fq 'raco rivet inspect --json' ArchiveSmoke/AGENTS.md
+grep -Fq 'raco rivet dev' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.md' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.zh-CN.md' ArchiveSmoke/README.md
+
+cd ArchiveSmoke
+PLTUSERHOME="$user_home" \
+  raco rivet inspect --json > inspect.json
+PLTUSERHOME="$user_home" racket -e '
+  (require json)
+  (define report (call-with-input-file "inspect.json" read-json))
+  (define (expect actual expected label)
+    (unless (equal? actual expected)
+      (raise-arguments-error
+       (quote source-package-smoke)
+       "inspect report did not match the packaged scaffold"
+       "field" label
+       "expected" expected
+       "actual" actual)))
+  (expect (hash-ref report (quote contract-version)) 1 "contract-version")
+  (expect (hash-ref (hash-ref report (quote project)) (quote name))
+          "ArchiveSmoke"
+          "project.name")
+  (expect (hash-ref (hash-ref (hash-ref report (quote backend)) (quote source))
+                    (quote exists))
+          #t
+          "backend.source.exists")
+  (expect (hash-ref (car (hash-ref (hash-ref report (quote edit-points))
+                                  (quote windows-ui)))
+                    (quote exists))
+          #t
+          "edit-points.windows-ui[0].exists")
+  (expect (hash-ref (hash-ref (hash-ref report (quote generated-clients))
+                             (quote kotlin))
+                    (quote path))
+          ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
+          "generated-clients.kotlin.path")
+'
+
+# The published archive must still generate every typed client. The Kotlin
+# client exists only for projects with a declared companion API (issue #311 —
+# a desktop-only scaffold carries no Kotlin file nothing consumes), so declare
+# the starter's `greet` RPC before generating and assert the file appears.
+racket -e '(require racket/file) (define p "rivet.rktd") (define c (call-with-input-file p read)) (call-with-output-file p #:exists (quote truncate/replace) (lambda (out) (write (hash-set c (quote device-rpcs) (list (quote greet))) out)))'
+PLTUSERHOME="$user_home" \
+  raco rivet generate
+test -s .rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt
+
+printf 'source package smoke test passed: %s\n' "$archive"
+ "$archive_entries"
+grep -Eq '(^|/)rivet-cli/apple-review-preflight.py
+
+# The canonical learning project and both walkthrough languages are public
+# package content, not files that happen to exist only in the Git checkout.
+grep -Eq '(^|/)examples/taskboard/app/backend.rkt$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/rivet-schema.json$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.zh-CN.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/PERFORMANCE.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/windows/MainWindow.xaml$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/macos-host/Sources/RivetHost/ContentView.swift$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/linux/src/main.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/macos/Sources/RivetSystem/FileDialogs.swift$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/system/file_dialogs.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.cpp$' "$archive_entries"
+user_home="$tmp/racket-user"
+work="$tmp/work"
+mkdir -p "$user_home" "$work"
+
+# Install the exact archive into a fresh user package scope. The repository's
+# Force applies only to the fresh user scope: it lets the archive shadow a
+# maintainer machine's installation-scope link. The pkg-directory assertion
+# below proves all commands resolve this exact archive, not the checkout.
+PLTUSERHOME="$user_home" \
+  raco pkg install --auto --no-docs --scope user --force --name rivet "$archive"
+
+PLTUSERHOME="$user_home" \
+  racket -e '(require rivet/backend rivet/protocol rivet/resources)'
+PLTUSERHOME="$user_home" \
+  raco rivet help >/dev/null
+
+installed_root="$(PLTUSERHOME="$user_home" racket -e \
+  '(require pkg/lib) (display (path->string (pkg-directory "rivet")))')"
+case "$installed_root" in
+  "$user_home"/*) ;;
+  *)
+    echo "source package did not take precedence in the isolated user scope: $installed_root" >&2
+    exit 1
+    ;;
+esac
+test -f "$installed_root/examples/taskboard/app/backend.rkt"
+test -f "$installed_root/examples/taskboard/README.md"
+test -f "$installed_root/examples/taskboard/README.zh-CN.md"
+test -f "$installed_root/examples/taskboard/PERFORMANCE.md"
+
+# Exercise packaged scaffold resources too. A source archive that omitted CLI
+# templates or other package data can load its modules yet still fail here.
+cd "$work"
+PLTUSERHOME="$user_home" \
+  raco rivet new ArchiveSmoke
+
+test -f ArchiveSmoke/README.md
+test -f ArchiveSmoke/AGENTS.md
+test -f ArchiveSmoke/rivet.rktd
+test -f ArchiveSmoke/app/backend.rkt
+test -f ArchiveSmoke/windows/RivetHost.vcxproj
+test -f ArchiveSmoke/macos-host/Package.swift
+test -f ArchiveSmoke/linux/CMakeLists.txt
+test -f ArchiveSmoke/linux/src/main.cpp
+grep -Fq '(resources . ())' ArchiveSmoke/rivet.rktd
+grep -Fq 'RIVET_WINDOWS_ICON_RC' ArchiveSmoke/windows/RivetHost.vcxproj
+
+# The starter should remain self-guiding: installing a release archive and
+# running `new` must leave a developer with the normal diagnosis/run path and a
+# route to both walkthroughs, without requiring the Rivet checkout nearby.
+grep -Fq 'raco rivet doctor' ArchiveSmoke/README.md
+grep -Fq 'raco rivet inspect --json' ArchiveSmoke/AGENTS.md
+grep -Fq 'raco rivet dev' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.md' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.zh-CN.md' ArchiveSmoke/README.md
+
+cd ArchiveSmoke
+PLTUSERHOME="$user_home" \
+  raco rivet inspect --json > inspect.json
+PLTUSERHOME="$user_home" racket -e '
+  (require json)
+  (define report (call-with-input-file "inspect.json" read-json))
+  (define (expect actual expected label)
+    (unless (equal? actual expected)
+      (raise-arguments-error
+       (quote source-package-smoke)
+       "inspect report did not match the packaged scaffold"
+       "field" label
+       "expected" expected
+       "actual" actual)))
+  (expect (hash-ref report (quote contract-version)) 1 "contract-version")
+  (expect (hash-ref (hash-ref report (quote project)) (quote name))
+          "ArchiveSmoke"
+          "project.name")
+  (expect (hash-ref (hash-ref (hash-ref report (quote backend)) (quote source))
+                    (quote exists))
+          #t
+          "backend.source.exists")
+  (expect (hash-ref (car (hash-ref (hash-ref report (quote edit-points))
+                                  (quote windows-ui)))
+                    (quote exists))
+          #t
+          "edit-points.windows-ui[0].exists")
+  (expect (hash-ref (hash-ref (hash-ref report (quote generated-clients))
+                             (quote kotlin))
+                    (quote path))
+          ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
+          "generated-clients.kotlin.path")
+'
+
+# The published archive must still generate every typed client. The Kotlin
+# client exists only for projects with a declared companion API (issue #311 —
+# a desktop-only scaffold carries no Kotlin file nothing consumes), so declare
+# the starter's `greet` RPC before generating and assert the file appears.
+racket -e '(require racket/file) (define p "rivet.rktd") (define c (call-with-input-file p read)) (call-with-output-file p #:exists (quote truncate/replace) (lambda (out) (write (hash-set c (quote device-rpcs) (list (quote greet))) out)))'
+PLTUSERHOME="$user_home" \
+  raco rivet generate
+test -s .rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt
+
+printf 'source package smoke test passed: %s\n' "$archive"
+ "$archive_entries"
+
+# The canonical learning project and both walkthrough languages are public
+# package content, not files that happen to exist only in the Git checkout.
+grep -Eq '(^|/)examples/taskboard/app/backend.rkt$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/rivet-schema.json$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.zh-CN.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/PERFORMANCE.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/windows/MainWindow.xaml$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/macos-host/Sources/RivetHost/ContentView.swift$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/linux/src/main.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/macos/Sources/RivetSystem/FileDialogs.swift$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/system/file_dialogs.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.cpp$' "$archive_entries"
+user_home="$tmp/racket-user"
+work="$tmp/work"
+mkdir -p "$user_home" "$work"
+
+# Install the exact archive into a fresh user package scope. The repository's
+# Force applies only to the fresh user scope: it lets the archive shadow a
+# maintainer machine's installation-scope link. The pkg-directory assertion
+# below proves all commands resolve this exact archive, not the checkout.
+PLTUSERHOME="$user_home" \
+  raco pkg install --auto --no-docs --scope user --force --name rivet "$archive"
+
+PLTUSERHOME="$user_home" \
+  racket -e '(require rivet/backend rivet/protocol rivet/resources)'
+PLTUSERHOME="$user_home" \
+  raco rivet help >/dev/null
+
+installed_root="$(PLTUSERHOME="$user_home" racket -e \
+  '(require pkg/lib) (display (path->string (pkg-directory "rivet")))')"
+case "$installed_root" in
+  "$user_home"/*) ;;
+  *)
+    echo "source package did not take precedence in the isolated user scope: $installed_root" >&2
+    exit 1
+    ;;
+esac
+test -f "$installed_root/examples/taskboard/app/backend.rkt"
+test -f "$installed_root/examples/taskboard/README.md"
+test -f "$installed_root/examples/taskboard/README.zh-CN.md"
+test -f "$installed_root/examples/taskboard/PERFORMANCE.md"
+
+# Exercise packaged scaffold resources too. A source archive that omitted CLI
+# templates or other package data can load its modules yet still fail here.
+cd "$work"
+PLTUSERHOME="$user_home" \
+  raco rivet new ArchiveSmoke
+
+test -f ArchiveSmoke/README.md
+test -f ArchiveSmoke/AGENTS.md
+test -f ArchiveSmoke/rivet.rktd
+test -f ArchiveSmoke/app/backend.rkt
+test -f ArchiveSmoke/windows/RivetHost.vcxproj
+test -f ArchiveSmoke/macos-host/Package.swift
+test -f ArchiveSmoke/linux/CMakeLists.txt
+test -f ArchiveSmoke/linux/src/main.cpp
+grep -Fq '(resources . ())' ArchiveSmoke/rivet.rktd
+grep -Fq 'RIVET_WINDOWS_ICON_RC' ArchiveSmoke/windows/RivetHost.vcxproj
+
+# The starter should remain self-guiding: installing a release archive and
+# running `new` must leave a developer with the normal diagnosis/run path and a
+# route to both walkthroughs, without requiring the Rivet checkout nearby.
+grep -Fq 'raco rivet doctor' ArchiveSmoke/README.md
+grep -Fq 'raco rivet inspect --json' ArchiveSmoke/AGENTS.md
+grep -Fq 'raco rivet dev' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.md' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.zh-CN.md' ArchiveSmoke/README.md
+
+cd ArchiveSmoke
+PLTUSERHOME="$user_home" \
+  raco rivet inspect --json > inspect.json
+PLTUSERHOME="$user_home" racket -e '
+  (require json)
+  (define report (call-with-input-file "inspect.json" read-json))
+  (define (expect actual expected label)
+    (unless (equal? actual expected)
+      (raise-arguments-error
+       (quote source-package-smoke)
+       "inspect report did not match the packaged scaffold"
+       "field" label
+       "expected" expected
+       "actual" actual)))
+  (expect (hash-ref report (quote contract-version)) 1 "contract-version")
+  (expect (hash-ref (hash-ref report (quote project)) (quote name))
+          "ArchiveSmoke"
+          "project.name")
+  (expect (hash-ref (hash-ref (hash-ref report (quote backend)) (quote source))
+                    (quote exists))
+          #t
+          "backend.source.exists")
+  (expect (hash-ref (car (hash-ref (hash-ref report (quote edit-points))
+                                  (quote windows-ui)))
+                    (quote exists))
+          #t
+          "edit-points.windows-ui[0].exists")
+  (expect (hash-ref (hash-ref (hash-ref report (quote generated-clients))
+                             (quote kotlin))
+                    (quote path))
+          ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
+          "generated-clients.kotlin.path")
+'
+
+# The published archive must still generate every typed client. The Kotlin
+# client exists only for projects with a declared companion API (issue #311 —
+# a desktop-only scaffold carries no Kotlin file nothing consumes), so declare
+# the starter's `greet` RPC before generating and assert the file appears.
+racket -e '(require racket/file) (define p "rivet.rktd") (define c (call-with-input-file p read)) (call-with-output-file p #:exists (quote truncate/replace) (lambda (out) (write (hash-set c (quote device-rpcs) (list (quote greet))) out)))'
+PLTUSERHOME="$user_home" \
+  raco rivet generate
+test -s .rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt
+
+printf 'source package smoke test passed: %s\n' "$archive"
+ "$archive_entries"
+
+# The public Apple preflight must be included in the release archive.
+grep -Eq '(^|/)rivet-cli/apple-review.rkt
+# The canonical learning project and both walkthrough languages are public
+# package content, not files that happen to exist only in the Git checkout.
+grep -Eq '(^|/)examples/taskboard/app/backend.rkt$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/rivet-schema.json$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.zh-CN.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/PERFORMANCE.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/windows/MainWindow.xaml$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/macos-host/Sources/RivetHost/ContentView.swift$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/linux/src/main.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/macos/Sources/RivetSystem/FileDialogs.swift$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/system/file_dialogs.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.cpp$' "$archive_entries"
+user_home="$tmp/racket-user"
+work="$tmp/work"
+mkdir -p "$user_home" "$work"
+
+# Install the exact archive into a fresh user package scope. The repository's
+# Force applies only to the fresh user scope: it lets the archive shadow a
+# maintainer machine's installation-scope link. The pkg-directory assertion
+# below proves all commands resolve this exact archive, not the checkout.
+PLTUSERHOME="$user_home" \
+  raco pkg install --auto --no-docs --scope user --force --name rivet "$archive"
+
+PLTUSERHOME="$user_home" \
+  racket -e '(require rivet/backend rivet/protocol rivet/resources)'
+PLTUSERHOME="$user_home" \
+  raco rivet help >/dev/null
+
+installed_root="$(PLTUSERHOME="$user_home" racket -e \
+  '(require pkg/lib) (display (path->string (pkg-directory "rivet")))')"
+case "$installed_root" in
+  "$user_home"/*) ;;
+  *)
+    echo "source package did not take precedence in the isolated user scope: $installed_root" >&2
+    exit 1
+    ;;
+esac
+test -f "$installed_root/examples/taskboard/app/backend.rkt"
+test -f "$installed_root/examples/taskboard/README.md"
+test -f "$installed_root/examples/taskboard/README.zh-CN.md"
+test -f "$installed_root/examples/taskboard/PERFORMANCE.md"
+test -f "$installed_root/rivet-cli/apple-review.rkt"
+test -f "$installed_root/rivet-cli/apple-review-preflight.py"
+
+# Validate the exact archived CLI outside this checkout or any app project.
+apple_result="$tmp/apple-preflight.json"
+set +e
+PLTUSERHOME="$user_home" raco rivet apple-review \
+  --channel ios-app-store --app "$tmp/never-built.app" --json > "$apple_result"
+apple_code=$?
+set -e
+if [[ "$apple_code" -ne 1 ]]; then
+  echo "installed Apple preflight did not reject unsupported iOS delivery" >&2
+  exit 1
+fi
+python3 - "$apple_result" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    report = json.load(handle)
+assert report["schema"] == "rivet.apple-review-preflight.v1"
+assert report["status"] == "blocked"
+assert any(item["code"] == "standalone-ios-not-shipped"
+           for item in report["blockers"])
+PY
+
+# Exercise packaged scaffold resources too. A source archive that omitted CLI
+# templates or other package data can load its modules yet still fail here.
+cd "$work"
+PLTUSERHOME="$user_home" \
+  raco rivet new ArchiveSmoke
+
+test -f ArchiveSmoke/README.md
+test -f ArchiveSmoke/AGENTS.md
+test -f ArchiveSmoke/rivet.rktd
+test -f ArchiveSmoke/app/backend.rkt
+test -f ArchiveSmoke/windows/RivetHost.vcxproj
+test -f ArchiveSmoke/macos-host/Package.swift
+test -f ArchiveSmoke/linux/CMakeLists.txt
+test -f ArchiveSmoke/linux/src/main.cpp
+grep -Fq '(resources . ())' ArchiveSmoke/rivet.rktd
+grep -Fq 'RIVET_WINDOWS_ICON_RC' ArchiveSmoke/windows/RivetHost.vcxproj
+
+# The starter should remain self-guiding: installing a release archive and
+# running `new` must leave a developer with the normal diagnosis/run path and a
+# route to both walkthroughs, without requiring the Rivet checkout nearby.
+grep -Fq 'raco rivet doctor' ArchiveSmoke/README.md
+grep -Fq 'raco rivet inspect --json' ArchiveSmoke/AGENTS.md
+grep -Fq 'raco rivet dev' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.md' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.zh-CN.md' ArchiveSmoke/README.md
+
+cd ArchiveSmoke
+PLTUSERHOME="$user_home" \
+  raco rivet inspect --json > inspect.json
+PLTUSERHOME="$user_home" racket -e '
+  (require json)
+  (define report (call-with-input-file "inspect.json" read-json))
+  (define (expect actual expected label)
+    (unless (equal? actual expected)
+      (raise-arguments-error
+       (quote source-package-smoke)
+       "inspect report did not match the packaged scaffold"
+       "field" label
+       "expected" expected
+       "actual" actual)))
+  (expect (hash-ref report (quote contract-version)) 1 "contract-version")
+  (expect (hash-ref (hash-ref report (quote project)) (quote name))
+          "ArchiveSmoke"
+          "project.name")
+  (expect (hash-ref (hash-ref (hash-ref report (quote backend)) (quote source))
+                    (quote exists))
+          #t
+          "backend.source.exists")
+  (expect (hash-ref (car (hash-ref (hash-ref report (quote edit-points))
+                                  (quote windows-ui)))
+                    (quote exists))
+          #t
+          "edit-points.windows-ui[0].exists")
+  (expect (hash-ref (hash-ref (hash-ref report (quote generated-clients))
+                             (quote kotlin))
+                    (quote path))
+          ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
+          "generated-clients.kotlin.path")
+'
+
+# The published archive must still generate every typed client. The Kotlin
+# client exists only for projects with a declared companion API (issue #311 —
+# a desktop-only scaffold carries no Kotlin file nothing consumes), so declare
+# the starter's `greet` RPC before generating and assert the file appears.
+racket -e '(require racket/file) (define p "rivet.rktd") (define c (call-with-input-file p read)) (call-with-output-file p #:exists (quote truncate/replace) (lambda (out) (write (hash-set c (quote device-rpcs) (list (quote greet))) out)))'
+PLTUSERHOME="$user_home" \
+  raco rivet generate
+test -s .rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt
+
+printf 'source package smoke test passed: %s\n' "$archive"
+ "$archive_entries"
+# Public scanner and CLI must be included in the archived Racket package.
+grep -Eq '(^|/)rivet-cli/apple-review.rkt
+
+# The canonical learning project and both walkthrough languages are public
+# package content, not files that happen to exist only in the Git checkout.
+grep -Eq '(^|/)examples/taskboard/app/backend.rkt$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/rivet-schema.json$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.zh-CN.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/PERFORMANCE.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/windows/MainWindow.xaml$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/macos-host/Sources/RivetHost/ContentView.swift$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/linux/src/main.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/macos/Sources/RivetSystem/FileDialogs.swift$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/system/file_dialogs.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.cpp$' "$archive_entries"
+user_home="$tmp/racket-user"
+work="$tmp/work"
+mkdir -p "$user_home" "$work"
+
+# Install the exact archive into a fresh user package scope. The repository's
+# Force applies only to the fresh user scope: it lets the archive shadow a
+# maintainer machine's installation-scope link. The pkg-directory assertion
+# below proves all commands resolve this exact archive, not the checkout.
+PLTUSERHOME="$user_home" \
+  raco pkg install --auto --no-docs --scope user --force --name rivet "$archive"
+
+PLTUSERHOME="$user_home" \
+  racket -e '(require rivet/backend rivet/protocol rivet/resources)'
+PLTUSERHOME="$user_home" \
+  raco rivet help >/dev/null
+
+installed_root="$(PLTUSERHOME="$user_home" racket -e \
+  '(require pkg/lib) (display (path->string (pkg-directory "rivet")))')"
+case "$installed_root" in
+  "$user_home"/*) ;;
+  *)
+    echo "source package did not take precedence in the isolated user scope: $installed_root" >&2
+    exit 1
+    ;;
+esac
+test -f "$installed_root/examples/taskboard/app/backend.rkt"
+test -f "$installed_root/examples/taskboard/README.md"
+test -f "$installed_root/examples/taskboard/README.zh-CN.md"
+test -f "$installed_root/examples/taskboard/PERFORMANCE.md"
+
+# Exercise packaged scaffold resources too. A source archive that omitted CLI
+# templates or other package data can load its modules yet still fail here.
+cd "$work"
+PLTUSERHOME="$user_home" \
+  raco rivet new ArchiveSmoke
+
+test -f ArchiveSmoke/README.md
+test -f ArchiveSmoke/AGENTS.md
+test -f ArchiveSmoke/rivet.rktd
+test -f ArchiveSmoke/app/backend.rkt
+test -f ArchiveSmoke/windows/RivetHost.vcxproj
+test -f ArchiveSmoke/macos-host/Package.swift
+test -f ArchiveSmoke/linux/CMakeLists.txt
+test -f ArchiveSmoke/linux/src/main.cpp
+grep -Fq '(resources . ())' ArchiveSmoke/rivet.rktd
+grep -Fq 'RIVET_WINDOWS_ICON_RC' ArchiveSmoke/windows/RivetHost.vcxproj
+
+# The starter should remain self-guiding: installing a release archive and
+# running `new` must leave a developer with the normal diagnosis/run path and a
+# route to both walkthroughs, without requiring the Rivet checkout nearby.
+grep -Fq 'raco rivet doctor' ArchiveSmoke/README.md
+grep -Fq 'raco rivet inspect --json' ArchiveSmoke/AGENTS.md
+grep -Fq 'raco rivet dev' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.md' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.zh-CN.md' ArchiveSmoke/README.md
+
+cd ArchiveSmoke
+PLTUSERHOME="$user_home" \
+  raco rivet inspect --json > inspect.json
+PLTUSERHOME="$user_home" racket -e '
+  (require json)
+  (define report (call-with-input-file "inspect.json" read-json))
+  (define (expect actual expected label)
+    (unless (equal? actual expected)
+      (raise-arguments-error
+       (quote source-package-smoke)
+       "inspect report did not match the packaged scaffold"
+       "field" label
+       "expected" expected
+       "actual" actual)))
+  (expect (hash-ref report (quote contract-version)) 1 "contract-version")
+  (expect (hash-ref (hash-ref report (quote project)) (quote name))
+          "ArchiveSmoke"
+          "project.name")
+  (expect (hash-ref (hash-ref (hash-ref report (quote backend)) (quote source))
+                    (quote exists))
+          #t
+          "backend.source.exists")
+  (expect (hash-ref (car (hash-ref (hash-ref report (quote edit-points))
+                                  (quote windows-ui)))
+                    (quote exists))
+          #t
+          "edit-points.windows-ui[0].exists")
+  (expect (hash-ref (hash-ref (hash-ref report (quote generated-clients))
+                             (quote kotlin))
+                    (quote path))
+          ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
+          "generated-clients.kotlin.path")
+'
+
+# The published archive must still generate every typed client. The Kotlin
+# client exists only for projects with a declared companion API (issue #311 —
+# a desktop-only scaffold carries no Kotlin file nothing consumes), so declare
+# the starter's `greet` RPC before generating and assert the file appears.
+racket -e '(require racket/file) (define p "rivet.rktd") (define c (call-with-input-file p read)) (call-with-output-file p #:exists (quote truncate/replace) (lambda (out) (write (hash-set c (quote device-rpcs) (list (quote greet))) out)))'
+PLTUSERHOME="$user_home" \
+  raco rivet generate
+test -s .rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt
+
+printf 'source package smoke test passed: %s\n' "$archive"
+ "$archive_entries"
+grep -Eq '(^|/)rivet-cli/apple-review-preflight.py
+
+# The canonical learning project and both walkthrough languages are public
+# package content, not files that happen to exist only in the Git checkout.
+grep -Eq '(^|/)examples/taskboard/app/backend.rkt$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/rivet-schema.json$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.zh-CN.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/PERFORMANCE.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/windows/MainWindow.xaml$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/macos-host/Sources/RivetHost/ContentView.swift$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/linux/src/main.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/macos/Sources/RivetSystem/FileDialogs.swift$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/system/file_dialogs.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.cpp$' "$archive_entries"
+user_home="$tmp/racket-user"
+work="$tmp/work"
+mkdir -p "$user_home" "$work"
+
+# Install the exact archive into a fresh user package scope. The repository's
+# Force applies only to the fresh user scope: it lets the archive shadow a
+# maintainer machine's installation-scope link. The pkg-directory assertion
+# below proves all commands resolve this exact archive, not the checkout.
+PLTUSERHOME="$user_home" \
+  raco pkg install --auto --no-docs --scope user --force --name rivet "$archive"
+
+PLTUSERHOME="$user_home" \
+  racket -e '(require rivet/backend rivet/protocol rivet/resources)'
+PLTUSERHOME="$user_home" \
+  raco rivet help >/dev/null
+
+installed_root="$(PLTUSERHOME="$user_home" racket -e \
+  '(require pkg/lib) (display (path->string (pkg-directory "rivet")))')"
+case "$installed_root" in
+  "$user_home"/*) ;;
+  *)
+    echo "source package did not take precedence in the isolated user scope: $installed_root" >&2
+    exit 1
+    ;;
+esac
+test -f "$installed_root/examples/taskboard/app/backend.rkt"
+test -f "$installed_root/examples/taskboard/README.md"
+test -f "$installed_root/examples/taskboard/README.zh-CN.md"
+test -f "$installed_root/examples/taskboard/PERFORMANCE.md"
+
+# Exercise packaged scaffold resources too. A source archive that omitted CLI
+# templates or other package data can load its modules yet still fail here.
+cd "$work"
+PLTUSERHOME="$user_home" \
+  raco rivet new ArchiveSmoke
+
+test -f ArchiveSmoke/README.md
+test -f ArchiveSmoke/AGENTS.md
+test -f ArchiveSmoke/rivet.rktd
+test -f ArchiveSmoke/app/backend.rkt
+test -f ArchiveSmoke/windows/RivetHost.vcxproj
+test -f ArchiveSmoke/macos-host/Package.swift
+test -f ArchiveSmoke/linux/CMakeLists.txt
+test -f ArchiveSmoke/linux/src/main.cpp
+grep -Fq '(resources . ())' ArchiveSmoke/rivet.rktd
+grep -Fq 'RIVET_WINDOWS_ICON_RC' ArchiveSmoke/windows/RivetHost.vcxproj
+
+# The starter should remain self-guiding: installing a release archive and
+# running `new` must leave a developer with the normal diagnosis/run path and a
+# route to both walkthroughs, without requiring the Rivet checkout nearby.
+grep -Fq 'raco rivet doctor' ArchiveSmoke/README.md
+grep -Fq 'raco rivet inspect --json' ArchiveSmoke/AGENTS.md
+grep -Fq 'raco rivet dev' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.md' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.zh-CN.md' ArchiveSmoke/README.md
+
+cd ArchiveSmoke
+PLTUSERHOME="$user_home" \
+  raco rivet inspect --json > inspect.json
+PLTUSERHOME="$user_home" racket -e '
+  (require json)
+  (define report (call-with-input-file "inspect.json" read-json))
+  (define (expect actual expected label)
+    (unless (equal? actual expected)
+      (raise-arguments-error
+       (quote source-package-smoke)
+       "inspect report did not match the packaged scaffold"
+       "field" label
+       "expected" expected
+       "actual" actual)))
+  (expect (hash-ref report (quote contract-version)) 1 "contract-version")
+  (expect (hash-ref (hash-ref report (quote project)) (quote name))
+          "ArchiveSmoke"
+          "project.name")
+  (expect (hash-ref (hash-ref (hash-ref report (quote backend)) (quote source))
+                    (quote exists))
+          #t
+          "backend.source.exists")
+  (expect (hash-ref (car (hash-ref (hash-ref report (quote edit-points))
+                                  (quote windows-ui)))
+                    (quote exists))
+          #t
+          "edit-points.windows-ui[0].exists")
+  (expect (hash-ref (hash-ref (hash-ref report (quote generated-clients))
+                             (quote kotlin))
+                    (quote path))
+          ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
+          "generated-clients.kotlin.path")
+'
+
+# The published archive must still generate every typed client. The Kotlin
+# client exists only for projects with a declared companion API (issue #311 —
+# a desktop-only scaffold carries no Kotlin file nothing consumes), so declare
+# the starter's `greet` RPC before generating and assert the file appears.
+racket -e '(require racket/file) (define p "rivet.rktd") (define c (call-with-input-file p read)) (call-with-output-file p #:exists (quote truncate/replace) (lambda (out) (write (hash-set c (quote device-rpcs) (list (quote greet))) out)))'
+PLTUSERHOME="$user_home" \
+  raco rivet generate
+test -s .rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt
+
+printf 'source package smoke test passed: %s\n' "$archive"
+ "$archive_entries"
+
+# The canonical learning project and both walkthrough languages are public
+# package content, not files that happen to exist only in the Git checkout.
+grep -Eq '(^|/)examples/taskboard/app/backend.rkt$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/rivet-schema.json$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.zh-CN.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/PERFORMANCE.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/windows/MainWindow.xaml$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/macos-host/Sources/RivetHost/ContentView.swift$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/linux/src/main.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/macos/Sources/RivetSystem/FileDialogs.swift$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/system/file_dialogs.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.cpp$' "$archive_entries"
+user_home="$tmp/racket-user"
+work="$tmp/work"
+mkdir -p "$user_home" "$work"
+
+# Install the exact archive into a fresh user package scope. The repository's
+# Force applies only to the fresh user scope: it lets the archive shadow a
+# maintainer machine's installation-scope link. The pkg-directory assertion
+# below proves all commands resolve this exact archive, not the checkout.
+PLTUSERHOME="$user_home" \
+  raco pkg install --auto --no-docs --scope user --force --name rivet "$archive"
+
+PLTUSERHOME="$user_home" \
+  racket -e '(require rivet/backend rivet/protocol rivet/resources)'
+PLTUSERHOME="$user_home" \
+  raco rivet help >/dev/null
+
+installed_root="$(PLTUSERHOME="$user_home" racket -e \
+  '(require pkg/lib) (display (path->string (pkg-directory "rivet")))')"
+case "$installed_root" in
+  "$user_home"/*) ;;
+  *)
+    echo "source package did not take precedence in the isolated user scope: $installed_root" >&2
+    exit 1
+    ;;
+esac
+test -f "$installed_root/examples/taskboard/app/backend.rkt"
+test -f "$installed_root/examples/taskboard/README.md"
+test -f "$installed_root/examples/taskboard/README.zh-CN.md"
+test -f "$installed_root/examples/taskboard/PERFORMANCE.md"
+
+# Exercise packaged scaffold resources too. A source archive that omitted CLI
+# templates or other package data can load its modules yet still fail here.
+cd "$work"
+PLTUSERHOME="$user_home" \
+  raco rivet new ArchiveSmoke
+
+test -f ArchiveSmoke/README.md
+test -f ArchiveSmoke/AGENTS.md
+test -f ArchiveSmoke/rivet.rktd
+test -f ArchiveSmoke/app/backend.rkt
+test -f ArchiveSmoke/windows/RivetHost.vcxproj
+test -f ArchiveSmoke/macos-host/Package.swift
+test -f ArchiveSmoke/linux/CMakeLists.txt
+test -f ArchiveSmoke/linux/src/main.cpp
+grep -Fq '(resources . ())' ArchiveSmoke/rivet.rktd
+grep -Fq 'RIVET_WINDOWS_ICON_RC' ArchiveSmoke/windows/RivetHost.vcxproj
+
+# The starter should remain self-guiding: installing a release archive and
+# running `new` must leave a developer with the normal diagnosis/run path and a
+# route to both walkthroughs, without requiring the Rivet checkout nearby.
+grep -Fq 'raco rivet doctor' ArchiveSmoke/README.md
+grep -Fq 'raco rivet inspect --json' ArchiveSmoke/AGENTS.md
+grep -Fq 'raco rivet dev' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.md' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.zh-CN.md' ArchiveSmoke/README.md
+
+cd ArchiveSmoke
+PLTUSERHOME="$user_home" \
+  raco rivet inspect --json > inspect.json
+PLTUSERHOME="$user_home" racket -e '
+  (require json)
+  (define report (call-with-input-file "inspect.json" read-json))
+  (define (expect actual expected label)
+    (unless (equal? actual expected)
+      (raise-arguments-error
+       (quote source-package-smoke)
+       "inspect report did not match the packaged scaffold"
+       "field" label
+       "expected" expected
+       "actual" actual)))
+  (expect (hash-ref report (quote contract-version)) 1 "contract-version")
+  (expect (hash-ref (hash-ref report (quote project)) (quote name))
+          "ArchiveSmoke"
+          "project.name")
+  (expect (hash-ref (hash-ref (hash-ref report (quote backend)) (quote source))
+                    (quote exists))
+          #t
+          "backend.source.exists")
+  (expect (hash-ref (car (hash-ref (hash-ref report (quote edit-points))
+                                  (quote windows-ui)))
+                    (quote exists))
+          #t
+          "edit-points.windows-ui[0].exists")
+  (expect (hash-ref (hash-ref (hash-ref report (quote generated-clients))
+                             (quote kotlin))
+                    (quote path))
+          ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
+          "generated-clients.kotlin.path")
+'
+
+# The published archive must still generate every typed client. The Kotlin
+# client exists only for projects with a declared companion API (issue #311 —
+# a desktop-only scaffold carries no Kotlin file nothing consumes), so declare
+# the starter's `greet` RPC before generating and assert the file appears.
+racket -e '(require racket/file) (define p "rivet.rktd") (define c (call-with-input-file p read)) (call-with-output-file p #:exists (quote truncate/replace) (lambda (out) (write (hash-set c (quote device-rpcs) (list (quote greet))) out)))'
+PLTUSERHOME="$user_home" \
+  raco rivet generate
+test -s .rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt
+
+printf 'source package smoke test passed: %s\n' "$archive"
+ "$archive_entries"
+grep -Eq '(^|/)rivet-cli/apple-review-preflight.py
+# The canonical learning project and both walkthrough languages are public
+# package content, not files that happen to exist only in the Git checkout.
+grep -Eq '(^|/)examples/taskboard/app/backend.rkt$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/rivet-schema.json$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.zh-CN.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/PERFORMANCE.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/windows/MainWindow.xaml$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/macos-host/Sources/RivetHost/ContentView.swift$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/linux/src/main.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/macos/Sources/RivetSystem/FileDialogs.swift$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/system/file_dialogs.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.cpp$' "$archive_entries"
+user_home="$tmp/racket-user"
+work="$tmp/work"
+mkdir -p "$user_home" "$work"
+
+# Install the exact archive into a fresh user package scope. The repository's
+# Force applies only to the fresh user scope: it lets the archive shadow a
+# maintainer machine's installation-scope link. The pkg-directory assertion
+# below proves all commands resolve this exact archive, not the checkout.
+PLTUSERHOME="$user_home" \
+  raco pkg install --auto --no-docs --scope user --force --name rivet "$archive"
+
+PLTUSERHOME="$user_home" \
+  racket -e '(require rivet/backend rivet/protocol rivet/resources)'
+PLTUSERHOME="$user_home" \
+  raco rivet help >/dev/null
+
+installed_root="$(PLTUSERHOME="$user_home" racket -e \
+  '(require pkg/lib) (display (path->string (pkg-directory "rivet")))')"
+case "$installed_root" in
+  "$user_home"/*) ;;
+  *)
+    echo "source package did not take precedence in the isolated user scope: $installed_root" >&2
+    exit 1
+    ;;
+esac
+test -f "$installed_root/examples/taskboard/app/backend.rkt"
+test -f "$installed_root/examples/taskboard/README.md"
+test -f "$installed_root/examples/taskboard/README.zh-CN.md"
+test -f "$installed_root/examples/taskboard/PERFORMANCE.md"
+test -f "$installed_root/rivet-cli/apple-review.rkt"
+test -f "$installed_root/rivet-cli/apple-review-preflight.py"
+
+# Validate the exact archived CLI outside this checkout or any app project.
+apple_result="$tmp/apple-preflight.json"
+set +e
+PLTUSERHOME="$user_home" raco rivet apple-review \
+  --channel ios-app-store --app "$tmp/never-built.app" --json > "$apple_result"
+apple_code=$?
+set -e
+if [[ "$apple_code" -ne 1 ]]; then
+  echo "installed Apple preflight did not reject unsupported iOS delivery" >&2
+  exit 1
+fi
+python3 - "$apple_result" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    report = json.load(handle)
+assert report["schema"] == "rivet.apple-review-preflight.v1"
+assert report["status"] == "blocked"
+assert any(item["code"] == "standalone-ios-not-shipped"
+           for item in report["blockers"])
+PY
+
+# Exercise packaged scaffold resources too. A source archive that omitted CLI
+# templates or other package data can load its modules yet still fail here.
+cd "$work"
+PLTUSERHOME="$user_home" \
+  raco rivet new ArchiveSmoke
+
+test -f ArchiveSmoke/README.md
+test -f ArchiveSmoke/AGENTS.md
+test -f ArchiveSmoke/rivet.rktd
+test -f ArchiveSmoke/app/backend.rkt
+test -f ArchiveSmoke/windows/RivetHost.vcxproj
+test -f ArchiveSmoke/macos-host/Package.swift
+test -f ArchiveSmoke/linux/CMakeLists.txt
+test -f ArchiveSmoke/linux/src/main.cpp
+grep -Fq '(resources . ())' ArchiveSmoke/rivet.rktd
+grep -Fq 'RIVET_WINDOWS_ICON_RC' ArchiveSmoke/windows/RivetHost.vcxproj
+
+# The starter should remain self-guiding: installing a release archive and
+# running `new` must leave a developer with the normal diagnosis/run path and a
+# route to both walkthroughs, without requiring the Rivet checkout nearby.
+grep -Fq 'raco rivet doctor' ArchiveSmoke/README.md
+grep -Fq 'raco rivet inspect --json' ArchiveSmoke/AGENTS.md
+grep -Fq 'raco rivet dev' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.md' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.zh-CN.md' ArchiveSmoke/README.md
+
+cd ArchiveSmoke
+PLTUSERHOME="$user_home" \
+  raco rivet inspect --json > inspect.json
+PLTUSERHOME="$user_home" racket -e '
+  (require json)
+  (define report (call-with-input-file "inspect.json" read-json))
+  (define (expect actual expected label)
+    (unless (equal? actual expected)
+      (raise-arguments-error
+       (quote source-package-smoke)
+       "inspect report did not match the packaged scaffold"
+       "field" label
+       "expected" expected
+       "actual" actual)))
+  (expect (hash-ref report (quote contract-version)) 1 "contract-version")
+  (expect (hash-ref (hash-ref report (quote project)) (quote name))
+          "ArchiveSmoke"
+          "project.name")
+  (expect (hash-ref (hash-ref (hash-ref report (quote backend)) (quote source))
+                    (quote exists))
+          #t
+          "backend.source.exists")
+  (expect (hash-ref (car (hash-ref (hash-ref report (quote edit-points))
+                                  (quote windows-ui)))
+                    (quote exists))
+          #t
+          "edit-points.windows-ui[0].exists")
+  (expect (hash-ref (hash-ref (hash-ref report (quote generated-clients))
+                             (quote kotlin))
+                    (quote path))
+          ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
+          "generated-clients.kotlin.path")
+'
+
+# The published archive must still generate every typed client. The Kotlin
+# client exists only for projects with a declared companion API (issue #311 —
+# a desktop-only scaffold carries no Kotlin file nothing consumes), so declare
+# the starter's `greet` RPC before generating and assert the file appears.
+racket -e '(require racket/file) (define p "rivet.rktd") (define c (call-with-input-file p read)) (call-with-output-file p #:exists (quote truncate/replace) (lambda (out) (write (hash-set c (quote device-rpcs) (list (quote greet))) out)))'
+PLTUSERHOME="$user_home" \
+  raco rivet generate
+test -s .rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt
+
+printf 'source package smoke test passed: %s\n' "$archive"
+ "$archive_entries"
+# Public scanner and CLI must be included in the archived Racket package.
+grep -Eq '(^|/)rivet-cli/apple-review.rkt
+
+# The canonical learning project and both walkthrough languages are public
+# package content, not files that happen to exist only in the Git checkout.
+grep -Eq '(^|/)examples/taskboard/app/backend.rkt$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/rivet-schema.json$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.zh-CN.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/PERFORMANCE.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/windows/MainWindow.xaml$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/macos-host/Sources/RivetHost/ContentView.swift$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/linux/src/main.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/macos/Sources/RivetSystem/FileDialogs.swift$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/system/file_dialogs.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.cpp$' "$archive_entries"
+user_home="$tmp/racket-user"
+work="$tmp/work"
+mkdir -p "$user_home" "$work"
+
+# Install the exact archive into a fresh user package scope. The repository's
+# Force applies only to the fresh user scope: it lets the archive shadow a
+# maintainer machine's installation-scope link. The pkg-directory assertion
+# below proves all commands resolve this exact archive, not the checkout.
+PLTUSERHOME="$user_home" \
+  raco pkg install --auto --no-docs --scope user --force --name rivet "$archive"
+
+PLTUSERHOME="$user_home" \
+  racket -e '(require rivet/backend rivet/protocol rivet/resources)'
+PLTUSERHOME="$user_home" \
+  raco rivet help >/dev/null
+
+installed_root="$(PLTUSERHOME="$user_home" racket -e \
+  '(require pkg/lib) (display (path->string (pkg-directory "rivet")))')"
+case "$installed_root" in
+  "$user_home"/*) ;;
+  *)
+    echo "source package did not take precedence in the isolated user scope: $installed_root" >&2
+    exit 1
+    ;;
+esac
+test -f "$installed_root/examples/taskboard/app/backend.rkt"
+test -f "$installed_root/examples/taskboard/README.md"
+test -f "$installed_root/examples/taskboard/README.zh-CN.md"
+test -f "$installed_root/examples/taskboard/PERFORMANCE.md"
+
+# Exercise packaged scaffold resources too. A source archive that omitted CLI
+# templates or other package data can load its modules yet still fail here.
+cd "$work"
+PLTUSERHOME="$user_home" \
+  raco rivet new ArchiveSmoke
+
+test -f ArchiveSmoke/README.md
+test -f ArchiveSmoke/AGENTS.md
+test -f ArchiveSmoke/rivet.rktd
+test -f ArchiveSmoke/app/backend.rkt
+test -f ArchiveSmoke/windows/RivetHost.vcxproj
+test -f ArchiveSmoke/macos-host/Package.swift
+test -f ArchiveSmoke/linux/CMakeLists.txt
+test -f ArchiveSmoke/linux/src/main.cpp
+grep -Fq '(resources . ())' ArchiveSmoke/rivet.rktd
+grep -Fq 'RIVET_WINDOWS_ICON_RC' ArchiveSmoke/windows/RivetHost.vcxproj
+
+# The starter should remain self-guiding: installing a release archive and
+# running `new` must leave a developer with the normal diagnosis/run path and a
+# route to both walkthroughs, without requiring the Rivet checkout nearby.
+grep -Fq 'raco rivet doctor' ArchiveSmoke/README.md
+grep -Fq 'raco rivet inspect --json' ArchiveSmoke/AGENTS.md
+grep -Fq 'raco rivet dev' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.md' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.zh-CN.md' ArchiveSmoke/README.md
+
+cd ArchiveSmoke
+PLTUSERHOME="$user_home" \
+  raco rivet inspect --json > inspect.json
+PLTUSERHOME="$user_home" racket -e '
+  (require json)
+  (define report (call-with-input-file "inspect.json" read-json))
+  (define (expect actual expected label)
+    (unless (equal? actual expected)
+      (raise-arguments-error
+       (quote source-package-smoke)
+       "inspect report did not match the packaged scaffold"
+       "field" label
+       "expected" expected
+       "actual" actual)))
+  (expect (hash-ref report (quote contract-version)) 1 "contract-version")
+  (expect (hash-ref (hash-ref report (quote project)) (quote name))
+          "ArchiveSmoke"
+          "project.name")
+  (expect (hash-ref (hash-ref (hash-ref report (quote backend)) (quote source))
+                    (quote exists))
+          #t
+          "backend.source.exists")
+  (expect (hash-ref (car (hash-ref (hash-ref report (quote edit-points))
+                                  (quote windows-ui)))
+                    (quote exists))
+          #t
+          "edit-points.windows-ui[0].exists")
+  (expect (hash-ref (hash-ref (hash-ref report (quote generated-clients))
+                             (quote kotlin))
+                    (quote path))
+          ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
+          "generated-clients.kotlin.path")
+'
+
+# The published archive must still generate every typed client. The Kotlin
+# client exists only for projects with a declared companion API (issue #311 —
+# a desktop-only scaffold carries no Kotlin file nothing consumes), so declare
+# the starter's `greet` RPC before generating and assert the file appears.
+racket -e '(require racket/file) (define p "rivet.rktd") (define c (call-with-input-file p read)) (call-with-output-file p #:exists (quote truncate/replace) (lambda (out) (write (hash-set c (quote device-rpcs) (list (quote greet))) out)))'
+PLTUSERHOME="$user_home" \
+  raco rivet generate
+test -s .rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt
+
+printf 'source package smoke test passed: %s\n' "$archive"
+ "$archive_entries"
+grep -Eq '(^|/)rivet-cli/apple-review-preflight.py
+
+# The canonical learning project and both walkthrough languages are public
+# package content, not files that happen to exist only in the Git checkout.
+grep -Eq '(^|/)examples/taskboard/app/backend.rkt$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/rivet-schema.json$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.zh-CN.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/PERFORMANCE.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/windows/MainWindow.xaml$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/macos-host/Sources/RivetHost/ContentView.swift$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/linux/src/main.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/macos/Sources/RivetSystem/FileDialogs.swift$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/system/file_dialogs.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.cpp$' "$archive_entries"
+user_home="$tmp/racket-user"
+work="$tmp/work"
+mkdir -p "$user_home" "$work"
+
+# Install the exact archive into a fresh user package scope. The repository's
+# Force applies only to the fresh user scope: it lets the archive shadow a
+# maintainer machine's installation-scope link. The pkg-directory assertion
+# below proves all commands resolve this exact archive, not the checkout.
+PLTUSERHOME="$user_home" \
+  raco pkg install --auto --no-docs --scope user --force --name rivet "$archive"
+
+PLTUSERHOME="$user_home" \
+  racket -e '(require rivet/backend rivet/protocol rivet/resources)'
+PLTUSERHOME="$user_home" \
+  raco rivet help >/dev/null
+
+installed_root="$(PLTUSERHOME="$user_home" racket -e \
+  '(require pkg/lib) (display (path->string (pkg-directory "rivet")))')"
+case "$installed_root" in
+  "$user_home"/*) ;;
+  *)
+    echo "source package did not take precedence in the isolated user scope: $installed_root" >&2
+    exit 1
+    ;;
+esac
+test -f "$installed_root/examples/taskboard/app/backend.rkt"
+test -f "$installed_root/examples/taskboard/README.md"
+test -f "$installed_root/examples/taskboard/README.zh-CN.md"
+test -f "$installed_root/examples/taskboard/PERFORMANCE.md"
+
+# Exercise packaged scaffold resources too. A source archive that omitted CLI
+# templates or other package data can load its modules yet still fail here.
+cd "$work"
+PLTUSERHOME="$user_home" \
+  raco rivet new ArchiveSmoke
+
+test -f ArchiveSmoke/README.md
+test -f ArchiveSmoke/AGENTS.md
+test -f ArchiveSmoke/rivet.rktd
+test -f ArchiveSmoke/app/backend.rkt
+test -f ArchiveSmoke/windows/RivetHost.vcxproj
+test -f ArchiveSmoke/macos-host/Package.swift
+test -f ArchiveSmoke/linux/CMakeLists.txt
+test -f ArchiveSmoke/linux/src/main.cpp
+grep -Fq '(resources . ())' ArchiveSmoke/rivet.rktd
+grep -Fq 'RIVET_WINDOWS_ICON_RC' ArchiveSmoke/windows/RivetHost.vcxproj
+
+# The starter should remain self-guiding: installing a release archive and
+# running `new` must leave a developer with the normal diagnosis/run path and a
+# route to both walkthroughs, without requiring the Rivet checkout nearby.
+grep -Fq 'raco rivet doctor' ArchiveSmoke/README.md
+grep -Fq 'raco rivet inspect --json' ArchiveSmoke/AGENTS.md
+grep -Fq 'raco rivet dev' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.md' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.zh-CN.md' ArchiveSmoke/README.md
+
+cd ArchiveSmoke
+PLTUSERHOME="$user_home" \
+  raco rivet inspect --json > inspect.json
+PLTUSERHOME="$user_home" racket -e '
+  (require json)
+  (define report (call-with-input-file "inspect.json" read-json))
+  (define (expect actual expected label)
+    (unless (equal? actual expected)
+      (raise-arguments-error
+       (quote source-package-smoke)
+       "inspect report did not match the packaged scaffold"
+       "field" label
+       "expected" expected
+       "actual" actual)))
+  (expect (hash-ref report (quote contract-version)) 1 "contract-version")
+  (expect (hash-ref (hash-ref report (quote project)) (quote name))
+          "ArchiveSmoke"
+          "project.name")
+  (expect (hash-ref (hash-ref (hash-ref report (quote backend)) (quote source))
+                    (quote exists))
+          #t
+          "backend.source.exists")
+  (expect (hash-ref (car (hash-ref (hash-ref report (quote edit-points))
+                                  (quote windows-ui)))
+                    (quote exists))
+          #t
+          "edit-points.windows-ui[0].exists")
+  (expect (hash-ref (hash-ref (hash-ref report (quote generated-clients))
+                             (quote kotlin))
+                    (quote path))
+          ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
+          "generated-clients.kotlin.path")
+'
+
+# The published archive must still generate every typed client. The Kotlin
+# client exists only for projects with a declared companion API (issue #311 —
+# a desktop-only scaffold carries no Kotlin file nothing consumes), so declare
+# the starter's `greet` RPC before generating and assert the file appears.
+racket -e '(require racket/file) (define p "rivet.rktd") (define c (call-with-input-file p read)) (call-with-output-file p #:exists (quote truncate/replace) (lambda (out) (write (hash-set c (quote device-rpcs) (list (quote greet))) out)))'
+PLTUSERHOME="$user_home" \
+  raco rivet generate
+test -s .rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt
+
+printf 'source package smoke test passed: %s\n' "$archive"
+ "$archive_entries"
+
+# The canonical learning project and both walkthrough languages are public
+# package content, not files that happen to exist only in the Git checkout.
+grep -Eq '(^|/)examples/taskboard/app/backend.rkt$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/rivet-schema.json$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/README.zh-CN.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/PERFORMANCE.md$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/windows/MainWindow.xaml$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/macos-host/Sources/RivetHost/ContentView.swift$' "$archive_entries"
+grep -Eq '(^|/)examples/taskboard/linux/src/main.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/macos/Sources/RivetSystem/FileDialogs.swift$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/system/file_dialogs.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/windows/update/update_handoff.cpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.hpp$' "$archive_entries"
+grep -Eq '(^|/)platform/linux/update/update_handoff.cpp$' "$archive_entries"
+user_home="$tmp/racket-user"
+work="$tmp/work"
+mkdir -p "$user_home" "$work"
+
+# Install the exact archive into a fresh user package scope. The repository's
+# Force applies only to the fresh user scope: it lets the archive shadow a
+# maintainer machine's installation-scope link. The pkg-directory assertion
+# below proves all commands resolve this exact archive, not the checkout.
+PLTUSERHOME="$user_home" \
+  raco pkg install --auto --no-docs --scope user --force --name rivet "$archive"
+
+PLTUSERHOME="$user_home" \
+  racket -e '(require rivet/backend rivet/protocol rivet/resources)'
+PLTUSERHOME="$user_home" \
+  raco rivet help >/dev/null
+
+installed_root="$(PLTUSERHOME="$user_home" racket -e \
+  '(require pkg/lib) (display (path->string (pkg-directory "rivet")))')"
+case "$installed_root" in
+  "$user_home"/*) ;;
+  *)
+    echo "source package did not take precedence in the isolated user scope: $installed_root" >&2
+    exit 1
+    ;;
+esac
+test -f "$installed_root/examples/taskboard/app/backend.rkt"
+test -f "$installed_root/examples/taskboard/README.md"
+test -f "$installed_root/examples/taskboard/README.zh-CN.md"
+test -f "$installed_root/examples/taskboard/PERFORMANCE.md"
+
+# Exercise packaged scaffold resources too. A source archive that omitted CLI
+# templates or other package data can load its modules yet still fail here.
+cd "$work"
+PLTUSERHOME="$user_home" \
+  raco rivet new ArchiveSmoke
+
+test -f ArchiveSmoke/README.md
+test -f ArchiveSmoke/AGENTS.md
+test -f ArchiveSmoke/rivet.rktd
+test -f ArchiveSmoke/app/backend.rkt
+test -f ArchiveSmoke/windows/RivetHost.vcxproj
+test -f ArchiveSmoke/macos-host/Package.swift
+test -f ArchiveSmoke/linux/CMakeLists.txt
+test -f ArchiveSmoke/linux/src/main.cpp
+grep -Fq '(resources . ())' ArchiveSmoke/rivet.rktd
+grep -Fq 'RIVET_WINDOWS_ICON_RC' ArchiveSmoke/windows/RivetHost.vcxproj
+
+# The starter should remain self-guiding: installing a release archive and
+# running `new` must leave a developer with the normal diagnosis/run path and a
+# route to both walkthroughs, without requiring the Rivet checkout nearby.
+grep -Fq 'raco rivet doctor' ArchiveSmoke/README.md
+grep -Fq 'raco rivet inspect --json' ArchiveSmoke/AGENTS.md
+grep -Fq 'raco rivet dev' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.md' ArchiveSmoke/README.md
+grep -Fq 'docs/getting-started.zh-CN.md' ArchiveSmoke/README.md
+
+cd ArchiveSmoke
+PLTUSERHOME="$user_home" \
+  raco rivet inspect --json > inspect.json
+PLTUSERHOME="$user_home" racket -e '
+  (require json)
+  (define report (call-with-input-file "inspect.json" read-json))
+  (define (expect actual expected label)
+    (unless (equal? actual expected)
+      (raise-arguments-error
+       (quote source-package-smoke)
+       "inspect report did not match the packaged scaffold"
+       "field" label
+       "expected" expected
+       "actual" actual)))
+  (expect (hash-ref report (quote contract-version)) 1 "contract-version")
+  (expect (hash-ref (hash-ref report (quote project)) (quote name))
+          "ArchiveSmoke"
+          "project.name")
+  (expect (hash-ref (hash-ref (hash-ref report (quote backend)) (quote source))
+                    (quote exists))
+          #t
+          "backend.source.exists")
+  (expect (hash-ref (car (hash-ref (hash-ref report (quote edit-points))
+                                  (quote windows-ui)))
+                    (quote exists))
+          #t
+          "edit-points.windows-ui[0].exists")
+  (expect (hash-ref (hash-ref (hash-ref report (quote generated-clients))
+                             (quote kotlin))
+                    (quote path))
+          ".rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt"
+          "generated-clients.kotlin.path")
+'
+
+# The published archive must still generate every typed client. The Kotlin
+# client exists only for projects with a declared companion API (issue #311 —
+# a desktop-only scaffold carries no Kotlin file nothing consumes), so declare
+# the starter's `greet` RPC before generating and assert the file appears.
+racket -e '(require racket/file) (define p "rivet.rktd") (define c (call-with-input-file p read)) (call-with-output-file p #:exists (quote truncate/replace) (lambda (out) (write (hash-set c (quote device-rpcs) (list (quote greet))) out)))'
+PLTUSERHOME="$user_home" \
+  raco rivet generate
+test -s .rivet/generated/kotlin/dev/rivet/generated/GeneratedBackend.kt
+
+printf 'source package smoke test passed: %s\n' "$archive"
+ "$archive_entries"
 
 # The canonical learning project and both walkthrough languages are public
 # package content, not files that happen to exist only in the Git checkout.
