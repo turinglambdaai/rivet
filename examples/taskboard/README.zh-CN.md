@@ -92,18 +92,17 @@ git diff -- rivet-schema.json
 
 ## 标题编辑交互（Windows 预览）
 
-Windows 的 WinUI 3 参考界面现已提供 **Edit title → Save / Discard
-draft**（编辑标题、保存、丢弃草稿），对应原生自动化标识
+Windows 的 WinUI 3 参考界面现已提供 **Edit title → Apply for this session / Discard draft**（编辑标题、仅本次运行应用修改、丢弃草稿），对应原生自动化标识
 `edit-task-title`、`save-task` 和 `cancel-task-edit`。用户需要显式
 应用；按 Enter 不会在输入法候选词确认时误提交。编辑框中按 Escape 或点击
 **Discard draft** 会取消本次编辑。编辑期间暂时禁用任务列表及其他修改操作；
-Racket 的 `update-task` RPC 验证标题。保存被拒绝时保留草稿并显示可恢复的
+Racket 的 `update-task` RPC 验证标题。更新被拒绝时保留草稿并显示可恢复的
 错误。Windows UI Automation 测试覆盖已打包原生应用中的取消、验证失败和
 成功应用会话内修改。
 
 **这尚未满足** [Issue #347](https://github.com/turinglambdaai/rivet/issues/347)
 的全部跨平台及持久化验收条件。目前 Taskboard 后端仅在进程内存保存任务：
-即使界面显示保存成功，退出并重新启动应用后修改**不会保留**。macOS 和
+界面仅表明当前运行期间更新成功，退出并重新启动后修改**不会保留**。macOS 和
 Linux 仍需实现语义相同的编辑交互；三个平台还需基于隔离用户配置的持久化、
 焦点、键盘、无障碍与真实窗口证据。在 #347 通过全部验收之前，不能把本示例
 描述为生产级任务编辑器。
