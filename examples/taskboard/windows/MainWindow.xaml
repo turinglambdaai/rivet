@@ -69,37 +69,45 @@
                         Text="Task details are provided by the shared Racket backend."
                         TextWrapping="Wrap"
                         AutomationProperties.AutomationId="task-notes" />
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <Button
-                            x:Name="EditButton"
-                            Content="Edit title"
-                            IsEnabled="False"
-                            Click="Edit_Click"
-                            AutomationProperties.AutomationId="edit-task" />
-                        <Button
-                            x:Name="SaveEditButton"
-                            Content="Apply for this session"
-                            Visibility="Collapsed"
-                            Click="SaveEdit_Click"
-                            AutomationProperties.AutomationId="save-task" />
-                        <Button
-                            x:Name="CancelEditButton"
-                            Content="Discard draft"
-                            Visibility="Collapsed"
-                            Click="CancelEdit_Click"
-                            AutomationProperties.AutomationId="cancel-task-edit" />
-                        <Button
-                            x:Name="AdvanceButton"
-                            Content="Start Task"
-                            IsEnabled="False"
-                            Click="Advance_Click"
-                            AutomationProperties.AutomationId="advance-task" />
-                        <Button
-                            x:Name="DeleteButton"
-                            Content="Delete"
-                            IsEnabled="False"
-                            Click="Delete_Click"
-                            AutomationProperties.AutomationId="delete-task" />
+                    <!-- Separate action rows prevent the long edit controls from
+                         clipping in the minimum-width native detail pane. -->
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Button
+                                x:Name="EditButton"
+                                Content="Edit title"
+                                IsEnabled="False"
+                                Click="Edit_Click"
+                                AutomationProperties.AutomationId="edit-task" />
+                            <Button
+                                x:Name="AdvanceButton"
+                                Content="Start Task"
+                                IsEnabled="False"
+                                Click="Advance_Click"
+                                AutomationProperties.AutomationId="advance-task" />
+                            <Button
+                                x:Name="DeleteButton"
+                                Content="Delete"
+                                IsEnabled="False"
+                                Click="Delete_Click"
+                                AutomationProperties.AutomationId="delete-task" />
+                        </StackPanel>
+                        <StackPanel Spacing="8">
+                            <Button
+                                x:Name="SaveEditButton"
+                                Content="Apply for this session"
+                                HorizontalAlignment="Left"
+                                Visibility="Collapsed"
+                                Click="SaveEdit_Click"
+                                AutomationProperties.AutomationId="save-task" />
+                            <Button
+                                x:Name="CancelEditButton"
+                                Content="Discard draft"
+                                HorizontalAlignment="Left"
+                                Visibility="Collapsed"
+                                Click="CancelEdit_Click"
+                                AutomationProperties.AutomationId="cancel-task-edit" />
+                        </StackPanel>
                     </StackPanel>
                 </StackPanel>
             </Border>
