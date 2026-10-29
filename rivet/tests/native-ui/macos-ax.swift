@@ -156,6 +156,20 @@ func press(_ element: AXUIElement, description: String) throws {
     }
 }
 
+func setText(_ element: AXUIElement, to text: String) throws {
+    var settable = DarwinBoolean(false)
+    let readable = AXUIElementIsAttributeSettable(
+        element, kAXValueAttribute as CFString, &settable)
+    guard readable == .success, settable.boolValue else {
+        throw DriverError.failure("native title TextField does not expose a writable AXValue")
+    }
+    let result = AXUIElementSetAttributeValue(
+        element, kAXValueAttribute as CFString, text as CFString)
+    guard result == .success else {
+        throw DriverError.failure("AXValue set failed for title edit: \(result.rawValue)")
+    }
+}
+
 func statusText(_ element: AXUIElement) -> String {
     let candidates = [
         stringAttribute(element, kAXValueAttribute),
@@ -326,6 +340,74 @@ do {
     try press(try waitFor("new-task button") { find(window, identifier: "new-task") },
               description: "new-task")
     _ = try waitFor("the RPC-created task row") { find(window, identifier: "task-row-4") }
+
+    // Native SwiftUI edit flow: typed draft is separate from the committed
+    // task, explicit cancel restores the prior title, a rejected blank title
+    // retains the field/error, and an accepted title reaches the real Racket
+    // RPC before UI reports success. No simulated UI or mocked backend.
+    func beginEdit() throws -> AXUIElement {
+        try press(try waitFor("native Edit title button") {
+            find(window, identifier: "edit-task")
+        }, description: "edit-task")
+        return try waitFor("native task title field") {
+            find(window, identifier: "edit-task-title")
+        }
+    }
+    let cancelEditor = try beginEdit()
+    try setText(cancelEditor, to: "Discarded via macOS AX")
+    try press(try waitFor("native Discard draft button") {
+        find(window, identifier: "cancel-task-edit")
+    }, description: "cancel-task-edit")
+    _ = try waitFor("cancel restores original native title") {
+        guard let label = find(window, identifier: "task-title"),
+              statusText(label) == "New task" else { return nil as Bool? }
+        return true
+    }
+
+    let rejectedEditor = try beginEdit()
+    try setText(rejectedEditor, to: "   ")
+    try press(try waitFor("native Apply title button") {
+        find(window, identifier: "save-task")
+    }, description: "save-task")
+    _ = try waitFor("rejected save keeps the native draft editable") {
+        guard let field = find(window, identifier: "edit-task-title"),
+              let error = find(window, identifier: "task-edit-error"),
+              stringAttribute(field, kAXValueAttribute) == "   ",
+              statusText(error).contains("Update failed; draft retained") else {
+            return nil as Bool?
+        }
+        return true
+    }
+
+    try setText(try waitFor("retained title TextField") {
+        find(window, identifier: "edit-task-title")
+    }, to: "Edited via macOS AX")
+    try press(try waitFor("retry Apply title button") {
+        find(window, identifier: "save-task")
+    }, description: "save-task retry")
+    _ = try waitFor("saved native detail title") {
+        guard let label = find(window, identifier: "task-title"),
+              statusText(label) == "Edited via macOS AX" else { return nil as Bool? }
+        return true
+    }
+    _ = try waitFor("explicit session-only save feedback") {
+        guard let status = find(window, identifier: "application-status"),
+              statusText(status).contains("resets on restart") else { return nil as Bool? }
+        return true
+    }
+
+    // Keyboard path: Escape should not commit the draft. The existing
+    // keyboardGuard prevents posting keystrokes into another foreground app.
+    let escapeEditor = try beginEdit()
+    try setText(escapeEditor, to: "Must not commit")
+    try keyboardGuard(application, "title-edit Escape")
+    try focus(escapeEditor, description: "native task title field")
+    try postKey(kEscapeKeyCode)
+    _ = try waitFor("keyboard Escape discards draft") {
+        guard let label = find(window, identifier: "task-title"),
+              statusText(label) == "Edited via macOS AX" else { return nil as Bool? }
+        return true
+    }
 
     try press(try waitFor("generate-demo button") { find(window, identifier: "generate-demo") },
               description: "generate-demo")
