@@ -35,6 +35,8 @@ jobs:
           set -euo pipefail
           cd examples/taskboard
           raco rivet package --skip-launch-smoke
+          # Keep persisted Taskboard state in an isolated CI-only profile.
+          export RIVET_TASKBOARD_DATA_DIR="$RUNNER_TEMP/rivet-native-ui-linux/profile"
           dbus-run-session -- \
             "$GITHUB_WORKSPACE/rivet/tests/native-ui/linux-session.sh" \
             "$PWD/dist/rivet-taskboard-linux-x64/RivetHost" \
@@ -115,6 +117,8 @@ jobs:
           output="$RUNNER_TEMP/rivet-native-ui-macos"
           driver="$RUNNER_TEMP/rivet-macos-ax"
           mkdir -p "$output"
+          # The packaged backend persists edits: never touch runner preferences.
+          export RIVET_TASKBOARD_DATA_DIR="$output/profile"
           swiftc rivet/tests/native-ui/macos-ax.swift -o "$driver" \
             -framework AppKit -framework ApplicationServices
           cd examples/taskboard
