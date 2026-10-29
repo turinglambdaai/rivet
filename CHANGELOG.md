@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Taskboard WinUI 3 reference: add explicit title draft/save/discard controls,
+- Taskboard WinUI 3 reference: add explicit session-only title draft/apply/discard controls,
   keep drafts on rejected backend updates, and exercise the interaction using
   packaged-app UI Automation. Windows-only preview: cross-platform parity,
   relaunch persistence, and full acceptance remain tracked in #347.
