@@ -90,6 +90,12 @@ git diff -- rivet-schema.json
 授权、Linux 缺少 session bus 或通知服务不可用时不会把已成功的领域操作变成失败；
 任务状态仍会正常显示在列表中。
 
+## 原生标题编辑（macOS 预览）
+
+macOS SwiftUI 示例现在提供 **Edit title → Apply for this session / Discard draft**（编辑标题 → 本次运行应用 / 丢弃草稿），并使用与 Windows #350 方案一致的无障碍标识 `edit-task-title`、`save-task`、`cancel-task-edit`。保存需要显式点击，不将 Enter 绑定成保存键，避免输入法候选确认时误提交。按 Escape 或点击丢弃按钮会取消修改；标题校验被拒绝时保留原输入并展示错误，用户可以修改后重试。编辑期间禁止任务列表切换及其他冲突修改，关闭草稿后将键盘焦点返回编辑入口。
+
+macOS 原生 AX 自动化将在打包应用内检查取消、空白标题拒绝并保留草稿、成功调用真实 Racket 后端及 Escape 丢弃。**本分支仍是会话内保存**，不能宣称重新启动后保留数据，也不能据此认定已经达到生产级跨平台编辑体验。默认持久化由独立的 #352 开发；Linux GTK4 对等交互，以及 Windows/macOS/Linux 的原生无障碍、重启恢复、焦点和真实界面视觉验收仍属于 [#347](https://github.com/turinglambdaai/rivet/issues/347) 的未完成条件。
+
 ## 无障碍与性能契约
 
 三个 host 提供同一组稳定标识，包括 `task-list`、`task-title`、`advance-task`、
