@@ -236,7 +236,7 @@ try {
         if ($null -eq $candidate -or -not $candidate.Current.IsEnabled) { return $false }
         $retained = $candidate.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
         $message = Get-StatusText $status
-        ($retained -eq '   ') -and ($message -like '*Save failed; draft retained*')
+        ($retained -eq '   ') -and ($message -like '*Update failed; draft retained*')
     } | Out-Null
 
     $editor = Find-ByAutomationId $window 'edit-task-title'
