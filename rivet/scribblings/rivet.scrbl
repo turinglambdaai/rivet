@@ -9,7 +9,7 @@
                      rivet/system))
 
 @title[#:tag "rivet"]{Rivet: First-Party Native Desktop Applications with Racket}
-@author{turinglambdaai}
+@author{TurLamAI}
 
 Rivet is a native desktop application foundation that keeps application logic
 in Racket while using WinUI 3 on Windows, SwiftUI/AppKit on macOS, and GTK4 on
