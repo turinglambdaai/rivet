@@ -106,13 +106,13 @@ already succeeded and remains visible in the task list.
 
 The Windows WinUI 3 reference now exposes **Edit title → Save / Discard
 draft** with the native `edit-task-title`, `save-task`, and
-`cancel-task-edit` automation IDs. The user must explicitly save; Enter
+`cancel-task-edit` automation IDs. The user must explicitly apply; Enter
 does not commit an IME composition. Escape in the editor, or **Discard
 draft**, cancels the edit. The task list and other mutations are disabled
 while the draft is active, and the Racket `update-task` RPC validates the
 title. A rejected save keeps the typed draft and shows a recoverable error;
 the native UI Automation driver exercises cancel, validation failure, and
-successful save against a packaged WinUI host.
+successful in-session update against a packaged WinUI host.
 
 This is **not yet** the full cross-platform or persistent-data acceptance
 contract from [issue #347](https://github.com/turinglambdaai/rivet/issues/347).
