@@ -494,7 +494,12 @@
     (raise-argument-error 'emit-event! "(or/c symbol? string?)" name))
   (define emitter (current-event-emitter))
   (unless emitter
-    (error 'emit-event! "no Rivet server is active on the current Racket thread"))
+    (error 'emit-event!
+           (string-append
+            "no Rivet event emitter is bound to this thread; "
+            "a server running on another thread does not bind it here. "
+            "Start event ticker threads from a Rivet RPC handler after serve "
+            "starts (see docs/chart-series.md)")))
   (emitter (if (symbol? name) (symbol->string name) name)
            (wire-safe-value value)))
 

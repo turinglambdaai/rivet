@@ -85,8 +85,46 @@ readout, and an accessibility description that tracks the latest values
 1. Declare the envelope record and event; require `rivet/chart`.
 2. Create series with a capacity covering your window at your sample rate
    (default 16 384 samples ≈ 2 min at 128 Hz).
-3. Append from engine threads (`chart-series-append!` is synchronized);
-   drain and emit from a ticker so batches stay UI-cadence sized.
+3. Append from engine threads (`chart-series-append!` is synchronized).
+   **Start the event ticker from a Rivet RPC handler after `serve` starts**;
+   drain and emit at UI cadence (30–60 Hz). See the thread ownership rule below.
 4. Expose a window RPC for initial paint and gap recovery.
 5. In the host, feed batches to the widget on the main thread and wire the
    widget's gap callback to the window RPC.
+
+## Event ticker thread ownership
+
+Rivet currently binds its event emitter using a Racket thread parameter while
+serving the RVT1 connection. **A thread created before `serve`, or created
+independently of the server reader, cannot call `define-event` functions,**
+even while a server is connected. Thread parameters are inherited at thread
+creation, not discovered dynamically from a running server. Unlike synchronized
+chart ring appends, event emission requires this inherited connection context.
+
+Start the ticker from an RPC invoked by the connected host (for example,
+`start-chart-stream` during native view setup). The handler is a child of
+the server reader and its own `thread` children inherit the emitter:
+
+```racket
+(define batch-ticker #f)
+(define-rpc (start-chart-stream : Void)
+  (unless batch-ticker
+    (set! batch-ticker
+          (thread
+           (lambda ()
+             (let loop ()
+               (sleep 0.033)
+               (emit-current-chart-batches!) ; product's typed chart-batch event
+               (loop))))))
+  (void))
+```
+
+The product must define `emit-current-chart-batches!`, provide a stop/cancel
+policy for its ticker, and invoke `start-chart-stream` from the native host
+after connecting. Do not assume a pre-started engine/timer thread has emitter
+access. If it must remain independent, it can append to the synchronized ring
+and leave event publishing to the server-owned ticker.
+
+This is a **thread-scoped API**, not a process-wide broadcast registry; it
+does not select arbitrarily among multiple `serve` instances. An explicit
+cross-thread event-handle API would be a separate lifetime/backpressure design.

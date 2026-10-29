@@ -30,6 +30,11 @@
 
 ### Fixed
 
+- Document the thread-scoped event emitter required for live chart tickers
+  (issue #341): event publishers must be spawned from a server-owned RPC
+  handler, not started before `serve`. An unbound ticker now receives an
+  actionable error, and the regression test covers both thread origins.
+
 - The CLI no longer fails a completed command when the ambient log
   transport dies (issue #339): failed stdout/stderr writes drop only the
   affected output, preserving the child process result. Tolerant wrappers
