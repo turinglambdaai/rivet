@@ -4,7 +4,7 @@ Build first-party native desktop apps with [Racket](https://racket-lang.org/). U
 
 **Human-first. Agent-native. Local by design.**
 
-[![CI](https://github.com/turlamai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turlamai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Linux](https://img.shields.io/badge/Linux-GTK4-FCC624?logo=linux&logoColor=111111) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Version](https://img.shields.io/github/v/release/turinglambdaai/rivet?label=version)](https://github.com/turlamai/rivet/releases/latest)
+[![CI](https://github.com/turlamai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turlamai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Linux](https://img.shields.io/badge/Linux-GTK4-FCC624?logo=linux&logoColor=111111) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Version](https://img.shields.io/github/v/release/turlamai/rivet?label=version)](https://github.com/turlamai/rivet/releases/latest)
 
 **English** · [中文](README.zh-CN.md)
 
