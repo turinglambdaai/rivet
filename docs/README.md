@@ -34,6 +34,7 @@ a product overview rather than a second documentation index.
 
 - [Package verification](package-verification.md)
 - [Production signing](production-signing.md)
+- [Apple release readiness](apple-release-readiness.md) · [中文](apple-release-readiness.zh-CN.md) — channel-specific bundle preflight and App Store evidence boundaries
 - [Release and updates](release-and-updates.md)
 - [Releasing the Rivet framework](releasing.md)
 - [Native UI end-to-end testing](native-ui-testing.md)
