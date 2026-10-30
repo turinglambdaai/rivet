@@ -236,10 +236,16 @@
    board-write-lock
    (lambda ()
      (define candidate (transform (state-ref tasks)))
-     (when storage-root
-       (write-task-snapshot! storage-root next-task-id
-                             (map task->row candidate)))
-     (state-set! tasks candidate)
+     ;; Do not allow a request cancellation between durable rename and the
+     ;; visible State commit: otherwise a failed/interrupted RPC could return
+     ;; with old in-memory tasks while the *new* snapshot survives restart.
+     ;; The transform (including cancellable bulk work) runs before this
+     ;; short critical section; storage errors still propagate unchanged.
+     (parameterize-break #f
+       (when storage-root
+         (write-task-snapshot! storage-root next-task-id
+                               (map task->row candidate)))
+       (state-set! tasks candidate))
      candidate)))
 
 (define (allocate-task-id!)
