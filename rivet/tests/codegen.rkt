@@ -67,7 +67,7 @@
     (check-true (regexp-match? #rx"RivetDevice" macos-package))
     (check-true
      (string-contains? macos-package
-                       ".package(url: \"https://github.com/turinglambdaai/rivet.git\"")
+                       ".package(url: \"https://github.com/turlamai/rivet.git\"")
      "the scaffold consumes Rivet through its released SwiftPM package")
     (check-false (string-contains? macos-package ".package(path:")
                  "the scaffold must not depend on a Rivet checkout path")

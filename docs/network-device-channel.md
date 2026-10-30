@@ -1,6 +1,6 @@
 # Network device channel design
 
-Status: active design for [issue #85](https://github.com/turinglambdaai/rivet/issues/85).
+Status: active design for [issue #85](https://github.com/turlamai/rivet/issues/85).
 The transport-independent `RivetDeviceGateway` policy/session core,
 pairing/authentication lifecycle, and byte-exact RVD1 preface have in-memory
 coverage. The Apple Keychain pairing store, Network.framework TLS transport,

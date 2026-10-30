@@ -4,7 +4,7 @@ Build first-party native desktop apps with [Racket](https://racket-lang.org/). U
 
 **Human-first. Agent-native. Local by design.**
 
-[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Linux](https://img.shields.io/badge/Linux-GTK4-FCC624?logo=linux&logoColor=111111) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Version](https://img.shields.io/github/v/release/turinglambdaai/rivet?label=version)](https://github.com/turinglambdaai/rivet/releases/latest)
+[![CI](https://github.com/turlamai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turlamai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Linux](https://img.shields.io/badge/Linux-GTK4-FCC624?logo=linux&logoColor=111111) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Version](https://img.shields.io/github/v/release/turlamai/rivet?label=version)](https://github.com/turlamai/rivet/releases/latest)
 
 **English** · [中文](README.zh-CN.md)
 
@@ -50,7 +50,7 @@ Rivet fills that gap:
 - **First-party native UI** — WinUI 3 on Windows, SwiftUI/AppKit on macOS, GTK4 on Linux
 - **Racket for application logic** — macros, pattern matching, concurrency, data processing, domain logic
 - **One backend contract** — typed RPC, events, shared state, cancellation, and lifecycle over the same RVT1 protocol
-- **Shared application model** — project the backend schema into [Keel](https://github.com/turinglambdaai/keel), the transport-neutral contract shared with Glaze, without moving RVT1 or native UI ownership
+- **Shared application model** — project the backend schema into [Keel](https://github.com/turlamai/keel), the transport-neutral contract shared with Glaze, without moving RVT1 or native UI ownership
 - **Generated native clients** — Racket declarations become typed Swift and C++ APIs at build time
 - **Real-time charts** — rolling-time-series widgets on every desktop host over one typed data plane (`rivet/chart` ring buffers, gap-detected binary batches); see [docs/chart-series.md](docs/chart-series.md)
 - **Embedded Racket CS** — the Racket runtime lives inside the application process; no external backend process is required
@@ -210,11 +210,11 @@ For publisher-signed output, use `raco rivet package --production` with the plat
 
 Commercial entitlements are deliberately outside Rivet's framework boundary.
 Products that need offline-verifiable rights can compose Rivet with
-[Permit](https://github.com/turinglambdaai/permit/blob/main/docs/framework-integration.md)
+[Permit](https://github.com/turlamai/permit/blob/main/docs/framework-integration.md)
 or another independent entitlement library; Rivet does not depend on it.
 Products that need online checkout, payment-event handling, or credential
 claim delivery may additionally use
-[Commerce](https://github.com/turinglambdaai/commerce); Commerce remains a
+[Commerce](https://github.com/turlamai/commerce); Commerce remains a
 product/service dependency, never a Rivet subsystem. Products that sell
 manually or operate fully offline do not need it.
 Products may use Rivet's general secure storage for credential state, while

@@ -21,4 +21,4 @@ find . -name compiled -type d -prune -exec rm -rf {} +
 raco setup rivet
 ```
 
-See [#145](https://github.com/turinglambdaai/rivet/issues/145) for the full symptom set.
+See [#145](https://github.com/turlamai/rivet/issues/145) for the full symptom set.

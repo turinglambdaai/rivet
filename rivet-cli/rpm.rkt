@@ -74,7 +74,7 @@
                    (project-display-name project)))
       ;; Rivet apps carry their own licensing; products set their terms.
       (tag "License" "Proprietary")
-      (tag "URL" "https://github.com/turinglambdaai/rivet")
+      (tag "URL" "https://github.com/turlamai/rivet")
       (tag "BuildArch" (rpm-architecture))
       (tag "Requires" "gtk4")
       (tag "Requires" "ncurses-libs")
