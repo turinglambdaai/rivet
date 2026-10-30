@@ -434,9 +434,16 @@ do {
         let frontmost = boolAttribute(application, kAXFrontmostAttribute)
         let keyboard = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue()
         let sourceID = keyboard.map(inputSourceID) ?? "<missing>"
-        let systemFocus = (attribute(application, kAXFocusedUIElementAttribute)
-            as? AXUIElement)
-            .map { stringAttribute($0, kAXIdentifierAttribute) } ?? "<missing>"
+        // A CFTypeRef conditional downcast to AXUIElement is rejected by
+        // Swift on macOS. Check the actual AX type ID before the cast so
+        // diagnostics remain safe when the system focus is absent or invalid.
+        let rawSystemFocus = attribute(application, kAXFocusedUIElementAttribute)
+        let systemFocus: String
+        if let rawSystemFocus, CFGetTypeID(rawSystemFocus) == AXUIElementGetTypeID() {
+            systemFocus = stringAttribute(rawSystemFocus as! AXUIElement, kAXIdentifierAttribute)
+        } else {
+            systemFocus = "<missing>"
+        }
         // Preserve structured evidence even when the failure occurs before
         // Apply. String(reflecting:) makes whitespace-only drafts visible.
         try? writeJSON([
