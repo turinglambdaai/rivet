@@ -99,8 +99,8 @@
      (displayln "  raco rivet dev")
      (displayln "")
      (displayln "The generated README.md points to the backend and native UI files to edit.")
-     (displayln "Guide: https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.md")
-     (displayln "中文教程: https://github.com/turinglambdaai/rivet/blob/main/docs/getting-started.zh-CN.md")]
+     (displayln "Guide: https://github.com/turlamai/rivet/blob/main/docs/getting-started.md")
+     (displayln "中文教程: https://github.com/turlamai/rivet/blob/main/docs/getting-started.zh-CN.md")]
     [(list "doctor")
      (define run-doctor (command "doctor" 'run-doctor))
      (exit (run-doctor))]

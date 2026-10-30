@@ -6,7 +6,7 @@
 (define version "0.13")
 (define release-version "0.13.0")
 (define pkg-desc "Native application foundation for Racket")
-(define pkg-authors '(turinglambdaai))
+(define pkg-authors '(turlamai))
 (define license 'MIT)
 
 (define deps

@@ -15,7 +15,7 @@ let package = Package(
     name: "RivetHost",
     platforms: [.macOS(macosMinVersion)],
     dependencies: [
-        .package(url: "https://github.com/turinglambdaai/rivet.git", from: "0.10.0")
+        .package(url: "https://github.com/turlamai/rivet.git", from: "0.10.0")
     ],
     targets: [
         .executableTarget(

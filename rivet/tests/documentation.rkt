@@ -156,7 +156,7 @@
                         (file->string (build-path repository-root "info.rkt")))))
 (define pinned-tag (format "v~a" release-version))
 (define pinned-package-url
-  (format "https://github.com/turinglambdaai/rivet.git#v~a" release-version))
+  (format "https://github.com/turlamai/rivet.git#v~a" release-version))
 
 (define package-info (file->string (build-path repository-root "info.rkt")))
 (for ([generated-path (in-list '("platform/macos/.build" ".rivet" "dist"))])
