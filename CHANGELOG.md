@@ -8,6 +8,11 @@
   invalid input and a real Racket RPC success. Persistence/relaunch and full
   three-platform UX acceptance remain separate unverified gates.
 
+- Taskboard WinUI 3 reference: explicit title draft/apply/discard controls,
+  rejected backend mutations retain the draft, with packaged Windows UI
+  Automation coverage. Updates are session-only until persistent storage and
+  three-platform acceptance for #347 land.
+
 - New Rivet projects now tell coding agents to design and verify native
   interaction through the real packaged app, not require a separate mockup.
   The generated AGENTS.md/README cover save/draft/focus/recovery and native

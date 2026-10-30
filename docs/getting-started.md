@@ -15,7 +15,7 @@ raco pkg install --auto rivet
 If you are developing Rivet itself, use a linked checkout instead:
 
 ```bash
-git clone https://github.com/turinglambdaai/rivet.git
+git clone https://github.com/turlamai/rivet.git
 cd rivet
 raco pkg install --auto --name rivet --link "$(pwd)"
 ```
