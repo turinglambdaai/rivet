@@ -100,7 +100,7 @@ Racket 的 `update-task` RPC 验证标题。更新被拒绝时保留草稿并显
 错误。Windows UI Automation 测试覆盖已打包原生应用中的取消、验证失败和
 成功应用会话内修改。
 
-**这尚未满足** [Issue #347](https://github.com/turinglambdaai/rivet/issues/347)
+**这尚未满足** [Issue #347](https://github.com/turlamai/rivet/issues/347)
 的全部跨平台及持久化验收条件。目前 Taskboard 后端仅在进程内存保存任务：
 界面仅表明当前运行期间更新成功，退出并重新启动后修改**不会保留**。macOS 和
 Linux 仍需实现语义相同的编辑交互；三个平台还需基于隔离用户配置的持久化、
