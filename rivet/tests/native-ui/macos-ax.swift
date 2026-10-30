@@ -434,13 +434,27 @@ do {
         let frontmost = boolAttribute(application, kAXFrontmostAttribute)
         let keyboard = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue()
         let sourceID = keyboard.map(inputSourceID) ?? "<missing>"
+        let systemFocus = (attribute(application, kAXFocusedUIElementAttribute)
+            as? AXUIElement)
+            .map { stringAttribute($0, kAXIdentifierAttribute) } ?? "<missing>"
+        // Preserve structured evidence even when the failure occurs before
+        // Apply. String(reflecting:) makes whitespace-only drafts visible.
+        try? writeJSON([
+            "draft": draft,
+            "selected": selected,
+            "focused": focused,
+            "frontmost": frontmost,
+            "focusedIdentifier": systemFocus,
+            "inputSourceID": sourceID,
+            "underlying": String(describing: error),
+        ], to: options.output.appendingPathComponent("retry-input-diagnostics.json"))
         try? writeJSON(snapshot(application),
                        to: options.output.appendingPathComponent("retry-input-failure-ax.json"))
         throw DriverError.failure(
-            "native retry keyboard input failed: draft=\\(draft) " +
-            "selected=\\(selected) focused=\\(focused) " +
-            "frontmost=\\(frontmost) inputSource=\\(sourceID); " +
-            "underlying=\\(error)"
+            "native retry keyboard input failed: draft=\(String(reflecting: draft)) " +
+            "selected=\(String(reflecting: selected)) focused=\(focused) " +
+            "frontmost=\(frontmost) focusedIdentifier=\(systemFocus) " +
+            "inputSource=\(sourceID); underlying=\(error)"
         )
     }
     try press(try waitFor("retry Apply title button") {
