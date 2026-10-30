@@ -118,8 +118,9 @@ is stored under `RIVET_TASKBOARD_DATA_DIR` when that environment variable
 is set, otherwise in `(find-system-path 'pref-dir)/rivet-taskboard/`.
 The current record includes title, notes, status, stable task IDs and the
 next-ID counter. A new app session reloads the snapshot instead of silently
-restoring the demo tasks. The snapshot write stages a bounded temporary file
-beside the destination and then replaces it. File-system write errors leave
+restoring the demo tasks. Each snapshot has a hard 64 MiB size limit,
+with separate task-count and per-field limits. The snapshot write stages a
+bounded temporary file beside the destination and then replaces it. File-system write errors leave
 the previous State intact and surface as RPC failures. Invalid/corrupted
 snapshots prevent startup instead of overwriting the user's file.
 
@@ -130,7 +131,7 @@ the indicated directory; keep a backup before attempting manual recovery.
 There is no automatic backup, migration from a future format, cloud sync or
 concurrent multi-process writer coordination in this reference.
 
-**Issue [#347](https://github.com/turinglambdaai/rivet/issues/347) remains
+**Issue [#347](https://github.com/turlamai/rivet/issues/347) remains
 open.** macOS and GTK4 still need an equivalent native title editor and
 packaged-app relaunch acceptance. Windows close-while-dirty, real keyboard/IME
 and focus traces, scaling/accessibility and human visual review also require
