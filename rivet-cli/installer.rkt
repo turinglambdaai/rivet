@@ -481,11 +481,31 @@
     #:exists 'truncate/replace
     (lambda (out)
       (display (dmg-style-applescript disk-name app-name) out)))
+  ;; Detaching is the flakiest DMG step on CI runners: a lingering
+  ;; diskimages-helper or Spotlight can hold the volume for a few seconds
+  ;; past the Finder script, and hdiutil is not idempotent — once the system
+  ;; tears the volume down during a retry, the next detach exits nonzero
+  ;; ("No such file or directory") even though the unmount already happened.
+  ;; Probe the mount point instead of parsing stderr, retry across that
+  ;; window, and only then fall back to the forced detach.
+  (define (volume-gone?) (not (directory-exists? mount-path)))
+  (define (detach-attempt! . flags)
+    (cond
+      [(volume-gone?) #t]
+      [else
+       (with-handlers ([exn:fail? (lambda (_) #f)])
+         (run! 'create-installer! hdiutil "detach"
+               (append flags (list mount-path)))
+         (volume-gone?))]))
   (define (detach!)
-    (with-handlers ([exn:fail? (lambda (_)
-                                 (run! 'create-installer! hdiutil "detach"
-                                       "-force" mount-path))])
-      (run! 'create-installer! hdiutil "detach" mount-path)))
+    (or (for/or ([_ (in-range 5)])
+          (define ok (detach-attempt!))
+          (unless ok (sleep 2))
+          ok)
+        (detach-attempt! "-force")
+        ;; Preserve the familiar failure shape when the volume truly
+        ;; cannot go away.
+        (run! 'create-installer! hdiutil "detach" "-force" mount-path)))
   (with-handlers ([exn:fail?
                    (lambda (e)
                      (with-handlers ([exn:fail? void]) (detach!))
