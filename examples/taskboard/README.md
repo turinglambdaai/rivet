@@ -102,6 +102,25 @@ service. Permission denial, a missing Linux session bus, or another unavailable
 notification service is intentionally non-fatal: the domain mutation has
 already succeeded and remains visible in the task list.
 
+## Title-edit interaction (Windows preview)
+
+The Windows WinUI 3 reference now exposes **Edit title → Apply for this session / Discard draft** with the native `edit-task-title`, `save-task`, and
+`cancel-task-edit` automation IDs. The user must explicitly apply; Enter
+does not commit an IME composition. Escape in the editor, or **Discard
+draft**, cancels the edit. The task list and other mutations are disabled
+while the draft is active, and the Racket `update-task` RPC validates the
+title. A rejected update keeps the typed draft and shows a recoverable error;
+the native UI Automation driver exercises cancel, validation failure, and
+successful in-session update against a packaged WinUI host.
+
+This is **not yet** the full cross-platform or persistent-data acceptance
+contract from [issue #347](https://github.com/turinglambdaai/rivet/issues/347).
+The Taskboard backend stores its task list in process memory: successful
+changes do **not** survive application relaunch. macOS and Linux still need
+equivalent editing interactions; all three need clean-profile persistence,
+focus/keyboard/accessibility and real-window evidence before #347 can close.
+Do not use this example as proof of a production-ready task editor.
+
 ## Accessibility and performance contracts
 
 The three hosts expose the same stable identifiers, including `task-list`,
