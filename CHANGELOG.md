@@ -6,7 +6,7 @@
   rejected backend mutations retain the draft, with packaged Windows UI
   Automation coverage. The product-owned Racket task snapshot saves locally
   before reporting a successful mutation and reloads across restarts; bounded
-  atomic replacement, corrupt-input rejection and RVT1 relaunch tests cover
+  same-directory staged replacement, corrupt-input rejection and RVT1 relaunch tests cover
   the storage path. Cross-platform native edit parity and full #347 acceptance
   remain outstanding.
 
