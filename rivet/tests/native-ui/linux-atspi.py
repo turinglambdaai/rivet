@@ -43,6 +43,14 @@ def snapshot(node, depth=0, maximum_depth=8):
         "name": node.name or "",
         "role": role_name(node),
     }
+    # GTK4 gives dynamic labels their live text as the accessible name.
+    # Persist the stable semantic description used by the UI test locator
+    # so a Wayland failure report can distinguish a missing widget from a
+    # text update that changed only its name.
+    try:
+        result["description"] = node.description or ""
+    except Exception:
+        result["description"] = "<unavailable>"
     value = text_value(node)
     if value is not None:
         result["text"] = value
@@ -332,4 +340,25 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        # Native Wayland/AT-SPI failures must retain *post-failure* evidence;
+        # previously only the before snapshot existed when a wait timed out.
+        # This runs only on failure and never changes acceptance assertions.
+        try:
+            parser = argparse.ArgumentParser(add_help=False)
+            parser.add_argument("--application")
+            parser.add_argument("--output", type=Path)
+            options, _ = parser.parse_known_args()
+            if options.application and options.output:
+                app = find_application(options.application)
+                if app is not None:
+                    options.output.mkdir(parents=True, exist_ok=True)
+                    (options.output / "accessibility-failure.json").write_text(
+                        json.dumps(snapshot(app), ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+        except Exception:
+            pass
+        raise
