@@ -402,7 +402,19 @@ do {
                 event.post(tap: .cghidEventTap)
             }
         }
+        // A posted Cmd+A key event is asynchronous. In CI the subsequent
+        // Unicode keystrokes could arrive before the TextField had selected
+        // the rejected draft. Wait for *observable* selection, not a sleep or
+        // an AXValue assignment that might bypass the SwiftUI binding.
         try commandA()
+        _ = try waitFor("Cmd+A selects the rejected title draft", timeout: 8) {
+            guard let field = find(window, identifier: "edit-task-title"),
+                  stringAttribute(field, kAXSelectedTextAttribute) == "   " else {
+                return nil as Bool?
+            }
+            return true
+        }
+        try keyboardGuard(application, "typing the retry title after selection")
         try typeText("Edited via macOS AX")
         _ = try waitFor("retry title visible in native TextField") {
             guard let field = find(window, identifier: "edit-task-title"),
@@ -411,6 +423,25 @@ do {
             }
             return true
         }
+    } catch {
+        // Preserve the *failure point* evidence as well as the existing
+        // post-save error snapshot. Previously this exception escaped before
+        // any retry-stage AX state was archived.
+        let field = find(window, identifier: "edit-task-title")
+        let draft = field.map { stringAttribute($0, kAXValueAttribute) } ?? "<missing>"
+        let selected = field.map { stringAttribute($0, kAXSelectedTextAttribute) } ?? "<missing>"
+        let focused = field.map { boolAttribute($0, kAXFocusedAttribute) } ?? false
+        let frontmost = boolAttribute(application, kAXFrontmostAttribute)
+        let keyboard = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue()
+        let sourceID = keyboard.map(inputSourceID) ?? "<missing>"
+        try? writeJSON(snapshot(application),
+                       to: options.output.appendingPathComponent("retry-input-failure-ax.json"))
+        throw DriverError.failure(
+            "native retry keyboard input failed: draft=\\(draft) " +
+            "selected=\\(selected) focused=\\(focused) " +
+            "frontmost=\\(frontmost) inputSource=\\(sourceID); " +
+            "underlying=\\(error)"
+        )
     }
     try press(try waitFor("retry Apply title button") {
         find(window, identifier: "save-task")
