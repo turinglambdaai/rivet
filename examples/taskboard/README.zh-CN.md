@@ -104,6 +104,7 @@ WinUI 3 参考界面提供 **Edit title → Save / Discard draft**（编辑标�
 `RIVET_TASKBOARD_DATA_DIR` 时存放于该目录；否则存放于
 `(find-system-path 'pref-dir)/rivet-taskboard/`。快照记录标题、备注、
 状态、稳定任务 ID 和下一个 ID。重启时读取该快照，而不是默认恢复三条演示数据。
+快照文件的大小上限为 64 MiB，另有任务数量与单字段长度限制。
 写入时先在目标目录创建大小受限的临时文件，再替换原文件。写入失败不会
 提交新的 State，而是通过 RPC 返回错误。损坏或不兼容的快照会阻止启动，
 不会悄悄覆盖原始用户数据。
@@ -113,7 +114,7 @@ WinUI 3 参考界面提供 **Edit title → Save / Discard draft**（编辑标�
 尝试手工恢复前应保留备份。本参考程序尚无自动备份、未来格式迁移、云同步
 或多进程并发写入协调功能。
 
-**[Issue #347](https://github.com/turinglambdaai/rivet/issues/347) 仍然开放。**
+**[Issue #347](https://github.com/turlamai/rivet/issues/347) 仍然开放。**
 macOS/GTK4 尚需语义一致的原生标题编辑器及打包后重启验收；Windows 关闭窗口时
 草稿处理、真实键盘/输入法/焦点追踪、缩放/无障碍与人工视觉评审也仍需证据。
 Racket 存储测试通过不代表生产级 UI 体验已经达标。
