@@ -202,23 +202,22 @@ keep that exact image in the pull-request matrix until the release environment
 is upgraded. Runner labels can change over time; parity with the product's
 actual release workflow is the contract.
 
-
 ## Measuring queue time separately from actual execution
 
 For agent-driven development, minimize the time until **the latest required
 check has a result**, not just CPU seconds spent compiling. Rapid pushes can
 leave earlier commits and macOS matrix legs waiting for hosted runners.
 
-Repository-local PR/branch workflows should use \`concurrency\` with
-\`cancel-in-progress: true\`; release, signing, publishing and intentional
+Repository-local PR/branch workflows should use `concurrency` with
+`cancel-in-progress: true`; release, signing, publishing and intentional
 scheduled compatibility workflows should not be cancelled this way.
-Use \`paths\` only when it cannot hide changes to generated artifacts or
+Use `paths` only when it cannot hide changes to generated artifacts or
 runtime dependencies. Preserve native WinUI/SwiftUI/GTK compilation in PR CI.
 
 Rivet includes a read-only stdlib Python report helper that accepts any
 GitHub repository, including other products in the same account:
 
-\`\`\`bash
+```bash
 GH_TOKEN="$(gh auth token)" python3 .github/scripts/ci-latency.py \
   --repo turlamai/rivet --repo turlamai/glaze \
   --repo turlamai/taskly --runs 30
@@ -226,22 +225,22 @@ GH_TOKEN="$(gh auth token)" python3 .github/scripts/ci-latency.py \
 # Machine-readable output, suitable for agent comparisons:
 GH_TOKEN="$(gh auth token)" python3 .github/scripts/ci-latency.py \
   --repo turlamai/rivet --runs 30 --json
-\`\`\`
+```
 
 The helper fetches the latest runs and each run's job start/end timestamps.
-It reports P50/P95 of \`first job start - workflow creation\` (initial queue
-delay) and \`last job finish - workflow creation\` (end-to-end wall time).
+It reports P50/P95 of `first job start - workflow creation` (initial queue
+delay) and `last job finish - workflow creation` (end-to-end wall time).
 For macOS jobs it separately reports the first macOS job start delay;
-that metric may include \`needs\` dependency time and is not a pure
+that metric may include `needs` dependency time and is not a pure
 GitHub runner-allocation metric. Cancelled runs count as cancellations
 rather than artificially fast successes. For a meaningful before/after
 comparison, filter to the same workflow and compare similar commit activity.
 
-\`GITHUB_TOKEN\` is also supported; public repositories are readable without
+`GITHUB_TOKEN` is also supported; public repositories are readable without
 a token subject to API rate limits. Private repositories require access.
 The helper never sends credentials anywhere except GitHub's API, does not
 print the token, and makes no write requests. Run its offline self-tests via
-\`python3 -m unittest discover -s .github/scripts -p 'test_ci_latency.py'\`.
+`python3 -m unittest discover -s .github/scripts -p 'test_ci_latency.py'`.
 
 Rivet's embeddable Racket setup action already caches the checksum-verified
 runtime with a version/OS/architecture key. Do not add a second cache around
