@@ -14,7 +14,10 @@
 (define snapshot-name "tasks-v1.rktd")
 ;; Bounds apply to both imports and exports; even a malformed on-disk file
 ;; cannot force unbounded reader work or become executable Racket source.
-(define maximum-snapshot-bytes 400000)
+;; The 1,000-row reference workload remains writable when task notes are
+;; genuinely useful, not just when they are empty. This remains a hard
+;; parsing/serialization budget, independent of the row/text length budgets.
+(define maximum-snapshot-bytes (* 64 1024 1024))
 (define maximum-task-count 10000)
 (define maximum-task-text 4000)
 (define max-id (sub1 (expt 2 63)))
