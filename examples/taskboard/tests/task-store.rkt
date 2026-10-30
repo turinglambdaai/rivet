@@ -23,6 +23,19 @@
     (write-task-snapshot! root 4 changed)
     (check-equal? (vector-ref (read-task-snapshot root) 1) changed)
 
+    ;; A product-valid 1,000-task board with meaningful notes must remain
+    ;; persistable. The old 400 KB snapshot cap rejected this *valid* input,
+    ;; even though each row satisfied the public 4,000-character limit.
+    (define large-board
+      (for/list ([id (in-range 1 1001)])
+        (list id (format "Task ~a" id) (make-string 1024 #\x) 'backlog)))
+    (write-task-snapshot! root 1001 large-board)
+    (define large-restored (read-task-snapshot root))
+    (check-equal? (vector-ref large-restored 0) 1001)
+    (check-equal? (length (vector-ref large-restored 1)) 1000)
+    (check-equal? (vector-ref large-restored 1) large-board)
+    (write-task-snapshot! root 4 changed)
+
     ;; Invalid updates must not overwrite the last known good snapshot.
     (check-exn exn:fail?
                (lambda () (write-task-snapshot! root 4
