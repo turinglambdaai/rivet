@@ -66,7 +66,12 @@
        (error 'read-task-snapshot "task snapshot exceeds safe size limit; existing data preserved"))
      (call-with-input-file target
        (lambda (input)
-         (parameterize ([read-accept-reader #f])
+         ;; State files are pure data, never reader extensions, modules,
+         ;; compiled expressions or shared graph syntax from disk.
+         (parameterize ([read-accept-reader #f]
+                        [read-accept-lang #f]
+                        [read-accept-compiled #f]
+                        [read-accept-graph #f])
            (define value (read input))
            (unless (eof-object? (read input))
              (error 'read-task-snapshot "task snapshot has trailing data; existing data preserved"))
