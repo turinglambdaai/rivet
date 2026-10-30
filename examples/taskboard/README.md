@@ -114,7 +114,7 @@ the native UI Automation driver exercises cancel, validation failure, and
 successful in-session update against a packaged WinUI host.
 
 This is **not yet** the full cross-platform or persistent-data acceptance
-contract from [issue #347](https://github.com/turinglambdaai/rivet/issues/347).
+contract from [issue #347](https://github.com/turlamai/rivet/issues/347).
 The Taskboard backend stores its task list in process memory: successful
 changes do **not** survive application relaunch. macOS and Linux still need
 equivalent editing interactions; all three need clean-profile persistence,
