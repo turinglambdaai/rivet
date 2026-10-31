@@ -5,7 +5,8 @@
          racket/string
          rivet/backend
          rivet/chart
-         rivet/resources)
+         rivet/resources
+         "task-store.rkt")
 
 (provide start)
 
@@ -211,6 +212,41 @@
 
 (define board-lock (make-semaphore 1))
 (define next-task-id 4)
+(define board-write-lock (make-semaphore 1))
+(define storage-root #f)
+
+(define (task->row task)
+  (list (record-ref task 'id)
+        (record-ref task 'title)
+        (record-ref task 'notes)
+        (enum-case (record-ref task 'status))))
+
+(define (row->task row)
+  (BoardTask (list-ref row 0)
+             (list-ref row 1)
+             (list-ref row 2)
+             (TaskStatus (list-ref row 3))))
+
+;; Persist BEFORE emitting the State change. A denied/unwritable file
+;; propagates an RPC error without claiming that the task was saved.
+;; Only the real start path enables storage; transport-only tests can
+;; still explicitly exercise the ephemeral Racket backend.
+(define (commit-board! transform)
+  (call-with-semaphore
+   board-write-lock
+   (lambda ()
+     (define candidate (transform (state-ref tasks)))
+     ;; Do not allow a request cancellation between durable rename and the
+     ;; visible State commit: otherwise a failed/interrupted RPC could return
+     ;; with old in-memory tasks while the *new* snapshot survives restart.
+     ;; The transform (including cancellable bulk work) runs before this
+     ;; short critical section; storage errors still propagate unchanged.
+     (parameterize-break #f
+       (when storage-root
+         (write-task-snapshot! storage-root next-task-id
+                               (map task->row candidate)))
+       (state-set! tasks candidate))
+     candidate)))
 
 (define (allocate-task-id!)
   (call-with-semaphore
@@ -255,7 +291,7 @@
           (validate-text 'create-task "title" title)
           (validate-text 'create-task "notes" notes #:allow-empty? #t)
           (TaskStatus 'backlog)))
-  (state-set! tasks (append (state-ref tasks) (list task)))
+  (commit-board! (lambda (current) (append current (list task))))
   (task-saved task)
   task)
 
@@ -265,28 +301,30 @@
              [notes : String]
              [status : TaskStatus]
              : BoardTask)
-  (require-task id)
   (define updated
     (BoardTask id
           (validate-text 'update-task "title" title)
           (validate-text 'update-task "notes" notes #:allow-empty? #t)
           status))
-  (state-set!
-   tasks
-   (for/list ([task (in-list (state-ref tasks))])
-     (if (= (task-id task) id) updated task)))
+  (commit-board!
+   (lambda (current)
+     (unless (findf (lambda (task) (= (task-id task) id)) current)
+       (error 'taskboard "task does not exist: ~a" id))
+     (for/list ([task (in-list current)])
+       (if (= (task-id task) id) updated task))))
   (task-saved updated)
   updated)
 
 (define-rpc (delete-task [id : Int64] : Bool)
-  (define before (state-ref tasks))
-  (define after
-    (filter (lambda (task) (not (= (task-id task) id))) before))
-  (define deleted? (< (length after) (length before)))
-  (when deleted?
-    (state-set! tasks after)
-    (when (equal? (state-ref selected-task-id) id)
-      (state-set! selected-task-id (void))))
+  (define deleted? #f)
+  (commit-board!
+   (lambda (current)
+     (define after
+       (filter (lambda (task) (not (= (task-id task) id))) current))
+     (set! deleted? (< (length after) (length current)))
+     after))
+  (when (and deleted? (equal? (state-ref selected-task-id) id))
+    (state-set! selected-task-id (void)))
   deleted?)
 
 (define (sample-entry->task entry)
@@ -308,7 +346,7 @@
   (unless (list? entries)
     (error 'reload-sample-tasks "sample-tasks.rktd must contain a list"))
   (define loaded (map sample-entry->task entries))
-  (state-set! tasks loaded)
+  (commit-board! (lambda (_) loaded))
   (state-set! selected-task-id
               (if (null? loaded) (void) (task-id (car loaded))))
   loaded)
@@ -338,7 +376,7 @@
                           [(0) 'backlog]
                           [(1) 'active]
                           [else 'done])))))
-  (state-set! tasks generated)
+  (commit-board! (lambda (_) generated))
   (state-set! selected-task-id
               (if (null? generated) (void) (task-id (car generated))))
   generated)
@@ -354,11 +392,31 @@
    timing-markers-lock
    (lambda () (set! timing-markers '()))))
 
+;; The portable initialization is shared with the RVT1 pipe test. Native
+;; embedding supplies OS file descriptors to serve-fds, not Racket ports.
+(define (initialize-taskboard!)
+  ;; A corrupt, unsupported, or unreadable snapshot aborts startup instead
+  ;; of silently replacing user data with the three demo tasks.
+  (define root (task-store-root))
+  (define snapshot (read-task-snapshot root))
+  (call-with-semaphore
+   board-write-lock
+   (lambda ()
+     (when snapshot
+       (define restored (map row->task (vector-ref snapshot 1)))
+       (state-set! tasks restored)
+       (state-set! selected-task-id
+                   (if (null? restored) (void) (task-id (car restored))))
+       (set! next-task-id (vector-ref snapshot 0)))
+     (set! storage-root root))))
+
 (define (start in-fd out-fd)
+  (initialize-taskboard!)
   (serve-fds in-fd out-fd))
 
 (module+ test-support
-  (provide BoardTask
+  (provide initialize-taskboard!
+           BoardTask
            TaskStatus
            ImportProgress
            tasks

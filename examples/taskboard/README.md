@@ -102,24 +102,40 @@ service. Permission denial, a missing Linux session bus, or another unavailable
 notification service is intentionally non-fatal: the domain mutation has
 already succeeded and remains visible in the task list.
 
-## Title-edit interaction (Windows preview)
+## Title editing and local persistence (Windows preview)
 
-The Windows WinUI 3 reference now exposes **Edit title → Apply for this session / Discard draft** with the native `edit-task-title`, `save-task`, and
-`cancel-task-edit` automation IDs. The user must explicitly apply; Enter
-does not commit an IME composition. Escape in the editor, or **Discard
-draft**, cancels the edit. The task list and other mutations are disabled
-while the draft is active, and the Racket `update-task` RPC validates the
-title. A rejected update keeps the typed draft and shows a recoverable error;
-the native UI Automation driver exercises cancel, validation failure, and
-successful in-session update against a packaged WinUI host.
+The WinUI 3 reference exposes **Edit title → Save / Discard draft**, with
+`edit-task-title`, `save-task` and `cancel-task-edit` automation IDs.
+Save is explicit, and Enter deliberately does not submit an IME candidate.
+Escape or Discard cancels. While a draft is active, list selection and
+competing mutations are disabled. A rejected Racket update preserves the
+typed draft, displays an error and permits a retry. The packaged native
+UI Automation driver covers these paths.
 
-This is **not yet** the full cross-platform or persistent-data acceptance
-contract from [issue #347](https://github.com/turlamai/rivet/issues/347).
-The Taskboard backend stores its task list in process memory: successful
-changes do **not** survive application relaunch. macOS and Linux still need
-equivalent editing interactions; all three need clean-profile persistence,
-focus/keyboard/accessibility and real-window evidence before #347 can close.
-Do not use this example as proof of a production-ready task editor.
+Task changes are **persisted locally by the Racket backend before a successful
+RPC or State update is reported**. The versioned `tasks-v1.rktd` snapshot
+is stored under `RIVET_TASKBOARD_DATA_DIR` when that environment variable
+is set, otherwise in `(find-system-path 'pref-dir)/rivet-taskboard/`.
+The current record includes title, notes, status, stable task IDs and the
+next-ID counter. A new app session reloads the snapshot instead of silently
+restoring the demo tasks. Each snapshot has a hard 64 MiB size limit,
+with separate task-count and per-field limits. The snapshot write stages a
+bounded temporary file beside the destination and then replaces it. File-system write errors leave
+the previous State intact and surface as RPC failures. Invalid/corrupted
+snapshots prevent startup instead of overwriting the user's file.
+
+For an isolated test, set `RIVET_TASKBOARD_DATA_DIR` to a disposable
+directory before launching the packaged app. To back up, restore or delete
+data, close the app first and copy, replace or remove the entire snapshot in
+the indicated directory; keep a backup before attempting manual recovery.
+There is no automatic backup, migration from a future format, cloud sync or
+concurrent multi-process writer coordination in this reference.
+
+**Issue [#347](https://github.com/turlamai/rivet/issues/347) remains
+open.** macOS and GTK4 still need an equivalent native title editor and
+packaged-app relaunch acceptance. Windows close-while-dirty, real keyboard/IME
+and focus traces, scaling/accessibility and human visual review also require
+evidence. A successful Racket storage test is not a production UX certificate.
 
 ## Accessibility and performance contracts
 

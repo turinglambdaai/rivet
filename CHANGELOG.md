@@ -11,10 +11,13 @@
   with `couldn't eject "disk2" - Resource busy` followed by
   `detach failed - No such file or directory`).
 
-- Taskboard WinUI 3 reference: explicit title draft/apply/discard controls,
+- Taskboard WinUI 3 reference: explicit title draft/save/discard controls,
   rejected backend mutations retain the draft, with packaged Windows UI
-  Automation coverage. Updates are session-only until persistent storage and
-  three-platform acceptance for #347 land.
+  Automation coverage. The product-owned Racket task snapshot saves locally
+  before reporting a successful mutation and reloads across restarts; bounded
+  same-directory staged replacement, corrupt-input rejection and RVT1 relaunch tests cover
+  the storage path. Cross-platform native edit parity and full #347 acceptance
+  remain outstanding.
 
 - New Rivet projects now tell coding agents to design and verify native
   interaction through the real packaged app, not require a separate mockup.

@@ -349,7 +349,7 @@ void MainWindow::Edit_Click(
   CancelEditButton().Visibility(Microsoft::UI::Xaml::Visibility::Visible);
   SetBusy(false);
   StatusBar().Severity(Microsoft::UI::Xaml::Controls::InfoBarSeverity::Informational);
-  StatusBar().Message(L"Draft pending — Apply for this session or Discard draft.");
+  StatusBar().Message(L"Draft pending — select Save or Discard draft.");
   EditTitleBox().Focus(Microsoft::UI::Xaml::FocusState::Programmatic);
 }
 
@@ -399,7 +399,7 @@ void MainWindow::SaveEdit_Click(
   title_save_pending_ = true;
   SetBusy(true);
   StatusBar().Severity(Microsoft::UI::Xaml::Controls::InfoBarSeverity::Informational);
-  StatusBar().Message(L"Applying title for this session…");
+  StatusBar().Message(L"Saving title to this device…");
   auto const dispatcher = DispatcherQueue();
   auto const weak = get_weak();
   rivet_app::API api(*backend_);
@@ -412,7 +412,7 @@ void MainWindow::SaveEdit_Click(
             window->FinishTitleEdit();
             window->StatusBar().Severity(
                 Microsoft::UI::Xaml::Controls::InfoBarSeverity::Success);
-            window->StatusBar().Message(L"Title updated for this session (resets on restart).");
+            window->StatusBar().Message(L"Task title saved to this device.");
             window->LoadTasksAsync(id);
           }
         });
