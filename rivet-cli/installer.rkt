@@ -494,8 +494,8 @@
       [(volume-gone?) #t]
       [else
        (with-handlers ([exn:fail? (lambda (_) #f)])
-         (run! 'create-installer! hdiutil "detach"
-               (append flags (list mount-path)))
+         (apply run! 'create-installer! hdiutil "detach"
+                (append flags (list mount-path)))
          (volume-gone?))]))
   (define (detach!)
     (or (for/or ([_ (in-range 5)])
