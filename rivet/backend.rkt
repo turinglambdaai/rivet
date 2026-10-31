@@ -51,11 +51,32 @@
 (define record-registry (make-hash))
 (define enum-registry (make-hash))
 (define current-event-emitter (make-parameter #f))
-;; The active server's emitter, registered so application threads (which
-;; do not carry the reader thread's parameterization) can also emit
-;; events. send! is thread-safe: frames are handed to the dedicated
-;; writer thread through a backpressured async channel.
-(define active-server-emitter (box #f))
+;; A background thread without a server-owned parameter may publish only
+;; when exactly one server is running. A single global box would silently route
+;; its events to whichever concurrent test/embedded host registered last.
+(define active-server-emitters (make-hasheq))
+(define active-server-lock (make-semaphore 1))
+
+(define (register-server-emitter! emitter)
+  (call-with-semaphore
+   active-server-lock
+   (lambda () (hash-set! active-server-emitters emitter #t))))
+
+(define (unregister-server-emitter! emitter)
+  (call-with-semaphore
+   active-server-lock
+   (lambda () (hash-remove! active-server-emitters emitter))))
+
+(define (unique-active-server-emitter)
+  (call-with-semaphore
+   active-server-lock
+   (lambda ()
+     (case (hash-count active-server-emitters)
+       [(0) #f]
+       [(1) (car (hash-keys active-server-emitters))]
+       [else
+        (error 'emit-event!
+               "multiple Rivet servers are active; emit from a server-owned thread")]))))
 
 (define diagnostic-schema "rivet.diagnostic.v1")
 
@@ -500,7 +521,7 @@
   ;; Prefer the request-thread parameter (preserves request-scoped
   ;; semantics), then fall back to the active server so application
   ;; worker threads can emit too.
-  (define emitter (or (current-event-emitter) (unbox active-server-emitter)))
+  (define emitter (or (current-event-emitter) (unique-active-server-emitter)))
   (unless emitter
     (error 'emit-event! "no Rivet server is active"))
   (emitter (if (symbol? name) (symbol->string name) name)
@@ -1145,7 +1166,7 @@
              ;; Register the emitter for application threads; cleared when
              ;; the reader exits so a retired server receives nothing.
              (dynamic-wind
-               (lambda () (set-box! active-server-emitter emit!))
+               (lambda () (register-server-emitter! emit!))
                (lambda ()
                  (diagnose! "racket-backend" "backend-init" "success")
                  (send! (frame message:hello 0
@@ -1166,7 +1187,7 @@
                            ;; reader until another frame arrives.
                            (sleep 0)
                            (loop))))))
-               (lambda () (set-box! active-server-emitter #f)))))))))
+               (lambda () (unregister-server-emitter! emit!)))))))))
   (define reader-dead-evt (thread-dead-evt reader))
 
   (define cleanup-done? #f)
