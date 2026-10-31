@@ -7,8 +7,9 @@
 
 (define-event chart-batch : Int64)
 
-;; A worker born outside the serve reader's parameterization must not be
-;; silently treated as connected merely because another thread is serving.
+;; With exactly one connected server a worker born outside the serve
+;; reader's parameterization may publish through the active, bounded
+;; writer channel; this is a deliberate public behavior change (#362).
 (define start-external (make-semaphore 0))
 (define external-result (make-channel))
 (define external-ticker
@@ -38,11 +39,12 @@
 (check-equal? (frame-type (read-frame/timeout client-in)) message:hello)
 
 (semaphore-post start-external)
-(define failure (sync/timeout 2 external-result))
-(check-true (string? failure))
-(check-regexp-match #rx"server running on another thread" failure)
-(check-regexp-match #rx"docs/chart-series[.]md" failure)
+(check-equal? (sync/timeout 2 external-result) 'emitted)
 (thread-wait external-ticker)
+(define outside-event (read-frame/timeout client-in))
+(check-equal? (frame-type outside-event) message:event)
+(check-equal? (decode-value (frame-payload outside-event))
+              (list "chart-batch" 11))
 
 (write-frame
  (frame message:request 10 (encode-value (list "start-chart-ticker")))

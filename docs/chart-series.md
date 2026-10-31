@@ -86,24 +86,29 @@ readout, and an accessibility description that tracks the latest values
 2. Create series with a capacity covering your window at your sample rate
    (default 16 384 samples ≈ 2 min at 128 Hz).
 3. Append from engine threads (`chart-series-append!` is synchronized).
-   **Start the event ticker from a Rivet RPC handler after `serve` starts**;
-   drain and emit at UI cadence (30–60 Hz). See the thread ownership rule below.
+   For a single active `serve`, independent engine threads may emit at UI
+   cadence (30–60 Hz); with multiple concurrent servers, start a ticker from
+   a specific connected RPC handler. See the ownership rule below.
 4. Expose a window RPC for initial paint and gap recovery.
 5. In the host, feed batches to the widget on the main thread and wire the
    widget's gap callback to the window RPC.
 
 ## Event ticker thread ownership
 
-Rivet currently binds its event emitter using a Racket thread parameter while
-serving the RVT1 connection. **A thread created before `serve`, or created
-independently of the server reader, cannot call `define-event` functions,**
-even while a server is connected. Thread parameters are inherited at thread
-creation, not discovered dynamically from a running server. Unlike synchronized
-chart ring appends, event emission requires this inherited connection context.
+`emit-event!` prefers the server-owned thread parameter. When that parameter
+is absent, an independent background thread may emit through the **unique**
+active `serve` connection. This enables file watchers, chart engines and other
+long-lived workers to publish progress without polling. The shared writer
+channel still provides bounded backpressure; the fallback is not an
+unrestricted process-wide broadcast.
 
-Start the ticker from an RPC invoked by the connected host (for example,
-`start-chart-stream` during native view setup). The handler is a child of
-the server reader and its own `thread` children inherit the emitter:
+When **multiple** `serve` instances exist in one Racket process, there is no
+safe way for an unrelated worker to choose a recipient. In that case the
+fallback raises `multiple Rivet servers are active` rather than leaking an
+event to the wrong connection. The fallback is also removed on server exit.
+A product managing multiple sessions should create its ticker within the
+relevant server's connected RPC handler so that the thread-local emitter
+unambiguously identifies the destination:
 
 ```racket
 (define batch-ticker #f)
@@ -119,12 +124,12 @@ the server reader and its own `thread` children inherit the emitter:
   (void))
 ```
 
-The product must define `emit-current-chart-batches!`, provide a stop/cancel
-policy for its ticker, and invoke `start-chart-stream` from the native host
-after connecting. Do not assume a pre-started engine/timer thread has emitter
-access. If it must remain independent, it can append to the synchronized ring
-and leave event publishing to the server-owned ticker.
+The product must define `emit-current-chart-batches!` and provide a
+stop/cancel policy for its ticker. Starting from a connected RPC handler is
+the recommended choice for multi-server products. A single-server app may
+instead use its existing independent engine thread; it must handle
+disconnection and not keep emitting after `serve` exits.
 
-This is a **thread-scoped API**, not a process-wide broadcast registry; it
-does not select arbitrarily among multiple `serve` instances. An explicit
-cross-thread event-handle API would be a separate lifetime/backpressure design.
+This fallback is **single-server only**. It refuses ambiguous broadcast when
+more than one `serve` instance is active. An explicit per-server event-handle
+API would require a separately reviewed ownership and lifetime contract.
