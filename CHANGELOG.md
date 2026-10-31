@@ -49,6 +49,15 @@
   includes deterministic route, revocation, and budget tests. App packaging
   and physical-device acceptance remain separate release gates.
 
+### Added
+
+- Application threads can now emit events. `emit-event!` falls back to
+  the unique active server's emitter when no thread-local parameter exists
+  (`send!` is already thread-safe through the writer channel), so file
+  watchers, network workers, and other backend threads can notify the
+  UI without polling. Emissions with multiple active servers or after shutdown raise as
+  before.
+
 ### Fixed
 
 - Document the thread-scoped event emitter required for live chart tickers

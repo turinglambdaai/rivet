@@ -11,11 +11,10 @@
 
 ;; The outer List itself consumes one RVT1 value node. Exactly
 ;; max-value-nodes - 1 scalar children therefore fits the protocol budget. With
-;; no emitter bound to the current thread, reaching emit-event! proves type
-;; validation accepted it. The error also explains how to create a connected
-;; ticker from a server-owned RPC handler.
+;; no server active, reaching emit-event! proves type validation
+;; accepted the bounded value before attempting to emit.
 (let ([value (make-list (sub1 max-value-nodes) 1)])
-  (check-exn #rx"no Rivet event emitter is bound to this thread"
+  (check-exn #rx"no Rivet server is active"
              (lambda () (bounded-int-list-event value))))
 
 ;; One additional child exceeds the total value-node budget. Typed validation
