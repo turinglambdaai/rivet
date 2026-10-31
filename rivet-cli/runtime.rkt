@@ -99,16 +99,12 @@
        "missing" label
        "Racket version" (version)
        "remedy"
-       (if (member label '("petite.boot, scheme.boot, and racket.boot"
-                           "libracketcs*.a"))
-           (string-append
-            "Embedding needs a minimal source-built Racket CS runtime; an "
-            "ordinary full-distribution installation may lack its boot files "
-            "and static embedding library. Use the setup-embed-racket action "
-            "or the matching racket-minimal-<version>-src-builtpkgs.tgz, then "
-            "configure RIVET_RACKET_BOOT_DIR, RIVET_RACKET_INCLUDE, "
-            "RIVET_RACKET_LIB_DIR, and RIVET_RACKET_LIBRARY as needed.")
-           "Configure a complete Racket CS embedding runtime, not only the Racket executable."))))
+       (cond
+         [(equal? label "petite.boot, scheme.boot, and racket.boot")
+          "Use minimal source-built Racket CS (setup-embed-racket); set RIVET_RACKET_BOOT_DIR."]
+         [(equal? label "libracketcs*.a")
+          "Use minimal source-built Racket CS (setup-embed-racket); set RIVET_RACKET_LIBRARY."]
+         [else "Configure a complete Racket CS embedding runtime, not only the executable."]))))
 
 (define (environment-file name)
   (define value (getenv name))

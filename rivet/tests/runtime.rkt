@@ -89,7 +89,7 @@
 ;; A valid full-distribution installation may not carry the native embedding
 ;; boot set; the diagnostic must tell users how to remedy it.
 (check-exn
- #rx"minimal source-built Racket CS runtime"
+ #rx"minimal source-built Racket CS"
  (lambda ()
    (required 'discover-racket-runtime
              "petite.boot, scheme.boot, and racket.boot"
