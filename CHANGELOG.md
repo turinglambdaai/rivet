@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- DMG packaging survives slow volume teardown on CI runners. The installer
+  now probes the mount point instead of trusting one `hdiutil detach` exit
+  code, retries the graceful detach across the few-second window where a
+  lingering `diskimages-helper` or Spotlight still holds the volume, treats
+  an already-torn-down volume as success, and only then falls back to the
+  forced detach (fulcrum v0.14.1: macos-x64 packaging failed twice in a row
+  with `couldn't eject "disk2" - Resource busy` followed by
+  `detach failed - No such file or directory`).
+
 - Taskboard WinUI 3 reference: explicit title draft/save/discard controls,
   rejected backend mutations retain the draft, with packaged Windows UI
   Automation coverage. The product-owned Racket task snapshot saves locally
