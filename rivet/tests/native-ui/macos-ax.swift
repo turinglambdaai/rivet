@@ -156,6 +156,20 @@ func press(_ element: AXUIElement, description: String) throws {
     }
 }
 
+func setText(_ element: AXUIElement, to text: String) throws {
+    var settable = DarwinBoolean(false)
+    let readable = AXUIElementIsAttributeSettable(
+        element, kAXValueAttribute as CFString, &settable)
+    guard readable == .success, settable.boolValue else {
+        throw DriverError.failure("native title TextField does not expose a writable AXValue")
+    }
+    let result = AXUIElementSetAttributeValue(
+        element, kAXValueAttribute as CFString, text as CFString)
+    guard result == .success else {
+        throw DriverError.failure("AXValue set failed for title edit: \(result.rawValue)")
+    }
+}
+
 func statusText(_ element: AXUIElement) -> String {
     let candidates = [
         stringAttribute(element, kAXValueAttribute),
@@ -188,17 +202,41 @@ func postKey(_ keyCode: CGKeyCode) throws {
     up.post(tap: .cghidEventTap)
 }
 
+// The packaged SwiftUI host receives genuine key-down/up events, not direct
+// AXValue assignment. On macOS CI the old virtualKey=0 + injected Unicode
+// string events were silently ignored by the focused TextField even though
+// Cmd+A and foreground/focus checks succeeded. Use the verified US/ABC input
+// layout and actual physical key codes for this deterministic ASCII fixture.
 func typeText(_ text: String) throws {
-    for char in text.unicodeScalars {
-        guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
-              let up = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) else {
+    let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue()
+    let sourceID = source.map(inputSourceID) ?? "<missing>"
+    guard ["com.apple.keylayout.US", "com.apple.keylayout.ABC"].contains(sourceID) else {
+        throw DriverError.failure("test keyboard requires US/ABC layout, got \(sourceID)")
+    }
+    let codes: [String: CGKeyCode] = [
+        "a": 0, "b": 11, "c": 8, "d": 2, "e": 14, "f": 3,
+        "g": 5, "h": 4, "i": 34, "j": 38, "k": 40, "l": 37,
+        "m": 46, "n": 45, "o": 31, "p": 35, "q": 12, "r": 15,
+        "s": 1, "t": 17, "u": 32, "v": 9, "w": 13, "x": 7,
+        "y": 16, "z": 6, " ": 49,
+    ]
+    for character in text {
+        let original = String(character)
+        guard let keyCode = codes[original.lowercased()] else {
+            throw DriverError.failure("test keyboard has no key code for \(String(reflecting: original))")
+        }
+        guard let down = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true),
+              let up = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: false) else {
             throw DriverError.failure("could not create typing events")
         }
-        let utf16 = Array(String(char).utf16)
-        down.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
-        up.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
+        let flags: CGEventFlags = original != original.lowercased() ? .maskShift : []
+        down.flags = flags
+        up.flags = flags
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
+        // Serialise HID events through the CI input queue; success is only
+        // declared after the independent live AXValue and Racket RPC checks.
+        Thread.sleep(forTimeInterval: 0.015)
     }
 }
 
@@ -326,6 +364,175 @@ do {
     try press(try waitFor("new-task button") { find(window, identifier: "new-task") },
               description: "new-task")
     _ = try waitFor("the RPC-created task row") { find(window, identifier: "task-row-4") }
+
+    // Native SwiftUI edit flow: typed draft is separate from the committed
+    // task, explicit cancel restores the prior title, a rejected blank title
+    // retains the field/error, and an accepted title reaches the real Racket
+    // RPC before UI reports success. No simulated UI or mocked backend.
+    func beginEdit() throws -> AXUIElement {
+        try press(try waitFor("native Edit title button") {
+            find(window, identifier: "edit-task")
+        }, description: "edit-task")
+        return try waitFor("native task title field") {
+            find(window, identifier: "edit-task-title")
+        }
+    }
+    let cancelEditor = try beginEdit()
+    try setText(cancelEditor, to: "Discarded via macOS AX")
+    try press(try waitFor("native Discard draft button") {
+        find(window, identifier: "cancel-task-edit")
+    }, description: "cancel-task-edit")
+    _ = try waitFor("cancel restores original native title") {
+        guard let label = find(window, identifier: "task-title"),
+              statusText(label) == "New task" else { return nil as Bool? }
+        return true
+    }
+
+    let rejectedEditor = try beginEdit()
+    try setText(rejectedEditor, to: "   ")
+    try press(try waitFor("native Apply title button") {
+        find(window, identifier: "save-task")
+    }, description: "save-task")
+    _ = try waitFor("rejected save keeps the native draft editable") {
+        guard let field = find(window, identifier: "edit-task-title"),
+              let error = find(window, identifier: "task-edit-error"),
+              stringAttribute(field, kAXValueAttribute) == "   ",
+              statusText(error).contains("Update failed; draft retained") else {
+            return nil as Bool?
+        }
+        return true
+    }
+
+    // The first write exercises AXValue accessibility. On retry, use the
+    // actual keyboard input path: some SwiftUI TextField/AX implementations
+    // expose an updated AXValue without propagating it to the SwiftUI binding.
+    // A native user can recover by typing, so validate that route explicitly.
+    let retryEditor = try waitFor("retained title TextField") {
+        find(window, identifier: "edit-task-title")
+    }
+    try keyboardGuard(application, "retrying native title edit")
+    selectASCIILayout()
+    do {
+        defer { restoreInputSource() }
+        try focus(retryEditor, description: "retained native title field")
+        func commandA() throws {
+            for down in [true, false] {
+                guard let event = CGEvent(
+                    keyboardEventSource: nil, virtualKey: 0, keyDown: down
+                ) else {
+                    throw DriverError.failure("could not create Command+A key event")
+                }
+                event.flags = .maskCommand
+                event.post(tap: .cghidEventTap)
+            }
+        }
+        // A posted Cmd+A key event is asynchronous. In CI the subsequent
+        // Unicode keystrokes could arrive before the TextField had selected
+        // the rejected draft. Wait for *observable* selection, not a sleep or
+        // an AXValue assignment that might bypass the SwiftUI binding.
+        try commandA()
+        _ = try waitFor("Cmd+A selects the rejected title draft", timeout: 8) {
+            guard let field = find(window, identifier: "edit-task-title"),
+                  stringAttribute(field, kAXSelectedTextAttribute) == "   " else {
+                return nil as Bool?
+            }
+            return true
+        }
+        try keyboardGuard(application, "typing the retry title after selection")
+        try typeText("Edited via macOS AX")
+        _ = try waitFor("retry title visible in native TextField") {
+            guard let field = find(window, identifier: "edit-task-title"),
+                  stringAttribute(field, kAXValueAttribute) == "Edited via macOS AX" else {
+                return nil as Bool?
+            }
+            return true
+        }
+    } catch {
+        // Preserve the *failure point* evidence as well as the existing
+        // post-save error snapshot. Previously this exception escaped before
+        // any retry-stage AX state was archived.
+        let field = find(window, identifier: "edit-task-title")
+        let draft = field.map { stringAttribute($0, kAXValueAttribute) } ?? "<missing>"
+        let selected = field.map { stringAttribute($0, kAXSelectedTextAttribute) } ?? "<missing>"
+        let focused = field.map { boolAttribute($0, kAXFocusedAttribute) } ?? false
+        let frontmost = boolAttribute(application, kAXFrontmostAttribute)
+        let keyboard = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue()
+        let sourceID = keyboard.map(inputSourceID) ?? "<missing>"
+        // A CFTypeRef conditional downcast to AXUIElement is rejected by
+        // Swift on macOS. Check the actual AX type ID before the cast so
+        // diagnostics remain safe when the system focus is absent or invalid.
+        let rawSystemFocus = attribute(application, kAXFocusedUIElementAttribute)
+        let systemFocus: String
+        if let rawSystemFocus, CFGetTypeID(rawSystemFocus) == AXUIElementGetTypeID() {
+            systemFocus = stringAttribute(rawSystemFocus as! AXUIElement, kAXIdentifierAttribute)
+        } else {
+            systemFocus = "<missing>"
+        }
+        // Preserve structured evidence even when the failure occurs before
+        // Apply. String(reflecting:) makes whitespace-only drafts visible.
+        try? writeJSON([
+            "draft": draft,
+            "selected": selected,
+            "focused": focused,
+            "frontmost": frontmost,
+            "focusedIdentifier": systemFocus,
+            "inputSourceID": sourceID,
+            "underlying": String(describing: error),
+        ], to: options.output.appendingPathComponent("retry-input-diagnostics.json"))
+        try? writeJSON(snapshot(application),
+                       to: options.output.appendingPathComponent("retry-input-failure-ax.json"))
+        throw DriverError.failure(
+            "native retry keyboard input failed: draft=\(String(reflecting: draft)) " +
+            "selected=\(String(reflecting: selected)) focused=\(focused) " +
+            "frontmost=\(frontmost) focusedIdentifier=\(systemFocus) " +
+            "inputSource=\(sourceID); underlying=\(error)"
+        )
+    }
+    try press(try waitFor("retry Apply title button") {
+        find(window, identifier: "save-task")
+    }, description: "save-task retry")
+    do {
+        _ = try waitFor("saved native detail title") {
+            guard let label = find(window, identifier: "task-title"),
+                  statusText(label) == "Edited via macOS AX" else { return nil as Bool? }
+            return true
+        }
+    } catch {
+        // Capture *actual* AX values on failure. A timeout without status/error
+        // made the earlier failed run impossible to diagnose responsibly.
+        let status = find(window, identifier: "application-status")
+            .map(statusText) ?? "<missing>"
+        let errorText = find(window, identifier: "task-edit-error")
+            .map(statusText) ?? "<none>"
+        let visibleTitle = find(window, identifier: "task-title")
+            .map(statusText) ?? "<missing>"
+        let draft = find(window, identifier: "edit-task-title")
+            .map { stringAttribute($0, kAXValueAttribute) } ?? "<missing>"
+        try? writeJSON(snapshot(application),
+                       to: options.output.appendingPathComponent("edit-failure-accessibility.json"))
+        throw DriverError.failure(
+            "title retry failed: status=\(status) error=\(errorText) " +
+            "visibleTitle=\(visibleTitle) draft=\(draft); underlying=\(error)"
+        )
+    }
+    _ = try waitFor("explicit session-only save feedback") {
+        guard let status = find(window, identifier: "application-status"),
+              statusText(status).contains("resets on restart") else { return nil as Bool? }
+        return true
+    }
+
+    // Keyboard path: Escape should not commit the draft. The existing
+    // keyboardGuard prevents posting keystrokes into another foreground app.
+    let escapeEditor = try beginEdit()
+    try setText(escapeEditor, to: "Must not commit")
+    try keyboardGuard(application, "title-edit Escape")
+    try focus(escapeEditor, description: "native task title field")
+    try postKey(kEscapeKeyCode)
+    _ = try waitFor("keyboard Escape discards draft") {
+        guard let label = find(window, identifier: "task-title"),
+              statusText(label) == "Edited via macOS AX" else { return nil as Bool? }
+        return true
+    }
 
     try press(try waitFor("generate-demo button") { find(window, identifier: "generate-demo") },
               description: "generate-demo")

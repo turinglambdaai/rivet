@@ -116,10 +116,16 @@ successful in-session update against a packaged WinUI host.
 This is **not yet** the full cross-platform or persistent-data acceptance
 contract from [issue #347](https://github.com/turlamai/rivet/issues/347).
 The Taskboard backend stores its task list in process memory: successful
-changes do **not** survive application relaunch. macOS and Linux still need
-equivalent editing interactions; all three need clean-profile persistence,
+changes do **not** survive application relaunch. macOS editing is implemented
+in this branch, while Linux still needs integration; all three need clean-profile persistence,
 focus/keyboard/accessibility and real-window evidence before #347 can close.
 Do not use this example as proof of a production-ready task editor.
+
+## Native title editing (macOS preview)
+
+The macOS SwiftUI reference now offers **Edit title → Apply for this session / Discard draft** with the same stable `edit-task-title`, `save-task`, and `cancel-task-edit` accessibility identifiers used by the merged Windows implementation (#350). Title changes are explicit, not committed by Enter, so input method composition cannot accidentally save. Escape or **Discard draft** abandons changes; a rejected title keeps the editable text and error visible, allowing retry. While editing, list selection and conflicting mutations are disabled, and keyboard focus is returned to Edit when the draft closes.
+
+The native AX driver tests cancel, whitespace rejection with retained input, successful real-backend update and keyboard Escape inside the packaged macOS app. The backend is still **session-only in this branch**; this is not proof of durable storage or a production-quality cross-platform editor. Default persistence is being developed separately in stacked #352; Linux GTK4 parity and Windows/macOS/Linux packaged relaunch, focus, human visual review and native accessibility evidence remain required by [#347](https://github.com/turlamai/rivet/issues/347).
 
 ## Accessibility and performance contracts
 

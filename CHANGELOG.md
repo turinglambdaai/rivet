@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Taskboard's macOS SwiftUI reference now has an explicit title draft,
+  Apply-for-this-session and Discard flow with focus management and retained
+  validation errors (issue #347). The packaged macOS AX driver exercises
+  cancellation, rejected whitespace, successful update and keyboard Escape.
+  This is a native interaction preview, not durable persistence or full
+  three-platform acceptance.
+
 - DMG packaging survives slow volume teardown on CI runners. The installer
   now probes the mount point instead of trusting one `hdiutil detach` exit
   code, retries the graceful detach across the few-second window where a
