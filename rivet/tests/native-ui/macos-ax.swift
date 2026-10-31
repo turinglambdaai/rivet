@@ -202,17 +202,41 @@ func postKey(_ keyCode: CGKeyCode) throws {
     up.post(tap: .cghidEventTap)
 }
 
+// The packaged SwiftUI host receives genuine key-down/up events, not direct
+// AXValue assignment. On macOS CI the old virtualKey=0 + injected Unicode
+// string events were silently ignored by the focused TextField even though
+// Cmd+A and foreground/focus checks succeeded. Use the verified US/ABC input
+// layout and actual physical key codes for this deterministic ASCII fixture.
 func typeText(_ text: String) throws {
-    for char in text.unicodeScalars {
-        guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
-              let up = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) else {
+    let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue()
+    let sourceID = source.map(inputSourceID) ?? "<missing>"
+    guard ["com.apple.keylayout.US", "com.apple.keylayout.ABC"].contains(sourceID) else {
+        throw DriverError.failure("test keyboard requires US/ABC layout, got \(sourceID)")
+    }
+    let codes: [String: CGKeyCode] = [
+        "a": 0, "b": 11, "c": 8, "d": 2, "e": 14, "f": 3,
+        "g": 5, "h": 4, "i": 34, "j": 38, "k": 40, "l": 37,
+        "m": 46, "n": 45, "o": 31, "p": 35, "q": 12, "r": 15,
+        "s": 1, "t": 17, "u": 32, "v": 9, "w": 13, "x": 7,
+        "y": 16, "z": 6, " ": 49,
+    ]
+    for character in text {
+        let original = String(character)
+        guard let keyCode = codes[original.lowercased()] else {
+            throw DriverError.failure("test keyboard has no key code for \(String(reflecting: original))")
+        }
+        guard let down = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true),
+              let up = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: false) else {
             throw DriverError.failure("could not create typing events")
         }
-        let utf16 = Array(String(char).utf16)
-        down.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
-        up.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
+        let flags: CGEventFlags = original != original.lowercased() ? .maskShift : []
+        down.flags = flags
+        up.flags = flags
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
+        // Serialise HID events through the CI input queue; success is only
+        // declared after the independent live AXValue and Racket RPC checks.
+        Thread.sleep(forTimeInterval: 0.015)
     }
 }
 
