@@ -117,7 +117,7 @@ The two projects serve different trade-offs rather than replacing one another.
 
 Racket CS runs on a dedicated runtime thread. Native UI code never manipulates Racket/Chez values directly, and Racket pointers never cross ordinary native thread boundaries. The native side only sees framed RVT1 messages and generated Swift/C++ values.
 
-The embedding model is inspired by [Noise](https://github.com/Bogdanp/Noise), but Rivet makes the runtime contract, protocol, code generation, and lifecycle cross-platform instead of Swift-first.
+Rivet defines an embedding model with a cross-platform runtime contract, protocol, code generation, and lifecycle instead of Swift-first.
 
 Use the [documentation map](docs/README.md) to find the canonical guide for architecture, protocol, platform integration, diagnostics, and release work.
 
