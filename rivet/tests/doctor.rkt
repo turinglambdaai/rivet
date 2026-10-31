@@ -94,6 +94,22 @@
  (for/or ([fix (in-list linux-fixes)])
    (regexp-match? #rx"Linux native toolchain" (car fix))))
 
+;; The Racket executable can be present while its separate native-embedding
+;; runtime is missing. The remedy must not recommend a *full* distribution
+;; as the fix for missing boot files / static libraries (issue #365).
+(define unavailable-embedding
+  (hash-set (hash-set incomplete-linux 'runtime #f)
+            'runtime-error
+            "missing: petite.boot, scheme.boot, and racket.boot"))
+(define embedding-fixes (doctor-remediations unavailable-embedding))
+(check-true
+ (for/or ([fix (in-list embedding-fixes)])
+   (and (regexp-match? #rx"minimal source-built Racket CS" (cdr fix))
+        (regexp-match? #rx"RIVET_RACKET_BOOT_DIR" (cdr fix)))))
+(check-false
+ (for/or ([fix (in-list embedding-fixes)])
+   (regexp-match? #rx"Install a full Racket CS distribution" (cdr fix))))
+
 ;; `doctor --json` is intended for CI and agents. Keep the report inside the
 ;; Racket JSON data model and verify it survives a complete encode/decode pass.
 (define encoded

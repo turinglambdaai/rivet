@@ -85,3 +85,16 @@
   (lambda ()
     (when (directory-exists? temp-root)
       (delete-directory/files temp-root))))
+
+;; A valid full-distribution installation may not carry the native embedding
+;; boot set; the diagnostic must tell users how to remedy it.
+(check-exn
+ #rx"minimal source-built Racket CS runtime"
+ (lambda ()
+   (required 'discover-racket-runtime
+             "petite.boot, scheme.boot, and racket.boot"
+             #f)))
+(check-exn
+ #rx"RIVET_RACKET_LIBRARY"
+ (lambda ()
+   (required 'discover-racket-runtime "libracketcs*.a" #f)))

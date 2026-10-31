@@ -93,10 +93,22 @@
 
 (define (required who label value)
   (or value
-      (raise-arguments-error who
-                             "could not locate a required file from the installed Racket CS runtime"
-                             "missing" label
-                             "Racket version" (version))))
+      (raise-arguments-error
+       who
+       "could not locate a required file from the installed Racket CS runtime"
+       "missing" label
+       "Racket version" (version)
+       "remedy"
+       (if (member label '("petite.boot, scheme.boot, and racket.boot"
+                           "libracketcs*.a"))
+           (string-append
+            "Embedding needs a minimal source-built Racket CS runtime; an "
+            "ordinary full-distribution installation may lack its boot files "
+            "and static embedding library. Use the setup-embed-racket action "
+            "or the matching racket-minimal-<version>-src-builtpkgs.tgz, then "
+            "configure RIVET_RACKET_BOOT_DIR, RIVET_RACKET_INCLUDE, "
+            "RIVET_RACKET_LIB_DIR, and RIVET_RACKET_LIBRARY as needed.")
+           "Configure a complete Racket CS embedding runtime, not only the Racket executable."))))
 
 (define (environment-file name)
   (define value (getenv name))
@@ -203,4 +215,5 @@
            direct-matching-files
            find-direct-matching-file
            framework-boot-directories
-           direct-boot-directories))
+           direct-boot-directories
+           required))
