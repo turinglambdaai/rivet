@@ -51,6 +51,11 @@
 
 ### Fixed
 
+- `raco rivet doctor` now points full-distribution users with missing CS boot
+  files or static libraries to the minimal source-built embedding runtime and
+  the four `RIVET_RACKET_*` overrides instead of recommending another full
+  installation (issue #365). Tests cover both direct errors and doctor fixes.
+
 - Document the thread-scoped event emitter required for live chart tickers
   (issue #341): event publishers must be spawned from a server-owned RPC
   handler, not started before `serve`. An unbound ticker now receives an

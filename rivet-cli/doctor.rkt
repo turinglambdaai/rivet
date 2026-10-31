@@ -174,7 +174,7 @@
   (unless (hash-ref report 'runtime)
     (add! "Repair the Racket CS runtime"
           (string-append
-           "Rivet could not discover the complete embedded runtime. Install a full Racket CS distribution and reinstall Rivet with that installation's `raco`."
+           "Rivet requires a Racket CS embedding runtime, not only the ordinary full distribution. Use a matching minimal source-built Racket CS prefix (for example via setup-embed-racket); set RIVET_RACKET_BOOT_DIR, RIVET_RACKET_INCLUDE, RIVET_RACKET_LIB_DIR, and RIVET_RACKET_LIBRARY when automatic discovery fails."
            (let ([reason (hash-ref report 'runtime-error #f)])
              (if reason (format " Discovery error: ~a" reason) "")))))
 

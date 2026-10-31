@@ -93,10 +93,18 @@
 
 (define (required who label value)
   (or value
-      (raise-arguments-error who
-                             "could not locate a required file from the installed Racket CS runtime"
-                             "missing" label
-                             "Racket version" (version))))
+      (raise-arguments-error
+       who
+       "could not locate a required file from the installed Racket CS runtime"
+       "missing" label
+       "Racket version" (version)
+       "remedy"
+       (cond
+         [(equal? label "petite.boot, scheme.boot, and racket.boot")
+          "Use minimal source-built Racket CS (setup-embed-racket); set RIVET_RACKET_BOOT_DIR."]
+         [(equal? label "libracketcs*.a")
+          "Use minimal source-built Racket CS (setup-embed-racket); set RIVET_RACKET_LIBRARY."]
+         [else "Configure a complete Racket CS embedding runtime, not only the executable."]))))
 
 (define (environment-file name)
   (define value (getenv name))
@@ -203,4 +211,5 @@
            direct-matching-files
            find-direct-matching-file
            framework-boot-directories
-           direct-boot-directories))
+           direct-boot-directories
+           required))
