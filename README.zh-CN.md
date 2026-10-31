@@ -4,7 +4,7 @@
 
 **Human-first. Agent-native. Local by design. —— 为人而生，为 Agent 原生设计，本地优先。**
 
-[![CI](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turinglambdaai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Linux](https://img.shields.io/badge/Linux-GTK4-FCC624?logo=linux&logoColor=111111) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Version](https://img.shields.io/github/v/release/turinglambdaai/rivet?label=version)](https://github.com/turinglambdaai/rivet/releases/latest)
+[![CI](https://github.com/turlamai/rivet/actions/workflows/ci.yml/badge.svg)](https://github.com/turlamai/rivet/actions/workflows/ci.yml) ![Racket](https://img.shields.io/badge/Racket-9F1D20?logo=racket&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-WinUI_3-0078D4?logo=windows11&logoColor=white) ![macOS](https://img.shields.io/badge/macOS-SwiftUI-000000?logo=apple&logoColor=white) ![Linux](https://img.shields.io/badge/Linux-GTK4-FCC624?logo=linux&logoColor=111111) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Version](https://img.shields.io/github/v/release/turlamai/rivet?label=version)](https://github.com/turlamai/rivet/releases/latest)
 
 [English](README.md) · **中文**
 
@@ -48,7 +48,7 @@ Rivet 补上的是这一层：
 - **第一方原生 UI** —— Windows 使用 WinUI 3，macOS 使用 SwiftUI/AppKit，Linux 使用 GTK4
 - **Racket 负责应用逻辑** —— 宏、模式匹配、并发、数据处理、业务逻辑都留在 Racket
 - **一套后端契约** —— typed RPC、Event、共享 State、取消与生命周期统一走 RVT1
-- **共享应用模型** —— 将后端 schema 投影到与 Glaze 共用的传输无关契约 [Keel](https://github.com/turinglambdaai/keel)，但 RVT1 与原生 UI 所有权仍留在 Rivet
+- **共享应用模型** —— 将后端 schema 投影到与 Glaze 共用的传输无关契约 [Keel](https://github.com/turlamai/keel)，但 RVT1 与原生 UI 所有权仍留在 Rivet
 - **自动生成原生客户端** —— Racket 侧的声明在构建时生成 Swift/C++/Kotlin 类型化 API
 - **实时图表** —— 三桌面宿主统一的滚动时间序列控件走同一套类型化数据面（`rivet/chart` 环形缓冲 + 带间隙检测的二进制批次）；见 [docs/chart-series.md](docs/chart-series.md)
 - **进程内嵌 Racket CS** —— 不需要额外启动后端进程，Racket runtime 直接嵌入应用
@@ -205,10 +205,10 @@ raco rivet release
 ### 产品权益授权
 
 商业权益有意放在 Rivet 框架边界之外。需要离线可验证权益的产品可以将 Rivet 与
-[Permit](https://github.com/turinglambdaai/permit/blob/main/docs/framework-integration.md)
+[Permit](https://github.com/turlamai/permit/blob/main/docs/framework-integration.md)
 或其他独立权益库组合使用；Rivet 本身不依赖它。产品可以使用 Rivet 的通用安全存储
 保存凭证状态。需要在线结账、支付事件处理或凭证领取时，产品还可以接入
-[Commerce](https://github.com/turinglambdaai/commerce)；Commerce 是产品/服务层依赖，
+[Commerce](https://github.com/turlamai/commerce)；Commerce 是产品/服务层依赖，
 绝不进入 Rivet。手工交付或完全离线销售的产品不需要 Commerce。支付渠道密钥、
 Commerce 密钥、产品权益签名、更新签名和平台代码签名必须保持独立密钥与信任策略。
 

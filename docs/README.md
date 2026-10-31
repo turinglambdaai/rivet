@@ -28,7 +28,7 @@ a product overview rather than a second documentation index.
 - [Linux display policy](linux-display.md)
 - [Real-time chart series](chart-series.md)
 - [Typed device communication](device-communication.md)
-- [Network device channel design](network-device-channel.md) — policy/pairing cores implemented; network transport not shipped
+- [Network device channel design](network-device-channel.md) — protocol, pairing, and selected Apple/Windows/Android transport foundations exist; product wiring and real-device qualification remain unverified
 
 ## Ship and maintain / 发布与维护
 

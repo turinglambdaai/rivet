@@ -87,6 +87,18 @@
  (for/or ([event (in-list update-events)])
    (equal? event (list "task-saved" updated))))
 
+;; Invalid edits must fail without partially replacing the existing record:
+;; a native host may keep the draft open and retry the same task id.
+(define invalid-title-id
+  (send-request "update-task" created-id "   "
+                "Compare Swift, C++, and Kotlin." "active"))
+(define-values (invalid-title invalid-title-events)
+  (read-terminal invalid-title-id))
+(check-equal? (frame-type invalid-title) message:error)
+(define-values (after-invalid-title ignored-events)
+  (call "get-task" created-id))
+(check-equal? after-invalid-title updated)
+
 (define-values (deleted delete-events) (call "delete-task" created-id))
 (check-true deleted)
 (check-true

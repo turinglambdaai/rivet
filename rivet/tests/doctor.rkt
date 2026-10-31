@@ -172,7 +172,7 @@ RKT
        #:exists 'truncate
        (lambda (out)
          (displayln
-          (format "packages: 'https://github.com/turinglambdaai/rivet.git#v~a'"
+          (format "packages: 'https://github.com/turlamai/rivet.git#v~a'"
                   installed)
           out))))
 
@@ -222,7 +222,7 @@ RKT
        #:exists 'truncate
        (lambda (out)
          (displayln
-          "packages: 'https://github.com/turinglambdaai/rivet.git#'"
+          "packages: 'https://github.com/turlamai/rivet.git#'"
           out)))
       (define empty-ref-report (release-doctor-report project))
       (release-check-failed? empty-ref-report
@@ -242,7 +242,7 @@ RKT
            (lambda (out) (displayln content out))))
         ;; mediated and resolved to the installed release -> passes
         (write-ci
-         (format "env:\n  RIVET_PIN: v~a\npackages: \"https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}\""
+         (format "env:\n  RIVET_PIN: v~a\npackages: \"https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}\""
                  installed))
         (define mediated-report (release-doctor-report project))
         (release-check-passed?
@@ -250,7 +250,7 @@ RKT
          "dependency pins are non-empty and match the installed release")
         ;; mediated but undefined -> fails naming the variable
         (write-ci
-         "packages: \"https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}\"")
+         "packages: \"https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}\"")
         (define unresolved-report (release-doctor-report project))
         (release-check-failed?
          unresolved-report
@@ -258,7 +258,7 @@ RKT
          #rx"reads an env variable this file does not define")
         ;; mediated and resolved to a wrong tag -> fails the comparison
         (write-ci
-         "env:\n  RIVET_PIN: v0.0.1\npackages: \"https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}\"")
+         "env:\n  RIVET_PIN: v0.0.1\npackages: \"https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}\"")
         (define wrong-tag-report (release-doctor-report project))
         (release-check-failed?
          wrong-tag-report
@@ -267,7 +267,7 @@ RKT
         ;; restore the live workflow to the installed release, then check
         ;; that changelog prose naming a past pin is exempt from the comparison
         (write-ci
-         (format "env:\n  RIVET_PIN: v~a\npackages: \"https://github.com/turinglambdaai/rivet.git#${{ env.RIVET_PIN }}\""
+         (format "env:\n  RIVET_PIN: v~a\npackages: \"https://github.com/turlamai/rivet.git#${{ env.RIVET_PIN }}\""
                  installed))
         (call-with-output-file
          (build-path project-root "CHANGELOG.md")

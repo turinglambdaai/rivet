@@ -84,6 +84,21 @@
                  '("racket-library" "native-host" "ffi" "cli" "sidecar" "implement"))
    (check-not-false (member "license and redistribution" (hash-ref sourcing 'required-checks)))
 
+   (define interaction (hash-ref report 'interaction-guidance))
+   (check-equal? (hash-ref interaction 'version) 1)
+   (check-equal? (hash-ref interaction 'prototype-policy)
+                 "Direct native UI iteration; external prototypes are optional.")
+   (check-equal? (hash-ref interaction 'scenario-fields)
+                 '("scenario" "initial state" "user action" "visible result"
+                   "persisted effect" "failure/recovery"
+                   "per-platform presentation" "acceptance evidence"))
+   (check-not-false
+    (member "explicit save or auto-save semantics and draft preservation"
+            (hash-ref interaction 'review-checks)))
+   (check-not-false
+    (member "actual-window visual review and screenshot when supported"
+            (hash-ref interaction 'required-evidence)))
+
    (define commands (hash-ref report 'commands))
    (check-not-false
     (findf (lambda (entry)
@@ -150,6 +165,13 @@
    (check-regexp-match #rx"never construct a shell command" instructions)
    (check-regexp-match #rx"raco rivet schema check rivet-schema.json --json" instructions)
    (check-regexp-match #rx"raco rivet acceptance --json" instructions)
+   (check-regexp-match #rx"Native interaction workflow" instructions)
+   (check-regexp-match #rx"persisted effect" instructions)
+   (check-regexp-match #rx"never silently discard a draft" instructions)
+   (check-regexp-match #rx"A green build" instructions)
+   (define readme (file->string (build-path root "README.md")))
+   (check-regexp-match #rx"Design and verify the native interaction" readme)
+   (check-regexp-match #rx"packaged window" readme)
 
    (delete-file (build-path root "rivet-acceptance.rktd"))
    (define missing-acceptance-report (project-report project))
@@ -169,6 +191,7 @@
        (get-output-string out)))
    (define decoded (call-with-input-string encoded read-json))
    (check-equal? (hash-ref decoded 'contract-version) 1)
+   (check-equal? (hash-ref (hash-ref decoded 'interaction-guidance) 'version) 1)
    (check-equal? (hash-ref (hash-ref decoded 'project) 'identifier) "dev.rivet.agentdemo")
    (check-equal? (hash-ref (hash-ref decoded 'project) 'publisher) "AgentDemo")
    (check-equal? (hash-ref (car (hash-ref (hash-ref decoded 'capability-sourcing) 'decision-order))

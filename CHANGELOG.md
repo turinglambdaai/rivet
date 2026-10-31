@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- DMG packaging survives slow volume teardown on CI runners. The installer
+  now probes the mount point instead of trusting one `hdiutil detach` exit
+  code, retries the graceful detach across the few-second window where a
+  lingering `diskimages-helper` or Spotlight still holds the volume, treats
+  an already-torn-down volume as success, and only then falls back to the
+  forced detach (fulcrum v0.14.1: macos-x64 packaging failed twice in a row
+  with `couldn't eject "disk2" - Resource busy` followed by
+  `detach failed - No such file or directory`).
+
+- Taskboard WinUI 3 reference: explicit title draft/apply/discard controls,
+  rejected backend mutations retain the draft, with packaged Windows UI
+  Automation coverage. Updates are session-only until persistent storage and
+  three-platform acceptance for #347 land.
+
+- New Rivet projects now tell coding agents to design and verify native
+  interaction through the real packaged app, not require a separate mockup.
+  The generated AGENTS.md/README cover save/draft/focus/recovery and native
+  visual/keyboard evidence; `raco rivet inspect --json` exposes the same
+  product-owned scenario and review requirements as structured guidance.
+  This is a development contract, not automatic aesthetic certification.
+
 - Add an opt-in reverse-DNS `linux-desktop-id` project setting that is
   honored by native deb/rpm/AppImage desktop entry staging and verification.
   This lets GNOME 50 GlobalShortcuts consumers register a stable, valid
@@ -31,13 +52,18 @@
 ### Added
 
 - Application threads can now emit events. `emit-event!` falls back to
-  the active server's emitter when the thread-local parameter is unset
+  the unique active server's emitter when no thread-local parameter exists
   (`send!` is already thread-safe through the writer channel), so file
   watchers, network workers, and other backend threads can notify the
-  UI without polling. Events emitted after the server stops raise as
+  UI without polling. Emissions with multiple active servers or after shutdown raise as
   before.
 
 ### Fixed
+
+- Document the thread-scoped event emitter required for live chart tickers
+  (issue #341): event publishers must be spawned from a server-owned RPC
+  handler, not started before `serve`. An unbound ticker now receives an
+  actionable error, and the regression test covers both thread origins.
 
 - The CLI no longer fails a completed command when the ambient log
   transport dies (issue #339): failed stdout/stderr writes drop only the
