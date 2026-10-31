@@ -116,10 +116,16 @@ successful in-session update against a packaged WinUI host.
 This is **not yet** the full cross-platform or persistent-data acceptance
 contract from [issue #347](https://github.com/turlamai/rivet/issues/347).
 The Taskboard backend stores its task list in process memory: successful
-changes do **not** survive application relaunch. macOS and Linux still need
-equivalent editing interactions; all three need clean-profile persistence,
+changes do **not** survive application relaunch. The Linux native editor is
+implemented in this change, while the macOS editor and all three hosts still need clean-profile persistence,
 focus/keyboard/accessibility and real-window evidence before #347 can close.
 Do not use this example as proof of a production-ready task editor.
+
+## Native title editing (Linux GTK4 preview)
+
+The Linux GTK4 reference now offers **Edit title → Apply for this session / Discard draft**, backed by the existing typed Racket `update-task` RPC. The native `GtkEntry` keeps the draft separate from the committed task; Return is not wired to Save (for IME safety), Escape discards it, and failed validation leaves the input editable with a visible error and retry. Editing disables task selection and competing mutations. The GTK4 accessible widget names/labels expose `edit-task`, `edit-task-title`, `save-task`, `cancel-task-edit`, and `task-edit-error`. The packaged Wayland/AT-SPI driver exercises cancel, whitespace rejection/draft retention and a successful backend update.
+
+This is deliberately **session-only** until the product-owned persistence PR #352, now independently tracking Windows #350, is integrated and the desktop apps have passed actual relaunch/recovery acceptance. The separate macOS preview #353 provides equivalent SwiftUI semantics; all three native builds, keyboard/IME/accessibility traces and human visual review must still pass [#347](https://github.com/turlamai/rivet/issues/347) before completion is claimed.
 
 ## Accessibility and performance contracts
 

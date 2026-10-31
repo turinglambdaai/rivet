@@ -43,6 +43,14 @@ def snapshot(node, depth=0, maximum_depth=8):
         "name": node.name or "",
         "role": role_name(node),
     }
+    # GTK4 gives dynamic labels their live text as the accessible name.
+    # Persist the stable semantic description used by the UI test locator
+    # so a Wayland failure report can distinguish a missing widget from a
+    # text update that changed only its name.
+    try:
+        result["description"] = node.description or ""
+    except Exception:
+        result["description"] = "<unavailable>"
     value = text_value(node)
     if value is not None:
         result["text"] = value
@@ -89,8 +97,39 @@ def find_named(root, name, role=None):
     return None
 
 
+def find_described(root, description, role=None):
+    """GTK's dynamic label text owns AX name; description stays stable."""
+    for node in walk(root):
+        try:
+            if node.description != description:
+                continue
+            if role is None or role_name(node) == role:
+                return node
+        except Exception:
+            continue
+    return None
+
+
+def selected_title(window):
+    label = find_described(window, "Selected task title", "label")
+    return text_value(label) if label is not None else None
+
+
+def find_edit_draft(window):
+    return find_described(window, "Task title draft")
+
+
+def find_edit_error(window):
+    return find_described(window, "Task edit error", "label")
+
+
 def find_status(root):
-    prefixes = ("Starting embedded Racket CS", "Loaded ", "Preparing task ")
+    prefixes = (
+        "Starting embedded Racket CS",
+        "Loaded ",
+        "Preparing task ",
+        "Title updated for this session",
+    )
     return next(
         (
             node
@@ -106,6 +145,15 @@ def press(node):
     actions = node.queryAction()
     if actions.nActions < 1 or not actions.doAction(0):
         raise AssertionError(f"AT-SPI action failed for {node.name!r}")
+
+
+def edit_text(node, content):
+    try:
+        node.queryEditableText().setTextContents(content)
+    except Exception as exc:
+        raise AssertionError(
+            f"native task title field is not AT-SPI editable: {exc}"
+        ) from exc
 
 
 def is_enabled(node):
@@ -177,6 +225,66 @@ def main():
         > new_task_count,
     )
 
+    # New Task's list row can become visible before the detail selection
+    # settles; prove that the *selected* native detail actually changed.
+    wait_for(
+        "the new task selected in the detail pane",
+        lambda: selected_title(window) == "New task",
+    )
+
+    # Real GTK4/AT-SPI draft/cancel/error/retry path. This touches the
+    # packaged native app and sends real typed Racket RPCs, not a mock UI.
+    def begin_edit():
+        edit = wait_for(
+            "enabled Edit title action",
+            lambda: find_named(window, "Edit title", "push button")
+            if (candidate := find_named(window, "Edit title", "push button"))
+            and is_enabled(candidate)
+            else None,
+        )
+        press(edit)
+        return wait_for(
+            "editable native title draft",
+            lambda: find_edit_draft(window),
+        )
+
+    draft = begin_edit()
+    edit_text(draft, "Discard via native AT-SPI")
+    press(wait_for(
+        "Discard draft action",
+        lambda: find_named(window, "Discard draft", "push button"),
+    ))
+    wait_for(
+        "discard preserves original selected title",
+        lambda: selected_title(window) == "New task",
+    )
+    draft = begin_edit()
+    edit_text(draft, "   ")
+    press(wait_for(
+        "Apply title action",
+        lambda: find_named(window, "Apply for this session", "push button"),
+    ))
+    wait_for(
+        "rejected backend edit keeps text and explains the error",
+        lambda: (
+            (field := find_edit_draft(window))
+            and text_value(field) == "   "
+            and (message := find_edit_error(window))
+            and "Update failed; draft retained" in (text_value(message) or "")
+            and is_enabled(field)
+        ),
+    )
+    draft = find_edit_draft(window)
+    edit_text(draft, "Edited via native AT-SPI")
+    press(wait_for(
+        "retry Apply action",
+        lambda: find_named(window, "Apply for this session", "push button"),
+    ))
+    wait_for(
+        "successful edit updates the selected detail title",
+        lambda: selected_title(window) == "Edited via native AT-SPI",
+    )
+
     status = wait_for("the live application status", lambda: find_status(window))
     press(find_named(window, "Generate 1,000", "push button"))
     observed_progress = []
@@ -207,12 +315,19 @@ def main():
         json.dumps(
             {
                 "application": args.application,
-                "actions": ["press:new-task", "press:generate-demo"],
+                "actions": [
+                    "press:new-task", "edit:title", "discard:title",
+                    "reject:empty-title", "retry:title", "apply:title",
+                    "press:generate-demo",
+                ],
                 "observedStatus": observed_progress,
                 "assertions": [
                     "native frame exposed",
                     "stable roles and names exposed",
                     "RPC-created task appeared",
+                    "GTK4 edit draft cancel left the task unchanged",
+                    "invalid title preserved the editable draft and reported failure",
+                    "successful title reached Racket and the selected detail view",
                     "operation-progress Event appeared",
                     "1,000-row State reached the UI",
                 ],
@@ -225,4 +340,25 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        # Native Wayland/AT-SPI failures must retain *post-failure* evidence;
+        # previously only the before snapshot existed when a wait timed out.
+        # This runs only on failure and never changes acceptance assertions.
+        try:
+            parser = argparse.ArgumentParser(add_help=False)
+            parser.add_argument("--application")
+            parser.add_argument("--output", type=Path)
+            options, _ = parser.parse_known_args()
+            if options.application and options.output:
+                app = find_application(options.application)
+                if app is not None:
+                    options.output.mkdir(parents=True, exist_ok=True)
+                    (options.output / "accessibility-failure.json").write_text(
+                        json.dumps(snapshot(app), ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+        except Exception:
+            pass
+        raise

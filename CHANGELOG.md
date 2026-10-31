@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Taskboard's Linux GTK4 reference gains a native title draft, explicit
+  Apply-for-this-session / Discard actions and recoverable failed validation
+  (issue #347). The packaged Wayland/AT-SPI driver checks cancel, retained
+  invalid input and a real Racket RPC success. Persistence/relaunch and full
+  three-platform UX acceptance remain separate unverified gates.
+
 - DMG packaging survives slow volume teardown on CI runners. The installer
   now probes the mount point instead of trusting one `hdiutil detach` exit
   code, retries the graceful detach across the few-second window where a

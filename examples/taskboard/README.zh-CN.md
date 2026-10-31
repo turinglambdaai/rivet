@@ -102,10 +102,15 @@ Racket 的 `update-task` RPC 验证标题。更新被拒绝时保留草稿并显
 
 **这尚未满足** [Issue #347](https://github.com/turlamai/rivet/issues/347)
 的全部跨平台及持久化验收条件。目前 Taskboard 后端仅在进程内存保存任务：
-界面仅表明当前运行期间更新成功，退出并重新启动后修改**不会保留**。macOS 和
-Linux 仍需实现语义相同的编辑交互；三个平台还需基于隔离用户配置的持久化、
+界面仅表明当前运行期间更新成功，退出并重新启动后修改**不会保留**。macOS 交互仍需验证；Linux 的原生标题编辑已在本分支落地，三个平台还需基于隔离用户配置的持久化、
 焦点、键盘、无障碍与真实窗口证据。在 #347 通过全部验收之前，不能把本示例
 描述为生产级任务编辑器。
+
+## 原生标题编辑（Linux GTK4 预览）
+
+Linux GTK4 示例现已提供 **Edit title → Apply for this session / Discard draft**（编辑标题 → 本次运行应用 / 丢弃草稿），通过现有 Racket `update-task` RPC 修改任务。`GtkEntry` 草稿不会提前替换已保存任务；Enter 不绑定保存（避免输入法误提交），Escape 丢弃草稿，校验失败则保留可编辑内容、显示错误并允许重试。编辑期间禁止切换任务和其他冲突操作。原生无障碍标识包含 `edit-task`、`edit-task-title`、`save-task`、`cancel-task-edit`、`task-edit-error`。Wayland/AT-SPI 打包验收覆盖取消、空白标题失败保留输入及真实后端修改成功。
+
+**当前仍为会话内修改**。需要等已独立对接主分支的持久化 PR #352 通过并合并，且三个平台真正完成关闭重启、恢复和错误路径验收，才能承诺落盘保存。macOS #353 提供独立的 SwiftUI 交互预览；三个平台的键盘/输入法/无障碍证据和真人界面可读性检查仍属于 [#347](https://github.com/turlamai/rivet/issues/347) 未完成的验收条件。
 
 ## 无障碍与性能契约
 
